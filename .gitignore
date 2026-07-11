@@ -14,7 +14,8 @@ test-results/
 .superpowers/
 .worktrees/
 output/
-data/
+/data/provider-channels.json
+/data/provider-channels.json.*.tmp
 out/
 dist/
 packages/compositor/public/fixture/

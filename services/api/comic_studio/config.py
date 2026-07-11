@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     service_name: str = "ai-comic-studio"
     database_url: str = "sqlite:///./data/studio.db"
     data_root: Path = Path("./data")
+    provider_channels_path: Path = Field(
+        default=Path("data/provider-channels.json"),
+        validation_alias=AliasChoices(
+            "PROVIDER_CHANNELS_PATH", "AI_COMIC_PROVIDER_CHANNELS_PATH"
+        ),
+    )
     minimax_base_url: str = Field(
         default="https://api.minimaxi.com/anthropic/",
         validation_alias=AliasChoices("MINIMAX_BASE_URL", "AI_COMIC_MINIMAX_BASE_URL"),
@@ -64,6 +70,10 @@ class Settings(BaseSettings):
         repository_root = ROOT_ENV_FILE.parent
         if not self.data_root.is_absolute():
             self.data_root = (repository_root / self.data_root).resolve()
+        if not self.provider_channels_path.is_absolute():
+            self.provider_channels_path = (
+                repository_root / self.provider_channels_path
+            ).resolve()
         if not self.compositor_root.is_absolute():
             self.compositor_root = (repository_root / self.compositor_root).resolve()
         sqlite_relative = "sqlite:///./"

@@ -18,7 +18,7 @@
 - Modify: `services/api/comic_studio/config.py`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Write failing store tests**
+- [x] **Step 1: Write failing store tests**
 
 Cover environment bootstrap, strict schema validation, JSON authority, permissions, and snapshot preservation:
 
@@ -34,7 +34,7 @@ assert json.loads(store.path.read_text())["llm"]["model"] == "MiniMax-M3"
 
 Simulate `os.replace` failure and assert both the previous file bytes and `store.snapshot` remain unchanged. Assert unknown JSON fields and invalid enabled channels are rejected.
 
-- [ ] **Step 2: Run focused tests and confirm missing store**
+- [x] **Step 2: Run focused tests and confirm missing store**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_channel_store.py -q
@@ -42,7 +42,7 @@ cd services/api && uv run pytest tests/test_provider_channel_store.py -q
 
 Expected: FAIL because `ProviderChannelStore` and channel schemas do not exist.
 
-- [ ] **Step 3: Add channel schemas and environment defaults**
+- [x] **Step 3: Add channel schemas and environment defaults**
 
 Implement:
 
@@ -68,13 +68,13 @@ class ProviderChannels(BaseModel):
 
 Add `provider_channels_path` to `Settings`, defaulting to `data/provider-channels.json`, resolved relative to the repository root. Add a helper that converts existing MiniMax, GPT Image, and Qwen settings into a `ProviderChannels` bootstrap value.
 
-- [ ] **Step 4: Implement atomic store persistence**
+- [x] **Step 4: Implement atomic store persistence**
 
 `ProviderChannelStore.load()` returns JSON when present and valid, otherwise bootstrap defaults when absent. `save()` writes a same-directory temporary file, sets `0600`, flushes, calls `os.fsync`, atomically replaces, attempts parent-directory `fsync`, then publishes the new snapshot.
 
 Use a thread lock around load/save/snapshot access. Return immutable deep copies so callers cannot mutate active state.
 
-- [ ] **Step 5: Ignore the local configuration file**
+- [x] **Step 5: Ignore the local configuration file**
 
 Add:
 
@@ -85,7 +85,7 @@ data/provider-channels.json.*.tmp
 
 Do not ignore all source-controlled fixture data.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_channel_store.py tests/test_config.py -q
