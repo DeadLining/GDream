@@ -22,7 +22,10 @@ class ProjectRepository:
     def get(self, project_id: str) -> models.Project | None:
         statement = (
             select(models.Project)
-            .options(selectinload(models.Project.characters))
+            .options(
+                selectinload(models.Project.characters),
+                selectinload(models.Project.episodes),
+            )
             .where(models.Project.id == project_id)
         )
         return self.session.scalar(statement)

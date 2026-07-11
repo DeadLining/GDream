@@ -44,10 +44,6 @@ class ProjectRead(ProjectCreate):
     updated_at: datetime
 
 
-class ProjectDetail(ProjectRead):
-    characters: list[CharacterRead] = []
-
-
 class EpisodeCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     premise: str = Field(min_length=1)
@@ -108,6 +104,11 @@ class EpisodeRead(EpisodeCreate):
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectDetail(ProjectRead):
+    characters: list[CharacterRead] = []
+    episodes: list[EpisodeRead] = []
 
 
 class EpisodeDetail(EpisodeRead):

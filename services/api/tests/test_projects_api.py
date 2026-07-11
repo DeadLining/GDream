@@ -51,3 +51,33 @@ def test_project_rejects_unsupported_aspect_ratio(client):
     )
 
     assert response.status_code == 422
+
+
+def test_project_detail_lists_episode_summaries_in_creation_order(client):
+    project = client.post(
+        "/api/projects",
+        json={
+            "title": "霓虹夜行",
+            "logline": "失忆侦探寻找被删除的城市记忆",
+            "story_bible": "近未来重庆，记忆可以买卖。",
+            "visual_style": "Chinese noir comic",
+            "aspect_ratio": "9:16",
+        },
+    ).json()
+    for title in ["第一集", "第二集"]:
+        response = client.post(
+            f"/api/projects/{project['id']}/episodes",
+            json={
+                "title": title,
+                "premise": f"{title}梗概",
+                "target_duration_seconds": 60,
+            },
+        )
+        assert response.status_code == 201
+
+    response = client.get(f"/api/projects/{project['id']}")
+
+    assert response.status_code == 200
+    episodes = response.json()["episodes"]
+    assert [episode["title"] for episode in episodes] == ["第一集", "第二集"]
+    assert "scenes" not in episodes[0]

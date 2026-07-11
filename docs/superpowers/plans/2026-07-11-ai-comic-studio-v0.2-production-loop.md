@@ -40,7 +40,7 @@
 - Modify: `services/api/comic_studio/routes/projects.py`
 - Test: `services/api/tests/test_projects_api.py`
 
-- [ ] **Step 1: Write failing project-with-episodes contract test**
+- [x] **Step 1: Write failing project-with-episodes contract test**
 
 Add a test that creates two episodes, requests `GET /api/projects/{id}`, and asserts `episodes` is ordered by creation and excludes scene payloads.
 
@@ -51,25 +51,25 @@ assert [episode["title"] for episode in response.json()["episodes"]] == ["第一
 assert "scenes" not in response.json()["episodes"][0]
 ```
 
-- [ ] **Step 2: Run the focused test and confirm the missing field**
+- [x] **Step 2: Run the focused test and confirm the missing field**
 
 Run: `cd services/api && uv run pytest tests/test_projects_api.py -q`
 Expected: FAIL because `ProjectDetail` has no `episodes` field.
 
-- [ ] **Step 3: Add eager episode loading and response schema**
+- [x] **Step 3: Add eager episode loading and response schema**
 
 Add `episodes: list[EpisodeRead] = []` to `ProjectDetail`, and eager-load `Project.episodes` alongside characters in `ProjectRepository.get()`.
 
-- [ ] **Step 4: Set all source manifest versions to 0.2.0**
+- [x] **Step 4: Set all source manifest versions to 0.2.0**
 
 Set the root package, web package, compositor package, and Python project versions to `0.2.0`. Run `npm install --package-lock-only` so the lockfile versions match.
 
-- [ ] **Step 5: Run the focused and full API suites**
+- [x] **Step 5: Run the focused and full API suites**
 
 Run: `cd services/api && uv run pytest tests/test_projects_api.py -q && uv run pytest -q`
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit read models and version**
+- [x] **Step 6: Commit read models and version**
 
 ```bash
 git add package.json package-lock.json apps/web/package.json packages/compositor/package.json services/api/pyproject.toml services/api/comic_studio services/api/tests/test_projects_api.py
