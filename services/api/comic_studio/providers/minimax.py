@@ -63,6 +63,32 @@ def _episode_plan_payload(value: Any) -> Any:
     return None
 
 
+def _normalize_import_warnings(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return value
+    root_warnings = list(value.get("warnings", []))
+
+    def normalize(item: Any, *, root: bool = False) -> Any:
+        if isinstance(item, list):
+            return [normalize(child) for child in item]
+        if not isinstance(item, dict):
+            return item
+        normalized = {}
+        for key, child in item.items():
+            if key == "warnings" and not root:
+                if isinstance(child, list):
+                    root_warnings.extend(
+                        warning for warning in child if isinstance(warning, dict)
+                    )
+                continue
+            normalized[key] = normalize(child)
+        return normalized
+
+    normalized = normalize(value, root=True)
+    normalized["warnings"] = root_warnings
+    return normalized
+
+
 class MiniMaxProvider:
     def __init__(
         self,
@@ -121,7 +147,16 @@ class MiniMaxProvider:
         messages = [
             {
                 "role": "user",
-                "content": instruction + json.dumps(context, ensure_ascii=False),
+                "content": (
+                    instruction
+                    + "Return only fields allowed by this JSON schema:\n"
+                    + json.dumps(
+                        ScriptImportDraft.model_json_schema(),
+                        ensure_ascii=False,
+                    )
+                    + "\nProject and source context:\n"
+                    + json.dumps(context, ensure_ascii=False)
+                ),
             }
         ]
         validation_feedback = ""
@@ -144,9 +179,12 @@ class MiniMaxProvider:
                         if generating
                         else SCRIPT_IMPORT_SYSTEM_PROMPT
                     ),
+                    timeout_seconds=240,
                 )
                 repaired = repair_json(_strip_fences(text), return_objects=True)
-                return ScriptImportDraft.model_validate(repaired)
+                return ScriptImportDraft.model_validate(
+                    _normalize_import_warnings(repaired)
+                )
             except (json.JSONDecodeError, ValidationError, ValueError) as exc:
                 validation_feedback = str(exc)[:1500]
                 if attempt == 1:
@@ -160,9 +198,13 @@ class MiniMaxProvider:
         messages: list[dict[str, str]],
         *,
         system: str = SYSTEM_PROMPT,
+        timeout_seconds: float = 90,
     ) -> str:
         owns_client = self._client is None
-        client = self._client or httpx.AsyncClient(base_url=self.base_url, timeout=90)
+        client = self._client or httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=timeout_seconds,
+        )
         try:
             response = await client.post(
                 "v1/messages",

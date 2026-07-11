@@ -246,6 +246,60 @@ async def test_minimax_generates_script_from_project_context():
 
     assert "create" in captured["body"]["messages"][0]["content"].lower()
     assert "avoid duplicating" in captured["body"]["system"].lower()
+    assert '"$defs"' in captured["body"]["messages"][0]["content"]
+    assert '"appearance_bible"' in captured["body"]["messages"][0]["content"]
+
+
+@pytest.mark.anyio
+async def test_script_generation_uses_extended_read_timeout(monkeypatch):
+    captured = {}
+
+    class Client:
+        async def post(self, path, **kwargs):
+            return httpx.Response(
+                200,
+                request=httpx.Request("POST", f"https://api.minimaxi.com/{path}"),
+                json={"content": [{"type": "text", "text": json.dumps(VALID_IMPORT_DRAFT)}]},
+            )
+
+        async def aclose(self):
+            return None
+
+    def client_factory(**kwargs):
+        captured.update(kwargs)
+        return Client()
+
+    monkeypatch.setattr("comic_studio.providers.minimax.httpx.AsyncClient", client_factory)
+
+    await MiniMaxProvider(api_key="secret").parse_script_import(
+        {"mode": "generate", "project": {"title": "雨夜"}}
+    )
+
+    assert captured["timeout"] == 240
+
+
+@pytest.mark.anyio
+async def test_script_generation_hoists_episode_warnings_to_draft_root():
+    payload = deepcopy(VALID_IMPORT_DRAFT)
+    payload["episodes"][0]["warnings"] = [
+        {"code": "duration_estimate", "message": "时长为估算值", "path": "episodes.0"}
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"content": [{"type": "text", "text": json.dumps(payload)}]},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        draft = await MiniMaxProvider(api_key="secret", client=client).parse_script_import(
+            {"mode": "generate", "project": {"title": "雨夜"}}
+        )
+
+    assert draft.warnings[0].code == "duration_estimate"
+    assert draft.warnings[0].path == "episodes.0"
 
 
 @pytest.mark.anyio

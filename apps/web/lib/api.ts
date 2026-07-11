@@ -85,6 +85,7 @@ export async function uploadScriptImport(projectId:string,mode:ScriptImportMode,
   return response.json() as Promise<ScriptImport>;
 }
 export const parseScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/parse`,json('POST'));
+export const retryScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/retry`,json('POST'));
 export const updateScriptImportDraft = (id:string,draft:ScriptImportDraft) => apiRequest<ScriptImport>(`/api/script-imports/${id}/draft`,json('PATCH',draft));
 export const confirmScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/confirm`,json('POST',{}));
 export const listCharacterReferences = (id:string) => apiRequest<CharacterReference[]>(`/api/characters/${id}/references`);
