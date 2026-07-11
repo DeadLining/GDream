@@ -258,9 +258,9 @@ describe('Workspace', () => {
     mocks.getProject.mockResolvedValue(projectDetail);
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
     mocks.getProviderHealth.mockResolvedValue({
-      planning: {status: 'ok'},
-      image: {status: 'ok'},
-      speech: {status: 'unavailable'},
+      planning: {status: 'configured'},
+      image: {status: 'configured'},
+      speech: {status: 'disabled'},
     });
 
     render(<Workspace />);
@@ -271,8 +271,8 @@ describe('Workspace', () => {
     expect(screen.queryByRole('button', {name: '设置'})).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: '渲染本集'})).toHaveAttribute('title', '素材未就绪');
 
-    await userEvent.click(screen.getByRole('button', {name: '模型服务状态'}));
-    expect(await screen.findByText('2/3 服务')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: '模型渠道配置状态'}));
+    expect(await screen.findByText('2/3 已配置')).toBeVisible();
   });
 
   it('groups episodes and project resources while marking the active episode', async () => {
@@ -596,6 +596,7 @@ describe('Workspace', () => {
     render(<TabsHarness />);
     const overview = screen.getByRole('tab', {name: '总览'});
     const scriptImport = screen.getByRole('tab', {name: '剧本导入'});
+    const characters = screen.getByRole('tab', {name: '角色'});
     const storyboard = screen.getByRole('tab', {name: '分镜'});
 
     expect(overview).toHaveAttribute('tabindex', '0');
@@ -604,6 +605,9 @@ describe('Workspace', () => {
     await userEvent.keyboard('{ArrowRight}');
     expect(scriptImport).toHaveFocus();
     expect(scriptImport).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(characters).toHaveFocus();
+    expect(characters).toHaveAttribute('aria-selected', 'true');
     await userEvent.keyboard('{ArrowRight}');
     expect(storyboard).toHaveFocus();
     expect(storyboard).toHaveAttribute('aria-selected', 'true');

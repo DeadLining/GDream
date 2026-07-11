@@ -40,7 +40,7 @@ export function AppToolbar({
 
   const checkHealth = async () => {
     const health = await getProviderHealth();
-    setHealthCount(Object.values(health).filter(item => item.status === 'ok').length);
+    setHealthCount(Object.values(health).filter(item => item.status === 'configured').length);
   };
   useEffect(() => {if (healthRefreshKey > 0) void checkHealth();}, [healthRefreshKey]);
   const render = async () => {
@@ -64,9 +64,9 @@ export function AppToolbar({
         {breadcrumb && <span className="workspace-breadcrumb" title={breadcrumb}>{breadcrumb}</span>}
       </div>
       <div className="toolbar-actions">
-        <button className="health-button" title="模型服务状态" aria-label="模型服务状态" onClick={checkHealth}>
+        <button className="health-button" title="模型渠道配置状态" aria-label="模型渠道配置状态" onClick={checkHealth}>
           <Activity aria-hidden="true" size={17}/>
-          <span>{healthCount === null ? '检查服务' : `${healthCount}/3 服务`}</span>
+          <span>{healthCount === null ? '检查配置' : `${healthCount}/3 已配置`}</span>
         </button>
         <button className="icon-button" title="刷新项目" aria-label="刷新项目" onClick={onRefresh}><RefreshCw aria-hidden="true" size={17}/></button>
         <button className="icon-button" title="批量生产" aria-label="批量生产" onClick={onProduction} disabled={!episodeId}><Boxes aria-hidden="true" size={17}/></button>

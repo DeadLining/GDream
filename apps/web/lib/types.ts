@@ -111,3 +111,5 @@ export type ScriptImportEpisode = {draft_id:string;enabled:boolean;title:string;
 export type ScriptImportCharacter = {draft_id:string;name:string;aliases:string[];role:string;appearance_bible:string;personality:string;continuity_rules:string;negative_constraints:string;voice_speaker:string;voice_instruction:string};
 export type ScriptImportDraft = {project:{title:string;logline:string};characters:ScriptImportCharacter[];episodes:ScriptImportEpisode[];warnings:Array<{code:string;message:string;path:string}>};
 export type ScriptImport = {id:string;project_id:string;status:string;mode:ScriptImportMode;source_format:string;original_filename:string;checksum:string;extracted_text:string;structured_draft:ScriptImportDraft|Record<string,never>;error:string;error_category:string;created_at:string;updated_at:string;applied_at:string|null};
+export type CharacterReferenceType='primary'|'front'|'three_quarter'|'side'|'back'|'expression'|'outfit';
+export type CharacterReference={id:string;character_id:string;reference_type:CharacterReferenceType;label:string;position:number;is_active:boolean;review_status:ReviewStatus;created_at:string;asset:Asset};

@@ -5,6 +5,7 @@ import type {
   ProductionRunCreate, ProductionItem, ProviderChannelKind, ProviderChannelsRead,
   ProviderChannelTestResult, ProviderChannelUpdate, ProviderChannelUpdateRead,
   ScriptImport, ScriptImportDraft, ScriptImportMode,
+  CharacterReference, CharacterReferenceType, ReviewStatus,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -86,3 +87,8 @@ export async function uploadScriptImport(projectId:string,mode:ScriptImportMode,
 export const parseScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/parse`,json('POST'));
 export const updateScriptImportDraft = (id:string,draft:ScriptImportDraft) => apiRequest<ScriptImport>(`/api/script-imports/${id}/draft`,json('PATCH',draft));
 export const confirmScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/confirm`,json('POST',{}));
+export const listCharacterReferences = (id:string) => apiRequest<CharacterReference[]>(`/api/characters/${id}/references`);
+export async function uploadCharacterReference(id:string,type:CharacterReferenceType,file:File,label=''):Promise<CharacterReference>{const form=new FormData();form.set('reference_type',type);form.set('label',label);form.set('file',file);const response=await fetch(`${API_BASE}/api/characters/${id}/references/upload`,{method:'POST',body:form});if(!response.ok){const body=await response.json() as {detail?:unknown};throw new ApiError(String(body.detail??'上传失败'),response.status,String(body.detail??''));}return response.json() as Promise<CharacterReference>;}
+export const generateCharacterReference=(id:string,type:CharacterReferenceType,label='')=>apiRequest<CharacterReference>(`/api/characters/${id}/references/generate`,json('POST',{reference_type:type,label}));
+export const updateCharacterReference=(id:string,data:{label?:string;review_status?:ReviewStatus})=>apiRequest<CharacterReference>(`/api/character-references/${id}`,json('PATCH',data));
+export const activateCharacterReference=(characterId:string,referenceId:string)=>apiRequest<CharacterReference>(`/api/characters/${characterId}/references/${referenceId}/active`,json('PUT'));
