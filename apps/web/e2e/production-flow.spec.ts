@@ -50,6 +50,30 @@ test('desktop shot selection keeps the storyboard work area active', async ({pag
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
 });
 
+test('compact desktop keeps the inspector inside the viewport at the mobile breakpoint edge', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop-specific behavior');
+
+  for (const width of [900, 905, 906]) {
+    await page.setViewportSize({width, height: 800});
+    await page.goto('/');
+    await expect(page.getByRole('tab', {name: '审核'})).toBeVisible();
+
+    const [gridBox, inspectorBox, controlBox, dimensions] = await Promise.all([
+      page.locator('.workspace-grid').boundingBox(),
+      page.locator('.workspace-inspector').boundingBox(),
+      page.getByLabel('审核状态').boundingBox(),
+      page.evaluate(() => ({clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth})),
+    ]);
+    expect(gridBox).not.toBeNull();
+    expect(inspectorBox).not.toBeNull();
+    expect(controlBox).not.toBeNull();
+    expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+    expect(gridBox!.x + gridBox!.width).toBeLessThanOrEqual(width + 1);
+    expect(inspectorBox!.x + inspectorBox!.width).toBeLessThanOrEqual(width + 1);
+    expect(controlBox!.x + controlBox!.width).toBeLessThanOrEqual(width + 1);
+  }
+});
+
 test('mobile navigation keeps work areas separated and within the viewport', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
   await page.goto('/');
