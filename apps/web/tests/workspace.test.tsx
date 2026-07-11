@@ -305,6 +305,9 @@ describe('Workspace', () => {
     render(<Workspace />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('渲染准备状态暂时无法获取');
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', {name: '剧集总览暂不可用'})).toBeVisible();
+    expect(screen.queryByText('制作剧集')).not.toBeInTheDocument();
     expect(screen.queryByText('缺少画面 0')).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: '渲染本集'})).toBeDisabled();
   });

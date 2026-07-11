@@ -154,6 +154,7 @@ export function Workspace() {
   let center;
   if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => setWorkArea('production')} onOpenReview={openReview}/>;
+  else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
