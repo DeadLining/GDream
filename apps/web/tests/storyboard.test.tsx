@@ -36,6 +36,13 @@ describe('Storyboard', () => {
     expect(screen.getByText('场景 1')).toBeVisible();
     expect(screen.getByText('林默发现追踪者。')).toBeVisible();
     expect(screen.getByText('15s')).toBeVisible();
+    expect(screen.queryByRole('button', {name: '重新生成分镜'})).not.toBeInTheDocument();
+  });
+
+  it('creates a storyboard only for an empty episode using the episode settings', () => {
+    render(<Storyboard episode={{...episode, scenes: []}} selectedId={null} onSelect={vi.fn()} onPlan={vi.fn()} job={null}/>);
+    expect(screen.getByRole('button', {name: '根据本集设定生成分镜'})).toBeVisible();
+    expect(screen.queryByText('生成剧本与分镜')).not.toBeInTheDocument();
   });
 
   it('shows stable shot metadata and accessible status text', () => {

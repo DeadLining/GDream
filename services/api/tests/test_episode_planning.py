@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from comic_studio import models, schemas
 from comic_studio.services.planning import PlanningService
 
@@ -93,3 +95,36 @@ def test_planning_discards_character_ids_not_in_the_project(db_session):
     )
 
     assert planned.scenes[0].shots[0].dialogue[0].character_id is None
+
+
+def test_planning_refuses_to_replace_an_existing_storyboard(db_session):
+    project = models.Project(
+        title="霓虹夜行",
+        logline="失忆侦探寻找记忆",
+        story_bible="近未来重庆",
+        visual_style="Chinese noir",
+        aspect_ratio="9:16",
+    )
+    episode = models.Episode(
+        project=project,
+        title="失窃的雨夜",
+        premise="林默寻找芯片",
+        target_duration_seconds=60,
+    )
+    scene = models.Scene(
+        episode=episode,
+        position=1,
+        location="旧城巷道",
+        time_of_day="night",
+        summary="保留现有剧本分镜",
+        continuity_state={},
+        estimated_duration_seconds=8,
+    )
+    db_session.add(scene)
+    db_session.commit()
+
+    with pytest.raises(RuntimeError, match="storyboard_already_exists"):
+        asyncio.run(PlanningService(db_session, FakePlanner()).plan_episode(episode.id))
+
+    db_session.refresh(scene)
+    assert scene.summary == "保留现有剧本分镜"
