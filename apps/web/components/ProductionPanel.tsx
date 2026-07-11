@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Image, Mic2, Pause, Play, RefreshCw} from 'lucide-react';
 import {
   continueProductionRun,
@@ -33,57 +33,101 @@ export function ProductionPanel({
   const [items, setItems] = useState<ProductionItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [filter, setFilter] = useState('all');
+  const [stateEpisodeId, setStateEpisodeId] = useState(episodeId);
+  const sessionRef = useRef({generation: 0, controller: new AbortController()});
 
-  const refreshReadiness = async () => {
-    const value = await getProductionReadiness(episodeId);
+  const isCurrent = (generation: number, signal: AbortSignal) => sessionRef.current.generation === generation && !signal.aborted;
+  const refreshReadiness = async (id: string, generation: number, signal: AbortSignal) => {
+    const value = await getProductionReadiness(id);
+    if (!isCurrent(generation, signal)) return;
     setReadiness(value);
     onReadiness?.(value.ready);
   };
-  const loadItems = async (id: string) => setItems(await listProductionItems(id));
+  const loadItems = async (id: string, generation: number, signal: AbortSignal) => {
+    const value = await listProductionItems(id);
+    if (isCurrent(generation, signal)) setItems(value);
+  };
+  const finishActiveRun = async (id: string, generation: number, signal: AbortSignal, shouldContinue: boolean) => {
+    if (shouldContinue) {
+      const continued = await continueProductionRun(id);
+      if (!isCurrent(generation, signal)) return;
+      setRun(continued);
+    }
+    const finished = await pollProductionRun(id, {signal});
+    if (!isCurrent(generation, signal)) return;
+    setRun(finished);
+    await loadItems(id, generation, signal);
+    await refreshReadiness(episodeId, generation, signal);
+  };
 
   useEffect(() => {
-    void refreshReadiness();
+    sessionRef.current.controller.abort();
+    const controller = new AbortController();
+    const generation = sessionRef.current.generation + 1;
+    sessionRef.current = {generation, controller};
+    setStateEpisodeId(episodeId);
+    setReadiness(null);
+    setRun(null);
+    setItems([]);
+    setSelected([]);
+    setFilter('all');
+    void refreshReadiness(episodeId, generation, controller.signal);
     const runId = localStorage.getItem(`ai-comic-production-${episodeId}`);
     if (runId) {
-      void Promise.all([getProductionRun(runId), listProductionItems(runId)]).then(([savedRun, savedItems]) => {
+      void (async () => {
+        const savedRun = await getProductionRun(runId);
+        if (!isCurrent(generation, controller.signal)) return;
         setRun(savedRun);
-        setItems(savedItems);
+        if (savedRun.status === 'queued') await finishActiveRun(runId, generation, controller.signal, true);
+        else if (savedRun.status === 'running') await finishActiveRun(runId, generation, controller.signal, false);
+        else await loadItems(runId, generation, controller.signal);
+      })().catch(cause => {
+        if (!(cause instanceof DOMException && cause.name === 'AbortError')) throw cause;
       });
     }
+    return () => controller.abort();
   }, [episodeId]);
 
   const start = async () => {
-    const created = await createProductionRun(episodeId, {
+    const {generation, controller} = sessionRef.current;
+    const id = episodeId;
+    const created = await createProductionRun(id, {
       stages,
       concurrency,
       regenerate_panels: regenPanels,
       regenerate_speech: regenSpeech,
     });
-    localStorage.setItem(`ai-comic-production-${episodeId}`, created.id);
+    if (!isCurrent(generation, controller.signal)) return;
+    localStorage.setItem(`ai-comic-production-${id}`, created.id);
     setRun(created);
-    setRun(await continueProductionRun(created.id));
-    const finished = await pollProductionRun(created.id);
-    setRun(finished);
-    await loadItems(created.id);
-    await refreshReadiness();
+    await finishActiveRun(created.id, generation, controller.signal, true);
   };
-  const pause = async () => run && setRun(await pauseProductionRun(run.id));
+  const pause = async () => {
+    if (!run) return;
+    const {generation, controller} = sessionRef.current;
+    const paused = await pauseProductionRun(run.id);
+    if (isCurrent(generation, controller.signal)) setRun(paused);
+  };
   const resume = async () => {
     if (!run) return;
-    setRun(await continueProductionRun(run.id));
-    const finished = await pollProductionRun(run.id);
-    setRun(finished);
-    await loadItems(run.id);
-    await refreshReadiness();
+    const {generation, controller} = sessionRef.current;
+    await finishActiveRun(run.id, generation, controller.signal, true);
   };
   const retry = async () => {
     if (!run) return;
-    setRun(await retryProductionRun(run.id, selected));
+    const {generation, controller} = sessionRef.current;
+    const retried = await retryProductionRun(run.id, selected);
+    if (!isCurrent(generation, controller.signal)) return;
+    setRun(retried);
     setSelected([]);
-    await resume();
+    await finishActiveRun(run.id, generation, controller.signal, true);
   };
 
-  const visible = items.filter(item => filter === 'all' || (
+  const currentEpisodeState = stateEpisodeId === episodeId;
+  const displayedReadiness = currentEpisodeState ? readiness : null;
+  const displayedRun = currentEpisodeState ? run : null;
+  const displayedItems = currentEpisodeState ? items : [];
+  const visible = displayedItems.filter(item => filter === 'all' || (
     filter === 'completed' ? ['succeeded', 'skipped'].includes(item.status) : item.status === filter
   ));
   const filters = [
@@ -96,10 +140,10 @@ export function ProductionPanel({
   return <main className="production-panel">
     <header>
       <div><span className="eyebrow">批量生产</span><h1>剧集生产队列</h1></div>
-      {readiness && <div className="readiness-summary">
-        <span>缺少画面 {readiness.blockers.missing_panels.length}</span>
-        <span>未审核 {readiness.blockers.unapproved_shots.length}</span>
-        <span>缺少配音 {readiness.blockers.missing_speech.length}</span>
+      {displayedReadiness && <div className="readiness-summary">
+        <span>缺少画面 {displayedReadiness.blockers.missing_panels.length}</span>
+        <span>未审核 {displayedReadiness.blockers.unapproved_shots.length}</span>
+        <span>缺少配音 {displayedReadiness.blockers.missing_speech.length}</span>
       </div>}
     </header>
     <section className="production-options" aria-label="生产选项">
@@ -110,15 +154,15 @@ export function ProductionPanel({
       <label><input type="checkbox" checked={regenSpeech} onChange={event => setRegenSpeech(event.target.checked)}/>重生成配音</label>
     </section>
     <div className="production-actions">
-      {!run && <button className="primary-action" disabled={!stages.length} onClick={start}><Play size={15} aria-hidden="true"/>开始批量生产</button>}
-      {run?.status === 'running' && <button onClick={pause}><Pause size={15} aria-hidden="true"/>暂停</button>}
-      {run?.status === 'paused' && <button onClick={resume}><Play size={15} aria-hidden="true"/>继续</button>}
-      {run?.failed_items ? <button onClick={retry} disabled={!selected.length}><RefreshCw size={15} aria-hidden="true"/>重试选中失败项</button> : null}
+      {!displayedRun && <button className="primary-action" disabled={!stages.length} onClick={start}><Play size={15} aria-hidden="true"/>开始批量生产</button>}
+      {displayedRun?.status === 'running' && <button onClick={pause}><Pause size={15} aria-hidden="true"/>暂停</button>}
+      {displayedRun?.status === 'paused' && <button onClick={resume}><Play size={15} aria-hidden="true"/>继续</button>}
+      {displayedRun?.failed_items ? <button onClick={retry} disabled={!selected.length}><RefreshCw size={15} aria-hidden="true"/>重试选中失败项</button> : null}
     </div>
-    {run && <>
+    {displayedRun && <>
       <div className="production-progress">
-        <progress max={run.total_items || 1} value={run.succeeded_items + run.failed_items + run.skipped_items}/>
-        <span>成功 {run.succeeded_items}</span><span>失败 {run.failed_items}</span><span>跳过 {run.skipped_items}</span>
+        <progress max={displayedRun.total_items || 1} value={displayedRun.succeeded_items + displayedRun.failed_items + displayedRun.skipped_items}/>
+        <span>成功 {displayedRun.succeeded_items}</span><span>失败 {displayedRun.failed_items}</span><span>跳过 {displayedRun.skipped_items}</span>
       </div>
       <nav className="production-filters" aria-label="生产队列筛选">{filters.map(({value, label}) => <button key={value} className={filter === value ? 'active' : ''} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</nav>
       <div className="production-items">{visible.map(item => <ProductionItemRow key={item.id} item={item} selected={selected.includes(item.id)} onSelect={checked => setSelected(checked ? [...selected, item.id] : selected.filter(id => id !== item.id))} onOpen={() => onSelectTarget(item.target_id)}/>)}</div>
