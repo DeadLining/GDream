@@ -74,8 +74,12 @@ def synthesize(request: SpeechRequest):
         raise HTTPException(status_code=400, detail=f"Unsupported model: {request.model}")
     if request.response_format != "wav":
         raise HTTPException(status_code=400, detail="Only WAV output is supported")
-    if request.speaker not in app.state.speakers:
+    supported_speakers = {speaker.lower() for speaker in app.state.speakers}
+    supported_languages = {language.lower() for language in app.state.languages}
+    if request.speaker.lower() not in supported_speakers:
         raise HTTPException(status_code=400, detail=f"Unsupported speaker: {request.speaker}")
+    if request.language.lower() not in supported_languages:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {request.language}")
 
     wavs, sample_rate = app.state.model.generate_custom_voice(
         text=request.text,

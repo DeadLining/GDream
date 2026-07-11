@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         default="Qwen3-TTS-12Hz-1.7B-CustomVoice",
         validation_alias=AliasChoices("QWEN_TTS_MODEL", "AI_COMIC_QWEN_TTS_MODEL"),
     )
+    qwen_tts_ssh_host: str = Field(
+        default="ai-comic-tts",
+        validation_alias=AliasChoices("QWEN_TTS_SSH_HOST", "AI_COMIC_QWEN_TTS_SSH_HOST"),
+    )
     compositor_root: Path = Field(
         default=Path("packages/compositor"),
         validation_alias=AliasChoices("COMPOSITOR_ROOT", "AI_COMIC_COMPOSITOR_ROOT"),

@@ -3,6 +3,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+find_port() {
+  local port="$1"
+  while lsof -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1; do
+    port=$((port + 1))
+  done
+  echo "$port"
+}
+
+API_PORT="$(find_port 8000)"
+WEB_PORT="$(find_port 3000)"
+
 cleanup() {
   kill "${API_PID:-}" "${WEB_PID:-}" 2>/dev/null || true
 }
@@ -10,16 +21,17 @@ trap cleanup EXIT INT TERM
 
 (
   cd "$ROOT/services/api"
-  uv run uvicorn comic_studio.main:app --host 127.0.0.1 --port 8000 --reload
+  uv run uvicorn comic_studio.main:app --host 127.0.0.1 --port "$API_PORT" --reload
 ) &
 API_PID=$!
 
 (
   cd "$ROOT"
-  npm run dev --workspace @comic-studio/web -- --hostname 127.0.0.1 --port 3000
+  NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:$API_PORT" \
+    npm run dev --workspace @comic-studio/web -- --hostname 127.0.0.1 --port "$WEB_PORT"
 ) &
 WEB_PID=$!
 
-echo "AI Comic Studio: http://127.0.0.1:3000"
-echo "API docs:        http://127.0.0.1:8000/docs"
+echo "AI Comic Studio: http://127.0.0.1:$WEB_PORT"
+echo "API docs:        http://127.0.0.1:$API_PORT/docs"
 wait "$API_PID" "$WEB_PID"

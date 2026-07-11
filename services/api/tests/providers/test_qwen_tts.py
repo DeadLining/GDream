@@ -1,3 +1,4 @@
+import base64
 import json
 
 import httpx
@@ -49,3 +50,55 @@ async def test_qwen_tts_rejects_non_wav_response():
         provider = QwenTTSProvider(client=client)
         with pytest.raises(RuntimeError, match="non-WAV"):
             await provider.synthesize("测试", "Dylan", "Chinese", "")
+
+
+@pytest.mark.anyio
+async def test_qwen_tts_falls_back_to_hostbridge_ssh_on_transport_failure():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("unreachable", request=request)
+
+    captured = {}
+
+    def ssh_executor(command, payload):
+        captured["command"] = command
+        captured["payload"] = payload
+        return base64.b64encode(WAV_BYTES)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        provider = QwenTTSProvider(
+            client=client,
+            ssh_host="ai-comic-tts",
+            ssh_executor=ssh_executor,
+        )
+        audio = await provider.synthesize("别回头。", "Dylan", "Chinese", "低声")
+
+    assert captured["command"][0:2] == ["ssh", "ai-comic-tts"]
+    encoded_payload = (
+        captured["command"][2].split("printf '%s' '", 1)[1].split("' |", 1)[0]
+    )
+    remote_payload = json.loads(base64.b64decode(encoded_payload))
+    assert remote_payload["speaker"] == "Dylan"
+    assert captured["payload"] == b""
+    assert audio == WAV_BYTES
+
+
+@pytest.mark.anyio
+async def test_qwen_tts_falls_back_on_gateway_errors_only():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="Bad Gateway", request=request)
+
+    def ssh_executor(command, payload):
+        return base64.b64encode(WAV_BYTES)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        audio = await QwenTTSProvider(
+            client=client,
+            ssh_host="ai-comic-tts",
+            ssh_executor=ssh_executor,
+        ).synthesize("测试", "Dylan", "Chinese", "")
+
+    assert audio == WAV_BYTES

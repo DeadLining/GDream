@@ -27,7 +27,7 @@ Set `MINIMAX_API_KEY` and `GPT_IMAGE_KEY` in `.env`. Confirm the trusted LAN can
 ./scripts/dev.sh
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). FastAPI documentation is available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+The script prints the selected workspace and API URLs. It starts from ports `3000` and `8000` and automatically selects the next free ports when either is already in use.
 
 ## Verification
 

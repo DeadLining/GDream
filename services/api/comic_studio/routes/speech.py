@@ -18,6 +18,7 @@ async def run_speech_job(app, job_id: str, dialogue_id: str) -> None:
             provider = QwenTTSProvider(
                 base_url=settings.qwen_tts_base_url,
                 model=settings.qwen_tts_model,
+                ssh_host=settings.qwen_tts_ssh_host,
             )
             asset = await SpeechService(
                 session, settings.data_root, provider
