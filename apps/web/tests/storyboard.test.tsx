@@ -45,6 +45,7 @@ describe('Storyboard', () => {
     expect(selected).toHaveTextContent('5s');
     expect(selected).toHaveTextContent('待审核');
     expect(selected).toHaveTextContent('缺少画面');
+    expect(selected).toHaveAccessibleName(/镜头 1.*特写.*5s/);
     expect(selected).toHaveAccessibleName(/已选中/);
     expect(screen.getByRole('button', {name: /镜头 2/})).toHaveTextContent('中景');
     expect(screen.getByRole('button', {name: /镜头 2/})).toHaveTextContent('已通过');

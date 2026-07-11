@@ -9,9 +9,10 @@ const SHOT_TYPES: Record<string, string> = {
 export function ShotCard({shot, selected, onSelect}: {shot: Shot; selected: boolean; onSelect: () => void}) {
   const hasPanel = Boolean(shot.active_panel_asset_id);
   const failed = shot.render_status === 'failed';
+  const shotType = SHOT_TYPES[shot.shot_type] ?? shot.shot_type.replaceAll('_', ' ');
   const reviewLabel = shot.review_status === 'approved' ? '已通过' : shot.review_status === 'needs_changes' ? '需修改' : '待审核';
   const mediaLabel = failed ? '生成失败' : hasPanel ? '已有画面' : '缺少画面';
-  const accessibleName = `镜头 ${shot.position}：${shot.composition}，${reviewLabel}，${mediaLabel}${selected ? '，已选中' : ''}`;
+  const accessibleName = `镜头 ${shot.position}：${shotType}，${shot.duration_seconds}s，${shot.composition}，${reviewLabel}，${mediaLabel}${selected ? '，已选中' : ''}`;
 
   return (
     <button className={`shot-card${selected ? ' selected' : ''}${failed ? ' failed' : ''}`} onClick={onSelect} aria-label={accessibleName} aria-pressed={selected}>
@@ -20,7 +21,7 @@ export function ShotCard({shot, selected, onSelect}: {shot: Shot; selected: bool
         <span className="shot-number">{String(shot.position).padStart(2, '0')}</span>
       </div>
       <div className="shot-meta">
-        <strong>{SHOT_TYPES[shot.shot_type] ?? shot.shot_type.replaceAll('_', ' ')}</strong>
+        <strong>{shotType}</strong>
         <span><Clock3 size={13}/>{shot.duration_seconds}s</span>
         <span><MessageSquareText size={13}/>{shot.dialogue.length}</span>
       </div>
