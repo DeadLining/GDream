@@ -4,6 +4,17 @@ from sqlalchemy.orm import Session, selectinload
 from comic_studio import models, schemas
 
 
+def patch_resource(session: Session, model_type, resource_id: str, data):
+    resource = session.get(model_type, resource_id)
+    if resource is None:
+        return None
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(resource, field, value)
+    session.commit()
+    session.refresh(resource)
+    return resource
+
+
 class ProjectRepository:
     def __init__(self, session: Session):
         self.session = session
@@ -42,6 +53,12 @@ class ProjectRepository:
         self.session.refresh(character)
         return character
 
+    def update(self, project_id: str, data: schemas.ProjectPatch):
+        return patch_resource(self.session, models.Project, project_id, data)
+
+    def update_character(self, character_id: str, data: schemas.CharacterPatch):
+        return patch_resource(self.session, models.Character, character_id, data)
+
 
 class EpisodeRepository:
     def __init__(self, session: Session):
@@ -69,3 +86,12 @@ class EpisodeRepository:
             .where(models.Episode.id == episode_id)
         )
         return self.session.scalar(statement)
+
+    def update(self, episode_id: str, data: schemas.EpisodePatch):
+        return patch_resource(self.session, models.Episode, episode_id, data)
+
+    def update_shot(self, shot_id: str, data: schemas.ShotPatch):
+        return patch_resource(self.session, models.Shot, shot_id, data)
+
+    def update_dialogue(self, dialogue_id: str, data: schemas.DialoguePatch):
+        return patch_resource(self.session, models.DialogueLine, dialogue_id, data)

@@ -5,6 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
+ReviewStatus = Literal["draft", "needs_changes", "approved"]
+
+
+class PatchModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class CharacterCreate(BaseModel):
@@ -27,6 +32,17 @@ class CharacterRead(CharacterCreate):
     updated_at: datetime
 
 
+class CharacterPatch(PatchModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    role: str | None = Field(default=None, min_length=1, max_length=80)
+    appearance_bible: str | None = Field(default=None, min_length=1)
+    personality: str | None = Field(default=None, min_length=1)
+    continuity_rules: str | None = Field(default=None, min_length=1)
+    negative_constraints: str | None = None
+    voice_speaker: str | None = Field(default=None, min_length=1, max_length=80)
+    voice_instruction: str | None = None
+
+
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     logline: str = Field(min_length=1)
@@ -42,6 +58,15 @@ class ProjectRead(ProjectCreate):
     id: str
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectPatch(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    logline: str | None = Field(default=None, min_length=1)
+    story_bible: str | None = Field(default=None, min_length=1)
+    visual_style: str | None = Field(default=None, min_length=1)
+    aspect_ratio: AspectRatio | None = None
+    language: str | None = Field(default=None, min_length=1, max_length=32)
 
 
 class EpisodeCreate(BaseModel):
@@ -65,6 +90,14 @@ class DialogueRead(BaseModel):
     duration_seconds: float
 
 
+class DialoguePatch(PatchModel):
+    text: str | None = Field(default=None, min_length=1)
+    subtitle_text: str | None = Field(default=None, min_length=1)
+    emotion: str | None = Field(default=None, min_length=1, max_length=80)
+    performance_instruction: str | None = None
+    start_seconds: float | None = Field(default=None, ge=0)
+
+
 class ShotRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,6 +114,15 @@ class ShotRead(BaseModel):
     review_status: str
     render_status: str
     dialogue: list[DialogueRead] = []
+
+
+class ShotPatch(PatchModel):
+    duration_seconds: float | None = Field(default=None, gt=0, le=30)
+    composition: str | None = Field(default=None, min_length=1)
+    camera_motion: str | None = Field(default=None, min_length=1, max_length=80)
+    image_prompt: str | None = Field(default=None, min_length=1)
+    negative_prompt: str | None = None
+    review_status: ReviewStatus | None = None
 
 
 class SceneRead(BaseModel):
@@ -104,6 +146,12 @@ class EpisodeRead(EpisodeCreate):
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+class EpisodePatch(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    premise: str | None = Field(default=None, min_length=1)
+    target_duration_seconds: int | None = Field(default=None, ge=15, le=1800)
 
 
 class ProjectDetail(ProjectRead):

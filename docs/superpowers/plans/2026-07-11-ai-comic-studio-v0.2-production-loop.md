@@ -85,7 +85,7 @@ git commit -m "feat: expose v0.2 project production data"
 - Modify: `services/api/comic_studio/routes/episodes.py`
 - Test: `services/api/tests/test_resource_updates.py`
 
-- [ ] **Step 1: Write failing patch-route tests**
+- [x] **Step 1: Write failing patch-route tests**
 
 Cover project, character, episode, shot, and dialogue updates. Verify omitted fields remain unchanged and unknown fields return HTTP 422.
 
@@ -96,20 +96,20 @@ assert response.json()["duration_seconds"] == 7.5
 assert response.json()["review_status"] == "approved"
 ```
 
-- [ ] **Step 2: Run the new test and verify the routes return 404/405**
+- [x] **Step 2: Run the new test and verify the routes return 404/405**
 
 Run: `cd services/api && uv run pytest tests/test_resource_updates.py -q`
 Expected: FAIL because PATCH routes do not exist.
 
-- [ ] **Step 3: Define strict patch schemas**
+- [x] **Step 3: Define strict patch schemas**
 
 Create `ProjectPatch`, `CharacterPatch`, `EpisodePatch`, `ShotPatch`, and `DialoguePatch` with `ConfigDict(extra="forbid")`. Use the same field validation bounds as create schemas and restrict review status to `draft`, `needs_changes`, or `approved`.
 
-- [ ] **Step 4: Implement a shared repository patch helper**
+- [x] **Step 4: Implement a shared repository patch helper**
 
 Apply only `model_dump(exclude_unset=True)` values, commit once, refresh the model, and return `None` for missing IDs. Keep provider-owned asset IDs outside user patch schemas.
 
-- [ ] **Step 5: Add PATCH routes with typed responses**
+- [x] **Step 5: Add PATCH routes with typed responses**
 
 Expose:
 
@@ -123,12 +123,12 @@ PATCH /api/dialogue/{dialogue_id}
 
 Return HTTP 404 with a resource-specific message when absent.
 
-- [ ] **Step 6: Run update and regression tests**
+- [x] **Step 6: Run update and regression tests**
 
 Run: `cd services/api && uv run pytest tests/test_resource_updates.py tests/test_episode_graph.py tests/test_projects_api.py -q`
 Expected: all tests pass.
 
-- [ ] **Step 7: Commit editable resource contracts**
+- [x] **Step 7: Commit editable resource contracts**
 
 ```bash
 git add services/api/comic_studio services/api/tests/test_resource_updates.py

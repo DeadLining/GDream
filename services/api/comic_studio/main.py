@@ -11,7 +11,7 @@ from comic_studio.routes.jobs import router as jobs_router
 from comic_studio.routes.speech import router as speech_router
 from comic_studio.routes.providers import router as providers_router
 from comic_studio.routes.renders import router as renders_router
-from comic_studio.routes.projects import router as projects_router
+from comic_studio.routes.projects import character_router, router as projects_router
 
 
 def create_app() -> FastAPI:
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     app.state.session_factory = session_factory
     app.state.settings = settings
     app.include_router(projects_router)
+    app.include_router(character_router)
     app.include_router(episodes_router)
     app.include_router(jobs_router)
     app.include_router(assets_router)

@@ -37,6 +37,34 @@ def get_episode(episode_id: str, session: SessionDependency):
     return episode
 
 
+@router.patch("/api/episodes/{episode_id}", response_model=schemas.EpisodeRead)
+def update_episode(
+    episode_id: str, data: schemas.EpisodePatch, session: SessionDependency
+):
+    episode = EpisodeRepository(session).update(episode_id, data)
+    if episode is None:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    return episode
+
+
+@router.patch("/api/shots/{shot_id}", response_model=schemas.ShotRead)
+def update_shot(shot_id: str, data: schemas.ShotPatch, session: SessionDependency):
+    shot = EpisodeRepository(session).update_shot(shot_id, data)
+    if shot is None:
+        raise HTTPException(status_code=404, detail="Shot not found")
+    return shot
+
+
+@router.patch("/api/dialogue/{dialogue_id}", response_model=schemas.DialogueRead)
+def update_dialogue(
+    dialogue_id: str, data: schemas.DialoguePatch, session: SessionDependency
+):
+    dialogue = EpisodeRepository(session).update_dialogue(dialogue_id, data)
+    if dialogue is None:
+        raise HTTPException(status_code=404, detail="Dialogue line not found")
+    return dialogue
+
+
 async def run_planning_job(app, job_id: str, episode_id: str) -> None:
     with app.state.session_factory() as session:
         jobs = JobStore(session)
