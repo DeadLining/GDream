@@ -305,6 +305,27 @@ class AssetRead(BaseModel):
     created_at: datetime
 
 
+ReferenceType = Literal["primary", "front", "three_quarter", "side", "back", "expression", "outfit"]
+
+
+class CharacterReferencePatch(PatchModel):
+    label: str | None = Field(default=None, max_length=120)
+    position: int | None = Field(default=None, ge=0)
+    review_status: ReviewStatus | None = None
+
+
+class CharacterReferenceRead(BaseModel):
+    id: str
+    character_id: str
+    reference_type: str
+    label: str
+    position: int
+    is_active: bool
+    review_status: str
+    created_at: datetime
+    asset: AssetRead
+
+
 ProductionStage = Literal["panels", "speech"]
 
 
