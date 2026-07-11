@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, it, vi} from 'vitest';
 import {EpisodeOverview} from '../components/EpisodeOverview';
@@ -123,5 +123,30 @@ describe('episode overview', () => {
 
     await userEvent.click(screen.getByRole('button', {name: '审核镜头'}));
     expect(onOpenReview).toHaveBeenCalledOnce();
+  });
+
+  it('shows truthful empty metrics without exposing a contradictory progress range', () => {
+    const emptyEpisode: EpisodeDetail = {...episode, scenes: []};
+    const emptyReadiness: ProductionReadiness = {
+      episode_id: episode.id,
+      ready: false,
+      totals: {shots: 0, dialogue: 0},
+      ready_counts: {panels: 0, approved: 0, speech: 0},
+      blockers: {missing_panels: [], unapproved_shots: [], missing_speech: []},
+    };
+
+    const {container} = render(
+      <EpisodeOverview
+        episode={emptyEpisode}
+        readiness={emptyReadiness}
+        onSelectShot={vi.fn()}
+        onOpenProduction={vi.fn()}
+        onOpenReview={vi.fn()}
+      />,
+    );
+
+    expect(within(container).getAllByText('0 / 0')).toHaveLength(3);
+    expect(within(container).queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(within(container).getByLabelText('画面进度：无项目')).toHaveTextContent('暂无项目');
   });
 });

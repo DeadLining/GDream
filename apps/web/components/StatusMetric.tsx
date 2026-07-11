@@ -13,7 +13,11 @@ export function StatusMetric({
         <span>{label}</span>
         <strong>{ready} / {total}</strong>
       </div>
-      <progress aria-label={label} aria-valuetext={`${ready} / ${total}`} value={ready} max={total || 1} />
+      {total === 0 ? (
+        <span className="status-metric-empty" aria-label={`${label}：无项目`}>暂无项目</span>
+      ) : (
+        <progress aria-label={label} aria-valuetext={`${ready} / ${total}`} value={ready} max={total} />
+      )}
     </div>
   );
 }
