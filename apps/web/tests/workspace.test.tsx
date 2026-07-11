@@ -301,4 +301,18 @@ describe('Workspace', () => {
     await userEvent.keyboard('{Home}');
     expect(overview).toHaveFocus();
   });
+
+  it('provides a matching tabpanel for every visible tab', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    render(<Workspace />);
+
+    const tabs = await screen.findAllByRole('tab');
+    for (const tab of tabs) {
+      const panelId = tab.getAttribute('aria-controls');
+      expect(panelId).toBeTruthy();
+      expect(document.getElementById(panelId!)).toHaveAttribute('role', 'tabpanel');
+    }
+  });
 });

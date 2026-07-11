@@ -147,11 +147,15 @@ export function Workspace() {
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review') center = <main className="center-state review-placeholder" data-testid="review-placeholder"><h1>审核工作区</h1><p>审核队列将在后续任务中接入。</p></main>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
+  const visibleWorkAreas: WorkArea[] = mobile
+    ? ['overview', 'storyboard', 'production', 'inspector']
+    : ['overview', 'storyboard', 'production', 'review'];
 
   return <div className="app-shell">
     {toolbar}
     <div className="mobile-project-bar"><select aria-label="选择项目" value={project?.id ?? ''} onChange={event => loadProject(event.target.value)}>{projects.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select><select aria-label="选择剧集" value={episode?.id ?? ''} onChange={event => loadEpisode(event.target.value)}>{project?.episodes.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
     <WorkspaceTabs value={workArea} onChange={setWorkArea} mobile={mobile}/>
+    {visibleWorkAreas.filter(area => area !== workArea).map(area => <section key={area} id={`workspace-panel-${area}`} role="tabpanel" aria-labelledby={`workspace-tab-${area}`} hidden/>)}
     <div className={`workspace-grid mobile-${workArea}`}>
       <ProjectNavigator projects={projects} project={project} episodeId={episode?.id ?? null} onProject={loadProject} onEpisode={loadEpisode} onNewProject={() => setProjectDialog(true)} onNewEpisode={() => setEpisodeDialog(true)}/>
       <section
