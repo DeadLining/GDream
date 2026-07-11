@@ -313,7 +313,7 @@ git commit -m "feat: redesign storyboard and shot inspector"
 - Modify: `apps/web/tests/production-panel.test.tsx`
 - Modify: `apps/web/app/globals.css`
 
-- [ ] **Step 1: Write failing review and production presentation tests**
+- [x] **Step 1: Write failing review and production presentation tests**
 
 Review tests must show only blocker shots and route selection:
 
@@ -326,7 +326,7 @@ expect(onSelectShot).toHaveBeenCalledWith('shot-2');
 
 Extend production tests to assert Chinese filter labels, stage icons with accessible names, failure text, and stable counters while retaining start, pause, continue, retry, restore, and readiness-refresh behavior.
 
-- [ ] **Step 2: Run focused tests and confirm review/filter UI is absent**
+- [x] **Step 2: Run focused tests and confirm review/filter UI is absent**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/review-panel.test.tsx tests/production-panel.test.tsx
@@ -334,19 +334,19 @@ npm test --workspace @comic-studio/web -- --run tests/review-panel.test.tsx test
 
 Expected: FAIL because `ReviewPanel` and redesigned labels do not exist.
 
-- [ ] **Step 3: Implement `ReviewPanel` from existing data**
+- [x] **Step 3: Implement `ReviewPanel` from existing data**
 
 Derive blocked shots from `missing_panels` and `unapproved_shots`. Render one compact row per affected shot with blocker labels and `onSelectShot`. Do not persist a separate review queue.
 
-- [ ] **Step 4: Redesign production controls and rows**
+- [x] **Step 4: Redesign production controls and rows**
 
 Keep every v0.3 API call unchanged. Replace English filter text with `全部`, `进行中`, `失败`, and `已完成`. Use icons and status labels, preserve semantic checkboxes, and show errors in an inline failure region.
 
-- [ ] **Step 5: Apply production and review CSS**
+- [x] **Step 5: Apply production and review CSS**
 
 Use a compact option band, stable progress region, segmented filter control, and dense rows. Keep progress and counters from resizing the layout as states change.
 
-- [ ] **Step 6: Run tests and build**
+- [x] **Step 6: Run tests and build**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/review-panel.test.tsx tests/production-panel.test.tsx
@@ -356,7 +356,7 @@ npm run build --workspace @comic-studio/web
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit production and review**
+- [x] **Step 7: Commit production and review**
 
 ```bash
 git add apps/web/components/ReviewPanel.tsx apps/web/components/ProductionPanel.tsx apps/web/components/ProductionItemRow.tsx apps/web/tests/review-panel.test.tsx apps/web/tests/production-panel.test.tsx apps/web/app/globals.css

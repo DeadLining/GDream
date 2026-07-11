@@ -209,12 +209,17 @@ describe('Workspace', () => {
     await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
     expect(screen.getByRole('tab', {name: '分镜'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: /镜头 2/}));
+    expect(screen.getByRole('heading', {name: '镜头 2'})).toBeVisible();
 
     await userEvent.click(screen.getByRole('tab', {name: '生产'}));
     expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
 
     await userEvent.click(screen.getByRole('tab', {name: '审核'}));
-    expect(screen.getByTestId('review-placeholder')).toBeVisible();
+    expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
+    expect(screen.getByRole('heading', {name: '镜头 2'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: /镜头 1/}));
+    expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
   });
 
   it('preserves the selected shot when switching from overview to storyboard', async () => {

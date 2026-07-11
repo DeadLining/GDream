@@ -11,6 +11,7 @@ import {EpisodeOverview} from './EpisodeOverview';
 import {Inspector} from './Inspector';
 import {ProductionPanel} from './ProductionPanel';
 import {ProjectNavigator} from './ProjectNavigator';
+import {ReviewPanel} from './ReviewPanel';
 import {Storyboard} from './Storyboard';
 import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
 
@@ -145,7 +146,7 @@ export function Workspace() {
   if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => setWorkArea('production')} onOpenReview={() => setWorkArea('review')}/>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
-  else if (workArea === 'review') center = <main className="center-state review-placeholder" data-testid="review-placeholder"><h1>审核工作区</h1><p>审核队列将在后续任务中接入。</p></main>;
+  else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
   const visibleWorkAreas: WorkArea[] = mobile
     ? ['overview', 'storyboard', 'production', 'inspector']
