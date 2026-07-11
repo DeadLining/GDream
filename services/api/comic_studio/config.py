@@ -33,6 +33,18 @@ class Settings(BaseSettings):
         default="gpt-image-2",
         validation_alias=AliasChoices("GPT_IMAGE_MODEL", "AI_COMIC_GPT_IMAGE_MODEL"),
     )
+    qwen_tts_base_url: str = Field(
+        default="http://192.168.18.94:18080",
+        validation_alias=AliasChoices("QWEN_TTS_BASE_URL", "AI_COMIC_QWEN_TTS_BASE_URL"),
+    )
+    qwen_tts_model: str = Field(
+        default="Qwen3-TTS-12Hz-1.7B-CustomVoice",
+        validation_alias=AliasChoices("QWEN_TTS_MODEL", "AI_COMIC_QWEN_TTS_MODEL"),
+    )
+    compositor_root: Path = Field(
+        default=Path("../../packages/compositor"),
+        validation_alias=AliasChoices("COMPOSITOR_ROOT", "AI_COMIC_COMPOSITOR_ROOT"),
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

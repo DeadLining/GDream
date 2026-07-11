@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 import httpx
+from json_repair import repair_json
 from pydantic import ValidationError
 
 from comic_studio.providers.base import ProviderError
@@ -73,7 +74,8 @@ class MiniMaxProvider:
                 )
             try:
                 text = await self._request(messages)
-                return EpisodePlan.model_validate_json(_strip_fences(text))
+                repaired = repair_json(_strip_fences(text), return_objects=True)
+                return EpisodePlan.model_validate(repaired)
             except (json.JSONDecodeError, ValidationError, ValueError) as exc:
                 validation_feedback = str(exc)[:1500]
                 if attempt == 1:

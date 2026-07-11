@@ -1,0 +1,80 @@
+from pathlib import Path
+
+from comic_studio import models
+from comic_studio.services.rendering import RenderingService
+
+
+def seed_episode(session, data_root: Path):
+    project = models.Project(
+        title="霓虹夜行",
+        logline="侦探寻找记忆",
+        story_bible="近未来重庆",
+        visual_style="Chinese noir",
+        aspect_ratio="9:16",
+    )
+    episode = models.Episode(
+        project=project, title="雨夜", premise="寻找芯片", target_duration_seconds=60
+    )
+    scene = models.Scene(
+        episode=episode,
+        position=1,
+        location="巷道",
+        summary="发现线索",
+        estimated_duration_seconds=5,
+    )
+    shot = models.Shot(
+        scene=scene,
+        position=1,
+        shot_type="close_up",
+        duration_seconds=5,
+        composition="芯片特写",
+        camera_motion="push_in",
+        review_status="approved",
+    )
+    session.add(project)
+    session.flush()
+    panel = models.Asset(
+        project_id=project.id,
+        kind="panel",
+        local_path="projects/panel.png",
+        media_type="image/png",
+        provider="test",
+        model="test",
+        checksum="0" * 64,
+        review_status="approved",
+    )
+    session.add_all([shot, panel])
+    session.flush()
+    shot.active_panel_asset_id = panel.id
+    session.commit()
+    panel_path = data_root / panel.local_path
+    panel_path.parent.mkdir(parents=True)
+    panel_path.write_bytes(b"png")
+    return episode
+
+
+def test_render_manifest_uses_only_active_approved_assets(db_session, tmp_path):
+    episode = seed_episode(db_session, tmp_path)
+
+    manifest = RenderingService(db_session, tmp_path, tmp_path).build_manifest(
+        episode.id
+    )
+
+    assert manifest["episode"]["width"] == 1080
+    assert manifest["episode"]["height"] == 1920
+    assert manifest["shots"][0]["reviewStatus"] == "approved"
+    assert manifest["shots"][0]["panelPath"].endswith("projects/panel.png")
+
+
+def test_render_manifest_rejects_unapproved_shot(db_session, tmp_path):
+    episode = seed_episode(db_session, tmp_path)
+    episode.scenes[0].shots[0].review_status = "draft"
+    db_session.commit()
+
+    service = RenderingService(db_session, tmp_path, tmp_path)
+    try:
+        service.build_manifest(episode.id)
+    except ValueError as exc:
+        assert "not approved" in str(exc)
+    else:
+        raise AssertionError("Expected unapproved shot to block rendering")

@@ -83,3 +83,24 @@ async def test_minimax_retries_once_with_validation_feedback():
     assert len(requests) == 2
     assert "validation" in requests[1]["messages"][-1]["content"].lower()
     assert plan.scenes[0].location == "雨夜巷道"
+
+
+@pytest.mark.anyio
+async def test_minimax_repairs_syntax_but_still_validates_schema():
+    damaged = json.dumps(VALID_PLAN, ensure_ascii=False).replace(
+        '"location": "雨夜巷道",', '"location": "雨夜巷道"'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"content": [{"type": "text", "text": damaged}]}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        plan = await MiniMaxProvider(api_key="secret", client=client).plan_episode(
+            {"title": "失窃的雨夜"}
+        )
+
+    assert plan.scenes[0].location == "雨夜巷道"
