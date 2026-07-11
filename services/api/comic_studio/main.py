@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -108,6 +109,13 @@ def create_app() -> FastAPI:
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://(?:127\.0\.0\.1|localhost):\d{1,5}",
+        allow_credentials=False,
+        allow_methods=["GET", "PUT", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
 
     @app.exception_handler(RequestValidationError)
     async def sanitized_validation_error_handler(
