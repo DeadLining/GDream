@@ -137,7 +137,7 @@ export function Workspace() {
     if (finished.status === 'succeeded') await loadEpisode(episode.id);
   };
 
-  const toolbar = <AppToolbar episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => setWorkArea('production')} renderReady={readiness?.ready ?? false}/>;
+  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => setWorkArea('production')} renderReady={readiness?.ready ?? false}/>;
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
   if (!projects.length) return <div className="app-shell">{toolbar}<main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main><CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async data => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/></div>;
 

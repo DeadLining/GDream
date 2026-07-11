@@ -1,4 +1,55 @@
-import {BookOpen,Clapperboard,Plus,Users} from 'lucide-react'; import type {Project,ProjectDetail} from '../lib/types';
-export function ProjectNavigator({projects,project,episodeId,onProject,onEpisode,onNewProject,onNewEpisode}:{projects:Project[];project:ProjectDetail|null;episodeId:string|null;onProject:(id:string)=>void;onEpisode:(id:string)=>void;onNewProject:()=>void;onNewEpisode:()=>void}) {
- return <aside className="project-nav"><select className="project-switcher" aria-label="选择项目" value={project?.id??''} onChange={event=>onProject(event.target.value)}>{projects.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select><button className="new-episode" onClick={onNewProject}><Plus size={16}/>新建项目</button><nav aria-label="项目导航"><p className="nav-section-label">项目资产</p><button className="nav-item"><BookOpen size={17}/>故事设定</button><button className="nav-item"><Users size={17}/>角色库<span>{project?.characters.length??0}</span></button><p className="nav-section-label episodes-label">剧集</p>{project?.episodes.map((episode,index)=><button key={episode.id} className={`episode-item ${episodeId===episode.id?'active':''}`} onClick={()=>onEpisode(episode.id)}><span>{String(index+1).padStart(2,'0')}</span><span><strong>{episode.title}</strong><small>{episode.status==='planned'?'已规划':'尚未规划'}</small></span></button>)}</nav><button className="new-episode" onClick={onNewEpisode}><Plus size={16}/>新建剧集</button><div className="nav-footer"><Clapperboard size={16}/><span>{project?.aspect_ratio??'9:16'} 本地项目</span></div></aside>;
+import {BookOpen, Clapperboard, FileText, Plus, Users} from 'lucide-react';
+import type {Project, ProjectDetail} from '../lib/types';
+
+export function ProjectNavigator({projects, project, episodeId, onProject, onEpisode, onNewProject, onNewEpisode}: {
+  projects: Project[];
+  project: ProjectDetail | null;
+  episodeId: string | null;
+  onProject: (id: string) => void;
+  onEpisode: (id: string) => void;
+  onNewProject: () => void;
+  onNewEpisode: () => void;
+}) {
+  return (
+    <aside className="project-nav">
+      <div className="project-controls">
+        <label htmlFor="project-switcher">当前项目</label>
+        <select id="project-switcher" className="project-switcher" aria-label="选择项目" value={project?.id ?? ''} onChange={event => onProject(event.target.value)}>
+          {projects.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+        </select>
+        <button className="creation-command" onClick={onNewProject}><Plus aria-hidden="true" size={16}/>新建项目</button>
+      </div>
+
+      <nav aria-label="项目导航">
+        <section className="nav-group" aria-labelledby="episodes-heading">
+          <div className="nav-group-heading">
+            <h2 id="episodes-heading">剧集</h2>
+            <span>{project?.episodes.length ?? 0}</span>
+          </div>
+          <div className="episode-list">
+            {project?.episodes.map((episode, index) => (
+              <button
+                key={episode.id}
+                className={`episode-item ${episodeId === episode.id ? 'active' : ''}`}
+                aria-current={episodeId === episode.id ? 'page' : undefined}
+                onClick={() => onEpisode(episode.id)}
+              >
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <span><strong>{episode.title}</strong><small>{episode.status === 'planned' ? '已规划' : '尚未规划'}</small></span>
+              </button>
+            ))}
+          </div>
+          <button className="creation-command" onClick={onNewEpisode}><Plus aria-hidden="true" size={16}/>新建剧集</button>
+        </section>
+
+        <section className="nav-group" aria-labelledby="resources-heading">
+          <div className="nav-group-heading"><h2 id="resources-heading">项目资料</h2></div>
+          <button className="nav-item placeholder" aria-label="角色设定" title="角色设定将在后续任务中接入"><Users aria-hidden="true" size={17}/><span>角色设定</span><small aria-hidden="true">{project?.characters.length ?? 0}</small></button>
+          <button className="nav-item placeholder" title="故事圣经将在后续任务中接入"><BookOpen aria-hidden="true" size={17}/><span>故事圣经</span></button>
+        </section>
+      </nav>
+
+      <div className="nav-footer"><Clapperboard aria-hidden="true" size={16}/><span>{project?.aspect_ratio ?? '9:16'} 本地项目</span><FileText aria-hidden="true" size={14}/></div>
+    </aside>
+  );
 }

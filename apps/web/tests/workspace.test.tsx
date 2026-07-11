@@ -147,6 +147,42 @@ describe('Workspace', () => {
     await waitFor(() => expect(mocks.startPlanning).toHaveBeenCalledWith('episode-1'));
   });
 
+  it('exposes the active project context and accessible studio commands', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProviderHealth.mockResolvedValue({
+      planning: {status: 'ok'},
+      image: {status: 'ok'},
+      speech: {status: 'unavailable'},
+    });
+
+    render(<Workspace />);
+
+    expect(await screen.findByText('霓虹夜行 / 失窃的雨夜')).toBeVisible();
+    expect(screen.getByRole('button', {name: '刷新项目'})).toHaveAttribute('title', '刷新项目');
+    expect(screen.getByRole('button', {name: '批量生产'})).toHaveAttribute('title', '批量生产');
+    expect(screen.getByRole('button', {name: '设置'})).toHaveAttribute('title', '设置');
+    expect(screen.getByRole('button', {name: '渲染本集'})).toHaveAttribute('title', '素材未就绪');
+
+    await userEvent.click(screen.getByRole('button', {name: '模型服务状态'}));
+    expect(await screen.findByText('2/3 服务')).toBeVisible();
+  });
+
+  it('groups episodes and project resources while marking the active episode', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+
+    expect(await screen.findByRole('heading', {name: '剧集'})).toBeVisible();
+    expect(screen.getByRole('heading', {name: '项目资料'})).toBeVisible();
+    expect(screen.getByRole('button', {name: '故事圣经'})).toBeVisible();
+    expect(screen.getByRole('button', {name: '角色设定'})).toBeVisible();
+    expect(screen.getByRole('button', {name: /失窃的雨夜/})).toHaveAttribute('aria-current', 'page');
+  });
+
   it('opens on overview and navigates between episode work areas', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);

@@ -181,7 +181,7 @@ git commit -m "feat: add episode cockpit navigation"
 - Modify: `apps/web/tests/workspace.test.tsx`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Write failing shell semantics tests**
+- [x] **Step 1: Write failing shell semantics tests**
 
 Assert that the toolbar exposes a project/episode breadcrumb, accessible icon commands, and readiness-aware render title. Assert the navigator exposes `剧集` and `项目资料` groups and preserves the active episode.
 
@@ -191,7 +191,7 @@ expect(screen.getByRole('button', {name: '批量生产'})).toBeVisible();
 expect(screen.getByRole('button', {name: '渲染本集'})).toHaveAttribute('title', '素材未就绪');
 ```
 
-- [ ] **Step 2: Run tests and confirm the new shell contract fails**
+- [x] **Step 2: Run tests and confirm the new shell contract fails**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/workspace.test.tsx
@@ -199,11 +199,11 @@ npm test --workspace @comic-studio/web -- --run tests/workspace.test.tsx
 
 Expected: FAIL on breadcrumb and navigation group assertions.
 
-- [ ] **Step 3: Refactor toolbar and navigator props**
+- [x] **Step 3: Refactor toolbar and navigator props**
 
 Pass project and episode labels explicitly to `AppToolbar`. Use Lucide icons already installed; keep icon-only utilities at stable 34px dimensions with tooltips. Add project-resource navigation rows as non-destructive placeholders only when they map to existing content; do not create backend routes.
 
-- [ ] **Step 4: Replace global tokens and shell CSS**
+- [x] **Step 4: Replace global tokens and shell CSS**
 
 Define the light studio tokens at the top of `globals.css`:
 
@@ -225,7 +225,7 @@ Define the light studio tokens at the top of `globals.css`:
 
 Rebuild toolbar, navigation, workspace grid, button, input, focus, loading, and empty-state styles. Keep surfaces unframed except repeated cards and dialogs. Add `.superpowers/` to `.gitignore` so visual-companion artifacts stay local.
 
-- [ ] **Step 5: Run tests, build, and CSS checks**
+- [x] **Step 5: Run tests, build, and CSS checks**
 
 ```bash
 npm test --workspace @comic-studio/web
