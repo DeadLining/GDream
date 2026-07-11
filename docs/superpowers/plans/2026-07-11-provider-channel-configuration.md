@@ -287,7 +287,7 @@ git commit -m "feat: test provider channel connections"
 - Modify: `apps/web/components/ProjectNavigator.tsx`
 - Modify: `apps/web/components/WorkspaceTabs.tsx`
 
-- [ ] **Step 1: Write failing client and settings tests**
+- [x] **Step 1: Write failing client and settings tests**
 
 Test request bodies and UI behavior:
 
@@ -301,7 +301,7 @@ expect(await screen.findByText(/连接成功/)).toBeVisible();
 
 Cover dirty state, preserve/replace/clear key controls, TTS SSH Host, enabled validation, test failure, save/reload, and navigation confirmation.
 
-- [ ] **Step 2: Run tests and confirm exports/components are absent**
+- [x] **Step 2: Run tests and confirm exports/components are absent**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/provider-settings.test.tsx
@@ -309,7 +309,7 @@ npm test --workspace @comic-studio/web -- --run tests/provider-settings.test.tsx
 
 Expected: FAIL because channel types, API functions, and settings components do not exist.
 
-- [ ] **Step 3: Add typed API functions**
+- [x] **Step 3: Add typed API functions**
 
 Add `ProviderChannelKind`, redacted read types, update types, and test-result types. Implement:
 
@@ -321,17 +321,17 @@ testProviderChannel(kind, candidate)
 
 Do not place keys in URLs or logs.
 
-- [ ] **Step 4: Build the settings components**
+- [x] **Step 4: Build the settings components**
 
 `ProviderSettings` loads all channels, owns dirty state, saves changed sections deterministically, and reloads the redacted snapshot. `ProviderChannelSection` renders the fixed fields, masked key state, replace/clear controls, enabled toggle, connection test, and TTS-only SSH Host.
 
 Use semantic forms, labels, switches/checkboxes, accessible inline status, and stable dimensions. Never write key input values to local storage.
 
-- [ ] **Step 5: Integrate a real settings work area**
+- [x] **Step 5: Integrate a real settings work area**
 
 Add `settings` to the desktop and mobile `WorkArea` contract. Add a `模型渠道` navigation command in `ProjectNavigator` or toolbar that selects this work area. Ensure every rendered tab/control has valid `aria-controls`/tabpanel behavior and responsive normalization.
 
-- [ ] **Step 6: Run tests/build and commit**
+- [x] **Step 6: Run tests/build and commit**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/provider-settings.test.tsx tests/workspace.test.tsx

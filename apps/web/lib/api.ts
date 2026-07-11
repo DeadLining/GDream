@@ -2,7 +2,8 @@ import type {
   Asset, DialogueLine, DialoguePatch, EpisodeCreate, EpisodeDetail, EpisodePatch,
   EpisodeSummary, Job, Project, ProjectCreate, ProjectDetail, ProjectPatch,
   ProviderHealth, Shot, ShotPatch, ProductionReadiness, ProductionRun,
-  ProductionRunCreate, ProductionItem,
+  ProductionRunCreate, ProductionItem, ProviderChannelKind, ProviderChannelsRead,
+  ProviderChannelTestResult, ProviderChannelUpdate, ProviderChannelUpdateRead,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -59,6 +60,11 @@ export const startRender = (episodeId: string) => apiRequest<{job_id: string; st
 export const getJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}`);
 export const retryJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}/retry`, json('POST'));
 export const getProviderHealth = () => apiRequest<ProviderHealth>('/api/providers/health');
+export const getProviderChannels = () => apiRequest<ProviderChannelsRead>('/api/provider-channels');
+export const updateProviderChannel = (kind: ProviderChannelKind, update: ProviderChannelUpdate) =>
+  apiRequest<ProviderChannelUpdateRead>(`/api/provider-channels/${kind}`, json('PUT', update));
+export const testProviderChannel = (kind: ProviderChannelKind, candidate: ProviderChannelUpdate) =>
+  apiRequest<ProviderChannelTestResult>(`/api/provider-channels/${kind}/test`, json('POST', candidate));
 export const getProductionReadiness = (episodeId:string) => apiRequest<ProductionReadiness>(`/api/episodes/${episodeId}/production-readiness`);
 export const createProductionRun = (episodeId:string,data:ProductionRunCreate) => apiRequest<ProductionRun>(`/api/episodes/${episodeId}/production-runs`,json('POST',data));
 export const getProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}`);

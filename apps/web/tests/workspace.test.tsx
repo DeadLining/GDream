@@ -486,7 +486,7 @@ describe('Workspace', () => {
     expect(storyboard).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', {name: '审核'})).toHaveFocus();
+    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveFocus();
     await userEvent.keyboard('{Home}');
     expect(overview).toHaveFocus();
   });

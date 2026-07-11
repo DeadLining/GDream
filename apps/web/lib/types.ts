@@ -55,6 +55,39 @@ export type Job = {
 
 export type ProviderHealth = Record<string, {status: string; model?: string; error?: string}>;
 
+export type ProviderChannelKind = 'llm' | 'image' | 'tts';
+export type ProviderChannelRead = {
+  name: string;
+  enabled: boolean;
+  base_url: string;
+  model: string;
+  ssh_host: string;
+  api_key_configured: boolean;
+  api_key_masked: string;
+};
+export type ProviderChannelsRead = Record<ProviderChannelKind, ProviderChannelRead> & {
+  persistence: {status: 'defaults' | 'saved'; file_path: string};
+  reloaded_at: string;
+};
+export type ProviderChannelUpdate = {
+  name: string;
+  enabled: boolean;
+  base_url: string;
+  model: string;
+  api_key: string;
+  clear_api_key: boolean;
+  ssh_host: string;
+};
+export type ProviderChannelUpdateRead = {channel: ProviderChannelRead; current: ProviderChannelsRead};
+export type ProviderChannelTestResult = {
+  status: 'ok' | 'failed';
+  model: string;
+  host: string;
+  elapsed_ms: number;
+  check_scope: 'model' | 'endpoint' | 'audio';
+  error: string | null;
+};
+
 export type ProductionStage = 'panels' | 'speech';
 export type ProductionRunStatus = 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_failures';
 export type ProductionRun = {id:string;episode_id:string;status:ProductionRunStatus;stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean;pause_requested:boolean;total_items:number;queued_items:number;running_items:number;succeeded_items:number;failed_items:number;skipped_items:number;summary_error:string;created_at:string;updated_at:string};

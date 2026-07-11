@@ -2,7 +2,6 @@ import {cleanup, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {ProviderSettings} from '../components/ProviderSettings';
-import {getProviderChannels, testProviderChannel, updateProviderChannel} from '../lib/api';
 import type {ProviderChannelsRead} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
@@ -40,6 +39,7 @@ describe('provider channel API client', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('keeps provider secrets in JSON request bodies only', async () => {
+    const {getProviderChannels, testProviderChannel, updateProviderChannel} = await vi.importActual<typeof import('../lib/api')>('../lib/api');
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(snapshot), {status: 200}))
       .mockResolvedValueOnce(new Response(JSON.stringify({channel: snapshot.llm, current: snapshot}), {status: 200}))
@@ -75,8 +75,8 @@ describe('ProviderSettings', () => {
   it('loads three accessible channel forms without exposing a full key', async () => {
     render(<ProviderSettings/>);
 
-    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
-    expect(screen.getAllByRole('form')).toHaveLength(3);
+    expect(await screen.findAllByRole('form')).toHaveLength(3);
+    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
     expect(screen.getByDisplayValue('MiniMax-M3')).toBeVisible();
     expect(screen.getByLabelText('语音合成 SSH Host')).toHaveValue('ai-comic-tts');
     expect(screen.queryByLabelText('剧本规划 SSH Host')).not.toBeInTheDocument();
@@ -119,6 +119,7 @@ describe('ProviderSettings', () => {
 
     await userEvent.clear(screen.getByLabelText('剧本规划渠道名称'));
     await userEvent.type(screen.getByLabelText('剧本规划渠道名称'), 'MiniMax Clear');
+    await userEvent.click(screen.getByRole('checkbox', {name: '启用剧本规划渠道'}));
     await userEvent.click(screen.getByRole('button', {name: '清除剧本规划 API Key'}));
     await userEvent.click(screen.getByRole('button', {name: '保存全部更改'}));
     expect(mocks.updateProviderChannel).toHaveBeenLastCalledWith('llm', expect.objectContaining({api_key: '', clear_api_key: true}));

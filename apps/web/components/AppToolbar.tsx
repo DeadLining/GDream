@@ -13,6 +13,7 @@ type AppToolbarProps = {
   onRefresh?: () => void;
   onProduction?: () => void;
   renderReady?: boolean;
+  healthRefreshKey?: number;
 };
 
 export function AppToolbar({
@@ -22,6 +23,7 @@ export function AppToolbar({
   onRefresh,
   onProduction,
   renderReady = true,
+  healthRefreshKey = 0,
 }: AppToolbarProps) {
   const [healthCount, setHealthCount] = useState<number | null>(null);
   const [job, setJob] = useState<Job | null>(null);
@@ -40,6 +42,7 @@ export function AppToolbar({
     const health = await getProviderHealth();
     setHealthCount(Object.values(health).filter(item => item.status === 'ok').length);
   };
+  useEffect(() => {if (healthRefreshKey > 0) void checkHealth();}, [healthRefreshKey]);
   const render = async () => {
     if (!episodeId || rendering) return;
     const generation = renderGeneration.current;

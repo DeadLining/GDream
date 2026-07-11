@@ -1,7 +1,7 @@
-import {BookOpen, Clapperboard, FileText, Plus, Users} from 'lucide-react';
+import {BookOpen, Clapperboard, FileText, Plus, Settings2, Users} from 'lucide-react';
 import type {Project, ProjectDetail} from '../lib/types';
 
-export function ProjectNavigator({projects, project, episodeId, onProject, onEpisode, onNewProject, onNewEpisode}: {
+export function ProjectNavigator({projects, project, episodeId, onProject, onEpisode, onNewProject, onNewEpisode, onProviderSettings}: {
   projects: Project[];
   project: ProjectDetail | null;
   episodeId: string | null;
@@ -9,6 +9,7 @@ export function ProjectNavigator({projects, project, episodeId, onProject, onEpi
   onEpisode: (id: string) => void;
   onNewProject: () => void;
   onNewEpisode: () => void;
+  onProviderSettings: () => void;
 }) {
   return (
     <aside className="project-nav">
@@ -46,6 +47,10 @@ export function ProjectNavigator({projects, project, episodeId, onProject, onEpi
           <div className="nav-group-heading"><h2 id="resources-heading">项目资料</h2></div>
           <button className="nav-item placeholder" aria-label="角色设定" title="角色设定将在后续任务中接入"><Users aria-hidden="true" size={17}/><span>角色设定</span><small aria-hidden="true">{project?.characters.length ?? 0}</small></button>
           <button className="nav-item placeholder" title="故事圣经将在后续任务中接入"><BookOpen aria-hidden="true" size={17}/><span>故事圣经</span></button>
+        </section>
+        <section className="nav-group" aria-labelledby="settings-heading">
+          <div className="nav-group-heading"><h2 id="settings-heading">工作室设置</h2></div>
+          <button className="nav-item" onClick={onProviderSettings}><Settings2 aria-hidden="true" size={17}/><span>模型渠道</span></button>
         </section>
       </nav>
 
