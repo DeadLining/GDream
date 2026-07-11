@@ -222,11 +222,16 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
   });
 
-  it('numbers an opaque episode id from its ordered project position', async () => {
+  it('numbers an opaque episode id from its later ordered project position', async () => {
     const opaqueId = '550e8400-e29b-41d4-a716-44665544abcd';
     const opaqueSummary = {...projectDetail.episodes[0], id: opaqueId};
-    const opaqueProject = {...projectDetail, episodes: [opaqueSummary]};
+    const opaqueProject = {...projectDetail, episodes: [
+      {...projectDetail.episodes[0], id: 'first-episode', title: '第一集'},
+      {...projectDetail.episodes[0], id: 'second-episode', title: '第二集'},
+      opaqueSummary,
+    ]};
     const opaqueEpisode = {...plannedEpisode, ...opaqueSummary};
+    localStorage.setItem('ai-comic-episode', opaqueId);
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(opaqueProject);
     mocks.getEpisode.mockResolvedValue(opaqueEpisode);
@@ -234,7 +239,7 @@ describe('Workspace', () => {
 
     render(<Workspace />);
 
-    expect(await screen.findByText('第 01 集')).toBeVisible();
+    expect(await screen.findByText('第 03 集')).toBeVisible();
   });
 
   it('preserves the selected shot when switching from overview to storyboard', async () => {
