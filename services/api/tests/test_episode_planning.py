@@ -128,3 +128,40 @@ def test_planning_refuses_to_replace_an_existing_storyboard(db_session):
 
     db_session.refresh(scene)
     assert scene.summary == "保留现有剧本分镜"
+
+
+def test_plan_route_rejects_an_episode_that_already_has_scenes(client):
+    with client.app.state.session_factory() as session:
+        project = models.Project(
+            title="霓虹夜行",
+            logline="失忆侦探寻找记忆",
+            story_bible="近未来重庆",
+            visual_style="Chinese noir",
+            aspect_ratio="9:16",
+        )
+        episode = models.Episode(
+            project=project,
+            title="失窃的雨夜",
+            premise="林默寻找芯片",
+            target_duration_seconds=60,
+        )
+        session.add(
+            models.Scene(
+                episode=episode,
+                position=1,
+                location="旧城巷道",
+                time_of_day="night",
+                summary="已确认的剧本分镜",
+                continuity_state={},
+                estimated_duration_seconds=8,
+            )
+        )
+        session.commit()
+        episode_id = episode.id
+
+    response = client.post(f"/api/episodes/{episode_id}/plan")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Storyboard already exists for this episode"
+    with client.app.state.session_factory() as session:
+        assert session.query(models.Job).count() == 0
