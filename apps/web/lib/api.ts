@@ -1,7 +1,8 @@
 import type {
   Asset, DialogueLine, DialoguePatch, EpisodeCreate, EpisodeDetail, EpisodePatch,
   EpisodeSummary, Job, Project, ProjectCreate, ProjectDetail, ProjectPatch,
-  ProviderHealth, Shot, ShotPatch,
+  ProviderHealth, Shot, ShotPatch, ProductionReadiness, ProductionRun,
+  ProductionRunCreate, ProductionItem,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -58,3 +59,10 @@ export const startRender = (episodeId: string) => apiRequest<{job_id: string; st
 export const getJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}`);
 export const retryJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}/retry`, json('POST'));
 export const getProviderHealth = () => apiRequest<ProviderHealth>('/api/providers/health');
+export const getProductionReadiness = (episodeId:string) => apiRequest<ProductionReadiness>(`/api/episodes/${episodeId}/production-readiness`);
+export const createProductionRun = (episodeId:string,data:ProductionRunCreate) => apiRequest<ProductionRun>(`/api/episodes/${episodeId}/production-runs`,json('POST',data));
+export const getProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}`);
+export const listProductionItems = (runId:string) => apiRequest<ProductionItem[]>(`/api/production-runs/${runId}/items`);
+export const pauseProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/pause`,json('POST'));
+export const continueProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/continue`,json('POST'));
+export const retryProductionRun = (runId:string,itemIds?:string[]) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/retry`,json('POST',{item_ids:itemIds}));

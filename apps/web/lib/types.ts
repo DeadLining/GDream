@@ -55,6 +55,13 @@ export type Job = {
 
 export type ProviderHealth = Record<string, {status: string; model?: string; error?: string}>;
 
+export type ProductionStage = 'panels' | 'speech';
+export type ProductionRunStatus = 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_failures';
+export type ProductionRun = {id:string;episode_id:string;status:ProductionRunStatus;stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean;pause_requested:boolean;total_items:number;queued_items:number;running_items:number;succeeded_items:number;failed_items:number;skipped_items:number;summary_error:string;created_at:string;updated_at:string};
+export type ProductionItem = {id:string;run_id:string;stage:'panel'|'speech';target_type:string;target_id:string;position:number;status:'queued'|'running'|'succeeded'|'failed'|'skipped';attempt_count:number;result_metadata:Record<string,unknown>;error:string;created_at:string;updated_at:string};
+export type ProductionReadiness = {episode_id:string;ready:boolean;totals:{shots:number;dialogue:number};ready_counts:{panels:number;approved:number;speech:number};blockers:{missing_panels:string[];unapproved_shots:string[];missing_speech:string[]}};
+export type ProductionRunCreate = {stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean};
+
 export type ProjectCreate = Pick<Project, 'title' | 'logline' | 'story_bible' | 'visual_style' | 'aspect_ratio'> & {language?: string};
 export type ProjectPatch = Partial<ProjectCreate>;
 export type EpisodeCreate = Pick<EpisodeSummary, 'title' | 'premise' | 'target_duration_seconds'>;

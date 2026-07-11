@@ -179,24 +179,24 @@ cd ../.. && git add services/api && git commit -m "feat: coordinate recoverable 
 - Create: `apps/web/lib/production.ts`
 - Create: `apps/web/tests/production-api.test.ts`
 
-- [ ] **Step 1: Write failing web API and polling tests**
+- [x] **Step 1: Write failing web API and polling tests**
 
 Verify request bodies, structured run/item types, terminal polling, paused polling stop, and AbortSignal cancellation.
 
-- [ ] **Step 2: Run focused tests and confirm exports are missing**
+- [x] **Step 2: Run focused tests and confirm exports are missing**
 
 Run: `npm test --workspace @comic-studio/web -- --run tests/production-api.test.ts`
 Expected: FAIL because production API and poller do not exist.
 
-- [ ] **Step 3: Add production types and API functions**
+- [x] **Step 3: Add production types and API functions**
 
 Implement readiness, create/get/list, pause, continue, retry, and run polling through `apiRequest`.
 
-- [ ] **Step 4: Implement `pollProductionRun`**
+- [x] **Step 4: Implement `pollProductionRun`**
 
 Poll at one second while queued/running, stop for paused or terminal states, accept abort, and return the last persisted snapshot.
 
-- [ ] **Step 5: Run web tests and build, then commit**
+- [x] **Step 5: Run web tests and build, then commit**
 
 ```bash
 npm test --workspace @comic-studio/web && npm run build --workspace @comic-studio/web
