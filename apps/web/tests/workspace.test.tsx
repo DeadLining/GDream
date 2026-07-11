@@ -117,6 +117,10 @@ function TabsHarness() {
   return <WorkspaceTabs value={value} onChange={setValue}/>;
 }
 
+function RejectedTabsHarness() {
+  return <WorkspaceTabs value="settings" onChange={() => false}/>;
+}
+
 describe('Workspace', () => {
   afterEach(() => {
     cleanup();
@@ -501,6 +505,22 @@ describe('Workspace', () => {
     expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveFocus();
     await userEvent.keyboard('{Home}');
     expect(overview).toHaveFocus();
+  });
+
+  it('keeps selected tab focus when guarded click or keyboard navigation is rejected', async () => {
+    render(<RejectedTabsHarness/>);
+    const settings = screen.getByRole('tab', {name: '模型渠道'});
+    const overview = screen.getByRole('tab', {name: '总览'});
+    settings.focus();
+
+    await userEvent.keyboard('{Home}');
+    expect(settings).toHaveFocus();
+    expect(settings).toHaveAttribute('aria-selected', 'true');
+    expect(overview).toHaveAttribute('tabindex', '-1');
+
+    await userEvent.click(overview);
+    expect(settings).toHaveFocus();
+    expect(settings).toHaveAttribute('aria-selected', 'true');
   });
 
   it('provides a matching tabpanel for every visible tab', async () => {

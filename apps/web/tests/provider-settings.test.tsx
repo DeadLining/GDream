@@ -1,6 +1,8 @@
 import {cleanup, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
 import {ProviderSettings} from '../components/ProviderSettings';
 import type {ProviderChannelsRead} from '../lib/types';
 
@@ -34,6 +36,18 @@ const snapshot: ProviderChannelsRead = {
   persistence: {status: 'saved', file_path: 'data/provider-channels.json'},
   reloaded_at: '2026-07-11T10:00:00Z',
 };
+const settingsStyles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {resolve = done; reject = fail;});
+  return {promise, resolve, reject};
+}
+
+function updateResponse(current: ProviderChannelsRead, kind: 'llm' | 'image' | 'tts') {
+  return {channel: current[kind], current};
+}
 
 describe('provider channel API client', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -178,5 +192,105 @@ describe('ProviderSettings', () => {
     await userEvent.click(screen.getByRole('button', {name: '保存全部更改'}));
 
     expect(mocks.updateProviderChannel).toHaveBeenCalledWith('image', expect.objectContaining({enabled: false, clear_api_key: true}));
+  });
+
+  it('locks every section synchronously during save and prevents duplicate writes or lost key edits', async () => {
+    const saving = deferred<ReturnType<typeof updateResponse>>();
+    const current = structuredClone(snapshot);
+    current.llm.name = 'Locked save';
+    mocks.updateProviderChannel.mockReturnValue(saving.promise);
+    mocks.getProviderChannels.mockResolvedValueOnce(snapshot).mockResolvedValueOnce(current);
+    render(<ProviderSettings/>);
+    await screen.findAllByRole('form');
+    await userEvent.clear(screen.getByLabelText('剧本规划渠道名称'));
+    await userEvent.type(screen.getByLabelText('剧本规划渠道名称'), 'Locked save');
+    await userEvent.type(screen.getByLabelText('替换剧本规划 API Key'), 'typed-before-save');
+
+    const save = screen.getByRole('button', {name: '保存全部更改'});
+    await userEvent.click(save);
+    save.click();
+
+    expect(mocks.updateProviderChannel).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('form').flatMap(form => within(form).getAllByRole('textbox')).every(control => control.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getByLabelText('替换剧本规划 API Key')).toBeDisabled();
+    expect(screen.getByRole('button', {name: '测试画面生成连接'})).toBeDisabled();
+    expect(screen.getByDisplayValue('typed-before-save')).toBeDisabled();
+
+    saving.resolve(updateResponse(current, 'llm'));
+    await waitFor(() => expect(save).toBeEnabled());
+  });
+
+  it('reconciles partial sequential saves and retries only the failed credential operation', async () => {
+    const committed = structuredClone(snapshot);
+    committed.llm.name = 'Committed LLM';
+    committed.llm.api_key_masked = 'sk-•••new';
+    mocks.updateProviderChannel
+      .mockResolvedValueOnce(updateResponse(committed, 'llm'))
+      .mockRejectedValueOnce(new Error('image save failed'))
+      .mockResolvedValueOnce(updateResponse({...committed, image: {...committed.image, name: 'Pending Image'}}, 'image'));
+    render(<ProviderSettings/>);
+    await screen.findAllByRole('form');
+    await userEvent.clear(screen.getByLabelText('剧本规划渠道名称'));
+    await userEvent.type(screen.getByLabelText('剧本规划渠道名称'), 'Committed LLM');
+    await userEvent.type(screen.getByLabelText('替换剧本规划 API Key'), 'one-shot-llm-key');
+    await userEvent.clear(screen.getByLabelText('画面生成渠道名称'));
+    await userEvent.type(screen.getByLabelText('画面生成渠道名称'), 'Pending Image');
+    await userEvent.type(screen.getByLabelText('替换画面生成 API Key'), 'retry-image-key');
+
+    await userEvent.click(screen.getByRole('button', {name: '保存全部更改'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('剧本规划已保存；画面生成保存失败：image save failed');
+    expect(screen.getByLabelText('替换剧本规划 API Key')).toHaveValue('');
+    expect(screen.getByLabelText('替换画面生成 API Key')).toHaveValue('retry-image-key');
+
+    await userEvent.click(screen.getByRole('button', {name: '保存全部更改'}));
+    expect(mocks.updateProviderChannel.mock.calls.map(call => call[0])).toEqual(['llm', 'image', 'image']);
+    expect(mocks.updateProviderChannel.mock.calls[2][1]).toEqual(expect.objectContaining({api_key: 'retry-image-key'}));
+    expect(JSON.stringify(mocks.updateProviderChannel.mock.calls[2][1])).not.toContain('one-shot-llm-key');
+  });
+
+  it('runs different channel probes in parallel, guards duplicates, and ignores stale edited results', async () => {
+    const llm = deferred<{status: 'ok'; model: string; host: string; elapsed_ms: number; check_scope: 'model'; error: null}>();
+    const image = deferred<{status: 'ok'; model: string; host: string; elapsed_ms: number; check_scope: 'endpoint'; error: null}>();
+    mocks.testProviderChannel.mockImplementation((kind: string) => kind === 'llm' ? llm.promise : image.promise);
+    render(<ProviderSettings/>);
+    await screen.findAllByRole('form');
+
+    const llmButton = screen.getByRole('button', {name: '测试剧本规划连接'});
+    await userEvent.click(llmButton);
+    llmButton.click();
+    await userEvent.click(screen.getByRole('button', {name: '测试画面生成连接'}));
+    expect(mocks.testProviderChannel.mock.calls.map(call => call[0])).toEqual(['llm', 'image']);
+
+    await userEvent.clear(screen.getByLabelText('剧本规划模型'));
+    await userEvent.type(screen.getByLabelText('剧本规划模型'), 'edited-while-probing');
+    llm.resolve({status: 'ok', model: 'old', host: 'old.example.com', elapsed_ms: 2, check_scope: 'model', error: null});
+    image.resolve({status: 'ok', model: 'image', host: 'image.example.com', elapsed_ms: 3, check_scope: 'endpoint', error: null});
+    expect(await screen.findByText(/image\.example\.com/)).toBeVisible();
+    expect(screen.queryByText(/old\.example\.com/)).not.toBeInTheDocument();
+  });
+
+  it('ignores stale retry loads and aborts outstanding loads on unmount', async () => {
+    const stale = deferred<ProviderChannelsRead>();
+    const latest = deferred<ProviderChannelsRead>();
+    mocks.getProviderChannels.mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(stale.promise).mockReturnValueOnce(latest.promise);
+    const view = render(<ProviderSettings/>);
+    const retry = await screen.findByRole('button', {name: '重新加载'});
+    retry.click();
+    retry.click();
+    const latestSnapshot = structuredClone(snapshot); latestSnapshot.llm.model = 'latest-model';
+    const staleSnapshot = structuredClone(snapshot); staleSnapshot.llm.model = 'stale-model';
+    latest.resolve(latestSnapshot);
+    expect(await screen.findByDisplayValue('latest-model')).toBeVisible();
+    stale.resolve(staleSnapshot);
+    await waitFor(() => expect(screen.queryByDisplayValue('stale-model')).not.toBeInTheDocument());
+    view.unmount();
+    expect(mocks.getProviderChannels.mock.calls.some(call => call[0] instanceof AbortSignal)).toBe(true);
+  });
+
+  it('provides a scrollable responsive settings surface with reachable channel sections', () => {
+    expect(settingsStyles).toMatch(/\.provider-settings\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/);
+    expect(settingsStyles).toMatch(/\.provider-settings-sections\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/);
+    expect(settingsStyles).toMatch(/@media \(max-width:\s*899px\)[\s\S]*\.provider-settings-sections\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(settingsStyles).toMatch(/\.provider-channel-section input\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0/);
   });
 });
