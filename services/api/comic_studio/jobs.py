@@ -60,6 +60,7 @@ class JobStore:
             job.retry_count += 1
             job.error = ""
             job.progress = 0
+            job.result_metadata = {}
         else:
             job.error = error[:4000]
         job.status = next_status

@@ -197,7 +197,7 @@ git commit -m "feat: expose panel versions and media URLs"
 - Test: `services/api/tests/test_job_transitions.py`
 - Test: `services/api/tests/test_job_retry_api.py`
 
-- [ ] **Step 1: Write failing retry API tests**
+- [x] **Step 1: Write failing retry API tests**
 
 Verify only failed jobs can retry, retry increments `retry_count`, clears error/result metadata, and dispatches the original supported operation.
 
@@ -208,25 +208,25 @@ assert response.json()["status"] == "queued"
 assert response.json()["retry_count"] == 1
 ```
 
-- [ ] **Step 2: Run tests and confirm retry endpoint is absent**
+- [x] **Step 2: Run tests and confirm retry endpoint is absent**
 
 Run: `cd services/api && uv run pytest tests/test_job_retry_api.py -q`
 Expected: FAIL with HTTP 405.
 
-- [ ] **Step 3: Extract operation dispatch functions**
+- [x] **Step 3: Extract operation dispatch functions**
 
 Expose one dispatcher per operation that accepts `app`, `job_id`, and `target_id`. Reuse the existing planning, panel, speech, and render runners without duplicating provider construction.
 
-- [ ] **Step 4: Implement retry transition and route**
+- [x] **Step 4: Implement retry transition and route**
 
 Accept only `plan_episode`, `generate_panel`, `synthesize_dialogue`, and `render_episode`. Return HTTP 409 for non-failed jobs and HTTP 422 for unsupported operations. Queue the dispatcher through `BackgroundTasks`.
 
-- [ ] **Step 5: Run job and full API tests**
+- [x] **Step 5: Run job and full API tests**
 
 Run: `cd services/api && uv run pytest tests/test_job_transitions.py tests/test_job_retry_api.py -q && uv run pytest -q`
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit retryable jobs**
+- [x] **Step 6: Commit retryable jobs**
 
 ```bash
 git add services/api/comic_studio services/api/tests
