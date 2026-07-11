@@ -135,13 +135,59 @@ describe('Workspace', () => {
     mocks.listProductionItems.mockResolvedValue([]);
   });
 
-  it('loads an explicit empty state when no projects exist', async () => {
+  it('opens provider settings without a project and returns to the create-project empty state', async () => {
     mocks.listProjects.mockResolvedValue([]);
+    mocks.getProviderChannels.mockResolvedValue({
+      llm: {name: 'MiniMax', enabled: true, base_url: 'https://api.example.com', model: 'M3', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      image: {name: 'Image', enabled: true, base_url: 'https://image.example.com', model: 'gpt-image-2', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      tts: {name: 'TTS', enabled: true, base_url: 'https://tts.example.com', model: 'qwen', ssh_host: '', api_key_configured: false, api_key_masked: ''},
+      persistence: {status: 'saved', file_path: 'data/provider-channels.json'}, reloaded_at: '',
+    });
 
     render(<Workspace />);
 
     expect(await screen.findByRole('heading', {name: '新建第一个项目'})).toBeVisible();
     expect(screen.getByRole('button', {name: '创建项目'})).toBeEnabled();
+    await userEvent.click(screen.getByRole('tab', {name: '模型渠道'}));
+
+    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
+    expect(mocks.getProviderChannels).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('aria-selected', 'true');
+    expect(document.getElementById('workspace-panel-settings')).toHaveAttribute('role', 'tabpanel');
+
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.stubGlobal('confirm', confirm);
+    await userEvent.clear(screen.getByLabelText('剧本规划模型'));
+    await userEvent.type(screen.getByLabelText('剧本规划模型'), 'M4');
+    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    expect(confirm).toHaveBeenCalledWith('模型渠道有未保存更改，确定离开吗？');
+    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    expect(screen.getByRole('heading', {name: '新建第一个项目'})).toBeVisible();
+    expect(screen.getByRole('button', {name: '创建项目'})).toBeEnabled();
+  });
+
+  it('keeps provider settings reachable on mobile without a project', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 899px)', media: query, onchange: null,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+    })));
+    mocks.listProjects.mockResolvedValue([]);
+    mocks.getProviderChannels.mockResolvedValue({
+      llm: {name: 'MiniMax', enabled: true, base_url: 'https://api.example.com', model: 'M3', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      image: {name: 'Image', enabled: true, base_url: 'https://image.example.com', model: 'gpt-image-2', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      tts: {name: 'TTS', enabled: true, base_url: 'https://tts.example.com', model: 'qwen', ssh_host: '', api_key_configured: false, api_key_masked: ''},
+      persistence: {status: 'saved', file_path: 'data/provider-channels.json'}, reloaded_at: '',
+    });
+
+    render(<Workspace/>);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '模型渠道'}));
+    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
+    expect(document.querySelector('.workspace-tabs-mobile')).toHaveClass('workspace-tabs-full');
+    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-settings', 'workspace-grid-empty');
+    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\.workspace-tabs-full\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   });
 
   it('loads persisted projects and plans an empty episode', async () => {

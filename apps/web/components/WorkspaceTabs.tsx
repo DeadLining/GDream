@@ -22,12 +22,16 @@ export function WorkspaceTabs({
   value,
   onChange,
   mobile = false,
+  areas,
+  fullWidth = false,
 }: {
   value: WorkArea;
   onChange: (value: WorkArea) => boolean | void;
   mobile?: boolean;
+  areas?: WorkArea[];
+  fullWidth?: boolean;
 }) {
-  const tabs = mobile ? mobileTabs : desktopTabs;
+  const tabs = (mobile ? mobileTabs : desktopTabs).filter(tab => !areas || areas.includes(tab.value));
   const moveSelection = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | null = null;
     if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
@@ -42,7 +46,7 @@ export function WorkspaceTabs({
   };
   return (
     <nav
-      className={mobile ? 'workspace-tabs workspace-tabs-mobile mobile-tabs' : 'workspace-tabs workspace-tabs-desktop'}
+      className={`${mobile ? 'workspace-tabs workspace-tabs-mobile mobile-tabs' : 'workspace-tabs workspace-tabs-desktop'}${fullWidth ? ' workspace-tabs-full' : ''}`}
       role="tablist"
       aria-label="工作区"
     >

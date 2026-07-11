@@ -161,42 +161,44 @@ export function Workspace() {
 
   const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => changeWorkArea('production')} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey}/>;
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
-  if (!projects.length) return <div className="app-shell">{toolbar}<main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main><CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async data => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/></div>;
 
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
   let center;
   if (workArea === 'settings') center = <ProviderSettings onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>;
+  else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => changeWorkArea('production')} onOpenReview={openReview}/>;
   else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
-  const visibleWorkAreas: WorkArea[] = mobile
+  const visibleWorkAreas: WorkArea[] = !projects.length
+    ? ['overview', 'settings']
+    : mobile
     ? ['overview', 'storyboard', 'production', 'inspector', 'settings']
     : ['overview', 'storyboard', 'production', 'review', 'settings'];
 
   return <div className="app-shell">
     {toolbar}
     {readinessError && <p className="readiness-error" role="alert">{readinessError}</p>}
-    <div className="mobile-project-bar"><select aria-label="选择项目" value={project?.id ?? ''} onChange={event => navigateProject(event.target.value)}>{projects.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select><select aria-label="选择剧集" value={episode?.id ?? ''} onChange={event => navigateEpisode(event.target.value)}>{project?.episodes.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
-    <WorkspaceTabs value={workArea} onChange={changeWorkArea} mobile={mobile}/>
+    {projects.length > 0 && <div className="mobile-project-bar"><select aria-label="选择项目" value={project?.id ?? ''} onChange={event => navigateProject(event.target.value)}>{projects.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select><select aria-label="选择剧集" value={episode?.id ?? ''} onChange={event => navigateEpisode(event.target.value)}>{project?.episodes.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>}
+    <WorkspaceTabs value={workArea} onChange={changeWorkArea} mobile={mobile} areas={visibleWorkAreas} fullWidth={!projects.length}/>
     {visibleWorkAreas.filter(area => area !== workArea).map(area => <section key={area} id={`workspace-panel-${area}`} role="tabpanel" aria-labelledby={`workspace-tab-${area}`} hidden/>)}
-    <div className={`workspace-grid mobile-${workArea}`}>
-      <ProjectNavigator projects={projects} project={project} episodeId={episode?.id ?? null} onProject={navigateProject} onEpisode={navigateEpisode} onNewProject={() => setProjectDialog(true)} onNewEpisode={() => setEpisodeDialog(true)} onProviderSettings={() => changeWorkArea('settings')}/>
+    <div className={`workspace-grid mobile-${workArea} ${projects.length ? '' : 'workspace-grid-empty'}`}>
+      {projects.length > 0 && <ProjectNavigator projects={projects} project={project} episodeId={episode?.id ?? null} onProject={navigateProject} onEpisode={navigateEpisode} onNewProject={() => setProjectDialog(true)} onNewEpisode={() => setEpisodeDialog(true)} onProviderSettings={() => changeWorkArea('settings')}/>}
       <section
         className="workspace-center"
         id={workArea === 'inspector' ? undefined : `workspace-panel-${workArea}`}
         role={workArea === 'inspector' ? undefined : 'tabpanel'}
         aria-labelledby={workArea === 'inspector' ? undefined : `workspace-tab-${workArea}`}
       >{center}</section>
-      <section
+      {projects.length > 0 && <section
         className="workspace-inspector"
         id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
         role={workArea === 'inspector' ? 'tabpanel' : undefined}
         aria-labelledby={workArea === 'inspector' ? 'workspace-tab-inspector' : undefined}
-      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>
+      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>
