@@ -37,6 +37,19 @@ test('workspace shows generated panel and shot production controls', async ({pag
   await expect(page.getByLabel('审核状态')).toHaveValue('draft');
 });
 
+test('desktop shot selection keeps the storyboard work area active', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop-specific behavior');
+  await page.goto('/');
+
+  const storyboardTab = page.getByRole('tab', {name: '分镜'});
+  await storyboardTab.click();
+  await page.getByRole('button', {name: /镜头 2/}).click();
+
+  await expect(storyboardTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', {name: /镜头 2/})).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
+});
+
 test('mobile navigation keeps work areas separated and within the viewport', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
   await page.goto('/');
@@ -55,6 +68,8 @@ test('mobile navigation keeps work areas separated and within the viewport', asy
   await page.getByRole('button', {name: '生成画面'}).scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeInViewport();
 
+  await page.getByRole('tab', {name: '分镜'}).click();
+  await expect(page.getByRole('button', {name: /镜头 2/})).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('tab', {name: '生产'}).click();
   const main = page.getByRole('main');
   await expect(page.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
@@ -80,6 +95,38 @@ test('mobile navigation keeps work areas separated and within the viewport', asy
   expect(tabsBox!.y).toBeGreaterThanOrEqual(selectorsBox!.y + selectorsBox!.height);
   expect(mainBox!.y).toBeGreaterThanOrEqual(tabsBox!.y + tabsBox!.height);
   expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+  for (const control of await page.locator('button:visible, select:visible, input:visible, textarea:visible').all()) {
+    const box = await control.boundingBox();
+    expect(box?.x ?? 0).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+  }
+});
+
+test('narrow mobile layout uses one shot column without clipping controls', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
+  await page.setViewportSize({width: 360, height: 800});
+  await page.goto('/');
+  await page.getByRole('tab', {name: '分镜'}).click();
+
+  const shotCards = page.getByRole('button', {name: /镜头 [12]/});
+  const [firstShotBox, secondShotBox, toolbarBox, tabsBox, dimensions] = await Promise.all([
+    shotCards.nth(0).boundingBox(),
+    shotCards.nth(1).boundingBox(),
+    page.locator('.app-toolbar').boundingBox(),
+    page.getByRole('tablist', {name: '工作区'}).boundingBox(),
+    page.evaluate(() => ({clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth})),
+  ]);
+  expect(firstShotBox).not.toBeNull();
+  expect(secondShotBox).not.toBeNull();
+  expect(toolbarBox).not.toBeNull();
+  expect(tabsBox).not.toBeNull();
+  expect(secondShotBox!.y).toBeGreaterThanOrEqual(firstShotBox!.y + firstShotBox!.height - 1);
+  expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+
+  for (const box of [toolbarBox!, tabsBox!]) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+  }
   for (const control of await page.locator('button:visible, select:visible, input:visible, textarea:visible').all()) {
     const box = await control.boundingBox();
     expect(box?.x ?? 0).toBeGreaterThanOrEqual(0);
