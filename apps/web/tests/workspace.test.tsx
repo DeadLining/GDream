@@ -7,7 +7,7 @@ import type {EpisodeDetail, Job, Project, ProjectDetail} from '../lib/types';
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
-  listPanelVersions: vi.fn(), pollJob: vi.fn(),
+  listPanelVersions: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -15,6 +15,8 @@ vi.mock('../lib/api', () => ({
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
   listPanelVersions: mocks.listPanelVersions,
+  getProviderHealth: mocks.getProviderHealth, startRender: mocks.startRender,
+  mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
 

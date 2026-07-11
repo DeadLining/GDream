@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
@@ -212,6 +212,11 @@ class PlannedShot(BaseModel):
     negative_prompt: str = ""
     dialogue: list[PlannedDialogue] = []
 
+    @field_validator("character_state", mode="before")
+    @classmethod
+    def normalize_character_state(cls, value):
+        return {"description": value} if isinstance(value, str) else value
+
 
 class PlannedScene(BaseModel):
     location: str = Field(min_length=1)
@@ -220,6 +225,11 @@ class PlannedScene(BaseModel):
     continuity_state: dict = {}
     estimated_duration_seconds: float = Field(gt=0)
     shots: list[PlannedShot] = Field(min_length=1)
+
+    @field_validator("continuity_state", mode="before")
+    @classmethod
+    def normalize_continuity_state(cls, value):
+        return {"description": value} if isinstance(value, str) else value
 
 
 class EpisodePlan(BaseModel):

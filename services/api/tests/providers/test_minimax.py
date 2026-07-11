@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 
 import httpx
 import pytest
@@ -102,5 +103,42 @@ async def test_minimax_repairs_syntax_but_still_validates_schema():
         plan = await MiniMaxProvider(api_key="secret", client=client).plan_episode(
             {"title": "失窃的雨夜"}
         )
+
+    assert plan.scenes[0].location == "雨夜巷道"
+
+
+@pytest.mark.anyio
+async def test_minimax_normalizes_textual_continuity_and_character_state():
+    textual = deepcopy(VALID_PLAN)
+    textual["scenes"][0]["continuity_state"] = "雨势逐渐减弱"
+    textual["scenes"][0]["shots"][0]["character_state"] = "林默握紧芯片"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"content": [{"type": "text", "text": json.dumps(textual)}]}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        plan = await MiniMaxProvider(api_key="secret", client=client).plan_episode({})
+
+    assert plan.scenes[0].continuity_state == {"description": "雨势逐渐减弱"}
+    assert plan.scenes[0].shots[0].character_state == {"description": "林默握紧芯片"}
+
+
+@pytest.mark.anyio
+async def test_minimax_extracts_scenes_from_a_wrapped_episode_object():
+    wrapped = {"project": {"title": "雨夜"}, "episode": VALID_PLAN}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"content": [{"type": "text", "text": json.dumps(wrapped)}]}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        plan = await MiniMaxProvider(api_key="secret", client=client).plan_episode({})
 
     assert plan.scenes[0].location == "雨夜巷道"

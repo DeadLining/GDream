@@ -1,22 +1,3 @@
-import {Activity, Film, Play, RefreshCw, Settings} from 'lucide-react';
-
-export function AppToolbar() {
-  return (
-    <header className="app-toolbar">
-      <div className="brand-lockup">
-        <Film aria-hidden="true" size={20} />
-        <strong>AI 漫剧工坊</strong>
-        <span className="workspace-label">本地制作台</span>
-      </div>
-      <div className="toolbar-actions">
-        <button className="icon-button health-button" title="模型服务状态" aria-label="模型服务状态">
-          <Activity size={18} />
-          <span>3/3 服务</span>
-        </button>
-        <button className="icon-button" title="刷新项目" aria-label="刷新项目"><RefreshCw size={18} /></button>
-        <button className="command-button"><Play size={17} /><span className="desktop-command-label">渲染本集</span><span className="mobile-command-label">渲染</span></button>
-        <button className="icon-button" title="设置" aria-label="设置"><Settings size={18} /></button>
-      </div>
-    </header>
-  );
-}
+'use client';
+import {useState} from 'react';import {Activity,Download,Film,Play,RefreshCw,Settings} from 'lucide-react';import {getProviderHealth,mediaUrl,startRender} from '../lib/api';import {pollJob} from '../lib/jobs';import type {Job} from '../lib/types';
+export function AppToolbar({episodeId,onRefresh}:{episodeId?:string|null;onRefresh?:()=>void}){const[healthCount,setHealthCount]=useState<number|null>(null);const[job,setJob]=useState<Job|null>(null);const[renderUrl,setRenderUrl]=useState('');const checkHealth=async()=>{const health=await getProviderHealth();setHealthCount(Object.values(health).filter(item=>item.status==='ok').length);};const render=async()=>{if(!episodeId||job&&['queued','running'].includes(job.status))return;const started=await startRender(episodeId);const finished=await pollJob(started.job_id);setJob(finished);const path=finished.result_metadata.media_url;if(finished.status==='succeeded'&&typeof path==='string')setRenderUrl(mediaUrl(path));};return <header className="app-toolbar"><div className="brand-lockup"><Film aria-hidden="true" size={20}/><strong>AI 漫剧工坊</strong><span className="workspace-label">v0.2 本地制作台</span></div><div className="toolbar-actions"><button className="icon-button health-button" title="模型服务状态" aria-label="模型服务状态" onClick={checkHealth}><Activity size={18}/><span>{healthCount===null?'检查服务':`${healthCount}/3 服务`}</span></button><button className="icon-button" title="刷新项目" aria-label="刷新项目" onClick={onRefresh}><RefreshCw size={18}/></button>{renderUrl?<a className="command-button" href={renderUrl} download aria-label="下载 MP4"><Download size={17}/><span>下载 MP4</span></a>:<button className="command-button" aria-label="渲染本集" onClick={render} disabled={!episodeId||job?.status==='running'}><Play size={17}/><span className="desktop-command-label">{job?.status==='running'?`渲染 ${job.progress}%`:'渲染本集'}</span><span className="mobile-command-label">渲染</span></button>}<button className="icon-button" title="设置" aria-label="设置"><Settings size={18}/></button></div></header>;}

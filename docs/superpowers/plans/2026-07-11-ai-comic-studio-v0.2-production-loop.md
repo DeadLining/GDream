@@ -397,24 +397,24 @@ git commit -m "feat: add shot panel and speech production"
 - Modify: `.env.example`
 - Test: `services/api/tests/test_provider_health.py`
 
-- [ ] **Step 1: Write failing render lifecycle E2E assertions**
+- [x] **Step 1: Write failing render lifecycle E2E assertions**
 
 Use deterministic API fixtures to plan an episode, generate a panel and speech, render it, observe progress, and assert the MP4 download link appears only after a successful job.
 
-- [ ] **Step 2: Run E2E and verify render controls are static**
+- [x] **Step 2: Run E2E and verify render controls are static**
 
 Run: `npm run test:e2e --workspace @comic-studio/web`
 Expected: FAIL because toolbar render and provider health controls are not connected.
 
-- [ ] **Step 3: Connect provider health and rendering**
+- [x] **Step 3: Connect provider health and rendering**
 
 Load sanitized provider health on demand, show per-provider status, launch one render per episode, poll the job, display FFmpeg metadata, and expose a download link with `download` attribute.
 
-- [ ] **Step 4: Update local operation documentation**
+- [x] **Step 4: Update local operation documentation**
 
 Document the v0.2 workflow, dynamic development URLs, HostBridge `ai-comic-tts` prerequisite, model health checks, deterministic tests, opt-in live checks, render output, and the A800_94 `/boot` package-state warning.
 
-- [ ] **Step 5: Run full verification**
+- [x] **Step 5: Run full verification**
 
 ```bash
 cd services/api && uv run pytest -q
@@ -428,17 +428,17 @@ git diff --check
 
 Expected: API, web, compositor, build, E2E, render, codec, and whitespace checks all pass.
 
-- [ ] **Step 6: Run opt-in live provider smoke tests**
+- [x] **Step 6: Run opt-in live provider smoke tests**
 
 Verify MiniMax planning, GPT Image generation, Qwen TTS synthesis through `ai-comic-tts`, and a local render using generated assets. Record only model names, timings, dimensions, durations, and checksums; never record keys.
 
-- [ ] **Step 7: Commit v0.2 release workflow**
+- [x] **Step 7: Commit v0.2 release workflow**
 
 ```bash
 git add apps/web README.md .env.example
 git commit -m "feat: complete v0.2 production workflow"
 ```
 
-- [ ] **Step 8: Audit release requirements**
+- [x] **Step 8: Audit release requirements**
 
 Confirm every release gate in `docs/superpowers/specs/2026-07-11-ai-comic-studio-v0.2-production-loop-design.md` has direct test, runtime, or artifact evidence. Mark this plan complete only after the audit finds no missing evidence.

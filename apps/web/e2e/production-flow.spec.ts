@@ -12,6 +12,17 @@ test.beforeEach(async ({page}) => {
   await page.route('**/api/projects', route => route.fulfill({json:[project]}));
   await page.route('**/api/projects/project-1', route => route.fulfill({json:projectDetail}));
   await page.route('**/api/episodes/episode-1', route => route.fulfill({json:episode}));
+  await page.route('**/api/providers/health', route => route.fulfill({json:{minimax:{status:'ok'},gpt_image:{status:'ok'},qwen_tts:{status:'ok'}}}));
+  await page.route('**/api/episodes/episode-1/render', route => route.fulfill({status:202,json:{job_id:'render-1',status:'queued'}}));
+  await page.route('**/api/jobs/render-1', route => route.fulfill({json:{id:'render-1',operation:'render_episode',target_type:'episode',target_id:'episode-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/render.mp4',probe:{format:{duration:'60'}}},error:'',retry_count:0,created_at:'',updated_at:''}}));
+});
+
+test('render success exposes the verified MP4 download', async ({page}) => {
+  await page.goto('/');
+  await page.getByRole('button',{name:'渲染本集'}).click();
+  const download = page.getByRole('link',{name:'下载 MP4'});
+  await expect(download).toBeVisible();
+  await expect(download).toHaveAttribute('href', /render\.mp4$/);
 });
 
 test('workspace shows generated panel and shot production controls', async ({page}) => {

@@ -38,6 +38,17 @@ def _strip_fences(text: str) -> str:
     return stripped
 
 
+def _episode_plan_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        if isinstance(value.get("scenes"), list):
+            return value
+        for nested in value.values():
+            candidate = _episode_plan_payload(nested)
+            if candidate is not None:
+                return candidate
+    return None
+
+
 class MiniMaxProvider:
     def __init__(
         self,
@@ -75,7 +86,9 @@ class MiniMaxProvider:
             try:
                 text = await self._request(messages)
                 repaired = repair_json(_strip_fences(text), return_objects=True)
-                return EpisodePlan.model_validate(repaired)
+                return EpisodePlan.model_validate(
+                    _episode_plan_payload(repaired) or repaired
+                )
             except (json.JSONDecodeError, ValidationError, ValueError) as exc:
                 validation_feedback = str(exc)[:1500]
                 if attempt == 1:
