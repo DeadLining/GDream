@@ -5,10 +5,13 @@ description = "Local API for the AI Comic Studio production workspace"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",
+  "charset-normalizer>=3.4,<4",
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "json-repair>=0.52,<1",
   "pydantic-settings>=2.10,<3",
+  "pypdf>=6.0,<7",
+  "python-docx>=1.2,<2",
   "sqlalchemy>=2.0,<3",
   "uvicorn[standard]>=0.35,<1",
 ]
