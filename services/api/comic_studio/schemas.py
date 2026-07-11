@@ -1,11 +1,86 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+)
 
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
 ReviewStatus = Literal["draft", "needs_changes", "approved"]
+ProviderChannelKind = Literal["llm", "image", "tts"]
+
+
+class ProviderChannelUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    name: str
+    enabled: bool
+    base_url: AnyHttpUrl
+    model: str
+    api_key: SecretStr = SecretStr("")
+    clear_api_key: bool = False
+    ssh_host: str = ""
+
+    @field_validator("name", "model", "ssh_host")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def strip_api_key(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("clear_api_key")
+    @classmethod
+    def validate_secret_operation(cls, value: bool, info: ValidationInfo) -> bool:
+        api_key = info.data.get("api_key")
+        if value and api_key and api_key.get_secret_value():
+            raise ValueError("api_key and clear_api_key are mutually exclusive")
+        return value
+
+
+class ProviderChannelRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    enabled: bool
+    base_url: str
+    model: str
+    ssh_host: str
+    api_key_configured: bool
+    api_key_masked: str
+
+
+class ProviderChannelPersistenceRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["defaults", "saved"]
+    file_path: str
+
+
+class ProviderChannelsRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    llm: ProviderChannelRead
+    image: ProviderChannelRead
+    tts: ProviderChannelRead
+    persistence: ProviderChannelPersistenceRead
+    reloaded_at: datetime
+
+
+class ProviderChannelUpdateRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    channel: ProviderChannelRead
+    current: ProviderChannelsRead
 
 
 class PatchModel(BaseModel):

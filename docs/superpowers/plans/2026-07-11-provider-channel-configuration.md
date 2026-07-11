@@ -164,7 +164,7 @@ git commit -m "feat: route operations through provider channels"
 - Modify: `services/api/comic_studio/schemas.py`
 - Modify: `services/api/comic_studio/main.py`
 
-- [ ] **Step 1: Write failing read and update API tests**
+- [x] **Step 1: Write failing read and update API tests**
 
 Cover:
 
@@ -177,7 +177,7 @@ assert "full-secret" not in response.text
 
 PUT tests must verify blank/omitted key preserves, non-empty key replaces, `clear_api_key` removes, and replacement plus clear returns HTTP 422. Assert disabled channels may omit credentials while enabled LLM/image channels may not.
 
-- [ ] **Step 2: Run tests and confirm routes are absent**
+- [x] **Step 2: Run tests and confirm routes are absent**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_channels_api.py -q
@@ -185,7 +185,7 @@ cd services/api && uv run pytest tests/test_provider_channels_api.py -q
 
 Expected: FAIL with HTTP 404.
 
-- [ ] **Step 3: Add strict read/update schemas**
+- [x] **Step 3: Add strict read/update schemas**
 
 Define separate secret-free read contracts and update contracts:
 
@@ -203,7 +203,7 @@ class ProviderChannelUpdate(BaseModel):
 
 Validate `api_key` and `clear_api_key` mutual exclusivity. Read schemas contain only `api_key_configured` and `api_key_masked`.
 
-- [ ] **Step 4: Implement GET and PUT**
+- [x] **Step 4: Implement GET and PUT**
 
 `GET /api/provider-channels` returns all redacted slots, file path relative to repository/data root, persistence status, and reload timestamp.
 
@@ -211,7 +211,7 @@ Validate `api_key` and `clear_api_key` mutual exclusivity. Read schemas contain 
 
 Map schema/configuration errors to HTTP 422 and file write errors to sanitized HTTP 500 responses.
 
-- [ ] **Step 5: Run focused/full tests and commit**
+- [x] **Step 5: Run focused/full tests and commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_channels_api.py tests/test_redaction.py -q

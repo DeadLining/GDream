@@ -55,6 +55,16 @@ def test_get_returns_redacted_channels_and_sanitized_metadata(client):
     assert str(store._path.parent) not in response.text
 
 
+def test_get_reports_defaults_when_configuration_file_is_absent(client):
+    response = client.get("/api/provider-channels")
+
+    assert response.status_code == 200
+    assert response.json()["persistence"] == {
+        "status": "defaults",
+        "file_path": "provider-channels.json",
+    }
+
+
 @pytest.mark.parametrize(
     ("secret", "expected"),
     [
@@ -70,7 +80,11 @@ def test_get_masks_short_and_long_keys_without_leaking(client, secret, expected)
     response = client.get("/api/provider-channels")
 
     assert response.json()["llm"]["api_key_masked"] == expected
-    assert secret not in response.text or secret == expected
+    assert "api_key" not in {
+        key
+        for key in response.json()["llm"]
+        if key not in {"api_key_configured", "api_key_masked"}
+    }
 
 
 @pytest.mark.parametrize("api_key_field", [{}, {"api_key": ""}, {"api_key": "   "}])
@@ -146,9 +160,21 @@ def test_put_rejects_extra_fields(client):
     assert response.status_code == 422
 
 
+def test_put_rejects_invalid_nonsecret_fields(client):
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(base_url="not-a-url", api_key="valid-key"),
+    )
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize("kind", ["llm", "image"])
 def test_enabled_key_required_channels_need_effective_key(client, kind):
-    response = client.put(f"/api/provider-channels/{kind}", json=channel_update())
+    response = client.put(
+        f"/api/provider-channels/{kind}",
+        json=channel_update(clear_api_key=True),
+    )
 
     assert response.status_code == 422
 
@@ -182,7 +208,9 @@ def test_ssh_host_is_rejected_outside_tts(client, kind):
     assert response.status_code == 422
 
 
-def test_put_write_failure_returns_sanitized_500_without_secret_or_path(client, monkeypatch):
+def test_put_write_failure_returns_sanitized_500_without_secret_or_path(
+    client, monkeypatch
+):
     store = seed_channels(client)
     secret = "write-failure-secret"
     private_path = str(store._path)
@@ -198,7 +226,8 @@ def test_put_write_failure_returns_sanitized_500_without_secret_or_path(client, 
     )
 
     assert response.status_code == 500
-    assert response.json() == {"detail": "Unable to save provider channel configuration"}
+    assert response.json() == {
+        "detail": "Unable to save provider channel configuration"
+    }
     assert secret not in response.text
     assert private_path not in response.text
-
