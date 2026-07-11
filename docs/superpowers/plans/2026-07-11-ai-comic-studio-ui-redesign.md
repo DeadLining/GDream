@@ -254,7 +254,7 @@ git commit -m "feat: redesign the studio application shell"
 - Modify: `apps/web/tests/inspector.test.tsx`
 - Create: `apps/web/tests/storyboard.test.tsx`
 
-- [ ] **Step 1: Write failing storyboard and inspector tests**
+- [x] **Step 1: Write failing storyboard and inspector tests**
 
 Verify stable shot metadata and status labels:
 
@@ -266,7 +266,7 @@ expect(screen.getByText('待审核')).toBeVisible();
 
 In inspector tests, assert grouped headings `镜头状态`, `构图与运动`, `生成提示`, `画面版本`, and `对白与配音`.
 
-- [ ] **Step 2: Run focused tests and confirm the hierarchy is absent**
+- [x] **Step 2: Run focused tests and confirm the hierarchy is absent**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/storyboard.test.tsx tests/inspector.test.tsx
@@ -274,19 +274,19 @@ npm test --workspace @comic-studio/web -- --run tests/storyboard.test.tsx tests/
 
 Expected: FAIL on the new status and section hierarchy.
 
-- [ ] **Step 3: Implement stable storyboard cards**
+- [x] **Step 3: Implement stable storyboard cards**
 
 Use fixed card tracks: media, one metadata row, and a two-line description region. Use Lucide icons for duration, dialogue, missing media, and approval. Keep generation commands out of cards.
 
-- [ ] **Step 4: Recompose the inspector**
+- [x] **Step 4: Recompose the inspector**
 
 Group existing controls into semantic `<section>` elements with compact headings. Keep all existing update, panel version, activation, speech, and audio behavior. Move the primary generation action near the relevant section and preserve accessible names used by tests and E2E.
 
-- [ ] **Step 5: Apply storyboard and inspector CSS**
+- [x] **Step 5: Apply storyboard and inspector CSS**
 
 Use responsive `minmax()` grids, stable card aspect ratios, two-line clamping, fixed icon button sizes, and visible focus rings. Do not put section cards inside the inspector surface.
 
-- [ ] **Step 6: Run focused tests, full tests, and build**
+- [x] **Step 6: Run focused tests, full tests, and build**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/storyboard.test.tsx tests/inspector.test.tsx
@@ -296,7 +296,7 @@ npm run build --workspace @comic-studio/web
 
 Expected: all pass.
 
-- [ ] **Step 7: Commit storyboard and inspector**
+- [x] **Step 7: Commit storyboard and inspector**
 
 ```bash
 git add apps/web/components/Storyboard.tsx apps/web/components/ShotCard.tsx apps/web/components/Inspector.tsx apps/web/components/PanelVersions.tsx apps/web/components/DialogueEditor.tsx apps/web/app/globals.css apps/web/tests/storyboard.test.tsx apps/web/tests/inspector.test.tsx

@@ -2,7 +2,7 @@ import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Inspector} from '../components/Inspector';
-import type {Job, Shot} from '../lib/types';
+import type {Asset, Job, Shot} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
   listPanelVersions: vi.fn(), updateShot: vi.fn(), startPanelGeneration: vi.fn(),
@@ -21,10 +21,22 @@ const shot: Shot = {
   }],
 };
 const succeeded: Job = {id:'job-1',operation:'generate_panel',target_type:'shot',target_id:'shot-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/panel.png'},error:'',retry_count:0,created_at:'',updated_at:''};
+const asset: Asset = {id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'openai',model:'gpt-image-2',generation_attempt:2,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''};
 
 describe('Inspector', () => {
   afterEach(cleanup);
   beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);});
+
+  it('groups controls under the operational section hierarchy', async () => {
+    mocks.listPanelVersions.mockResolvedValue([asset]);
+    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1'}}/>);
+    expect(screen.getByRole('heading',{name:'镜头状态'})).toBeVisible();
+    expect(screen.getByRole('heading',{name:'构图与运动'})).toBeVisible();
+    expect(screen.getByRole('heading',{name:'生成提示'})).toBeVisible();
+    expect(await screen.findByRole('heading',{name:'画面版本'})).toBeVisible();
+    expect(screen.getByRole('heading',{name:'对白与配音'})).toBeVisible();
+    expect(screen.getByRole('button',{name:/画面版本 2.*当前版本/})).toHaveAttribute('aria-pressed','true');
+  });
 
   it('saves edited shot fields explicitly', async () => {
     mocks.updateShot.mockResolvedValue({...shot,duration_seconds:7.5,review_status:'approved'});
@@ -47,5 +59,18 @@ describe('Inspector', () => {
     await waitFor(()=>expect(mocks.listPanelVersions).toHaveBeenCalledTimes(2));
     await userEvent.click(screen.getByRole('button',{name:'生成配音'}));
     expect(await screen.findByLabelText('对白音频')).toBeVisible();
+  });
+
+  it('activates panel versions and saves edited dialogue', async () => {
+    mocks.listPanelVersions.mockResolvedValue([asset]);
+    mocks.activatePanel.mockResolvedValue({...shot,active_panel_asset_id:'asset-1'});
+    mocks.updateDialogue.mockResolvedValue(shot.dialogue[0]);
+    render(<Inspector shot={shot}/>);
+    await userEvent.click(await screen.findByRole('button',{name:/画面版本 2/}));
+    await waitFor(()=>expect(mocks.activatePanel).toHaveBeenCalledWith('shot-1','asset-1'));
+    await userEvent.clear(screen.getByLabelText('对白文本'));
+    await userEvent.type(screen.getByLabelText('对白文本'),'快走。');
+    await userEvent.click(screen.getByRole('button',{name:'保存对白'}));
+    expect(mocks.updateDialogue).toHaveBeenCalledWith('line-1',expect.objectContaining({text:'快走。'}));
   });
 });

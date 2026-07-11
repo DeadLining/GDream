@@ -1,2 +1,16 @@
-import type {EpisodeDetail,Job,Shot} from '../lib/types';import {ShotCard} from './ShotCard';
-export function Storyboard({episode,selectedId,onSelect,onPlan,job}:{episode:EpisodeDetail|null;selectedId:string|null;onSelect:(shot:Shot)=>void;onPlan:()=>void;job:Job|null}){if(!episode)return <main className="storyboard center-state"><h1>新建剧集</h1><p>从左侧创建本系列的第一集。</p></main>;return <main className="storyboard"><div className="storyboard-header"><div><span className="eyebrow">制作剧集</span><h1>{episode.title}</h1><p>{episode.premise}</p></div><div className="duration-readout"><strong>{episode.target_duration_seconds}s</strong><span>目标时长</span></div></div>{!episode.scenes.length?<section className="episode-empty"><h2>尚未生成分镜</h2><p>使用 MiniMax-M3 根据项目设定生成场景、镜头和对白。</p><button className="primary-action" disabled={job?.status==='queued'||job?.status==='running'} onClick={onPlan}>{job?.status==='running'?`规划中 ${job.progress}%`:'生成剧本与分镜'}</button>{job?.status==='failed'&&<p className="form-error">{job.error}</p>}</section>:episode.scenes.map(scene=><section className="scene-section" key={scene.id}><div className="scene-heading"><span>场景 {scene.position}</span><h2>{scene.location}</h2><p>{scene.summary}</p><time>{scene.estimated_duration_seconds}s</time></div><div className="shots-grid">{scene.shots.map(shot=><ShotCard key={shot.id} shot={shot} selected={selectedId===shot.id} onSelect={()=>onSelect(shot)}/>)}</div></section>)}</main>;}
+import type {EpisodeDetail, Job, Shot} from '../lib/types';
+import {ShotCard} from './ShotCard';
+
+export function Storyboard({episode, selectedId, onSelect, onPlan, job}: {episode: EpisodeDetail | null; selectedId: string | null; onSelect: (shot: Shot) => void; onPlan: () => void; job: Job | null}) {
+  if (!episode) return <main className="storyboard center-state"><h1>新建剧集</h1><p>从左侧创建本系列的第一集。</p></main>;
+  return <main className="storyboard">
+    <div className="storyboard-header">
+      <div><span className="eyebrow">制作剧集</span><h1>{episode.title}</h1><p>{episode.premise}</p></div>
+      <div className="duration-readout"><strong>{episode.target_duration_seconds}s</strong><span>目标时长</span></div>
+    </div>
+    {!episode.scenes.length ? <section className="episode-empty"><h2>尚未生成分镜</h2><p>使用 MiniMax-M3 根据项目设定生成场景、镜头和对白。</p><button className="primary-action" disabled={job?.status === 'queued' || job?.status === 'running'} onClick={onPlan}>{job?.status === 'running' ? `规划中 ${job.progress}%` : '生成剧本与分镜'}</button>{job?.status === 'failed' && <p className="form-error">{job.error}</p>}</section> : episode.scenes.map(scene => <section className="scene-section" key={scene.id}>
+      <header className="scene-heading"><span>场景 {scene.position}</span><h2>{scene.location}</h2><p>{scene.summary}</p><time>{scene.estimated_duration_seconds}s</time></header>
+      <div className="shots-grid">{scene.shots.map(shot => <ShotCard key={shot.id} shot={shot} selected={selectedId === shot.id} onSelect={() => onSelect(shot)}/>)}</div>
+    </section>)}
+  </main>;
+}
