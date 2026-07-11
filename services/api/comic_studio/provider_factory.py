@@ -4,6 +4,7 @@ from typing import Any
 from comic_studio.provider_channels import ProviderChannelStore
 from comic_studio.providers.gpt_image import GPTImageProvider
 from comic_studio.providers.minimax import MiniMaxProvider
+from comic_studio.providers.minimax_video import MiniMaxVideoProvider
 from comic_studio.providers.qwen_tts import QwenTTSProvider
 
 
@@ -19,11 +20,13 @@ class ProviderFactory:
         llm_provider_class: Callable[..., Any] = MiniMaxProvider,
         image_provider_class: Callable[..., Any] = GPTImageProvider,
         tts_provider_class: Callable[..., Any] = QwenTTSProvider,
+        video_provider_class: Callable[..., Any] = MiniMaxVideoProvider,
     ):
         self._store = store
         self._llm_provider_class = llm_provider_class
         self._image_provider_class = image_provider_class
         self._tts_provider_class = tts_provider_class
+        self._video_provider_class = video_provider_class
 
     def create_llm(self) -> MiniMaxProvider:
         channel = self._store.snapshot.llm
@@ -59,6 +62,13 @@ class ProviderFactory:
             model=channel.model,
             base_url=channel.base_url,
             ssh_host=channel.ssh_host,
+        )
+
+    def create_video(self) -> MiniMaxVideoProvider:
+        channel = self._store.snapshot.video
+        self._require_configured("video", channel, require_api_key=True)
+        return self._video_provider_class(
+            channel.api_key_value, model=channel.model, base_url=channel.base_url
         )
 
     @staticmethod

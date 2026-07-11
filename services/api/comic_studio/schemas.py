@@ -16,7 +16,7 @@ from comic_studio.provider_channels import validate_http_url
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
 ReviewStatus = Literal["draft", "needs_changes", "approved"]
-ProviderChannelKind = Literal["llm", "image", "tts"]
+ProviderChannelKind = Literal["llm", "image", "tts", "video"]
 
 
 class ProviderChannelUpdate(BaseModel):
@@ -97,6 +97,7 @@ class ProviderChannelsRead(BaseModel):
     llm: ProviderChannelRead
     image: ProviderChannelRead
     tts: ProviderChannelRead
+    video: ProviderChannelRead
     persistence: ProviderChannelPersistenceRead
     reloaded_at: datetime
 
@@ -222,6 +223,10 @@ class ShotRead(BaseModel):
     image_prompt: str
     negative_prompt: str
     active_panel_asset_id: str | None
+    video_prompt: str
+    negative_video_prompt: str
+    active_video_asset_id: str | None
+    video_render_status: str
     review_status: str
     render_status: str
     dialogue: list[DialogueRead] = []
@@ -234,6 +239,8 @@ class ShotPatch(PatchModel):
     image_prompt: str | None = Field(default=None, min_length=1)
     negative_prompt: str | None = None
     review_status: ReviewStatus | None = None
+    video_prompt: str | None = None
+    negative_video_prompt: str | None = None
 
 
 class SceneRead(BaseModel):
@@ -332,7 +339,7 @@ class CharacterReferenceRead(BaseModel):
     asset: AssetRead
 
 
-ProductionStage = Literal["panels", "speech"]
+ProductionStage = Literal["panels", "speech", "videos"]
 
 
 class ProductionRunCreate(BaseModel):
@@ -341,12 +348,13 @@ class ProductionRunCreate(BaseModel):
     concurrency: int = Field(default=2, ge=1, le=4)
     regenerate_panels: bool = False
     regenerate_speech: bool = False
+    regenerate_videos: bool = False
 
 
 class ProductionRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str; episode_id: str; status: str; stages: list[str]; concurrency: int
-    regenerate_panels: bool; regenerate_speech: bool; pause_requested: bool
+    regenerate_panels: bool; regenerate_speech: bool; regenerate_videos: bool; pause_requested: bool
     total_items: int; queued_items: int; running_items: int; succeeded_items: int
     failed_items: int; skipped_items: int; summary_error: str
     created_at: datetime; updated_at: datetime

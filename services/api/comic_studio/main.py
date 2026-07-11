@@ -26,11 +26,13 @@ from comic_studio.routes.production import router as production_router
 from comic_studio.routes.provider_channels import router as provider_channels_router
 from comic_studio.routes.script_imports import router as script_imports_router
 from comic_studio.routes.character_references import router as character_references_router
+from comic_studio.routes.videos import router as videos_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
 from comic_studio.services.production_coordinator import ProductionCoordinator
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
+from comic_studio.services.videos import VideoService
 
 
 def _normalize_validation_field(value: str) -> str:
@@ -197,9 +199,14 @@ def create_app() -> FastAPI:
                 "media_url": f"/media/{asset.local_path}",
             }
 
+    async def produce_video(item):
+        with session_factory() as session:
+            asset = await VideoService(session, settings.data_root, app.state.provider_factory.create_video()).generate(item.target_id, activate=True)
+            return {"asset_id": asset.id, "media_url": f"/media/{asset.local_path}", "provider_task_id": asset.request_metadata.get("provider_task_id")}
+
     app.state.production_coordinator = ProductionCoordinator(
         session_factory,
-        {"panel": produce_panel, "speech": produce_speech},
+        {"panel": produce_panel, "speech": produce_speech, "video": produce_video},
     )
     app.include_router(projects_router)
     app.include_router(character_router)
@@ -213,6 +220,7 @@ def create_app() -> FastAPI:
     app.include_router(provider_channels_router)
     app.include_router(script_imports_router)
     app.include_router(character_references_router)
+    app.include_router(videos_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

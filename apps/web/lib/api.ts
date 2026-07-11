@@ -56,6 +56,9 @@ export const startPlanning = (episodeId: string) => apiRequest<Job>(`/api/episod
 export const startPanelGeneration = (shotId: string, activate = true) => apiRequest<{job_id: string; status: string}>(`/api/shots/${shotId}/panels?${new URLSearchParams({activate: String(activate)})}`, json('POST'));
 export const listPanelVersions = (shotId: string) => apiRequest<Asset[]>(`/api/shots/${shotId}/panels`);
 export const activatePanel = (shotId: string, assetId: string) => apiRequest<Shot>(`/api/shots/${shotId}/panels/${assetId}/active`, json('PUT'));
+export const startVideoGeneration = (shotId:string,activate=true) => apiRequest<{job_id:string;status:string}>(`/api/shots/${shotId}/videos?${new URLSearchParams({activate:String(activate)})}`,json('POST'));
+export const listVideoVersions = (shotId:string) => apiRequest<Asset[]>(`/api/shots/${shotId}/videos`);
+export const activateVideo = (shotId:string,assetId:string) => apiRequest<Shot>(`/api/shots/${shotId}/videos/${assetId}/active`,json('PUT'));
 export const startSpeech = (dialogueId: string) => apiRequest<{job_id: string; status: string}>(`/api/dialogue/${dialogueId}/speech`, json('POST'));
 export const startRender = (episodeId: string) => apiRequest<{job_id: string; status: string}>(`/api/episodes/${episodeId}/render`, json('POST'));
 export const getJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}`);

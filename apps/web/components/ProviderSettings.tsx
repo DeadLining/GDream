@@ -5,13 +5,14 @@ import {getProviderChannels, testProviderChannel, updateProviderChannel} from '.
 import type {ProviderChannelKind, ProviderChannelRead, ProviderChannelTestResult, ProviderChannelsRead, ProviderChannelUpdate, ProviderChannelUpdateRead} from '../lib/types';
 import {ProviderChannelSection, type ProviderChannelDraft} from './ProviderChannelSection';
 
-const kinds: ProviderChannelKind[] = ['llm', 'image', 'tts'];
-const labels: Record<ProviderChannelKind, string> = {llm: '剧本规划', image: '画面生成', tts: '语音合成'};
+const kinds: ProviderChannelKind[] = ['llm', 'image', 'tts', 'video'];
+const labels: Record<ProviderChannelKind, string> = {llm: '剧本规划', image: '画面生成', tts: '语音合成', video: '视频生成'};
 type Drafts = Record<ProviderChannelKind, ProviderChannelDraft>;
 type KindState<T> = Partial<Record<ProviderChannelKind, T>>;
 
 const toDraft = (channel: ProviderChannelRead): ProviderChannelDraft => ({...channel, api_key: '', clear_api_key: false});
-const toDrafts = (snapshot: ProviderChannelsRead): Drafts => ({llm: toDraft(snapshot.llm), image: toDraft(snapshot.image), tts: toDraft(snapshot.tts)});
+const fallbackVideo: ProviderChannelRead = {name: 'MiniMax Video', enabled: false, base_url: 'https://api.minimaxi.com', model: 'MiniMax-Hailuo-02', ssh_host: '', api_key_configured: false, api_key_masked: ''};
+const toDrafts = (snapshot: ProviderChannelsRead): Drafts => ({llm: toDraft(snapshot.llm), image: toDraft(snapshot.image), tts: toDraft(snapshot.tts), video: toDraft(snapshot.video ?? fallbackVideo)});
 const payload = (draft: ProviderChannelDraft): ProviderChannelUpdate => ({
   name: draft.name.trim(), enabled: draft.enabled, base_url: draft.base_url.trim(), model: draft.model.trim(),
   api_key: draft.api_key.trim(), clear_api_key: draft.clear_api_key, ssh_host: draft.ssh_host.trim(),
@@ -47,8 +48,8 @@ export function ProviderSettings({onDirtyChange, onSaved}: {onDirtyChange?: (dir
   const savingRef = useRef(false);
   const loadGeneration = useRef(0);
   const loadController = useRef<AbortController | null>(null);
-  const testGeneration = useRef<Record<ProviderChannelKind, number>>({llm: 0, image: 0, tts: 0});
-  const pendingTestRef = useRef<Record<ProviderChannelKind, boolean>>({llm: false, image: false, tts: false});
+  const testGeneration = useRef<Record<ProviderChannelKind, number>>({llm: 0, image: 0, tts: 0, video: 0});
+  const pendingTestRef = useRef<Record<ProviderChannelKind, boolean>>({llm: false, image: false, tts: false, video: false});
 
   const load = async () => {
     const generation = ++loadGeneration.current;
@@ -176,7 +177,7 @@ export function ProviderSettings({onDirtyChange, onSaved}: {onDirtyChange?: (dir
   if (!drafts) return <main className="provider-settings center-state"><h1>模型渠道</h1><p>正在加载渠道配置</p></main>;
   return (
     <main className="provider-settings">
-      <header className="provider-settings-header"><div><h1>模型渠道</h1><p>{dirty ? '有未保存更改' : saved ? '所有更改已保存' : '配置剧本、画面和语音服务'}</p></div><button className="command-button" onClick={() => void save()} disabled={!dirty || saving}>{saving ? '正在保存' : '保存全部更改'}</button></header>
+      <header className="provider-settings-header"><div><h1>模型渠道</h1><p>{dirty ? '有未保存更改' : saved ? '所有更改已保存' : '配置剧本、画面、语音和视频服务'}</p></div><button className="command-button" onClick={() => void save()} disabled={!dirty || saving}>{saving ? '正在保存' : '保存全部更改'}</button></header>
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
       <div className="provider-settings-sections">
         {kinds.map(kind => <ProviderChannelSection key={kind} kind={kind} label={labels[kind]} draft={drafts[kind]} testing={Boolean(pendingTests[kind])} disabled={saving} testResult={testResults[kind] ?? null} testError={testErrors[kind] ?? ''} validationError={validationErrors[kind] ?? ''} onChange={draft => change(kind, draft)} onTest={() => void test(kind)}/>)}

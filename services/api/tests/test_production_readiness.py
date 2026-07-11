@@ -23,6 +23,8 @@ def test_readiness_reports_exact_panel_approval_and_speech_blockers(client):
     assert report["blockers"]["missing_panels"] == [shot_id]
     assert report["blockers"]["unapproved_shots"] == [shot_id]
     assert report["blockers"]["missing_speech"] == [line_id]
+    assert report["blockers"]["missing_videos"] == [shot_id]
+    assert report["video_ready"] is False
 
 
 def test_readiness_becomes_true_when_required_assets_are_ready(client):
@@ -39,4 +41,6 @@ def test_readiness_becomes_true_when_required_assets_are_ready(client):
     report = client.get(f"/api/episodes/{episode_id}/production-readiness").json()
 
     assert report["ready"] is True
-    assert report["blockers"] == {"missing_panels": [], "unapproved_shots": [], "missing_speech": []}
+    assert report["blockers"] == {"missing_panels": [], "unapproved_shots": [], "missing_speech": [], "missing_videos": [shot_id]}
+    assert report["ready"] is True
+    assert report["video_ready"] is False

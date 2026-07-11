@@ -43,3 +43,12 @@ def test_run_creation_honors_regeneration_and_rejects_second_active_run(client):
 
     second = client.post(f"/api/episodes/{episode_id}/production-runs", json={"stages":["panels"]})
     assert second.status_code == 409
+
+
+def test_video_stage_queues_eligible_shots_and_skips_missing_panels(client):
+    episode_id, ready_shot, missing_shot, _, _ = seed_mixed_episode(client)
+    response = client.post(f"/api/episodes/{episode_id}/production-runs", json={"stages":["videos"],"regenerate_videos":True})
+    assert response.status_code == 202
+    items = client.get(f"/api/production-runs/{response.json()['id']}/items").json()
+    assert [(item['target_id'],item['status']) for item in items] == [(ready_shot,'queued'),(missing_shot,'skipped')]
+    assert response.json()['regenerate_videos'] is True

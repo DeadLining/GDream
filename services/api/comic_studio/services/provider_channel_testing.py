@@ -14,7 +14,7 @@ from comic_studio.providers.qwen_tts import QwenTTSProvider
 from comic_studio.schemas import ProviderChannelTestRead, ProviderChannelUpdate
 
 
-ProviderKind = Literal["llm", "image", "tts"]
+ProviderKind = Literal["llm", "image", "tts", "video"]
 CONNECT_TIMEOUT_SECONDS = 2
 TOTAL_TIMEOUT_SECONDS = 8
 SSH_TIMEOUT_MARGIN_SECONDS = 0.25
@@ -116,6 +116,9 @@ class ProviderChannelTestingService:
                     elif kind == "image":
                         provider = self._provider_factory(kind, channel, client)
                         scope = await self._test_image(provider, channel)
+                    elif kind == "video":
+                        provider = self._provider_factory(kind, channel, client)
+                        scope = await self._test_video(provider, channel)
                     else:
                         provider = self._tts_provider_factory(
                             channel,
@@ -149,9 +152,7 @@ class ProviderChannelTestingService:
             current = self._stored_channel(kind)
             replacement_key = candidate.api_key.get_secret_value()
             effective_key = (
-                None
-                if candidate.clear_api_key
-                else replacement_key or current.api_key
+                None if candidate.clear_api_key else replacement_key or current.api_key
             )
             return ProviderChannel(
                 name=candidate.name,
@@ -172,10 +173,8 @@ class ProviderChannelTestingService:
     def validate_channel(kind: ProviderKind, channel: ProviderChannel) -> None:
         if not channel.enabled:
             raise ProviderTestError(f"{kind} provider channel is not enabled")
-        if kind in {"llm", "image"} and not channel.api_key_value:
-            raise ProviderTestError(
-                f"Enabled {kind} channel requires an api_key"
-            )
+        if kind in {"llm", "image", "video"} and not channel.api_key_value:
+            raise ProviderTestError(f"Enabled {kind} channel requires an api_key")
 
     @staticmethod
     async def _test_llm(provider: Any, channel: ProviderChannel) -> None:
@@ -227,12 +226,20 @@ class ProviderChannelTestingService:
             "Chinese",
             "",
         )
-        if (
-            len(content) < 12
-            or content[:4] != b"RIFF"
-            or content[8:12] != b"WAVE"
-        ):
+        if len(content) < 12 or content[:4] != b"RIFF" or content[8:12] != b"WAVE":
             raise ProviderTestError("TTS returned invalid WAV data")
+
+    @staticmethod
+    async def _test_video(
+        provider: Any, channel: ProviderChannel
+    ) -> Literal["endpoint"]:
+        response = await provider.get(
+            "v1/query/video_generation",
+            headers={"Authorization": f"Bearer {channel.api_key_value or ''}"},
+        )
+        if response.status_code in {401, 403} or response.status_code >= 500:
+            response.raise_for_status()
+        return "endpoint"
 
     @staticmethod
     def _initial_scope(kind: ProviderKind) -> Literal["model", "endpoint", "audio"]:

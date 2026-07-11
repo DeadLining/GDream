@@ -26,6 +26,11 @@ describe('parseManifest', () => {
     expect(parseManifest(baseManifest).shots).toHaveLength(1);
   });
 
+  it('accepts an optional video while retaining the panel fallback',()=>{
+    const mixed: any=structuredClone(baseManifest); mixed.shots[0].videoPath='/tmp/shot.mp4'; mixed.shots[0].videoDurationSeconds=4;
+    expect(parseManifest(mixed).shots[0]).toMatchObject({videoPath:'/tmp/shot.mp4',panelPath:'/tmp/panel.png'});
+  });
+
   it('rejects a shot without an approved panel', () => {
     const invalid = structuredClone(baseManifest);
     invalid.shots[0].panelPath = '';

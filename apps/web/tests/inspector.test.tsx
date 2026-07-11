@@ -7,6 +7,7 @@ import type {Asset, Job, Shot} from '../lib/types';
 const mocks = vi.hoisted(() => ({
   listPanelVersions: vi.fn(), updateShot: vi.fn(), startPanelGeneration: vi.fn(),
   activatePanel: vi.fn(), updateDialogue: vi.fn(), startSpeech: vi.fn(), retryJob: vi.fn(),
+  listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
   pollJob: vi.fn(),
 }));
 vi.mock('../lib/api', () => ({...mocks, mediaUrl: (path:string) => path}));
@@ -25,7 +26,7 @@ const asset: Asset = {id:'asset-1',kind:'panel',media_url:'/media/panel.png',med
 
 describe('Inspector', () => {
   afterEach(cleanup);
-  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);});
+  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);});
 
   it('groups controls under the operational section hierarchy', async () => {
     mocks.listPanelVersions.mockResolvedValue([asset]);

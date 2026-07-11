@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getProductionRun: vi.fn(), createProductionRun: vi.fn(), continueProductionRun: vi.fn(), pauseProductionRun: vi.fn(),
   listProductionItems: vi.fn(), retryProductionRun: vi.fn(),
   getProviderChannels: vi.fn(), updateProviderChannel: vi.fn(), testProviderChannel: vi.fn(),
+  listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -29,6 +30,7 @@ vi.mock('../lib/api', () => ({
   listProductionItems: mocks.listProductionItems, retryProductionRun: mocks.retryProductionRun,
   getProviderChannels: mocks.getProviderChannels, updateProviderChannel: mocks.updateProviderChannel,
   testProviderChannel: mocks.testProviderChannel,
+  listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
@@ -131,6 +133,7 @@ describe('Workspace', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.listPanelVersions.mockResolvedValue([]);
+    mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
     mocks.listProductionItems.mockResolvedValue([]);
   });

@@ -32,6 +32,7 @@ export type Shot = {
   composition: string; camera_motion: string; character_state: Record<string, unknown>;
   image_prompt: string; negative_prompt: string; active_panel_asset_id: string | null;
   review_status: ReviewStatus; render_status: string; dialogue: DialogueLine[];
+  video_prompt?: string; negative_video_prompt?: string; active_video_asset_id?: string | null; video_render_status?: string;
 };
 
 export type Scene = {
@@ -55,7 +56,7 @@ export type Job = {
 
 export type ProviderHealth = Record<string, {status: string; model?: string; error?: string}>;
 
-export type ProviderChannelKind = 'llm' | 'image' | 'tts';
+export type ProviderChannelKind = 'llm' | 'image' | 'tts' | 'video';
 export type ProviderChannelRead = {
   name: string;
   enabled: boolean;
@@ -88,18 +89,18 @@ export type ProviderChannelTestResult = {
   error: string | null;
 };
 
-export type ProductionStage = 'panels' | 'speech';
+export type ProductionStage = 'panels' | 'speech' | 'videos';
 export type ProductionRunStatus = 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_failures';
-export type ProductionRun = {id:string;episode_id:string;status:ProductionRunStatus;stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean;pause_requested:boolean;total_items:number;queued_items:number;running_items:number;succeeded_items:number;failed_items:number;skipped_items:number;summary_error:string;created_at:string;updated_at:string};
-export type ProductionItem = {id:string;run_id:string;stage:'panel'|'speech';target_type:string;target_id:string;position:number;status:'queued'|'running'|'succeeded'|'failed'|'skipped';attempt_count:number;result_metadata:Record<string,unknown>;error:string;created_at:string;updated_at:string};
-export type ProductionReadiness = {episode_id:string;ready:boolean;totals:{shots:number;dialogue:number};ready_counts:{panels:number;approved:number;speech:number};blockers:{missing_panels:string[];unapproved_shots:string[];missing_speech:string[]}};
-export type ProductionRunCreate = {stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean};
+export type ProductionRun = {id:string;episode_id:string;status:ProductionRunStatus;stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean;regenerate_videos?:boolean;pause_requested:boolean;total_items:number;queued_items:number;running_items:number;succeeded_items:number;failed_items:number;skipped_items:number;summary_error:string;created_at:string;updated_at:string};
+export type ProductionItem = {id:string;run_id:string;stage:'panel'|'speech'|'video';target_type:string;target_id:string;position:number;status:'queued'|'running'|'succeeded'|'failed'|'skipped';attempt_count:number;result_metadata:Record<string,unknown>;error:string;created_at:string;updated_at:string};
+export type ProductionReadiness = {episode_id:string;ready:boolean;video_ready?:boolean;totals:{shots:number;dialogue:number};ready_counts:{panels:number;approved:number;speech:number;videos?:number};blockers:{missing_panels:string[];unapproved_shots:string[];missing_speech:string[];missing_videos?:string[]}};
+export type ProductionRunCreate = {stages:ProductionStage[];concurrency:number;regenerate_panels:boolean;regenerate_speech:boolean;regenerate_videos?:boolean};
 
 export type ProjectCreate = Pick<Project, 'title' | 'logline' | 'story_bible' | 'visual_style' | 'aspect_ratio'> & {language?: string};
 export type ProjectPatch = Partial<ProjectCreate>;
 export type EpisodeCreate = Pick<EpisodeSummary, 'title' | 'premise' | 'target_duration_seconds'>;
 export type EpisodePatch = Partial<EpisodeCreate>;
-export type ShotPatch = Partial<Pick<Shot, 'duration_seconds' | 'composition' | 'camera_motion' | 'image_prompt' | 'negative_prompt' | 'review_status'>>;
+export type ShotPatch = Partial<Pick<Shot, 'duration_seconds' | 'composition' | 'camera_motion' | 'image_prompt' | 'negative_prompt' | 'video_prompt' | 'negative_video_prompt' | 'review_status'>>;
 export type DialoguePatch = Partial<Pick<DialogueLine, 'text' | 'subtitle_text' | 'emotion' | 'performance_instruction' | 'start_seconds'>>;
 
 export type ScriptImportMode = 'auto' | 'screenplay' | 'prose';

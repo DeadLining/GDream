@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useRef, useState} from 'react';
-import {Image, Mic2, Pause, Play, RefreshCw} from 'lucide-react';
+import {Film, Image, Mic2, Pause, Play, RefreshCw} from 'lucide-react';
 import {
   continueProductionRun,
   createProductionRun,
@@ -29,6 +29,7 @@ export function ProductionPanel({
   const [concurrency, setConcurrency] = useState(2);
   const [regenPanels, setRegenPanels] = useState(false);
   const [regenSpeech, setRegenSpeech] = useState(false);
+  const [regenVideos, setRegenVideos] = useState(false);
   const [run, setRun] = useState<ProductionRun | null>(null);
   const [items, setItems] = useState<ProductionItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -107,6 +108,7 @@ export function ProductionPanel({
         concurrency,
         regenerate_panels: regenPanels,
         regenerate_speech: regenSpeech,
+        regenerate_videos: regenVideos,
       });
       if (!isCurrent(generation, controller.signal)) return;
       localStorage.setItem(`ai-comic-production-${id}`, created.id);
@@ -163,14 +165,17 @@ export function ProductionPanel({
         <span>缺少画面 {displayedReadiness.blockers.missing_panels.length}</span>
         <span>未审核 {displayedReadiness.blockers.unapproved_shots.length}</span>
         <span>缺少配音 {displayedReadiness.blockers.missing_speech.length}</span>
+        <span>缺少视频 {displayedReadiness.blockers.missing_videos?.length ?? 0}</span>
       </div>}
     </header>
     <section className="production-options" aria-label="生产选项">
       <label><input aria-label="画面" type="checkbox" checked={stages.includes('panels')} onChange={event => setStages(event.target.checked ? [...stages, 'panels'] : stages.filter(x => x !== 'panels'))}/><Image size={15} aria-hidden="true"/>画面</label>
       <label><input aria-label="配音" type="checkbox" checked={stages.includes('speech')} onChange={event => setStages(event.target.checked ? [...stages, 'speech'] : stages.filter(x => x !== 'speech'))}/><Mic2 size={15} aria-hidden="true"/>配音</label>
+      <label><input aria-label="视频" type="checkbox" checked={stages.includes('videos')} onChange={event => setStages(event.target.checked ? [...stages, 'videos'] : stages.filter(x => x !== 'videos'))}/><Film size={15} aria-hidden="true"/>视频</label>
       <label>并发数<input aria-label="并发数" type="number" min={1} max={4} value={concurrency} onChange={event => setConcurrency(Number(event.target.value))}/></label>
       <label><input type="checkbox" checked={regenPanels} onChange={event => setRegenPanels(event.target.checked)}/>重生成画面</label>
       <label><input type="checkbox" checked={regenSpeech} onChange={event => setRegenSpeech(event.target.checked)}/>重生成配音</label>
+      <label><input type="checkbox" checked={regenVideos} onChange={event => setRegenVideos(event.target.checked)}/>重生成视频</label>
     </section>
     <div className="production-actions">
       {!displayedRun && <button className="primary-action" disabled={!stages.length || starting} aria-busy={starting} onClick={start}><Play size={15} aria-hidden="true"/>{starting ? '正在启动' : '开始批量生产'}</button>}

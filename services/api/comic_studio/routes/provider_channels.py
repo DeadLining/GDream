@@ -27,6 +27,7 @@ from comic_studio.services.provider_channel_testing import (
 router = APIRouter(prefix="/api/provider-channels", tags=["provider-channels"])
 provider_testing_client_factory = default_client_factory
 provider_testing_total_timeout_seconds = TOTAL_TIMEOUT_SECONDS
+provider_testing_tts_timeout_seconds = 60
 
 
 def mask_api_key(api_key: str | None) -> str:
@@ -73,6 +74,7 @@ def channels_read(
         llm=channel_read(snapshot.llm),
         image=channel_read(snapshot.image),
         tts=channel_read(snapshot.tts),
+        video=channel_read(snapshot.video),
         persistence={
             "status": "saved" if state.persisted else "defaults",
             "file_path": display_path(path, settings.data_root),
@@ -101,7 +103,7 @@ def update_provider_channel(
         effective_key = (
             None if update.clear_api_key else replacement_key or current.api_key_value
         )
-        if kind in {"llm", "image"} and update.enabled and not effective_key:
+        if kind in {"llm", "image", "video"} and update.enabled and not effective_key:
             raise HTTPException(
                 status_code=422,
                 detail=f"Enabled {kind} channel requires an api_key",
@@ -156,7 +158,11 @@ async def test_provider_channel(
     service = ProviderChannelTestingService(
         stored_channel=lambda channel_kind: getattr(store.snapshot, channel_kind),
         client_factory=provider_testing_client_factory,
-        total_timeout_seconds=provider_testing_total_timeout_seconds,
+        total_timeout_seconds=(
+            provider_testing_tts_timeout_seconds
+            if kind == "tts"
+            else provider_testing_total_timeout_seconds
+        ),
     )
     try:
         channel = service.resolve_candidate(kind, candidate)

@@ -13,6 +13,8 @@ const shotSchema = z.object({
   id: z.string().min(1),
   durationSeconds: z.number().positive().max(60),
   panelPath: z.string().min(1),
+  videoPath: z.string().min(1).optional(),
+  videoDurationSeconds: z.number().positive().optional(),
   reviewStatus: z.literal('approved'),
   motion: z.enum(['push_in', 'pull_out', 'pan_left', 'pan_right', 'still']),
   dialogue: z.array(dialogueSchema),

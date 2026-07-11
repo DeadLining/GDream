@@ -4,6 +4,7 @@ import {
   Audio,
   Img,
   Sequence,
+  Video,
   interpolate,
   staticFile,
   useCurrentFrame,
@@ -36,7 +37,7 @@ const ShotScene: React.FC<{shot: RenderManifest['shots'][number]}> = ({shot}) =>
 
   return (
     <AbsoluteFill style={{backgroundColor: '#11100f', overflow: 'hidden'}}>
-      <Img
+      {shot.videoPath ? <Video muted src={mediaSource(shot.videoPath)} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : <Img
         src={mediaSource(shot.panelPath)}
         style={{
           width: '100%',
@@ -45,7 +46,7 @@ const ShotScene: React.FC<{shot: RenderManifest['shots'][number]}> = ({shot}) =>
           transform: `translateX(${translateX}%) scale(${scale})`,
           transformOrigin: 'center',
         }}
-      />
+      />}
       <AbsoluteFill
         style={{
           background:

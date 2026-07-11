@@ -26,6 +26,7 @@ class ProductionRunService:
         run = store.create_run(
             episode_id, stages=list(data.stages), concurrency=data.concurrency,
             regenerate_panels=data.regenerate_panels, regenerate_speech=data.regenerate_speech,
+            regenerate_videos=data.regenerate_videos,
         )
         position = 0
         shots = [shot for scene in episode.scenes for shot in scene.shots]
@@ -45,4 +46,16 @@ class ProductionRunService:
                     status = "queued" if data.regenerate_speech or not ready else "skipped"
                     metadata = {} if status == "queued" else {"reason": "already_ready"}
                     store.add_item(run.id, "speech", "dialogue", line.id, position=position, status=status, result_metadata=metadata)
+        if "videos" in data.stages:
+            for shot in shots:
+                position += 1
+                eligible = bool(shot.active_panel_asset_id and shot.review_status == "approved")
+                ready = bool(shot.active_video_asset_id)
+                if not eligible:
+                    status, metadata = "skipped", {"reason": "missing_approved_panel"}
+                elif data.regenerate_videos or not ready:
+                    status, metadata = "queued", {}
+                else:
+                    status, metadata = "skipped", {"reason": "already_ready"}
+                store.add_item(run.id, "video", "shot", shot.id, position=position, status=status, result_metadata=metadata)
         return store.refresh_counters(run.id)

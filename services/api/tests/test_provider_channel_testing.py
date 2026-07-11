@@ -472,6 +472,51 @@ def channel_payload(**overrides):
     return payload
 
 
+def test_tts_endpoint_uses_extended_test_timeout(client, monkeypatch):
+    captured = {}
+
+    class RecordingService:
+        def __init__(self, **kwargs):
+            captured["timeout"] = kwargs["total_timeout_seconds"]
+
+        def resolve_candidate(self, kind, candidate):
+            return candidate
+
+        def validate_channel(self, kind, channel):
+            return None
+
+        async def test(self, kind, channel):
+            return {
+                "status": "ok",
+                "model": channel.model,
+                "host": "192.168.18.94",
+                "elapsed_ms": 1,
+                "check_scope": "audio",
+                "error": None,
+            }
+
+    monkeypatch.setattr(
+        "comic_studio.routes.provider_channels.ProviderChannelTestingService",
+        RecordingService,
+    )
+    monkeypatch.setattr(
+        "comic_studio.routes.provider_channels.provider_testing_total_timeout_seconds",
+        8,
+    )
+
+    response = client.post(
+        "/api/provider-channels/tts/test",
+        json=channel_payload(
+            api_key="",
+            base_url="http://192.168.18.94:18080",
+            ssh_host="ai-comic-tts",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert captured["timeout"] == 60
+
+
 def test_endpoint_returns_failed_transport_as_redacted_200_without_persistence(client, monkeypatch):
     store = client.app.state.provider_channel_store
     saved = store.snapshot.model_copy(

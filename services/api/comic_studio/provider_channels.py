@@ -13,6 +13,7 @@ from pydantic import (
     AnyHttpUrl,
     BaseModel,
     ConfigDict,
+    Field,
     SecretStr,
     TypeAdapter,
     field_validator,
@@ -83,9 +84,7 @@ class ProviderChannel(BaseModel):
                 if not getattr(self, field)
             ]
             if missing:
-                raise ValueError(
-                    f"Enabled channel requires: {', '.join(missing)}"
-                )
+                raise ValueError(f"Enabled channel requires: {', '.join(missing)}")
         return self
 
     @property
@@ -100,6 +99,14 @@ class ProviderChannels(BaseModel):
     llm: ProviderChannel
     image: ProviderChannel
     tts: ProviderChannel
+    video: ProviderChannel = Field(
+        default_factory=lambda: ProviderChannel(
+            name="MiniMax Video",
+            enabled=False,
+            base_url="https://api.minimaxi.com",
+            model="MiniMax-Hailuo-02",
+        )
+    )
 
     model_config = ConfigDict(
         extra="forbid",
@@ -110,14 +117,12 @@ class ProviderChannels(BaseModel):
 
     @model_validator(mode="after")
     def validate_channel_semantics(self):
-        for channel_name in ("llm", "image"):
+        for channel_name in ("llm", "image", "video"):
             channel = getattr(self, channel_name)
             if channel.ssh_host is not None:
                 raise ValueError("ssh_host is only valid for the tts channel")
             if channel.enabled and not channel.api_key_value:
-                raise ValueError(
-                    f"Enabled {channel_name} channel requires an api_key"
-                )
+                raise ValueError(f"Enabled {channel_name} channel requires an api_key")
         return self
 
 
@@ -151,6 +156,13 @@ def provider_channel_defaults(settings: Settings) -> ProviderChannels:
             model=settings.qwen_tts_model,
             ssh_host=settings.qwen_tts_ssh_host,
         ),
+        video=ProviderChannel(
+            name="MiniMax Video",
+            enabled=bool(settings.minimax_video_api_key),
+            base_url=settings.minimax_video_base_url,
+            model=settings.minimax_video_model,
+            api_key=settings.minimax_video_api_key,
+        ),
     )
 
 
@@ -181,6 +193,10 @@ class ProviderChannelStore:
             else:
                 try:
                     payload = json.loads(self._path.read_text(encoding="utf-8"))
+                    if "video" not in payload:
+                        payload["video"] = self._defaults.video.model_dump(
+                            mode="python"
+                        )
                     loaded = ProviderChannels.model_validate(payload)
                 except (
                     OSError,
@@ -221,21 +237,20 @@ class ProviderChannelStore:
             return self.state
 
     def save(self, channels: ProviderChannels) -> ProviderChannels:
-        validated = ProviderChannels.model_validate(
-            channels.model_dump(mode="python")
+        validated = ProviderChannels.model_validate(channels.model_dump(mode="python"))
+        serialized = (
+            json.dumps(
+                self._persistence_payload(validated),
+                ensure_ascii=True,
+                indent=2,
+            ).encode("utf-8")
+            + b"\n"
         )
-        serialized = json.dumps(
-            self._persistence_payload(validated),
-            ensure_ascii=True,
-            indent=2,
-        ).encode("utf-8") + b"\n"
 
         with self._lock:
             self._reject_symlink_destination()
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            previous_bytes = (
-                self._path.read_bytes() if self._path.exists() else None
-            )
+            previous_bytes = self._path.read_bytes() if self._path.exists() else None
             previous_mode = (
                 stat.S_IMODE(self._path.stat().st_mode)
                 if previous_bytes is not None
@@ -270,8 +285,7 @@ class ProviderChannelStore:
     def _reject_symlink_destination(self) -> None:
         if self._path.is_symlink():
             raise ValueError(
-                f"Provider channel configuration must not be a symlink: "
-                f"{self._path}"
+                f"Provider channel configuration must not be a symlink: {self._path}"
             )
 
     def _write_temporary_file(self, payload: bytes, mode: int) -> Path:
@@ -301,7 +315,7 @@ class ProviderChannelStore:
     @staticmethod
     def _persistence_payload(channels: ProviderChannels) -> dict:
         payload = channels.model_dump(mode="json")
-        for channel_name in ("llm", "image", "tts"):
+        for channel_name in ("llm", "image", "tts", "video"):
             channel = getattr(channels, channel_name)
             payload[channel_name]["api_key"] = channel.api_key_value
         return payload

@@ -30,9 +30,29 @@ class Settings(BaseSettings):
         default="MiniMax-M3",
         validation_alias=AliasChoices("MINIMAX_MODEL", "AI_COMIC_MINIMAX_MODEL"),
     )
+    minimax_video_base_url: str = Field(
+        default="https://api.minimaxi.com",
+        validation_alias=AliasChoices(
+            "MINIMAX_VIDEO_BASE_URL", "AI_COMIC_MINIMAX_VIDEO_BASE_URL"
+        ),
+    )
+    minimax_video_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "MINIMAX_VIDEO_API_KEY", "AI_COMIC_MINIMAX_VIDEO_API_KEY"
+        ),
+    )
+    minimax_video_model: str = Field(
+        default="MiniMax-Hailuo-02",
+        validation_alias=AliasChoices(
+            "MINIMAX_VIDEO_MODEL", "AI_COMIC_MINIMAX_VIDEO_MODEL"
+        ),
+    )
     gpt_image_base_url: str = Field(
         default="http://192.168.18.80:14000",
-        validation_alias=AliasChoices("GPT_IMAGE_BASE_URL", "AI_COMIC_GPT_IMAGE_BASE_URL"),
+        validation_alias=AliasChoices(
+            "GPT_IMAGE_BASE_URL", "AI_COMIC_GPT_IMAGE_BASE_URL"
+        ),
     )
     gpt_image_key: str = Field(
         default="",
@@ -44,7 +64,9 @@ class Settings(BaseSettings):
     )
     qwen_tts_base_url: str = Field(
         default="http://192.168.18.94:18080",
-        validation_alias=AliasChoices("QWEN_TTS_BASE_URL", "AI_COMIC_QWEN_TTS_BASE_URL"),
+        validation_alias=AliasChoices(
+            "QWEN_TTS_BASE_URL", "AI_COMIC_QWEN_TTS_BASE_URL"
+        ),
     )
     qwen_tts_model: str = Field(
         default="Qwen3-TTS-12Hz-1.7B-CustomVoice",
@@ -52,7 +74,9 @@ class Settings(BaseSettings):
     )
     qwen_tts_ssh_host: str = Field(
         default="ai-comic-tts",
-        validation_alias=AliasChoices("QWEN_TTS_SSH_HOST", "AI_COMIC_QWEN_TTS_SSH_HOST"),
+        validation_alias=AliasChoices(
+            "QWEN_TTS_SSH_HOST", "AI_COMIC_QWEN_TTS_SSH_HOST"
+        ),
     )
     compositor_root: Path = Field(
         default=Path("packages/compositor"),

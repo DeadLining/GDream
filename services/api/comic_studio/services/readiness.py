@@ -14,15 +14,18 @@ class ReadinessService:
         missing_panels = [shot.id for shot in shots if not shot.active_panel_asset_id]
         unapproved = [shot.id for shot in shots if shot.review_status != "approved"]
         missing_speech = [line.id for line in lines if not line.audio_asset_id or line.duration_seconds <= 0]
+        missing_videos = [shot.id for shot in shots if not shot.active_video_asset_id]
         blockers = {"missing_panels": missing_panels, "unapproved_shots": unapproved, "missing_speech": missing_speech}
         return {
             "episode_id": episode.id,
             "ready": not any(blockers.values()),
+            "video_ready": not missing_videos and not any(blockers.values()),
             "totals": {"shots": len(shots), "dialogue": len(lines)},
             "ready_counts": {
                 "panels": len(shots) - len(missing_panels),
                 "approved": len(shots) - len(unapproved),
                 "speech": len(lines) - len(missing_speech),
+                "videos": len(shots) - len(missing_videos),
             },
-            "blockers": blockers,
+            "blockers": {**blockers, "missing_videos": missing_videos},
         }

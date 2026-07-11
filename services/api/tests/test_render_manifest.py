@@ -78,3 +78,12 @@ def test_render_manifest_rejects_unapproved_shot(db_session, tmp_path):
         assert "not approved" in str(exc)
     else:
         raise AssertionError("Expected unapproved shot to block rendering")
+
+
+def test_render_manifest_includes_active_video_and_keeps_panel_fallback(db_session,tmp_path):
+    episode=seed_episode(db_session,tmp_path); shot=episode.scenes[0].shots[0]
+    video=models.Asset(project_id=episode.project_id,kind=f"video:{shot.id}",local_path="projects/shot.mp4",media_type="video/mp4",provider="test",model="video",checksum="2"*64,duration_seconds=5)
+    db_session.add(video); db_session.flush(); shot.active_video_asset_id=video.id; db_session.commit(); (tmp_path/video.local_path).write_bytes(b'\x00\x00\x00\x18ftypmp42video')
+    manifest=RenderingService(db_session,tmp_path,tmp_path).build_manifest(episode.id)
+    assert manifest['shots'][0]['videoPath'].endswith('projects/shot.mp4')
+    assert manifest['shots'][0]['panelPath'].endswith('projects/panel.png')

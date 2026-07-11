@@ -49,6 +49,19 @@ class RenderingService:
                 panel_path = (self.data_root / panel.local_path).resolve()
                 if not panel_path.is_file():
                     raise ValueError(f"Shot {shot.id} panel file is missing")
+                video_path = None
+                video_duration = None
+                if shot.active_video_asset_id:
+                    video = self.session.get(models.Asset, shot.active_video_asset_id)
+                    if video is None or video.kind != f"video:{shot.id}":
+                        raise ValueError(f"Shot {shot.id} active video asset is invalid")
+                    video_file = (self.data_root / video.local_path).resolve()
+                    if self.data_root not in video_file.parents or not video_file.is_file():
+                        raise ValueError(f"Shot {shot.id} active video file is missing")
+                    if b"ftyp" not in video_file.read_bytes()[:32]:
+                        raise ValueError(f"Shot {shot.id} active video is not a valid MP4")
+                    video_path = str(video_file)
+                    video_duration = video.duration_seconds
                 dialogue = []
                 for line in shot.dialogue:
                     character = (
@@ -82,6 +95,7 @@ class RenderingService:
                         "id": shot.id,
                         "durationSeconds": shot.duration_seconds,
                         "panelPath": str(panel_path),
+                        **({"videoPath": video_path, "videoDurationSeconds": video_duration} if video_path else {}),
                         "reviewStatus": "approved",
                         "motion": shot.camera_motion
                         if shot.camera_motion

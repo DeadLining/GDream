@@ -40,6 +40,7 @@ def channels_payload(**overrides):
             api_key=None,
             ssh_host="ai-comic-tts",
         ),
+        "video": channel_payload(name="MiniMax Video", model="MiniMax-Hailuo-02"),
     }
     payload.update(overrides)
     return payload
@@ -115,7 +116,6 @@ def test_existing_json_is_authoritative_over_bootstrap_defaults(tmp_path):
     [
         channels_payload(version=2),
         channels_payload(version="1"),
-        {**channels_payload(), "video": channel_payload()},
         channels_payload(llm={**channel_payload(), "unexpected": True}),
         channels_payload(llm=channel_payload(enabled="true")),
         channels_payload(llm=channel_payload(base_url="not-a-url")),
