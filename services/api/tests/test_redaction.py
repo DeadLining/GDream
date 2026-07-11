@@ -42,3 +42,35 @@ def test_redacts_bearer_value_while_preserving_authorization_prefix():
     assert redact("Authorization: Bearer bearer-secret} request failed") == (
         "Authorization: Bearer [REDACTED]} request failed"
     )
+
+
+def test_redacts_normalized_mapping_keys_recursively_without_false_positives():
+    value = {
+        "apiKey": "top-secret",
+        "nested": {
+            "clientSecret": "nested-secret",
+            "access-token": "access-secret",
+            "monkey": "visible",
+        },
+    }
+
+    assert redact(value) == {
+        "apiKey": "[REDACTED]",
+        "nested": {
+            "clientSecret": "[REDACTED]",
+            "access-token": "[REDACTED]",
+            "monkey": "visible",
+        },
+    }
+
+
+def test_redacts_normalized_unquoted_string_fields_without_matching_monkey():
+    error = (
+        "apiKey=camel-key clientSecret: client-secret; "
+        "service-api-key=service-key, monkey=visible"
+    )
+
+    assert redact(error) == (
+        "apiKey=[REDACTED] clientSecret: [REDACTED]; "
+        "service-api-key=[REDACTED], monkey=visible"
+    )

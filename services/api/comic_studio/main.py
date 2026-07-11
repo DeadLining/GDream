@@ -13,7 +13,7 @@ from comic_studio.provider_channels import (
     provider_channel_defaults,
 )
 from comic_studio.provider_factory import ProviderFactory
-from comic_studio.redaction import redact
+from comic_studio.redaction import is_sensitive_key, normalize_field_name, redact
 from comic_studio.routes.episodes import router as episodes_router
 from comic_studio.routes.assets import router as assets_router
 from comic_studio.routes.jobs import router as jobs_router
@@ -30,36 +30,12 @@ from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
 
 
-_SENSITIVE_VALIDATION_FIELDS = {
-    "apikey",
-    "authorization",
-    "credential",
-    "credentials",
-    "key",
-    "password",
-    "secret",
-    "token",
-}
-_SENSITIVE_VALIDATION_SUFFIXES = (
-    "apikey",
-    "authorization",
-    "credential",
-    "credentials",
-    "password",
-    "secret",
-    "token",
-)
-
-
 def _normalize_validation_field(value: str) -> str:
-    return value.casefold().replace("_", "").replace("-", "")
+    return normalize_field_name(value)
 
 
 def _validation_field_is_sensitive(value: str) -> bool:
-    normalized = _normalize_validation_field(value)
-    return normalized in _SENSITIVE_VALIDATION_FIELDS or normalized.endswith(
-        _SENSITIVE_VALIDATION_SUFFIXES
-    )
+    return is_sensitive_key(value)
 
 
 def _validation_location_is_secret(location: tuple | list) -> bool:

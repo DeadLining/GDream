@@ -67,3 +67,24 @@ def test_failed_job_redacts_unquoted_composite_secrets_and_preserves_context(
         secret not in failed.error
         for secret in ("raw-key", "raw-token", "access-value", "client-value")
     )
+
+
+def test_failed_job_redacts_camel_case_and_nested_looking_secret_fields(db_session):
+    store = JobStore(db_session)
+    job = store.create("plan_episode", "episode", "ep-3", {})
+    store.transition(job.id, "running")
+    error = (
+        'Request failed apiKey=api-secret; payload={"clientSecret":"client-secret",'
+        '"nested":{"apiKey":"nested-secret","monkey":"visible"}}'
+    )
+
+    failed = store.transition(job.id, "failed", error=error)
+
+    assert failed.error == (
+        'Request failed apiKey=[REDACTED]; payload={"clientSecret":"[REDACTED]",'
+        '"nested":{"apiKey":"[REDACTED]","monkey":"visible"}}'
+    )
+    assert all(
+        secret not in failed.error
+        for secret in ("api-secret", "client-secret", "nested-secret")
+    )
