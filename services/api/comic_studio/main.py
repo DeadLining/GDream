@@ -40,16 +40,31 @@ _SENSITIVE_VALIDATION_FIELDS = {
     "secret",
     "token",
 }
+_SENSITIVE_VALIDATION_SUFFIXES = (
+    "apikey",
+    "authorization",
+    "credential",
+    "credentials",
+    "password",
+    "secret",
+    "token",
+)
 
 
 def _normalize_validation_field(value: str) -> str:
     return value.casefold().replace("_", "").replace("-", "")
 
 
+def _validation_field_is_sensitive(value: str) -> bool:
+    normalized = _normalize_validation_field(value)
+    return normalized in _SENSITIVE_VALIDATION_FIELDS or normalized.endswith(
+        _SENSITIVE_VALIDATION_SUFFIXES
+    )
+
+
 def _validation_location_is_secret(location: tuple | list) -> bool:
     return any(
-        isinstance(part, str)
-        and _normalize_validation_field(part) in _SENSITIVE_VALIDATION_FIELDS
+        isinstance(part, str) and _validation_field_is_sensitive(part)
         for part in location
     )
 
@@ -72,9 +87,7 @@ def _sanitize_validation_value(value):
         return {
             key: (
                 "[REDACTED]"
-                if isinstance(key, str)
-                and _normalize_validation_field(key)
-                in _SENSITIVE_VALIDATION_FIELDS
+                if isinstance(key, str) and _validation_field_is_sensitive(key)
                 else _sanitize_validation_value(item)
             )
             for key, item in value.items()
@@ -92,7 +105,9 @@ def _sanitized_validation_errors(error: RequestValidationError) -> list[dict]:
         safe_item = _sanitize_validation_value(dict(item))
         if _validation_location_is_secret(
             item.get("loc", ())
-        ) or _validation_error_contains_root_input(item):
+        ) or _validation_error_contains_root_input(item) or item.get(
+            "type"
+        ) == "extra_forbidden":
             safe_item["input"] = "[REDACTED]"
             safe_item.pop("ctx", None)
         sanitized.append(safe_item)

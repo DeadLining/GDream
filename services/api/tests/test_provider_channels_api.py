@@ -4,6 +4,11 @@ from datetime import datetime
 
 import pytest
 
+from comic_studio.main import (
+    _sanitize_validation_value,
+    _validation_field_is_sensitive,
+)
+
 
 def channel_update(**overrides):
     payload = {
@@ -227,6 +232,19 @@ def test_validation_redacts_nested_composite_secrets_in_unknown_field(client):
     )
     assert error["input"] == "[REDACTED]"
     assert all(secret not in response.text for secret in secrets.values())
+
+
+def test_validation_secret_policy_recurses_without_treating_monkey_as_key():
+    assert _validation_field_is_sensitive("access_token") is True
+    assert _validation_field_is_sensitive("clientSecret") is True
+    assert _validation_field_is_sensitive("monkey") is False
+    assert _sanitize_validation_value(
+        {
+            "nested": {"refreshToken": "secret-value", "monkey": "visible"}
+        }
+    ) == {
+        "nested": {"refreshToken": "[REDACTED]", "monkey": "visible"}
+    }
 
 
 def test_validation_redacts_whole_input_for_malformed_json(client):
