@@ -1,4 +1,5 @@
 import {expect, test} from '@playwright/test';
+import path from 'node:path';
 
 const project = {id:'project-1',title:'霓虹夜行',logline:'寻找记忆',story_bible:'近未来重庆',visual_style:'Chinese noir',aspect_ratio:'9:16',language:'Chinese',created_at:'',updated_at:''};
 const episodeSummary = {id:'episode-1',project_id:'project-1',title:'失窃的雨夜',premise:'寻找芯片',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''};
@@ -74,6 +75,75 @@ test('compact desktop keeps the inspector inside the viewport at the mobile brea
   }
 });
 
+test('compact overview keeps primary content inside the first viewport', async ({page}, testInfo) => {
+  const viewports = testInfo.project.name === 'desktop'
+    ? [{width: 1440, height: 900}, {width: 1024, height: 768}]
+    : [{width: 390, height: 844}];
+
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+
+    const shotCard = page.getByRole('button', {name: /镜头 1/});
+    const header = page.locator('.episode-overview-header');
+    const metrics = page.getByTestId('overview-metric');
+    const blockers = page.locator('.readiness-blockers');
+    const shotWallHeading = page.locator('.episode-overview-shots-heading');
+    await expect(shotCard).toBeInViewport();
+    await expect(blockers).toContainText('缺少画面 0');
+    await expect(blockers).toContainText('未审核镜头 0');
+    await expect(blockers).toContainText('缺少配音 0');
+    await expect(metrics).toHaveCount(3);
+
+    const [headerBox, metricBoxes, blockersBox, shotWallHeadingBox] = await Promise.all([
+      header.boundingBox(),
+      metrics.evaluateAll(elements => elements.map(element => {
+        const {x, y, width, height} = element.getBoundingClientRect();
+        return {x, y, width, height};
+      })),
+      blockers.boundingBox(),
+      shotWallHeading.boundingBox(),
+    ]);
+    expect(headerBox).not.toBeNull();
+    expect(blockersBox).not.toBeNull();
+    expect(shotWallHeadingBox).not.toBeNull();
+    expect(headerBox!.height).toBeLessThanOrEqual(140);
+    expect(headerBox!.y + headerBox!.height).toBeLessThanOrEqual(metricBoxes[0].y + 1);
+    expect(metricBoxes.at(-1)!.y + metricBoxes.at(-1)!.height).toBeLessThanOrEqual(blockersBox!.y + 1);
+    expect(blockersBox!.y + blockersBox!.height).toBeLessThanOrEqual(shotWallHeadingBox!.y + 1);
+
+    if (testInfo.project.name === 'mobile') {
+      const commands = [
+        page.getByRole('button', {name: '打开生产'}),
+        page.getByRole('button', {name: '处理阻塞项'}),
+      ];
+      const dimensions = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+
+      for (const element of [...commands, ...await metrics.all()]) {
+        await expect(element).toBeInViewport();
+        const box = await element.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+      }
+    } else {
+      expect(new Set(metricBoxes.map(box => Math.round(box.y))).size).toBe(1);
+      expect(new Set(metricBoxes.map(box => Math.round(box.height))).size).toBe(1);
+    }
+
+    const viewportName = viewport.width === 1440 ? 'desktop-1440x900' : viewport.width === 1024 ? 'tablet-1024x768' : 'mobile-390x844';
+    await page.screenshot({
+      path: path.resolve(process.cwd(), '../../output/compact-overview', `${viewportName}.png`),
+      animations: 'disabled',
+      scale: 'css',
+    });
+  }
+});
+
 test('mobile navigation keeps work areas separated and within the viewport', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
   await page.goto('/');
@@ -132,7 +202,7 @@ test('mobile review action opens a relevant shot in the inspector', async ({page
   await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:{episode_id:'episode-1',ready:false,totals:{shots:2,dialogue:0},ready_counts:{panels:1,approved:1,speech:0},blockers:{missing_panels:['shot-2'],unapproved_shots:['shot-2'],missing_speech:[]}}}));
   await page.goto('/');
 
-  await page.getByRole('button', {name: '审核镜头'}).click();
+  await page.getByRole('button', {name: '处理阻塞项'}).click();
 
   await expect(page.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();

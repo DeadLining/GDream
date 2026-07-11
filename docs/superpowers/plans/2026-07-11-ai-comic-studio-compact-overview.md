@@ -83,11 +83,11 @@ git commit -m "feat: compact the episode overview"
 - Modify: `apps/web/e2e/production-flow.spec.ts` only if an acceptance assertion is missing
 - Modify: `docs/superpowers/plans/2026-07-11-ai-comic-studio-compact-overview.md`
 
-- [ ] **Step 1: Add first-viewport acceptance assertions**
+- [x] **Step 1: Add first-viewport acceptance assertions**
 
 At 1440x900 and 1024x768, verify at least one shot card is visible in the viewport without scrolling. At 390x844, verify no horizontal overflow and the overview commands and metrics fit.
 
-- [ ] **Step 2: Run isolated E2E on the worktree server**
+- [x] **Step 2: Run isolated E2E on the worktree server**
 
 ```bash
 E2E_PORT=3100 npm run test:e2e --workspace @comic-studio/web
@@ -95,11 +95,11 @@ E2E_PORT=3100 npm run test:e2e --workspace @comic-studio/web
 
 Expected: all applicable desktop/mobile cases pass; cross-project skips remain intentional.
 
-- [ ] **Step 3: Capture and inspect screenshots**
+- [x] **Step 3: Capture and inspect screenshots**
 
 Capture desktop 1440x900, tablet 1024x768, and mobile 390x844 under `output/compact-overview/`. Confirm the title region is compact, all three metrics align, blockers remain readable, shot content enters the first viewport, and no content overlaps or clips.
 
-- [ ] **Step 4: Run final web verification and commit**
+- [x] **Step 4: Run final web verification and commit**
 
 ```bash
 npm test --workspace @comic-studio/web
