@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
@@ -22,13 +22,16 @@ class PlanningService:
             .options(
                 selectinload(models.Episode.project).selectinload(
                     models.Project.characters
-                )
+                ),
+                selectinload(models.Episode.scenes),
             )
             .where(models.Episode.id == episode_id)
         )
         episode = self.session.scalar(statement)
         if episode is None:
             raise KeyError(episode_id)
+        if episode.scenes:
+            raise RuntimeError("storyboard_already_exists")
 
         context = {
             "project": {
@@ -60,9 +63,6 @@ class PlanningService:
         valid_character_ids = {character.id for character in episode.project.characters}
 
         try:
-            self.session.execute(
-                delete(models.Scene).where(models.Scene.episode_id == episode.id)
-            )
             for scene_position, planned_scene in enumerate(plan.scenes, start=1):
                 scene_data = planned_scene.model_dump(exclude={"shots"})
                 scene = models.Scene(
@@ -102,6 +102,7 @@ class PlanningService:
             self.session.rollback()
             raise
 
+        self.session.expire_all()
         planned_episode = EpisodeRepository(self.session).get(episode.id)
         if planned_episode is None:
             raise RuntimeError("Planned episode disappeared after commit")

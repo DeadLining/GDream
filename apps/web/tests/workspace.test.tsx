@@ -246,7 +246,7 @@ describe('Workspace', () => {
 
     expect(await screen.findByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
     await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
-    await userEvent.click(screen.getByRole('button', {name: '生成剧本与分镜'}));
+    await userEvent.click(screen.getByRole('button', {name: '根据本集设定生成分镜'}));
 
     expect(await screen.findByText('场景 1')).toBeVisible();
     expect(screen.getByRole('button', {name: /镜头 1/})).toBeEnabled();
@@ -263,29 +263,24 @@ describe('Workspace', () => {
     render(<Workspace />);
 
     await userEvent.click(await screen.findByRole('tab', {name: '分镜'}));
-    await userEvent.click(screen.getByRole('button', {name: '生成剧本与分镜'}));
+    await userEvent.click(screen.getByRole('button', {name: '根据本集设定生成分镜'}));
 
-    expect(screen.getByRole('button', {name: '正在启动剧本规划'})).toBeDisabled();
-    expect(screen.getByLabelText('剧本规划启动中')).toBeVisible();
+    expect(screen.getByRole('button', {name: '正在启动分镜规划'})).toBeDisabled();
+    expect(screen.getByLabelText('分镜规划启动中')).toBeVisible();
   });
 
-  it('guards replacement planning for an episode with existing shots', async () => {
+  it('does not expose whole-episode planning for an existing storyboard', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
     mocks.startPlanning.mockResolvedValue(succeededJob);
     mocks.pollJob.mockResolvedValue(succeededJob);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
-
     render(<Workspace />);
 
     await userEvent.click(await screen.findByRole('tab', {name: '分镜'}));
-    const regenerate = screen.getByRole('button', {name: '重新生成分镜'});
-    await userEvent.click(regenerate);
+    expect(screen.queryByRole('button', {name: '重新生成分镜'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: '根据本集设定生成分镜'})).not.toBeInTheDocument();
     expect(mocks.startPlanning).not.toHaveBeenCalled();
-    await userEvent.click(regenerate);
-    await waitFor(() => expect(mocks.startPlanning).toHaveBeenCalledWith('episode-1'));
-    expect(confirm).toHaveBeenCalledTimes(2);
   });
 
   it('exposes the active project context and accessible studio commands', async () => {

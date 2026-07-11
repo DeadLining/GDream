@@ -96,8 +96,14 @@ def plan_episode(
     background_tasks: BackgroundTasks,
     session: SessionDependency,
 ):
-    if EpisodeRepository(session).get(episode_id) is None:
+    episode = EpisodeRepository(session).get(episode_id)
+    if episode is None:
         raise HTTPException(status_code=404, detail="Episode not found")
+    if episode.scenes:
+        raise HTTPException(
+            status_code=409,
+            detail="Storyboard already exists for this episode",
+        )
     job = JobStore(session).create("plan_episode", "episode", episode_id, {})
     background_tasks.add_task(run_planning_job, request.app, job.id, episode_id)
     return job
