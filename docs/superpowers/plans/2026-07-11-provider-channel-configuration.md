@@ -391,15 +391,15 @@ git commit -m "feat: style provider channel settings"
 - Modify: `README.md`
 - Modify: `docs/superpowers/plans/2026-07-11-provider-channel-configuration.md`
 
-- [ ] **Step 1: Add deterministic settings E2E**
+- [x] **Step 1: Add deterministic settings E2E**
 
 Mock redacted GET, test connection, PUT save, and post-save reload. Assert the full API key is never rendered after reload and the updated model is used by a subsequent mocked planning/provider operation.
 
-- [ ] **Step 2: Update operations documentation**
+- [x] **Step 2: Update operations documentation**
 
 Document JSON authority, `.env` bootstrap, permissions, key semantics, connection testing, immediate effect on new operations, and deletion recovery.
 
-- [ ] **Step 3: Run full deterministic verification sequentially**
+- [x] **Step 3: Run full deterministic verification sequentially**
 
 ```bash
 cd services/api && uv run pytest -q
@@ -411,7 +411,7 @@ git diff --check
 
 Run Playwright against the worktree server, not the main checkout on port 3000.
 
-- [ ] **Step 4: Run a local persistence smoke without real provider cost**
+- [x] **Step 4: Run a local persistence smoke without real provider cost**
 
 Use a temporary data root/config path to:
 
@@ -421,7 +421,7 @@ Use a temporary data root/config path to:
 - confirm the JSON configuration remains authoritative;
 - confirm key material does not appear in GET output or logs.
 
-- [ ] **Step 5: Security and artifact audit**
+- [x] **Step 5: Security and artifact audit**
 
 ```bash
 npm audit --omit=dev --registry=https://registry.npmjs.org || true
@@ -432,7 +432,7 @@ git status --short
 
 Confirm no real channel file, key, screenshot, `.superpowers` content, or temporary config is staged. Record the existing Next/PostCSS advisory if unchanged.
 
-- [ ] **Step 6: Mark all plan steps complete and commit**
+- [x] **Step 6: Mark all plan steps complete and commit**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-07-11-provider-channel-configuration.md services/api apps/web .gitignore

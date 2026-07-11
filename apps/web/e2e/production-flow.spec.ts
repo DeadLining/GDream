@@ -113,6 +113,78 @@ test('provider channel settings stay operable and bounded across studio viewport
   expect(writes.map(write => write.model)).toEqual(viewports.map(viewport => `MiniMax-M4-${viewport.width}`));
 });
 
+test('provider channel settings persist safely and affect the next planning operation', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Persistence behavior only needs one deterministic browser project');
+  const replacementKey = 'e2e-replacement-key-never-render';
+  const savedModel = 'MiniMax-M4-Persisted';
+  let current = structuredClone(providerChannels);
+  let getCount = 0;
+  let putCount = 0;
+  let planningModel = '';
+
+  await page.route('**/api/provider-channels', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    getCount += 1;
+    await route.fulfill({json: current});
+  });
+  await page.route('**/api/provider-channels/llm', async route => {
+    if (route.request().method() !== 'PUT') return route.fallback();
+    const body = await route.request().postDataJSON();
+    expect(body.api_key).toBe(replacementKey);
+    expect(body.model).toBe(savedModel);
+    putCount += 1;
+    current = {
+      ...current,
+      llm: {
+        ...current.llm,
+        name: body.name,
+        enabled: body.enabled,
+        base_url: body.base_url,
+        model: body.model,
+        ssh_host: body.ssh_host,
+        api_key_configured: true,
+        api_key_masked: 'e2e****nder',
+      },
+      persistence: {status: 'saved', file_path: 'data/provider-channels.json'},
+      reloaded_at: '2026-07-11T11:00:00Z',
+    };
+    await route.fulfill({json: {channel: current.llm, current}});
+  });
+  await page.route('**/api/episodes/episode-1/plan', async route => {
+    planningModel = current.llm.model;
+    await route.fulfill({status: 202, json: {id: 'plan-1', operation: 'plan_episode', target_type: 'episode', target_id: 'episode-1', status: 'queued', progress: 0, result_metadata: {}, error: '', retry_count: 0, created_at: '', updated_at: ''}});
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', {name: '模型渠道'}).click();
+  await expect(page.getByLabel('剧本规划模型')).toHaveValue(providerChannels.llm.model);
+
+  await page.getByLabel('剧本规划模型').fill('MiniMax-Unsaved');
+  await expect(page.getByText('有未保存更改')).toBeVisible();
+  page.once('dialog', dialog => dialog.accept());
+  await page.reload();
+  await page.getByRole('button', {name: '模型渠道'}).click();
+  await expect(page.getByLabel('剧本规划模型')).toHaveValue(providerChannels.llm.model);
+  expect(putCount).toBe(0);
+
+  await page.getByLabel('剧本规划模型').fill(savedModel);
+  await page.getByLabel('替换剧本规划 API Key').fill(replacementKey);
+  await page.getByRole('button', {name: '保存全部更改'}).click();
+  await expect(page.getByText('所有更改已保存')).toBeVisible();
+  await expect(page.getByLabel('剧本规划模型')).toHaveValue(savedModel);
+  await expect(page.getByLabel('替换剧本规划 API Key')).toHaveValue('');
+  expect(putCount).toBe(1);
+  expect(getCount).toBeGreaterThanOrEqual(3);
+  expect(await page.locator('body').textContent()).not.toContain(replacementKey);
+  expect(await page.locator('html').evaluate(element => element.outerHTML)).not.toContain(replacementKey);
+
+  await page.evaluate(async () => {
+    const response = await fetch('http://127.0.0.1:8000/api/episodes/episode-1/plan', {method: 'POST', headers: {'content-type': 'application/json'}});
+    if (!response.ok) throw new Error(`Planning request failed: ${response.status}`);
+  });
+  expect(planningModel).toBe(savedModel);
+});
+
 test('render success exposes the verified MP4 download', async ({page}) => {
   await page.goto('/');
   await page.getByRole('button',{name:'渲染本集'}).click();

@@ -28,6 +28,22 @@ On mobile, the same workflow is exposed as four equal navigation areas: `总览`
 
 No API key is stored in source code, SQLite, browser storage, or generated metadata.
 
+## Provider Channel Configuration
+
+Open `模型渠道` in the Studio to manage planning, image, and speech providers at runtime. The backend owns this configuration; the browser receives only redacted key status and never stores provider keys.
+
+On the first startup without `data/provider-channels.json`, provider values are bootstrapped from `.env`. Once the JSON file exists, it is authoritative across API restarts even if `.env` changes. The file is written atomically with owner-only `0600` permissions and is ignored by Git. Do not copy it into logs, screenshots, bug reports, or source control.
+
+Saving a channel uses these API key semantics:
+
+- Leave the replacement field empty to preserve the current key.
+- Enter a new value to replace the current key; after saving, the UI clears the field and reloads only a redacted mask.
+- Use `清除 API Key` to remove the key. An enabled planning or image channel cannot be saved without a key.
+
+`测试连接` checks the current draft without saving it. Planning and speech tests use bounded, low-cost provider checks; image testing does not request generated media. A failed test leaves the active configuration unchanged. A successful save affects only new planning, image, and speech operations; already-running jobs keep the provider snapshot they started with.
+
+To recover the environment defaults, stop the API, securely remove `data/provider-channels.json`, and restart. The next startup bootstraps from `.env` again. Deleting the file while the API is running does not reset the active in-memory snapshot.
+
 ## Setup
 
 ```bash

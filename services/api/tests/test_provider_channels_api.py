@@ -3,7 +3,10 @@ import threading
 from datetime import datetime
 
 import pytest
+from fastapi.testclient import TestClient
 
+from comic_studio.config import get_settings
+from comic_studio.main import create_app
 from comic_studio.main import (
     _sanitize_validation_value,
     _validation_field_is_sensitive,
@@ -37,6 +40,49 @@ def seed_channels(client, *, llm_key="full-secret-8adr", image_key="image-secret
         )
     )
     return store
+
+
+def test_temporary_path_restart_smoke_keeps_json_authoritative_and_redacted(
+    tmp_path, monkeypatch, caplog
+):
+    config_path = tmp_path / "provider-channels.json"
+    bootstrap_key = "bootstrap-smoke-key"
+    saved_key = "saved-smoke-key-never-return"
+    monkeypatch.setenv("AI_COMIC_DATABASE_URL", f"sqlite:///{tmp_path / 'studio.db'}")
+    monkeypatch.setenv("AI_COMIC_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("AI_COMIC_PROVIDER_CHANNELS_PATH", str(config_path))
+    monkeypatch.setenv("MINIMAX_API_KEY", bootstrap_key)
+    monkeypatch.setenv("MINIMAX_MODEL", "bootstrap-model")
+
+    get_settings.cache_clear()
+    with TestClient(create_app()) as first_client:
+        initial = first_client.get("/api/provider-channels")
+        assert initial.status_code == 200
+        assert initial.json()["llm"]["model"] == "bootstrap-model"
+        assert initial.json()["persistence"]["status"] == "defaults"
+        saved = first_client.put(
+            "/api/provider-channels/llm",
+            json=channel_update(model="saved-model", api_key=saved_key),
+        )
+        assert saved.status_code == 200
+
+    monkeypatch.setenv("MINIMAX_API_KEY", "changed-environment-key")
+    monkeypatch.setenv("MINIMAX_MODEL", "changed-environment-model")
+    get_settings.cache_clear()
+    caplog.clear()
+    with TestClient(create_app()) as restarted_client:
+        reloaded = restarted_client.get("/api/provider-channels")
+        assert reloaded.status_code == 200
+        assert reloaded.json()["llm"]["model"] == "saved-model"
+        assert reloaded.json()["persistence"]["status"] == "saved"
+        assert saved_key not in reloaded.text
+        assert saved_key not in caplog.text
+
+    persisted = json.loads(config_path.read_text(encoding="utf-8"))
+    assert persisted["llm"]["model"] == "saved-model"
+    assert persisted["llm"]["api_key"] == saved_key
+    assert config_path.stat().st_mode & 0o777 == 0o600
+    get_settings.cache_clear()
 
 
 def test_get_returns_redacted_channels_and_sanitized_metadata(client):
