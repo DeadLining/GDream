@@ -1,5 +1,7 @@
 import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Workspace} from '../components/Workspace';
 import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} from '../lib/types';
@@ -65,9 +67,13 @@ const succeededJob: Job = {
   status: 'succeeded', progress: 100, result_metadata: {}, error: '', retry_count: 0,
   created_at: '', updated_at: '',
 };
+const workspaceStyles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('Workspace', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -141,5 +147,35 @@ describe('Workspace', () => {
 
     expect(screen.getByRole('heading', {name: '镜头 2'})).toBeVisible();
     expect(screen.getByRole('button', {name: /镜头 2/})).toHaveClass('selected');
+  });
+
+  it('keeps only the selected mobile work area visible', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query === '(max-width: 899px)',
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })));
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+
+    expect(await screen.findByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-overview');
+    expect(workspaceStyles).toMatch(/\.mobile-overview \.inspector\s*\{\s*display:\s*none/);
+
+    await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
+    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-storyboard');
+    expect(workspaceStyles).toMatch(/\.mobile-storyboard \.inspector\s*\{\s*display:\s*none/);
+
+    await userEvent.click(screen.getByRole('tab', {name: '检查器'}));
+    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-inspector');
+    expect(workspaceStyles).toMatch(/\.mobile-inspector :is\(\.storyboard, \.episode-overview\)\s*\{\s*display:\s*none/);
   });
 });
