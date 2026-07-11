@@ -71,6 +71,16 @@ const succeededJob: Job = {
 };
 const workspaceStyles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
 
+function contrastRatio(foreground: string, background: string) {
+  const luminance = (hex: string) => {
+    const channels = hex.match(/[a-f\d]{2}/gi)!.map(value => parseInt(value, 16) / 255);
+    const linear = channels.map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4);
+    return .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2];
+  };
+  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (lighter + .05) / (darker + .05);
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(done => {resolve = done;});
@@ -256,6 +266,31 @@ describe('Workspace', () => {
   it('uses a non-clipping flex layout for toolbar, tabs, and workspace', () => {
     expect(workspaceStyles).toMatch(/\.app-shell\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/);
     expect(workspaceStyles).toMatch(/\.workspace-grid\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*height:\s*auto/);
+  });
+
+  it('keeps responsive workspace grid overrides after the modern desktop rule', () => {
+    const modernDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 248px minmax(480px, 1fr) 326px;');
+    const compactDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 210px minmax(400px, 1fr) 296px;');
+    const mobileRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 1fr;');
+
+    expect(modernDesktopRule).toBeGreaterThan(-1);
+    expect(compactDesktopRule).toBeGreaterThan(modernDesktopRule);
+    expect(mobileRule).toBeGreaterThan(compactDesktopRule);
+  });
+
+  it('uses stronger semantic colors with accessible shell contrast', () => {
+    const mutedStrong = workspaceStyles.match(/--muted-strong:\s*(#[a-f\d]{6})/i)?.[1];
+    const accentStrong = workspaceStyles.match(/--accent-strong:\s*(#[a-f\d]{6})/i)?.[1];
+
+    expect(mutedStrong).toBeTruthy();
+    expect(accentStrong).toBeTruthy();
+    expect(contrastRatio(mutedStrong!, '#ffffff')).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(mutedStrong!, '#f8f9fa')).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio('#ffffff', accentStrong!)).toBeGreaterThanOrEqual(4.5);
+    expect(workspaceStyles).toMatch(/\.workspace-breadcrumb\s*\{[^}]*color:\s*var\(--muted-strong\)/);
+    expect(workspaceStyles).toMatch(/\.nav-footer\s*\{[^}]*color:\s*var\(--muted-strong\)/);
+    expect(workspaceStyles).toMatch(/\.command-button\s*\{[^}]*background:\s*var\(--accent-strong\)/);
+    expect(workspaceStyles).toMatch(/\.inspector-actions \.primary-action[^}]*background:\s*var\(--accent-strong\)/);
   });
 
   it('normalizes inspector when the viewport switches from mobile to desktop', async () => {
