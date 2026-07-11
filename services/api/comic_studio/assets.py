@@ -119,3 +119,22 @@ class AssetStore:
         self.session.commit()
         self.session.refresh(asset)
         return asset
+
+    def list_panel_versions(self, shot_id: str) -> list[models.Asset]:
+        return list(
+            self.session.scalars(
+                select(models.Asset)
+                .where(models.Asset.kind == f"panel:{shot_id}")
+                .order_by(models.Asset.generation_attempt.desc())
+            )
+        )
+
+    def activate_panel(self, shot_id: str, asset_id: str) -> models.Shot | None:
+        shot = self.session.get(models.Shot, shot_id)
+        asset = self.session.get(models.Asset, asset_id)
+        if shot is None or asset is None or asset.kind != f"panel:{shot_id}":
+            return None
+        shot.active_panel_asset_id = asset.id
+        self.session.commit()
+        self.session.refresh(shot)
+        return shot

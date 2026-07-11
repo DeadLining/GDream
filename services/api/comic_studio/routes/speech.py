@@ -26,7 +26,11 @@ async def run_speech_job(app, job_id: str, dialogue_id: str) -> None:
             jobs.transition(
                 job_id,
                 "succeeded",
-                result_metadata={"asset_id": asset.id, "dialogue_id": dialogue_id},
+                result_metadata={
+                    "asset_id": asset.id,
+                    "dialogue_id": dialogue_id,
+                    "media_url": f"/media/{asset.local_path}",
+                },
             )
         except Exception as exc:
             jobs.transition(job_id, "failed", error=f"{type(exc).__name__}: {exc}")

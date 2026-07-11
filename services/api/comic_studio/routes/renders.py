@@ -40,6 +40,7 @@ def run_render_job(app, job_id: str, episode_id: str) -> None:
                 result_metadata={
                     "episode_id": episode_id,
                     "output_path": str(output.relative_to(settings.data_root)),
+                    "media_url": f"/media/{output.relative_to(settings.data_root)}",
                     "probe": report,
                 },
             )

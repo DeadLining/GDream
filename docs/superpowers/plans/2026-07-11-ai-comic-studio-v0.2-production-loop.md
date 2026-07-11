@@ -145,7 +145,7 @@ git commit -m "feat: add production resource editing"
 - Test: `services/api/tests/test_panel_versions.py`
 - Test: `services/api/tests/test_render_manifest.py`
 
-- [ ] **Step 1: Write failing asset listing and activation tests**
+- [x] **Step 1: Write failing asset listing and activation tests**
 
 Generate two panel assets for one shot, then assert listing is newest-first and activation changes only `Shot.active_panel_asset_id`.
 
@@ -156,29 +156,29 @@ selected = client.put(f"/api/shots/{shot_id}/panels/{versions[1]['id']}/active")
 assert selected.json()["active_panel_asset_id"] == versions[1]["id"]
 ```
 
-- [ ] **Step 2: Run the panel tests and confirm missing GET/PUT routes**
+- [x] **Step 2: Run the panel tests and confirm missing GET/PUT routes**
 
 Run: `cd services/api && uv run pytest tests/test_panel_versions.py -q`
 Expected: FAIL with HTTP 405 or 404.
 
-- [ ] **Step 3: Add sanitized asset responses**
+- [x] **Step 3: Add sanitized asset responses**
 
 Define `AssetRead` with ID, kind, media URL, media type, provider, model, generation attempt, review status, dimensions, duration, and created timestamp. Do not return raw request metadata or filesystem paths.
 
-- [ ] **Step 4: Implement panel queries and activation validation**
+- [x] **Step 4: Implement panel queries and activation validation**
 
 Query panel assets by `request_metadata["shot_id"]` using a portable in-memory filter after project-scoped selection. Reject assets that are not panel assets for the requested shot.
 
-- [ ] **Step 5: Return stable media paths in job results**
+- [x] **Step 5: Return stable media paths in job results**
 
 Panel, speech, and render success metadata must include `/media/<relative-path>` as `media_url`; raw relative paths may remain server-internal but must not be required by the web client.
 
-- [ ] **Step 6: Run asset, speech, render, and redaction suites**
+- [x] **Step 6: Run asset, speech, render, and redaction suites**
 
 Run: `cd services/api && uv run pytest tests/test_panel_versions.py tests/test_dialogue_speech.py tests/test_render_manifest.py tests/test_redaction.py -q`
 Expected: all tests pass and no response contains configured API keys.
 
-- [ ] **Step 7: Commit asset version APIs**
+- [x] **Step 7: Commit asset version APIs**
 
 ```bash
 git add services/api/comic_studio services/api/tests

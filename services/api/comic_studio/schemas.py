@@ -179,6 +179,21 @@ class JobRead(BaseModel):
     updated_at: datetime
 
 
+class AssetRead(BaseModel):
+    id: str
+    kind: str
+    media_url: str
+    media_type: str
+    provider: str
+    model: str
+    generation_attempt: int
+    review_status: str
+    width: int | None
+    height: int | None
+    duration_seconds: float | None
+    created_at: datetime
+
+
 class PlannedDialogue(BaseModel):
     character_id: str | None
     text: str = Field(min_length=1)
