@@ -433,3 +433,27 @@ def test_save_and_rollback_failures_are_reported_together(tmp_path, monkeypatch)
 
     messages = [str(error) for error in exc_info.value.exceptions]
     assert messages == ["save durability failed", "rollback failed"]
+
+
+def test_store_refuses_symlink_config_file_without_modifying_target(tmp_path):
+    target = tmp_path / "secret-target.json"
+    target.write_text(json.dumps(channels_payload()), encoding="utf-8")
+    original_bytes = target.read_bytes()
+    linked_parent = tmp_path / "linked-parent"
+    real_parent = tmp_path / "real-parent"
+    real_parent.mkdir()
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    config_path = linked_parent / "provider-channels.json"
+    config_path.symlink_to(target)
+    defaults = make_channels()
+    store = ProviderChannelStore(config_path, defaults)
+    previous_snapshot = store.snapshot
+
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        store.load()
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        store.save(defaults)
+
+    assert target.read_bytes() == original_bytes
+    assert config_path.is_symlink()
+    assert store.snapshot == previous_snapshot

@@ -147,7 +147,8 @@ class ProviderChannelStore:
     _path_locks: ClassVar[dict[Path, threading.RLock]] = {}
 
     def __init__(self, path: Path, defaults: ProviderChannels):
-        self._path = Path(path).expanduser().resolve()
+        requested_path = Path(path).expanduser()
+        self._path = requested_path.parent.resolve() / requested_path.name
         with self._locks_guard:
             self._lock = self._path_locks.setdefault(
                 self._path,
@@ -158,6 +159,7 @@ class ProviderChannelStore:
 
     def load(self) -> ProviderChannels:
         with self._lock:
+            self._reject_symlink_destination()
             if not self._path.exists():
                 loaded = self._defaults.model_copy(deep=True)
             else:
@@ -192,6 +194,7 @@ class ProviderChannelStore:
         ).encode("utf-8") + b"\n"
 
         with self._lock:
+            self._reject_symlink_destination()
             self._path.parent.mkdir(parents=True, exist_ok=True)
             previous_bytes = (
                 self._path.read_bytes() if self._path.exists() else None
@@ -224,6 +227,13 @@ class ProviderChannelStore:
             finally:
                 if temporary_path is not None:
                     temporary_path.unlink(missing_ok=True)
+
+    def _reject_symlink_destination(self) -> None:
+        if self._path.is_symlink():
+            raise ValueError(
+                f"Provider channel configuration must not be a symlink: "
+                f"{self._path}"
+            )
 
     def _write_temporary_file(self, payload: bytes, mode: int) -> Path:
         temporary_path: Path | None = None
