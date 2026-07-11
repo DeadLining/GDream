@@ -6,7 +6,7 @@ After=network-online.target
 Type=simple
 WorkingDirectory=/opt/ai-comic-studio/qwen3-tts
 Environment=CUDA_VISIBLE_DEVICES=0
-Environment=QWEN_TTS_MODEL_ID=Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+Environment=QWEN_TTS_MODEL_ID=/opt/ai-comic-studio/qwen3-tts/models/Qwen3-TTS-12Hz-1.7B-CustomVoice
 Environment=HF_HOME=/opt/ai-comic-studio/qwen3-tts/models/huggingface
 Environment=HTTP_PROXY=http://127.0.0.1:7890
 Environment=HTTPS_PROXY=http://127.0.0.1:7890

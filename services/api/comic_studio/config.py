@@ -1,8 +1,11 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
@@ -42,15 +45,30 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("QWEN_TTS_MODEL", "AI_COMIC_QWEN_TTS_MODEL"),
     )
     compositor_root: Path = Field(
-        default=Path("../../packages/compositor"),
+        default=Path("packages/compositor"),
         validation_alias=AliasChoices("COMPOSITOR_ROOT", "AI_COMIC_COMPOSITOR_ROOT"),
     )
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ROOT_ENV_FILE,
         env_prefix="AI_COMIC_",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def resolve_repository_paths(self):
+        repository_root = ROOT_ENV_FILE.parent
+        if not self.data_root.is_absolute():
+            self.data_root = (repository_root / self.data_root).resolve()
+        if not self.compositor_root.is_absolute():
+            self.compositor_root = (repository_root / self.compositor_root).resolve()
+        sqlite_relative = "sqlite:///./"
+        if self.database_url.startswith(sqlite_relative):
+            database_path = (
+                repository_root / self.database_url[len(sqlite_relative) :]
+            ).resolve()
+            self.database_url = f"sqlite:///{database_path}"
+        return self
 
 
 @lru_cache
