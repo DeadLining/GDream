@@ -222,6 +222,21 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
   });
 
+  it('numbers an opaque episode id from its ordered project position', async () => {
+    const opaqueId = '550e8400-e29b-41d4-a716-44665544abcd';
+    const opaqueSummary = {...projectDetail.episodes[0], id: opaqueId};
+    const opaqueProject = {...projectDetail, episodes: [opaqueSummary]};
+    const opaqueEpisode = {...plannedEpisode, ...opaqueSummary};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(opaqueProject);
+    mocks.getEpisode.mockResolvedValue(opaqueEpisode);
+    mocks.getProductionReadiness.mockResolvedValue({...readiness, episode_id: opaqueId});
+
+    render(<Workspace />);
+
+    expect(await screen.findByText('第 01 集')).toBeVisible();
+  });
+
   it('preserves the selected shot when switching from overview to storyboard', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);

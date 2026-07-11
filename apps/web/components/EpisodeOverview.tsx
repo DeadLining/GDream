@@ -11,19 +11,20 @@ const EPISODE_STATUS: Record<string, string> = {
   completed: '已完成',
 };
 
-function episodeSequence(id: string) {
-  const sequence = id.match(/(\d+)(?!.*\d)/)?.[1];
-  return sequence ? `第 ${sequence.padStart(2, '0')} 集` : '剧集';
+function episodeSequence(number?: number) {
+  return number === undefined ? '剧集' : `第 ${String(number).padStart(2, '0')} 集`;
 }
 
 export function EpisodeOverview({
   episode,
+  episodeNumber,
   readiness,
   onSelectShot,
   onOpenProduction,
   onOpenReview,
 }: {
   episode: EpisodeDetail;
+  episodeNumber?: number;
   readiness: ProductionReadiness;
   onSelectShot: (id: string) => void;
   onOpenProduction: () => void;
@@ -37,7 +38,7 @@ export function EpisodeOverview({
       <header className="episode-overview-header" aria-label="剧集信息">
         <div className="episode-overview-identity">
           <div className="episode-overview-meta">
-            <span>{episodeSequence(episode.id)}</span>
+            <span>{episodeSequence(episodeNumber)}</span>
             <span>{EPISODE_STATUS[episode.status] ?? episode.status}</span>
             <span>目标 {episode.target_duration_seconds} 秒</span>
           </div>

@@ -98,6 +98,7 @@ describe('episode overview', () => {
     render(
       <EpisodeOverview
         episode={episode}
+        episodeNumber={1}
         readiness={readiness}
         onSelectShot={onSelectShot}
         onOpenProduction={onOpenProduction}
@@ -130,6 +131,41 @@ describe('episode overview', () => {
 
     await userEvent.click(screen.getByRole('button', {name: '处理阻塞项'}));
     expect(onOpenReview).toHaveBeenCalledOnce();
+  });
+
+  it('uses an explicit episode number instead of deriving one from an opaque id', () => {
+    const uuidEpisode = {...episode, id: '550e8400-e29b-41d4-a716-44665544abcd'};
+
+    render(
+      <EpisodeOverview
+        episode={uuidEpisode}
+        episodeNumber={12}
+        readiness={{...readiness, episode_id: uuidEpisode.id}}
+        onSelectShot={vi.fn()}
+        onOpenProduction={vi.fn()}
+        onOpenReview={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('第 12 集')).toBeVisible();
+  });
+
+  it('shows a neutral episode label when no ordered position is available', () => {
+    const uuidEpisode = {...episode, id: '550e8400-e29b-41d4-a716-44665544abcd'};
+
+    const {container} = render(
+      <EpisodeOverview
+        episode={uuidEpisode}
+        readiness={{...readiness, episode_id: uuidEpisode.id}}
+        onSelectShot={vi.fn()}
+        onOpenProduction={vi.fn()}
+        onOpenReview={vi.fn()}
+      />,
+    );
+
+    const identity = within(container).getByRole('banner', {name: '剧集信息'});
+    expect(within(identity).getByText('剧集')).toBeVisible();
+    expect(within(identity).queryByText(/第 \d+ 集/)).not.toBeInTheDocument();
   });
 
   it('shows truthful empty metrics without exposing a contradictory progress range', () => {
