@@ -170,12 +170,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .health-button { width: 34px; min-width: 34px; padding: 0; }
   .mobile-project-bar { position: sticky; top: 56px; z-index: 20; flex: 0 0 42px; width: 100%; background: var(--surface-subtle); }
   .mobile-project-bar select { width: 100%; max-width: 100%; border-radius: 4px; background: var(--surface); }
-  .workspace-tabs-mobile { position: sticky; top: 98px; z-index: 10; flex: 0 0 44px; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; }
+  .workspace-tabs-mobile { position: sticky; top: 98px; z-index: 10; flex: 0 0 44px; width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 0; }
   .workspace-tabs-mobile button { width: 100%; min-width: 0; max-width: none; }
   .workspace-grid { grid-template-columns: 1fr; }
   .workspace-grid { flex: 1 1 auto; width: 100%; height: auto; min-height: 0; overflow: hidden; }
   .workspace-center, .workspace-inspector { width: 100%; min-width: 0; grid-column: 1; grid-row: 1; }
-  .mobile-overview .workspace-inspector, .mobile-storyboard .workspace-inspector, .mobile-production .workspace-inspector { display: none; }
+  .mobile-overview .workspace-inspector, .mobile-storyboard .workspace-inspector, .mobile-production .workspace-inspector, .mobile-settings .workspace-inspector { display: none; }
   .mobile-inspector .workspace-center { display: none; }
   .storyboard, .episode-overview, .production-panel, .inspector { max-width: 100%; }
   .shots-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
