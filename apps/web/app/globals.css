@@ -184,6 +184,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .production-actions { min-height: 52px; align-items: center; margin-top: 0; }
 .production-actions button { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 4px; background: var(--surface); cursor: pointer; }
 .production-actions .primary-action { color: #fff; background: var(--accent-strong); }
+.production-action-error { min-height: 32px; margin: 0; padding: 7px 9px; border-left: 3px solid #b9473e; background: #f8e4e2; color: #8c2d27; font-size: 11px; overflow-wrap: anywhere; }
 .production-progress { min-height: 54px; grid-template-columns: minmax(160px, 1fr) 76px 76px 76px; margin-top: 0; padding: 10px 0; border-block: 1px solid var(--line); }
 .production-progress progress { height: 8px; accent-color: var(--success); }
 .production-progress span { min-width: 0; text-align: center; white-space: nowrap; }

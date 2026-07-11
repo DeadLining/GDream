@@ -34,6 +34,9 @@ export function ProductionPanel({
   const [selected, setSelected] = useState<string[]>([]);
   const [filter, setFilter] = useState('all');
   const [stateEpisodeId, setStateEpisodeId] = useState(episodeId);
+  const [starting, setStarting] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const startingRef = useRef(false);
   const sessionRef = useRef({generation: 0, controller: new AbortController()});
 
   const isCurrent = (generation: number, signal: AbortSignal) => sessionRef.current.generation === generation && !signal.aborted;
@@ -71,6 +74,9 @@ export function ProductionPanel({
     setItems([]);
     setSelected([]);
     setFilter('all');
+    startingRef.current = false;
+    setStarting(false);
+    setActionError('');
     void refreshReadiness(episodeId, generation, controller.signal);
     const runId = localStorage.getItem(`ai-comic-production-${episodeId}`);
     if (runId) {
@@ -89,18 +95,31 @@ export function ProductionPanel({
   }, [episodeId]);
 
   const start = async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    setActionError('');
     const {generation, controller} = sessionRef.current;
     const id = episodeId;
-    const created = await createProductionRun(id, {
-      stages,
-      concurrency,
-      regenerate_panels: regenPanels,
-      regenerate_speech: regenSpeech,
-    });
-    if (!isCurrent(generation, controller.signal)) return;
-    localStorage.setItem(`ai-comic-production-${id}`, created.id);
-    setRun(created);
-    await finishActiveRun(created.id, generation, controller.signal, true);
+    try {
+      const created = await createProductionRun(id, {
+        stages,
+        concurrency,
+        regenerate_panels: regenPanels,
+        regenerate_speech: regenSpeech,
+      });
+      if (!isCurrent(generation, controller.signal)) return;
+      localStorage.setItem(`ai-comic-production-${id}`, created.id);
+      setRun(created);
+      await finishActiveRun(created.id, generation, controller.signal, true);
+    } catch (cause) {
+      if (isCurrent(generation, controller.signal)) setActionError(cause instanceof Error ? cause.message : '启动失败');
+    } finally {
+      if (isCurrent(generation, controller.signal)) {
+        startingRef.current = false;
+        setStarting(false);
+      }
+    }
   };
   const pause = async () => {
     if (!run) return;
@@ -154,11 +173,12 @@ export function ProductionPanel({
       <label><input type="checkbox" checked={regenSpeech} onChange={event => setRegenSpeech(event.target.checked)}/>重生成配音</label>
     </section>
     <div className="production-actions">
-      {!displayedRun && <button className="primary-action" disabled={!stages.length} onClick={start}><Play size={15} aria-hidden="true"/>开始批量生产</button>}
+      {!displayedRun && <button className="primary-action" disabled={!stages.length || starting} aria-busy={starting} onClick={start}><Play size={15} aria-hidden="true"/>{starting ? '正在启动' : '开始批量生产'}</button>}
       {displayedRun?.status === 'running' && <button onClick={pause}><Pause size={15} aria-hidden="true"/>暂停</button>}
       {displayedRun?.status === 'paused' && <button onClick={resume}><Play size={15} aria-hidden="true"/>继续</button>}
       {displayedRun?.failed_items ? <button onClick={retry} disabled={!selected.length}><RefreshCw size={15} aria-hidden="true"/>重试选中失败项</button> : null}
     </div>
+    {actionError && <p className="production-action-error" role="alert">{actionError}</p>}
     {displayedRun && <>
       <div className="production-progress">
         <progress max={displayedRun.total_items || 1} value={displayedRun.succeeded_items + displayedRun.failed_items + displayedRun.skipped_items}/>
