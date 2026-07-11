@@ -188,6 +188,47 @@ def test_validation_redacts_normalized_secret_field_names(client, field_name):
     assert secret not in response.text
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    ["access_token", "refreshToken", "client_secret", "proxyAuthorization"],
+)
+def test_validation_redacts_composite_secret_field_names(client, field_name):
+    secret = f"composite-{field_name}-value"
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(enabled=False, **{field_name: secret}),
+    )
+
+    assert response.status_code == 422
+    error = next(
+        item for item in response.json()["detail"] if item["loc"][-1] == field_name
+    )
+    assert error["input"] == "[REDACTED]"
+    assert secret not in response.text
+
+
+def test_validation_redacts_nested_composite_secrets_in_unknown_field(client):
+    secrets = {
+        "access_token": "nested-access-value",
+        "refreshToken": "nested-refresh-value",
+        "client_secret": "nested-client-value",
+        "proxyAuthorization": "nested-authorization-value",
+    }
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(enabled=False, metadata={"nested": secrets}),
+    )
+
+    assert response.status_code == 422
+    error = next(
+        item for item in response.json()["detail"] if item["loc"][-1] == "metadata"
+    )
+    assert error["input"] == "[REDACTED]"
+    assert all(secret not in response.text for secret in secrets.values())
+
+
 def test_validation_redacts_whole_input_for_malformed_json(client):
     secret = "malformed-json-secret-value"
     malformed_body = f'{{"name":"provider","api_key":"{secret}"'
@@ -215,10 +256,17 @@ def test_put_rejects_invalid_channel_kind(client, kind):
 def test_put_rejects_extra_fields(client):
     response = client.put(
         "/api/provider-channels/llm",
-        json=channel_update(unexpected=True),
+        json=channel_update(nonsecret_extra="ordinary-value"),
     )
 
     assert response.status_code == 422
+    error = next(
+        item
+        for item in response.json()["detail"]
+        if item["loc"][-1] == "nonsecret_extra"
+    )
+    assert error["type"] == "extra_forbidden"
+    assert error["input"] == "[REDACTED]"
 
 
 def test_put_rejects_invalid_nonsecret_fields(client):
