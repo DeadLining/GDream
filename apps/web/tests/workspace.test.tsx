@@ -289,6 +289,8 @@ describe('Workspace', () => {
     expect(contrastRatio('#ffffff', accentStrong!)).toBeGreaterThanOrEqual(4.5);
     expect(workspaceStyles).toMatch(/\.workspace-breadcrumb\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.nav-footer\s*\{[^}]*color:\s*var\(--muted-strong\)/);
+    expect(workspaceStyles).toMatch(/\.center-state p, \.episode-empty p\s*\{[^}]*color:\s*var\(--muted-strong\)/);
+    expect(workspaceStyles).toMatch(/\.empty-inspector\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.command-button\s*\{[^}]*background:\s*var\(--accent-strong\)/);
     expect(workspaceStyles).toMatch(/\.inspector-actions \.primary-action[^}]*background:\s*var\(--accent-strong\)/);
   });

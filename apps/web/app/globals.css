@@ -111,7 +111,8 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .inspector textarea, .inspector input, .inspector select, .form-dialog input, .form-dialog select, .form-dialog textarea { border-color: var(--line); background: var(--surface-subtle); color: var(--ink); }
 .center-state { color: var(--ink); background: var(--app); }
 .center-state h1 { font-size: 22px; }
-.center-state p, .episode-empty p { color: var(--muted); }
+.center-state p, .episode-empty p { color: var(--muted-strong); }
+.empty-inspector { color: var(--muted-strong); }
 .job-status { background: var(--surface-subtle); }
 .readiness-summary span { background: #edf2f3; color: var(--info); }
 .primary-action, .inspector-actions .primary-action { border-color: var(--accent-strong); background: var(--accent-strong); }
