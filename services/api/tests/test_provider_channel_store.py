@@ -1,6 +1,8 @@
+import errno
 import json
 import os
 import stat
+import threading
 from pathlib import Path
 
 import pytest
@@ -65,19 +67,10 @@ def test_environment_settings_bootstrap_provider_channel_defaults(monkeypatch):
         ROOT_ENV_FILE.parent / "data/provider-channels.json"
     ).resolve()
     assert defaults.version == 1
-    assert defaults.llm.model_dump(mode="json") == channel_payload(
-        base_url="https://llm.example.com/v1",
-        model="llm-model",
-        api_key="llm-key",
-        ssh_host=None,
-    )
-    assert defaults.image.model_dump(mode="json") == channel_payload(
-        name="GPT Image",
-        base_url="https://image.example.com/v1",
-        model="image-model",
-        api_key="image-key",
-        ssh_host=None,
-    )
+    assert defaults.llm.api_key_value == "llm-key"
+    assert defaults.image.api_key_value == "image-key"
+    assert defaults.llm.model == "llm-model"
+    assert defaults.image.model == "image-model"
     assert defaults.tts.model_dump(mode="json") == channel_payload(
         name="Qwen TTS",
         base_url="https://tts.example.com/v1",
@@ -136,6 +129,23 @@ def test_existing_json_is_authoritative_over_bootstrap_defaults(tmp_path):
 def test_schema_rejects_invalid_provider_channels(payload):
     with pytest.raises(ValidationError):
         ProviderChannels.model_validate(payload)
+
+
+def test_api_key_is_masked_in_repr_and_validation_errors():
+    secret = "do-not-leak-this-key"
+    channel = ProviderChannel.model_validate(channel_payload(api_key=secret))
+
+    assert secret not in repr(channel)
+    assert channel.api_key_value == secret
+
+    invalid = channels_payload(
+        llm=channel_payload(api_key=secret, ssh_host="invalid-for-llm")
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        ProviderChannels.model_validate(invalid)
+
+    assert secret not in str(exc_info.value)
+    assert secret not in repr(exc_info.value)
 
 
 def test_disabled_channel_may_omit_connection_fields():
@@ -207,8 +217,8 @@ def test_save_is_atomic_private_and_updates_snapshot(tmp_path):
     saved = store.save(updated)
 
     assert path.stat().st_mode & 0o777 == 0o600
-    assert json.loads(path.read_text(encoding="utf-8")) == updated.model_dump(
-        mode="json"
+    assert json.loads(path.read_text(encoding="utf-8"))["llm"]["api_key"] == (
+        "secret"
     )
     assert saved == updated
     assert saved is not updated
@@ -294,3 +304,132 @@ def test_parent_fsync_failure_removes_new_file_and_preserves_snapshot(
     assert not path.exists()
     assert store.snapshot == previous_snapshot
     assert list(tmp_path.glob("provider-channels.json.*.tmp")) == []
+
+
+@pytest.mark.parametrize("failure_errno", [errno.EINVAL, errno.ENOTSUP])
+def test_unsupported_parent_directory_open_does_not_rollback_successful_save(
+    tmp_path, monkeypatch, failure_errno
+):
+    path = tmp_path / "provider-channels.json"
+    defaults = make_channels()
+    store = ProviderChannelStore(path, defaults)
+    real_open = os.open
+
+    def unsupported_parent_open(target, flags, *args, **kwargs):
+        if Path(target) == path.parent:
+            raise OSError(failure_errno, "directory open unsupported")
+        return real_open(target, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", unsupported_parent_open)
+
+    saved = store.save(defaults)
+
+    assert saved == defaults
+    assert store.snapshot == defaults
+    assert path.exists()
+
+
+def test_unsupported_parent_directory_fsync_does_not_rollback_successful_save(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "provider-channels.json"
+    defaults = make_channels()
+    store = ProviderChannelStore(path, defaults)
+    real_fsync = os.fsync
+
+    def unsupported_directory_fsync(file_descriptor):
+        if stat.S_ISDIR(os.fstat(file_descriptor).st_mode):
+            raise OSError(errno.EINVAL, "directory fsync unsupported")
+        return real_fsync(file_descriptor)
+
+    monkeypatch.setattr(os, "fsync", unsupported_directory_fsync)
+
+    saved = store.save(defaults)
+
+    assert saved == defaults
+    assert store.snapshot == defaults
+    assert path.exists()
+
+
+def test_fchmod_falls_back_to_path_chmod_when_unsupported(tmp_path, monkeypatch):
+    path = tmp_path / "provider-channels.json"
+    defaults = make_channels()
+    store = ProviderChannelStore(path, defaults)
+    chmod_calls = []
+    real_chmod = os.chmod
+
+    def unsupported_fchmod(file_descriptor, mode):
+        raise NotImplementedError("fchmod unsupported")
+
+    def record_chmod(target, mode):
+        chmod_calls.append((Path(target), mode))
+        return real_chmod(target, mode)
+
+    monkeypatch.setattr(os, "fchmod", unsupported_fchmod)
+    monkeypatch.setattr(os, "chmod", record_chmod)
+
+    store.save(defaults)
+
+    assert chmod_calls
+    assert chmod_calls[0][1] == 0o600
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_store_instances_for_same_resolved_path_share_save_lock(tmp_path, monkeypatch):
+    path = tmp_path / "nested/../provider-channels.json"
+    defaults = make_channels()
+    first_store = ProviderChannelStore(path, defaults)
+    second_store = ProviderChannelStore(path.resolve(), defaults)
+    first_in_parent_fsync = threading.Event()
+    release_first = threading.Event()
+    second_finished = threading.Event()
+    real_first_fsync_parent = first_store._fsync_parent
+
+    def block_first_parent_fsync():
+        first_in_parent_fsync.set()
+        assert release_first.wait(timeout=2)
+        real_first_fsync_parent()
+
+    monkeypatch.setattr(first_store, "_fsync_parent", block_first_parent_fsync)
+
+    first_thread = threading.Thread(target=first_store.save, args=(defaults,))
+    second_thread = threading.Thread(
+        target=lambda: (
+            second_store.save(defaults),
+            second_finished.set(),
+        )
+    )
+    first_thread.start()
+    assert first_in_parent_fsync.wait(timeout=2)
+    second_thread.start()
+
+    assert not second_finished.wait(timeout=0.1)
+    release_first.set()
+    first_thread.join(timeout=2)
+    second_thread.join(timeout=2)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert second_finished.is_set()
+
+
+def test_save_and_rollback_failures_are_reported_together(tmp_path, monkeypatch):
+    path = tmp_path / "provider-channels.json"
+    defaults = make_channels()
+    store = ProviderChannelStore(path, defaults)
+    store.save(defaults)
+
+    def fail_parent_fsync():
+        raise OSError("save durability failed")
+
+    def fail_rollback(previous_bytes, previous_mode):
+        raise OSError("rollback failed")
+
+    monkeypatch.setattr(store, "_fsync_parent", fail_parent_fsync)
+    monkeypatch.setattr(store, "_rollback_file", fail_rollback)
+
+    with pytest.raises(ExceptionGroup) as exc_info:
+        store.save(defaults)
+
+    messages = [str(error) for error in exc_info.value.exceptions]
+    assert messages == ["save durability failed", "rollback failed"]

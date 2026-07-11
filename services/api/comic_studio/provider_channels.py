@@ -1,15 +1,17 @@
+import errno
 import json
 import os
 import stat
 import tempfile
 import threading
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
     ConfigDict,
+    SecretStr,
     TypeAdapter,
     field_validator,
     model_validator,
@@ -19,6 +21,16 @@ from comic_studio.config import Settings
 
 
 _HTTP_URL = TypeAdapter(AnyHttpUrl)
+_UNSUPPORTED_ERRNOS = {
+    errno_value
+    for errno_value in (
+        getattr(errno, "EINVAL", None),
+        getattr(errno, "ENOSYS", None),
+        getattr(errno, "ENOTSUP", None),
+        getattr(errno, "EOPNOTSUPP", None),
+    )
+    if errno_value is not None
+}
 
 
 class ProviderChannel(BaseModel):
@@ -26,15 +38,27 @@ class ProviderChannel(BaseModel):
     enabled: bool
     base_url: str
     model: str
-    api_key: str | None = None
+    api_key: SecretStr | None = None
     ssh_host: str | None = None
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        hide_input_in_errors=True,
+    )
 
-    @field_validator("name", "base_url", "model", "api_key", "ssh_host")
+    @field_validator("name", "base_url", "model", "ssh_host")
     @classmethod
     def strip_text(cls, value: str | None) -> str | None:
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def strip_api_key(cls, value: str | SecretStr | None):
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
     @field_validator("base_url")
     @classmethod
@@ -57,6 +81,12 @@ class ProviderChannel(BaseModel):
                 )
         return self
 
+    @property
+    def api_key_value(self) -> str | None:
+        if self.api_key is None:
+            return None
+        return self.api_key.get_secret_value()
+
 
 class ProviderChannels(BaseModel):
     version: Literal[1] = 1
@@ -64,7 +94,12 @@ class ProviderChannels(BaseModel):
     image: ProviderChannel
     tts: ProviderChannel
 
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        hide_input_in_errors=True,
+    )
 
     @model_validator(mode="after")
     def validate_channel_semantics(self):
@@ -72,7 +107,7 @@ class ProviderChannels(BaseModel):
             channel = getattr(self, channel_name)
             if channel.ssh_host is not None:
                 raise ValueError("ssh_host is only valid for the tts channel")
-            if channel.enabled and not channel.api_key:
+            if channel.enabled and not channel.api_key_value:
                 raise ValueError(
                     f"Enabled {channel_name} channel requires an api_key"
                 )
@@ -106,9 +141,18 @@ def provider_channel_defaults(settings: Settings) -> ProviderChannels:
 
 
 class ProviderChannelStore:
+    """Thread-safe local store; cross-process coordination is unsupported."""
+
+    _locks_guard: ClassVar[threading.Lock] = threading.Lock()
+    _path_locks: ClassVar[dict[Path, threading.RLock]] = {}
+
     def __init__(self, path: Path, defaults: ProviderChannels):
-        self._path = Path(path)
-        self._lock = threading.RLock()
+        self._path = Path(path).expanduser().resolve()
+        with self._locks_guard:
+            self._lock = self._path_locks.setdefault(
+                self._path,
+                threading.RLock(),
+            )
         self._defaults = defaults.model_copy(deep=True)
         self._snapshot = self._defaults.model_copy(deep=True)
 
@@ -142,7 +186,7 @@ class ProviderChannelStore:
             channels.model_dump(mode="python")
         )
         serialized = json.dumps(
-            validated.model_dump(mode="json"),
+            self._persistence_payload(validated),
             ensure_ascii=True,
             indent=2,
         ).encode("utf-8") + b"\n"
@@ -191,7 +235,11 @@ class ProviderChannelStore:
                 delete=False,
             ) as temporary_file:
                 temporary_path = Path(temporary_file.name)
-                os.fchmod(temporary_file.fileno(), mode)
+                self._set_file_mode(
+                    temporary_file.fileno(),
+                    temporary_path,
+                    mode,
+                )
                 temporary_file.write(payload)
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
@@ -200,6 +248,43 @@ class ProviderChannelStore:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
             raise
+
+    @staticmethod
+    def _persistence_payload(channels: ProviderChannels) -> dict:
+        payload = channels.model_dump(mode="json")
+        for channel_name in ("llm", "image", "tts"):
+            channel = getattr(channels, channel_name)
+            payload[channel_name]["api_key"] = channel.api_key_value
+        return payload
+
+    @staticmethod
+    def _is_unsupported_capability(error: BaseException) -> bool:
+        if isinstance(error, (AttributeError, NotImplementedError)):
+            return True
+        if not isinstance(error, OSError):
+            return False
+        if error.errno in _UNSUPPORTED_ERRNOS:
+            return True
+        return os.name == "nt" and error.errno in {
+            getattr(errno, "EACCES", None),
+            getattr(errno, "EPERM", None),
+        }
+
+    def _set_file_mode(self, file_descriptor: int, path: Path, mode: int) -> None:
+        fchmod = getattr(os, "fchmod", None)
+        if fchmod is not None:
+            try:
+                fchmod(file_descriptor, mode)
+                return
+            except Exception as error:
+                if not self._is_unsupported_capability(error):
+                    raise
+
+        try:
+            os.chmod(path, mode)
+        except Exception as error:
+            if not self._is_unsupported_capability(error):
+                raise
 
     def _rollback_file(self, previous_bytes: bytes | None, previous_mode: int) -> None:
         if previous_bytes is None:
@@ -222,8 +307,17 @@ class ProviderChannelStore:
 
     def _fsync_parent(self) -> None:
         flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-        directory_fd = os.open(self._path.parent, flags)
         try:
-            os.fsync(directory_fd)
+            directory_fd = os.open(self._path.parent, flags)
+        except Exception as error:
+            if self._is_unsupported_capability(error):
+                return
+            raise
+        try:
+            try:
+                os.fsync(directory_fd)
+            except Exception as error:
+                if not self._is_unsupported_capability(error):
+                    raise
         finally:
             os.close(directory_fd)
