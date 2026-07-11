@@ -12,6 +12,7 @@ from comic_studio.routes.speech import router as speech_router
 from comic_studio.routes.providers import router as providers_router
 from comic_studio.routes.renders import router as renders_router
 from comic_studio.routes.projects import character_router, router as projects_router
+from comic_studio.routes.production import router as production_router
 
 
 def create_app() -> FastAPI:
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(speech_router)
     app.include_router(providers_router)
     app.include_router(renders_router)
+    app.include_router(production_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

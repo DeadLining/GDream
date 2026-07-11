@@ -72,7 +72,7 @@ cd ../.. && git add . && git commit -m "feat: add v0.3 production run domain"
 - Modify: `services/api/comic_studio/main.py`
 - Create: `services/api/tests/test_production_readiness.py`
 
-- [ ] **Step 1: Write failing readiness tests**
+- [x] **Step 1: Write failing readiness tests**
 
 Cover missing panel, unapproved shot, missing speech, completed speech, and fully ready episodes.
 
@@ -83,20 +83,20 @@ assert report["blockers"]["missing_panels"] == [shot.id]
 assert report["blockers"]["missing_speech"] == [line.id]
 ```
 
-- [ ] **Step 2: Run and verify HTTP 404**
+- [x] **Step 2: Run and verify HTTP 404**
 
 Run: `cd services/api && uv run pytest tests/test_production_readiness.py -q`
 Expected: FAIL because the readiness route is absent.
 
-- [ ] **Step 3: Implement ReadinessService**
+- [x] **Step 3: Implement ReadinessService**
 
 Load the ordered episode graph and return total/ready counts plus blocker ID lists. Treat speech as ready only when `audio_asset_id` exists and duration is positive.
 
-- [ ] **Step 4: Add the readiness API and missing episode handling**
+- [x] **Step 4: Add the readiness API and missing episode handling**
 
 Return HTTP 404 for missing episodes and a typed response for valid episodes.
 
-- [ ] **Step 5: Run focused and regression tests, then commit**
+- [x] **Step 5: Run focused and regression tests, then commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_production_readiness.py tests/test_render_manifest.py -q
