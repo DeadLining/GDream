@@ -8,7 +8,7 @@ export function StatusMetric({
   total: number;
 }) {
   return (
-    <div className="status-metric">
+    <div className="status-metric" data-testid="overview-metric">
       <div className="status-metric-summary">
         <span>{label}</span>
         <strong>{ready} / {total}</strong>

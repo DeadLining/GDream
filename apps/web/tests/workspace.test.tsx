@@ -275,7 +275,7 @@ describe('Workspace', () => {
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
     render(<Workspace />);
 
-    await userEvent.click(await screen.findByRole('button', {name: '审核镜头'}));
+    await userEvent.click(await screen.findByRole('button', {name: '处理阻塞项'}));
 
     expect(screen.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
@@ -291,7 +291,7 @@ describe('Workspace', () => {
     mocks.getProductionReadiness.mockResolvedValue({...readiness, blockers: {missing_panels: [], unapproved_shots: [], missing_speech: []}});
     render(<Workspace />);
 
-    await userEvent.click(await screen.findByRole('button', {name: '审核镜头'}));
+    await userEvent.click(await screen.findByRole('button', {name: '处理阻塞项'}));
 
     expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByRole('tab').some(tab => tab.getAttribute('aria-selected') === 'true')).toBe(true);

@@ -105,23 +105,30 @@ describe('episode overview', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', {name: episode.title})).toBeVisible();
+    const identity = screen.getByRole('banner', {name: '剧集信息'});
+    expect(within(identity).getByText('第 01 集')).toBeVisible();
+    expect(within(identity).getByText('已规划')).toBeVisible();
+    expect(within(identity).getByText('目标 60 秒')).toBeVisible();
+    expect(within(identity).getByRole('heading', {name: episode.title})).toBeVisible();
+    expect(within(identity).getByText(episode.premise)).toBeVisible();
     expect(screen.getByText('2 个镜头')).toBeVisible();
     expect(screen.getByText('1 条对白')).toBeVisible();
     expect(screen.getByText('9 秒')).toBeVisible();
+    expect(screen.getAllByTestId('overview-metric')).toHaveLength(3);
     expect(screen.getByRole('progressbar', {name: '画面进度'})).toHaveAttribute('value', '1');
     expect(screen.getByRole('progressbar', {name: '画面进度'})).toHaveAttribute('max', '2');
     expect(screen.getByText('缺少画面 1')).toBeVisible();
     expect(screen.getByText('未审核镜头 1')).toBeVisible();
     expect(screen.getByText('缺少配音 0')).toBeVisible();
+    expect(screen.getByRole('region', {name: '镜头墙'})).toBeVisible();
 
     await userEvent.click(screen.getByRole('button', {name: /镜头 2/}));
     expect(onSelectShot).toHaveBeenCalledWith('shot-2');
 
-    await userEvent.click(screen.getByRole('button', {name: '处理画面与配音'}));
+    await userEvent.click(screen.getByRole('button', {name: '打开生产'}));
     expect(onOpenProduction).toHaveBeenCalledOnce();
 
-    await userEvent.click(screen.getByRole('button', {name: '审核镜头'}));
+    await userEvent.click(screen.getByRole('button', {name: '处理阻塞项'}));
     expect(onOpenReview).toHaveBeenCalledOnce();
   });
 

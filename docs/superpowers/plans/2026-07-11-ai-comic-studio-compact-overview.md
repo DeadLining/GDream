@@ -19,7 +19,7 @@
 - Modify: `apps/web/tests/episode-overview.test.tsx`
 - Modify: `apps/web/app/globals.css`
 
-- [ ] **Step 1: Write failing compact-layout component tests**
+- [x] **Step 1: Write failing compact-layout component tests**
 
 Assert the overview renders episode sequence/status/target duration, two commands, exactly three metrics, compact blockers, and shot buttons:
 
@@ -34,7 +34,7 @@ expect(screen.getByRole('button', {name: /镜头 2/})).toBeVisible();
 
 Retain the zero-total assertion that no false progressbar is exposed.
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/episode-overview.test.tsx
@@ -42,7 +42,7 @@ npm test --workspace @comic-studio/web -- --run tests/episode-overview.test.tsx
 
 Expected: FAIL because the compact header and command labels do not exist.
 
-- [ ] **Step 3: Implement the compact composition**
+- [x] **Step 3: Implement the compact composition**
 
 Use this hierarchy:
 
@@ -57,11 +57,11 @@ Use this hierarchy:
 
 Add an optional `compact` presentation prop to `ReadinessBlockers` only if needed. Preserve its callbacks. Keep `StatusMetric` semantic `<progress>` for positive totals and its non-progress zero-total state.
 
-- [ ] **Step 4: Add overview-only CSS**
+- [x] **Step 4: Add overview-only CSS**
 
 Create fixed, responsive tracks for the 104px identity region, equal metric row, blocker strip, and remaining shot wall. Use custom progress appearance with existing success/warning tokens. Do not modify global Workspace, ShotCard, Inspector, or Production layout rules.
 
-- [ ] **Step 5: Run focused/full tests and build**
+- [x] **Step 5: Run focused/full tests and build**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/episode-overview.test.tsx tests/workspace.test.tsx
@@ -70,7 +70,7 @@ npm run build --workspace @comic-studio/web
 git diff --check
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/components/EpisodeOverview.tsx apps/web/components/StatusMetric.tsx apps/web/components/ReadinessBlockers.tsx apps/web/tests/episode-overview.test.tsx apps/web/app/globals.css docs/superpowers/plans/2026-07-11-ai-comic-studio-compact-overview.md
