@@ -1,4 +1,6 @@
-import {cleanup,render,screen,waitFor} from '@testing-library/react';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {cleanup,render,screen,waitFor,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {ScriptImportWorkspace} from '../components/ScriptImportWorkspace';
@@ -11,7 +13,11 @@ const imported={id:'i1',project_id:'p1',status:'ready',mode:'auto',source_format
 beforeEach(()=>{vi.clearAllMocks();mocks.create.mockResolvedValue({...imported,status:'uploaded',structured_draft:{}});mocks.parse.mockResolvedValue(imported);mocks.update.mockResolvedValue(imported);mocks.confirm.mockResolvedValue({...imported,status:'applied'});});
 afterEach(cleanup);
 
-it('defaults to AI generation and accepts an optional creation brief',async()=>{const user=userEvent.setup();render(<ScriptImportWorkspace projectId="p1" onConfirmed={()=>{}}/>);expect(screen.getByRole('heading',{name:'剧本创作'})).toBeVisible();expect(screen.getByRole('button',{name:'AI生成'})).toHaveClass('active');expect(screen.getByRole('button',{name:'自动识别'})).toBeVisible();expect(screen.queryByRole('button',{name:'剧本'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'小说'})).not.toBeInTheDocument();await user.click(screen.getByRole('button',{name:'生成并预览'}));await waitFor(()=>expect(mocks.create).toHaveBeenCalledWith('p1','generate',''));});
+const workspaceStyles=readFileSync(resolve(process.cwd(),'app/globals.css'),'utf8');
+
+it('defaults to AI generation and accepts an optional creation brief',async()=>{const user=userEvent.setup();render(<ScriptImportWorkspace projectId="p1" onConfirmed={()=>{}}/>);expect(screen.getByRole('heading',{name:'剧本创作'})).toBeVisible();const modes=screen.getByRole('group',{name:'创作模式'});expect(modes).toHaveClass('script-mode-segments');expect(within(modes).getAllByRole('button')).toHaveLength(2);expect(screen.getByRole('button',{name:'AI生成'})).toHaveClass('active','script-mode-segment');expect(screen.getByRole('button',{name:'AI生成'}).querySelector('svg')).not.toBeNull();expect(screen.getByRole('button',{name:'自动识别'})).toBeVisible();expect(screen.queryByRole('button',{name:'剧本'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'小说'})).not.toBeInTheDocument();await user.click(screen.getByRole('button',{name:'生成并预览'}));await waitFor(()=>expect(mocks.create).toHaveBeenCalledWith('p1','generate',''));});
+
+it('uses a compact two-column selector that expands only on mobile',()=>{expect(workspaceStyles).toMatch(/\.script-mode-segments\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[^}]*width:\s*max-content/);expect(workspaceStyles).toMatch(/\.script-mode-segment\s*\{[^}]*height:\s*36px/);expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*\.script-mode-segments\s*\{[^}]*width:\s*100%/);});
 
 it('parses edits and confirms an automatically recognized source',async()=>{const onConfirmed=vi.fn();const user=userEvent.setup();render(<ScriptImportWorkspace projectId="p1" onConfirmed={onConfirmed}/>);await user.click(screen.getByRole('button',{name:'自动识别'}));await user.type(screen.getByPlaceholderText('粘贴剧本、小说或故事文本'),'雨夜剧本');await user.click(screen.getByRole('button',{name:'解析并预览'}));await screen.findByDisplayValue('林夏');await user.clear(screen.getByDisplayValue('林夏'));await user.type(screen.getByDisplayValue(''),'林夏新版');await user.click(screen.getByRole('button',{name:/确认导入/}));await waitFor(()=>expect(mocks.confirm).toHaveBeenCalledWith('i1'));expect(mocks.update.mock.calls.at(-1)?.[1].characters[0].name).toBe('林夏新版');expect(onConfirmed).toHaveBeenCalled();});
 
