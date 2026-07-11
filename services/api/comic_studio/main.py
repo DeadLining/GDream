@@ -2,6 +2,9 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from comic_studio.config import get_settings
@@ -11,6 +14,7 @@ from comic_studio.provider_channels import (
     provider_channel_defaults,
 )
 from comic_studio.provider_factory import ProviderFactory
+from comic_studio.redaction import SECRET_KEYS, redact
 from comic_studio.routes.episodes import router as episodes_router
 from comic_studio.routes.assets import router as assets_router
 from comic_studio.routes.jobs import router as jobs_router
@@ -25,6 +29,24 @@ from comic_studio.production import ProductionStore
 from comic_studio.services.production_coordinator import ProductionCoordinator
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
+
+
+def _validation_location_is_secret(location: tuple | list) -> bool:
+    return any(
+        isinstance(part, str)
+        and any(secret_key in part.lower() for secret_key in SECRET_KEYS)
+        for part in location
+    )
+
+
+def _sanitized_validation_errors(error: RequestValidationError) -> list[dict]:
+    sanitized = []
+    for item in error.errors():
+        safe_item = redact(dict(item))
+        if _validation_location_is_secret(item.get("loc", ())):
+            safe_item["input"] = "[REDACTED]"
+        sanitized.append(safe_item)
+    return sanitized
 
 
 def create_app() -> FastAPI:
@@ -45,6 +67,19 @@ def create_app() -> FastAPI:
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
+
+    @app.exception_handler(RequestValidationError)
+    async def sanitized_validation_error_handler(
+        _request,
+        error: RequestValidationError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": jsonable_encoder(_sanitized_validation_errors(error))
+            },
+        )
+
     app.state.session_factory = session_factory
     app.state.settings = settings
     app.state.provider_channel_store = provider_channel_store

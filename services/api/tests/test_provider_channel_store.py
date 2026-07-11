@@ -228,8 +228,9 @@ def test_save_is_atomic_private_and_updates_snapshot(tmp_path):
 
 def test_concurrent_updates_serialize_read_modify_save_without_lost_changes(tmp_path):
     path = tmp_path / "provider-channels.json"
-    store = ProviderChannelStore(path, make_channels())
-    store.save(make_channels())
+    first_store = ProviderChannelStore(path, make_channels())
+    second_store = ProviderChannelStore(path, make_channels())
+    first_store.save(make_channels())
     first_entered = threading.Event()
     release_first = threading.Event()
     second_entered = threading.Event()
@@ -239,29 +240,25 @@ def test_concurrent_updates_serialize_read_modify_save_without_lost_changes(tmp_
         first_entered.set()
         assert release_first.wait(timeout=2)
         return snapshot.model_copy(
-            update={
-                "llm": snapshot.llm.model_copy(update={"model": "llm-concurrent"})
-            }
+            update={"llm": snapshot.llm.model_copy(update={"model": "llm-concurrent"})}
         )
 
     def update_image(snapshot):
         second_entered.set()
         return snapshot.model_copy(
             update={
-                "image": snapshot.image.model_copy(
-                    update={"model": "image-concurrent"}
-                )
+                "image": snapshot.image.model_copy(update={"model": "image-concurrent"})
             }
         )
 
-    def run_update(mutator):
+    def run_update(store, mutator):
         try:
             store.update(mutator)
         except Exception as error:
             failures.append(error)
 
-    first = threading.Thread(target=run_update, args=(update_llm,))
-    second = threading.Thread(target=run_update, args=(update_image,))
+    first = threading.Thread(target=run_update, args=(first_store, update_llm))
+    second = threading.Thread(target=run_update, args=(second_store, update_image))
     first.start()
     assert first_entered.wait(timeout=2)
     second.start()
@@ -274,8 +271,8 @@ def test_concurrent_updates_serialize_read_modify_save_without_lost_changes(tmp_
     assert not second.is_alive()
     assert failures == []
     assert second_entered.is_set()
-    assert store.snapshot.llm.model == "llm-concurrent"
-    assert store.snapshot.image.model == "image-concurrent"
+    assert second_store.snapshot.llm.model == "llm-concurrent"
+    assert second_store.snapshot.image.model == "image-concurrent"
     persisted = json.loads(path.read_text(encoding="utf-8"))
     assert persisted["llm"]["model"] == "llm-concurrent"
     assert persisted["image"]["model"] == "image-concurrent"

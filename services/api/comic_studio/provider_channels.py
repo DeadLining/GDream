@@ -5,7 +5,7 @@ import stat
 import tempfile
 import threading
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import Callable, ClassVar, Literal
 
 from pydantic import (
     AnyHttpUrl,
@@ -182,6 +182,15 @@ class ProviderChannelStore:
     def snapshot(self) -> ProviderChannels:
         with self._lock:
             return self._snapshot.model_copy(deep=True)
+
+    def update(
+        self,
+        mutator: Callable[[ProviderChannels], ProviderChannels],
+    ) -> ProviderChannels:
+        with self._lock:
+            current = self.load()
+            updated = mutator(current.model_copy(deep=True))
+            return self.save(updated)
 
     def save(self, channels: ProviderChannels) -> ProviderChannels:
         validated = ProviderChannels.model_validate(

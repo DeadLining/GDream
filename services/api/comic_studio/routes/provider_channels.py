@@ -79,20 +79,17 @@ def update_provider_channel(
     if kind != "tts" and update.ssh_host:
         raise HTTPException(status_code=422, detail="ssh_host is only valid for tts")
 
-    store = request.app.state.provider_channel_store
-    snapshot = store.snapshot
-    current = getattr(snapshot, kind)
-    replacement_key = update.api_key.get_secret_value()
-    effective_key = (
-        None if update.clear_api_key else replacement_key or current.api_key_value
-    )
-    if kind in {"llm", "image"} and update.enabled and not effective_key:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Enabled {kind} channel requires an api_key",
+    def merge(snapshot: ProviderChannels) -> ProviderChannels:
+        current = getattr(snapshot, kind)
+        replacement_key = update.api_key.get_secret_value()
+        effective_key = (
+            None if update.clear_api_key else replacement_key or current.api_key_value
         )
-
-    try:
+        if kind in {"llm", "image"} and update.enabled and not effective_key:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Enabled {kind} channel requires an api_key",
+            )
         updated_channel = ProviderChannel(
             name=update.name,
             enabled=update.enabled,
@@ -101,19 +98,22 @@ def update_provider_channel(
             api_key=effective_key,
             ssh_host=update.ssh_host or None if kind == "tts" else None,
         )
-        updated_channels = ProviderChannels.model_validate(
+        return ProviderChannels.model_validate(
             snapshot.model_copy(update={kind: updated_channel}).model_dump(
                 mode="python"
             )
         )
+
+    store = request.app.state.provider_channel_store
+    try:
+        saved = store.update(merge)
+    except HTTPException:
+        raise
     except (TypeError, ValueError, ValidationError) as error:
         raise HTTPException(
             status_code=422,
             detail="Invalid provider channel configuration",
         ) from error
-
-    try:
-        saved = store.save(updated_channels)
     except Exception as error:
         raise HTTPException(
             status_code=500,
