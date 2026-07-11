@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from comic_studio.config import get_settings
-from comic_studio.db import create_session_factory, create_tables
+from comic_studio.db import create_session_factory, run_migrations
 from comic_studio.provider_channels import (
     ProviderChannelStore,
     provider_channel_defaults,
@@ -104,7 +104,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         settings.data_root.mkdir(parents=True, exist_ok=True)
-        create_tables(session_factory)
+        run_migrations(settings.database_url)
         recover_production_runs()
         yield
 

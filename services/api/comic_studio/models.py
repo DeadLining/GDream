@@ -38,6 +38,9 @@ class Project(Base):
     episodes: Mapped[list[Episode]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="Episode.created_at"
     )
+    script_imports: Mapped[list[ScriptImport]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="ScriptImport.created_at"
+    )
 
 
 class Character(Base):
@@ -61,6 +64,9 @@ class Character(Base):
     )
 
     project: Mapped[Project] = relationship(back_populates="characters")
+    references: Mapped[list[CharacterReference]] = relationship(
+        back_populates="character", cascade="all, delete-orphan", order_by="CharacterReference.created_at"
+    )
 
 
 class Episode(Base):
@@ -121,6 +127,10 @@ class Shot(Base):
     image_prompt: Mapped[str] = mapped_column(Text, default="")
     negative_prompt: Mapped[str] = mapped_column(Text, default="")
     active_panel_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    video_prompt: Mapped[str] = mapped_column(Text, default="")
+    negative_video_prompt: Mapped[str] = mapped_column(Text, default="")
+    active_video_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    video_render_status: Mapped[str] = mapped_column(String(32), default="pending")
     review_status: Mapped[str] = mapped_column(String(32), default="draft")
     render_status: Mapped[str] = mapped_column(String(32), default="pending")
 
@@ -195,6 +205,51 @@ class Job(Base):
     )
 
 
+class ScriptImport(Base):
+    __tablename__ = "script_imports"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(24), default="uploaded", index=True)
+    mode: Mapped[str] = mapped_column(String(24), default="auto")
+    source_format: Mapped[str] = mapped_column(String(24))
+    original_filename: Mapped[str] = mapped_column(String(255), default="")
+    checksum: Mapped[str] = mapped_column(String(64))
+    extracted_text: Mapped[str] = mapped_column(Text)
+    structured_draft: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    error_category: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    project: Mapped[Project] = relationship(back_populates="script_imports")
+
+
+class CharacterReference(Base):
+    __tablename__ = "character_references"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    character_id: Mapped[str] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), index=True
+    )
+    asset_id: Mapped[str] = mapped_column(
+        ForeignKey("assets.id", ondelete="RESTRICT"), index=True
+    )
+    reference_type: Mapped[str] = mapped_column(String(32), index=True)
+    label: Mapped[str] = mapped_column(String(120), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    review_status: Mapped[str] = mapped_column(String(32), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    character: Mapped[Character] = relationship(back_populates="references")
+
+
 class ProductionRun(Base):
     __tablename__ = "production_runs"
 
@@ -205,6 +260,7 @@ class ProductionRun(Base):
     concurrency: Mapped[int] = mapped_column(Integer, default=2)
     regenerate_panels: Mapped[bool] = mapped_column(Boolean, default=False)
     regenerate_speech: Mapped[bool] = mapped_column(Boolean, default=False)
+    regenerate_videos: Mapped[bool] = mapped_column(Boolean, default=False)
     pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     queued_items: Mapped[int] = mapped_column(Integer, default=0)

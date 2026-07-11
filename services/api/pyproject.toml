@@ -4,6 +4,7 @@ version = "0.3.0"
 description = "Local API for the AI Comic Studio production workspace"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.16,<2",
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "json-repair>=0.52,<1",
