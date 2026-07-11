@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
   getProductionRun: vi.fn(), createProductionRun: vi.fn(), continueProductionRun: vi.fn(), pauseProductionRun: vi.fn(),
   listProductionItems: vi.fn(), retryProductionRun: vi.fn(),
+  getProviderChannels: vi.fn(), updateProviderChannel: vi.fn(), testProviderChannel: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -26,6 +27,8 @@ vi.mock('../lib/api', () => ({
   getProductionRun: mocks.getProductionRun, createProductionRun: mocks.createProductionRun,
   continueProductionRun: mocks.continueProductionRun, pauseProductionRun: mocks.pauseProductionRun,
   listProductionItems: mocks.listProductionItems, retryProductionRun: mocks.retryProductionRun,
+  getProviderChannels: mocks.getProviderChannels, updateProviderChannel: mocks.updateProviderChannel,
+  testProviderChannel: mocks.testProviderChannel,
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
@@ -191,6 +194,35 @@ describe('Workspace', () => {
     expect(screen.getByRole('button', {name: '故事圣经'})).toBeVisible();
     expect(screen.getByRole('button', {name: '角色设定'})).toBeVisible();
     expect(screen.getByRole('button', {name: /失窃的雨夜/})).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('opens the real provider settings workspace and confirms leaving dirty changes', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProviderChannels.mockResolvedValue({
+      llm: {name: 'MiniMax', enabled: true, base_url: 'https://api.example.com', model: 'M3', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      image: {name: 'Image', enabled: true, base_url: 'https://image.example.com', model: 'gpt-image-2', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      tts: {name: 'TTS', enabled: true, base_url: 'https://tts.example.com', model: 'qwen', ssh_host: '', api_key_configured: false, api_key_masked: ''},
+      persistence: {status: 'saved', file_path: 'data/provider-channels.json'}, reloaded_at: '',
+    });
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.stubGlobal('confirm', confirm);
+    render(<Workspace/>);
+
+    await userEvent.click(await screen.findByRole('button', {name: '模型渠道'}));
+    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
+    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('aria-selected', 'true');
+    await userEvent.clear(screen.getByLabelText('剧本规划模型'));
+    await userEvent.type(screen.getByLabelText('剧本规划模型'), 'M4');
+
+    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    expect(confirm).toHaveBeenCalledWith('模型渠道有未保存更改，确定离开吗？');
+    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
   });
 
   it('opens on overview and navigates between episode work areas', async () => {
