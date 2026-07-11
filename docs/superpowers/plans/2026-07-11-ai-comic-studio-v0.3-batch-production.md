@@ -252,15 +252,15 @@ git add apps/web && git commit -m "feat: add episode production panel"
 - Modify: `README.md`
 - Modify: `docs/superpowers/plans/2026-07-11-ai-comic-studio-v0.3-batch-production.md`
 
-- [ ] **Step 1: Add deterministic mixed-run E2E**
+- [x] **Step 1: Add deterministic mixed-run E2E**
 
 Fixture a run with skipped, succeeded, and failed items; retry selected failures; assert readiness becomes true and render enables on desktop and mobile.
 
-- [ ] **Step 2: Update README operations**
+- [x] **Step 2: Update README operations**
 
 Document batch eligibility, concurrency, pause semantics, restart recovery, retry, readiness, and unchanged A800_94 warning.
 
-- [ ] **Step 3: Run full deterministic verification**
+- [x] **Step 3: Run full deterministic verification**
 
 ```bash
 cd services/api && uv run pytest -q
@@ -272,11 +272,11 @@ ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_n
 git diff --check
 ```
 
-- [ ] **Step 4: Run opt-in live smoke**
+- [x] **Step 4: Run opt-in live smoke**
 
 Use one short episode to create a panel+speech run with concurrency 1, verify persisted item states, and confirm render readiness. Record model names and artifact metadata only.
 
-- [ ] **Step 5: Audit release gates and commit**
+- [x] **Step 5: Audit release gates and commit**
 
 Confirm every design gate has direct evidence, mark every plan checkbox complete, then:
 

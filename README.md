@@ -1,8 +1,8 @@
-# AI Comic Studio v0.2.0
+# AI Comic Studio v0.3.0
 
 Local production workspace for serialized Chinese dynamic comics.
 
-The v0.2 workspace uses persisted projects and episodes. Creators can plan an episode, edit shots and dialogue, generate panel versions and speech, review assets, render the episode, and download the verified MP4 from the local web interface.
+The v0.3 workspace adds persisted episode production runs to the existing project, episode, review, and render workflow. Creators can batch eligible panel and speech work, pause scheduling, recover after restart, retry selected failures, and render only when the readiness report is clear.
 
 ## Model Stack
 
@@ -44,6 +44,7 @@ The script prints the selected workspace and API URLs. It starts from ports `300
 cd services/api && uv run pytest -q
 cd ../.. && npm test --workspaces --if-present
 npm run build --workspaces --if-present
+npm run test:e2e --workspace @comic-studio/web
 npm run render:fixture --workspace @comic-studio/compositor
 ```
 
@@ -52,13 +53,27 @@ The generated fixture is written to `packages/compositor/out/fixture.mp4` and mu
 ## Production Flow
 
 1. Create a project and enter its story bible and visual style.
-2. Create an episode brief and generate scenes, shots, and dialogue with MiniMax-M3.
-3. Select a shot to edit duration, composition, camera motion, prompts, and review state.
-4. Generate immutable panel versions with `gpt-image-2` and activate the preferred version.
-5. Edit dialogue performance instructions and synthesize playable Qwen3-TTS audio.
-6. Approve required shots, render the episode, and download the MP4 from the toolbar.
+2. Add each speaking character with a valid Qwen voice speaker before planning, so MiniMax can preserve real character IDs in dialogue.
+3. Create an episode brief and generate scenes, shots, and dialogue with MiniMax-M3.
+4. Select a shot to edit duration, composition, camera motion, prompts, and review state.
+5. Open the production view and select panel generation, speech synthesis, or both.
+6. Choose bounded concurrency from 1 to 4. By default, approved panels and completed speech are recorded as skipped; enable regeneration only when replacing existing assets intentionally.
+7. Start the persisted run. Each item completes independently, so one provider failure does not stop later eligible work.
+8. Pause to stop new claims while already-running items finish. Continue is idempotent, and an interrupted running process is recovered as paused on API startup.
+9. Filter the queue, select failed items, and retry only those targets. The run keeps succeeded and skipped history intact.
+10. Clear all readiness blockers: every shot needs an active panel and approval, and every dialogue line needs positive-duration speech audio.
+11. Render the episode and download the verified MP4 from the toolbar.
 
-Provider and render operations are persisted jobs. Failed jobs remain visible and can be retried without losing project edits.
+The current production run ID is stored per episode in local browser storage and reloaded after refresh. Run and item state remains authoritative in SQLite. Provider and render operations are persisted jobs, and errors are redacted before storage.
+
+## Batch Semantics
+
+- Eligibility is snapshotted deterministically in scene, shot, and dialogue order when a run is created.
+- Only one active production run is allowed per episode.
+- `pause` prevents new items from starting; it does not cancel provider calls already in progress.
+- API restart recovery moves interrupted runs to `paused` and their interrupted items back to `queued`.
+- Terminal runs may be `completed` or `completed_with_failures`; selected failed items can be returned to the queue without regenerating successful work.
+- The render command remains disabled until `/api/episodes/{episode_id}/production-readiness` reports no missing panels, unapproved shots, or missing speech.
 
 ## A800_94 Operations Warning
 

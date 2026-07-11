@@ -47,3 +47,44 @@ test('mobile shot selection opens the inspector without overlap', async ({page},
   await expect(page.getByRole('button', {name: '生成画面'})).toBeInViewport();
   await expect(page.getByRole('main')).toBeHidden();
 });
+
+test('mixed production retry clears readiness blockers and enables render', async ({page}) => {
+  let retried = false;
+  const run = (status: 'queued'|'running'|'completed_with_failures'|'completed') => ({
+    id:'run-1',episode_id:'episode-1',status,stages:['panels'],concurrency:2,
+    regenerate_panels:false,regenerate_speech:false,pause_requested:false,total_items:3,
+    queued_items:status==='queued'?1:0,running_items:status==='running'?1:0,
+    succeeded_items:retried?2:1,failed_items:retried?0:1,skipped_items:1,
+    summary_error:'',created_at:'',updated_at:'',
+  });
+  const items = () => [
+    {id:'item-skipped',run_id:'run-1',stage:'panel',target_type:'shot',target_id:'shot-1',position:1,status:'skipped',attempt_count:0,result_metadata:{reason:'already_ready'},error:'',created_at:'',updated_at:''},
+    {id:'item-success',run_id:'run-1',stage:'panel',target_type:'shot',target_id:'shot-2',position:2,status:'succeeded',attempt_count:1,result_metadata:{},error:'',created_at:'',updated_at:''},
+    {id:'item-failed',run_id:'run-1',stage:'panel',target_type:'shot',target_id:'shot-2',position:3,status:retried?'succeeded':'failed',attempt_count:retried?2:1,result_metadata:{},error:retried?'':'provider timeout',created_at:'',updated_at:''},
+  ];
+
+  await page.unroute('**/api/episodes/episode-1/production-readiness');
+  await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:retried
+    ? {episode_id:'episode-1',ready:true,totals:{shots:2,dialogue:0},ready_counts:{panels:2,approved:2,speech:0},blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}}
+    : {episode_id:'episode-1',ready:false,totals:{shots:2,dialogue:0},ready_counts:{panels:1,approved:1,speech:0},blockers:{missing_panels:['shot-2'],unapproved_shots:['shot-2'],missing_speech:[]}}}));
+  await page.route('**/api/episodes/episode-1/production-runs', route => route.fulfill({json:run('queued')}));
+  await page.route('**/api/production-runs/run-1/continue', route => route.fulfill({json:run('running')}));
+  await page.route('**/api/production-runs/run-1', route => route.fulfill({json:run(retried?'completed':'completed_with_failures')}));
+  await page.route('**/api/production-runs/run-1/items', route => route.fulfill({json:items()}));
+  await page.route('**/api/production-runs/run-1/retry', async route => {
+    expect((await route.request().postDataJSON()).item_ids).toEqual(['item-failed']);
+    retried = true;
+    await route.fulfill({json:run('queued')});
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('button',{name:'渲染本集'})).toBeDisabled();
+  await page.getByRole('button',{name:'批量生产'}).click();
+  await page.getByRole('button',{name:'开始批量生产'}).click();
+  await expect(page.getByText('失败 1')).toBeVisible();
+  await expect(page.getByText('跳过 1')).toBeVisible();
+  await page.getByLabel('选择失败项 item-failed').check();
+  await page.getByRole('button',{name:'重试选中失败项'}).click();
+  await expect(page.getByText('失败 0')).toBeVisible();
+  await expect(page.getByRole('button',{name:'渲染本集'})).toBeEnabled();
+});
