@@ -143,28 +143,28 @@ cd ../.. && git add services/api && git commit -m "feat: create deterministic pr
 - Create: `services/api/tests/test_production_coordinator.py`
 - Create: `services/api/tests/test_production_controls.py`
 
-- [ ] **Step 1: Write failing coordinator tests**
+- [x] **Step 1: Write failing coordinator tests**
 
 Use injected async workers that record active count. Assert maximum concurrency, deterministic claims, later items continue after one failure, and terminal status is `completed_with_failures`.
 
-- [ ] **Step 2: Write failing pause/continue/retry tests**
+- [x] **Step 2: Write failing pause/continue/retry tests**
 
 Assert pause blocks new claims, running work finishes, continue is idempotent, retry resets only selected failed items, and startup recovery changes running runs/items to paused/queued.
 
-- [ ] **Step 3: Run focused tests and confirm coordinator is missing**
+- [x] **Step 3: Run focused tests and confirm coordinator is missing**
 
 Run: `cd services/api && uv run pytest tests/test_production_coordinator.py tests/test_production_controls.py -q`
 Expected: FAIL on missing coordinator and routes.
 
-- [ ] **Step 4: Implement the bounded coordinator**
+- [x] **Step 4: Implement the bounded coordinator**
 
 Use `asyncio.Semaphore(run.concurrency)` and a fresh SQLAlchemy session per item. Re-check readiness at claim time. Panel workers call `PanelService`; speech workers call `SpeechService`. Persist each terminal state independently.
 
-- [ ] **Step 5: Implement control routes and startup recovery**
+- [x] **Step 5: Implement control routes and startup recovery**
 
 Add pause, continue, and retry endpoints with HTTP 409 transition errors. During lifespan startup, recover interrupted running state to paused and queued.
 
-- [ ] **Step 6: Run coordinator, control, and full API tests, then commit**
+- [x] **Step 6: Run coordinator, control, and full API tests, then commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_production_coordinator.py tests/test_production_controls.py -q && uv run pytest -q
