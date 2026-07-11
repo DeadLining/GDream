@@ -46,3 +46,85 @@ class ProjectRead(ProjectCreate):
 
 class ProjectDetail(ProjectRead):
     characters: list[CharacterRead] = []
+
+
+class EpisodeCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    premise: str = Field(min_length=1)
+    target_duration_seconds: int = Field(ge=15, le=1800)
+
+
+class DialogueRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    character_id: str | None
+    position: int
+    text: str
+    subtitle_text: str
+    emotion: str
+    performance_instruction: str
+    audio_asset_id: str | None
+    start_seconds: float
+    duration_seconds: float
+
+
+class ShotRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    position: int
+    shot_type: str
+    duration_seconds: float
+    composition: str
+    camera_motion: str
+    character_state: dict
+    image_prompt: str
+    negative_prompt: str
+    active_panel_asset_id: str | None
+    review_status: str
+    render_status: str
+    dialogue: list[DialogueRead] = []
+
+
+class SceneRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    position: int
+    location: str
+    time_of_day: str
+    summary: str
+    continuity_state: dict
+    estimated_duration_seconds: float
+    shots: list[ShotRead] = []
+
+
+class EpisodeRead(EpisodeCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class EpisodeDetail(EpisodeRead):
+    scenes: list[SceneRead] = []
+
+
+class JobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    operation: str
+    target_type: str
+    target_id: str
+    status: str
+    progress: int
+    result_metadata: dict
+    error: str
+    retry_count: int
+    created_at: datetime
+    updated_at: datetime

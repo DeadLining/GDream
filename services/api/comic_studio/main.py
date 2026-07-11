@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from comic_studio.config import get_settings
 from comic_studio.db import create_session_factory, create_tables
+from comic_studio.routes.episodes import router as episodes_router
 from comic_studio.routes.projects import router as projects_router
 
 
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
     app.state.session_factory = session_factory
     app.include_router(projects_router)
+    app.include_router(episodes_router)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

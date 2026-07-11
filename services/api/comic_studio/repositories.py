@@ -38,3 +38,31 @@ class ProjectRepository:
         self.session.commit()
         self.session.refresh(character)
         return character
+
+
+class EpisodeRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def create(
+        self, project_id: str, data: schemas.EpisodeCreate
+    ) -> models.Episode | None:
+        if self.session.get(models.Project, project_id) is None:
+            return None
+        episode = models.Episode(project_id=project_id, **data.model_dump())
+        self.session.add(episode)
+        self.session.commit()
+        self.session.refresh(episode)
+        return episode
+
+    def get(self, episode_id: str) -> models.Episode | None:
+        statement = (
+            select(models.Episode)
+            .options(
+                selectinload(models.Episode.scenes)
+                .selectinload(models.Scene.shots)
+                .selectinload(models.Shot.dialogue)
+            )
+            .where(models.Episode.id == episode_id)
+        )
+        return self.session.scalar(statement)
