@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -44,55 +45,63 @@ class ProviderChannelTestingService:
             [ProviderKind, ProviderChannel, Any], Any
         ] = default_provider_factory,
         client_factory: Callable[..., Any] = default_client_factory,
+        total_timeout_seconds: float = TOTAL_TIMEOUT_SECONDS,
     ):
         self._stored_channel = stored_channel
         self._clock = clock
         self._provider_factory = provider_factory
         self._client_factory = client_factory
+        self._total_timeout_seconds = total_timeout_seconds
 
     async def test(
         self,
         kind: ProviderKind,
         candidate: ProviderChannel | ProviderChannelUpdate,
     ) -> ProviderChannelTestRead:
-        channel = self._resolve_candidate(kind, candidate)
         started_at = self._clock()
         scope = self._initial_scope(kind)
         error: str | None = None
         status: Literal["ok", "failed"] = "ok"
+        channel: ProviderChannel | None = None
 
         try:
-            self._validate_configured(kind, channel)
-            timeout = httpx.Timeout(
-                TOTAL_TIMEOUT_SECONDS,
-                connect=CONNECT_TIMEOUT_SECONDS,
-            )
-            async with self._client_factory(
-                base_url=channel.base_url,
-                timeout=timeout,
-            ) as client:
-                provider = self._provider_factory(kind, channel, client)
-                if kind == "llm":
-                    await self._test_llm(provider, channel)
-                elif kind == "image":
-                    scope = await self._test_image(provider, channel)
-                else:
-                    await self._test_tts(provider, channel)
+            async with asyncio.timeout(self._total_timeout_seconds):
+                channel = self.resolve_candidate(kind, candidate)
+                self.validate_channel(kind, channel)
+                timeout = httpx.Timeout(
+                    self._total_timeout_seconds,
+                    connect=min(
+                        CONNECT_TIMEOUT_SECONDS,
+                        self._total_timeout_seconds,
+                    ),
+                )
+                async with self._client_factory(
+                    base_url=channel.base_url,
+                    timeout=timeout,
+                ) as client:
+                    provider = self._provider_factory(kind, channel, client)
+                    if kind == "llm":
+                        await self._test_llm(provider, channel)
+                    elif kind == "image":
+                        scope = await self._test_image(provider, channel)
+                    else:
+                        await self._test_tts(provider, channel)
         except Exception as exc:
             status = "failed"
             error = self._sanitize_error(exc)
 
         elapsed_ms = self._elapsed_ms(started_at, self._clock())
+        response_channel = channel or candidate
         return ProviderChannelTestRead(
             status=status,
-            model=channel.model,
-            host=urlsplit(channel.base_url).hostname or "",
+            model=response_channel.model,
+            host=urlsplit(str(response_channel.base_url)).hostname or "",
             elapsed_ms=elapsed_ms,
             check_scope=scope,
             error=error,
         )
 
-    def _resolve_candidate(
+    def resolve_candidate(
         self,
         kind: ProviderKind,
         candidate: ProviderChannel | ProviderChannelUpdate,
@@ -121,13 +130,13 @@ class ProviderChannelTestingService:
         return candidate.model_copy(update={"api_key": stored.api_key})
 
     @staticmethod
-    def _validate_configured(kind: ProviderKind, channel: ProviderChannel) -> None:
-        if not channel.enabled or not all(
-            (channel.name, channel.base_url, channel.model)
-        ):
-            raise ProviderTestError("Provider channel is not configured")
+    def validate_channel(kind: ProviderKind, channel: ProviderChannel) -> None:
+        if not channel.enabled:
+            raise ProviderTestError(f"{kind} provider channel is not enabled")
         if kind in {"llm", "image"} and not channel.api_key_value:
-            raise ProviderTestError("Provider channel is not configured")
+            raise ProviderTestError(
+                f"Enabled {kind} channel requires an api_key"
+            )
 
     @staticmethod
     async def _test_llm(provider: Any, channel: ProviderChannel) -> None:
@@ -191,6 +200,8 @@ class ProviderChannelTestingService:
 
     @staticmethod
     def _sanitize_error(error: Exception) -> str:
+        if isinstance(error, TimeoutError):
+            return "Connection timed out"
         if isinstance(error, httpx.HTTPStatusError):
             return f"Provider returned HTTP {error.response.status_code}"
         if isinstance(error, httpx.HTTPError):

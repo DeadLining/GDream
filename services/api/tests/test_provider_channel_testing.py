@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
@@ -159,7 +161,7 @@ async def test_clear_key_does_not_resolve_stored_key_or_open_connection():
     result = await service.test("llm", update)
 
     assert result.status == "failed"
-    assert result.error == "Provider channel is not configured"
+    assert result.error == "Enabled llm channel requires an api_key"
 
 
 @pytest.mark.anyio
@@ -274,6 +276,32 @@ async def test_provider_value_error_is_not_echoed():
     assert secret not in json.dumps(result.model_dump())
 
 
+@pytest.mark.anyio
+async def test_total_timeout_cuts_off_complete_provider_check_without_leaking():
+    secret = "slow-provider-secret"
+
+    class SlowClient:
+        async def post(self, path, **kwargs):
+            await asyncio.sleep(1)
+            raise AssertionError("timeout did not stop the request")
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        provider_factory=lambda kind, channel, http_client: http_client,
+        client_factory=ClientFactory(SlowClient()),
+        total_timeout_seconds=0.01,
+    )
+
+    started_at = time.perf_counter()
+    result = await service.test("llm", candidate(api_key=secret))
+    wall_seconds = time.perf_counter() - started_at
+
+    assert wall_seconds < 0.2
+    assert result.status == "failed"
+    assert result.error == "Connection timed out"
+    assert secret not in json.dumps(result.model_dump())
+
+
 def channel_payload(**overrides):
     payload = {
         "name": "Candidate",
@@ -342,6 +370,40 @@ def test_endpoint_returns_failed_transport_as_redacted_200_without_persistence(c
         assert session.query(models.Job).count() == before_jobs
 
 
+def test_endpoint_returns_sanitized_timeout_as_200(client, monkeypatch):
+    secret = "endpoint-timeout-secret"
+
+    @asynccontextmanager
+    async def slow_client_factory(**kwargs):
+        class SlowClient:
+            async def post(self, path, **request):
+                await asyncio.sleep(1)
+
+        yield SlowClient()
+
+    monkeypatch.setattr(
+        "comic_studio.routes.provider_channels.provider_testing_client_factory",
+        slow_client_factory,
+    )
+    monkeypatch.setattr(
+        "comic_studio.routes.provider_channels.provider_testing_total_timeout_seconds",
+        0.01,
+    )
+
+    started_at = time.perf_counter()
+    response = client.post(
+        "/api/provider-channels/llm/test",
+        json=channel_payload(api_key=secret),
+    )
+    wall_seconds = time.perf_counter() - started_at
+
+    assert wall_seconds < 0.2
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["error"] == "Connection timed out"
+    assert secret not in response.text
+
+
 def test_endpoint_rejects_invalid_candidate_with_422_and_no_secret(client):
     response = client.post(
         "/api/provider-channels/llm/test",
@@ -350,3 +412,47 @@ def test_endpoint_rejects_invalid_candidate_with_422_and_no_secret(client):
 
     assert response.status_code == 422
     assert "validation-secret" not in response.text
+
+
+@pytest.mark.parametrize("field", ["name", "model"])
+@pytest.mark.parametrize("value", ["", "   "])
+def test_endpoint_rejects_blank_required_identity_fields(client, field, value):
+    response = client.post(
+        "/api/provider-channels/llm/test",
+        json=channel_payload(**{field: value}),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "secret_operation",
+    [
+        {"api_key": ""},
+        {"api_key": "", "clear_api_key": True},
+    ],
+)
+def test_endpoint_rejects_enabled_channel_without_effective_key(
+    client,
+    secret_operation,
+):
+    store = client.app.state.provider_channel_store
+    snapshot = store.snapshot
+    store.save(
+        snapshot.model_copy(
+            update={
+                "llm": snapshot.llm.model_copy(
+                    update={"enabled": False, "api_key": None}
+                )
+            }
+        )
+    )
+    response = client.post(
+        "/api/provider-channels/llm/test",
+        json=channel_payload(**secret_operation),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Enabled llm channel requires an api_key"
+    )

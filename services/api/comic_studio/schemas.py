@@ -28,9 +28,17 @@ class ProviderChannelUpdate(BaseModel):
     clear_api_key: bool = False
     ssh_host: str = ""
 
-    @field_validator("name", "model", "ssh_host")
+    @field_validator("name", "model")
     @classmethod
-    def strip_text(cls, value: str) -> str:
+    def strip_required_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Field must not be blank")
+        return stripped
+
+    @field_validator("ssh_host")
+    @classmethod
+    def strip_optional_text(cls, value: str) -> str:
         return value.strip()
 
     @field_validator("api_key", mode="before")

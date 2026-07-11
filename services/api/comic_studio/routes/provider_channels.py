@@ -18,12 +18,15 @@ from comic_studio.schemas import (
 )
 from comic_studio.services.provider_channel_testing import (
     ProviderChannelTestingService,
+    ProviderTestError,
+    TOTAL_TIMEOUT_SECONDS,
     default_client_factory,
 )
 
 
 router = APIRouter(prefix="/api/provider-channels", tags=["provider-channels"])
 provider_testing_client_factory = default_client_factory
+provider_testing_total_timeout_seconds = TOTAL_TIMEOUT_SECONDS
 
 
 def mask_api_key(api_key: str | None) -> str:
@@ -153,5 +156,16 @@ async def test_provider_channel(
     service = ProviderChannelTestingService(
         stored_channel=lambda channel_kind: getattr(store.snapshot, channel_kind),
         client_factory=provider_testing_client_factory,
+        total_timeout_seconds=provider_testing_total_timeout_seconds,
     )
-    return await service.test(kind, candidate)
+    try:
+        channel = service.resolve_candidate(kind, candidate)
+        service.validate_channel(kind, channel)
+    except (ProviderTestError, ValidationError) as error:
+        detail = (
+            str(error)
+            if isinstance(error, ProviderTestError)
+            else "Invalid provider channel configuration"
+        )
+        raise HTTPException(status_code=422, detail=detail) from error
+    return await service.test(kind, channel)
