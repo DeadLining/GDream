@@ -105,6 +105,7 @@ export function Workspace() {
       setEpisode(null);
       setReadiness(null);
       setReadinessError('');
+      setWorkArea(current => current === 'settings' ? current : 'overview');
     }
   };
 

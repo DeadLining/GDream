@@ -190,6 +190,46 @@ describe('Workspace', () => {
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\.workspace-tabs-full\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   });
 
+  it('returns to overview when refresh removes the active project', async () => {
+    mocks.listProjects.mockResolvedValueOnce([project]).mockResolvedValueOnce([]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace/>);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '生产'}));
+    expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: '刷新项目'}));
+
+    expect(await screen.findByRole('heading', {name: '新建第一个项目'})).toBeVisible();
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('tabindex', '0');
+    expect(document.getElementById('workspace-panel-overview')).toHaveAttribute('role', 'tabpanel');
+  });
+
+  it('keeps provider settings active when refresh removes the active project', async () => {
+    mocks.listProjects.mockResolvedValueOnce([project]).mockResolvedValueOnce([]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProviderChannels.mockResolvedValue({
+      llm: {name: 'MiniMax', enabled: true, base_url: 'https://api.example.com', model: 'M3', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      image: {name: 'Image', enabled: true, base_url: 'https://image.example.com', model: 'gpt-image-2', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••'},
+      tts: {name: 'TTS', enabled: true, base_url: 'https://tts.example.com', model: 'qwen', ssh_host: '', api_key_configured: false, api_key_masked: ''},
+      persistence: {status: 'saved', file_path: 'data/provider-channels.json'}, reloaded_at: '',
+    });
+
+    render(<Workspace/>);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '模型渠道'}));
+    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: '刷新项目'}));
+
+    await waitFor(() => expect(mocks.listProjects).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('tabindex', '0');
+    expect(document.getElementById('workspace-panel-settings')).toHaveAttribute('role', 'tabpanel');
+  });
+
   it('loads persisted projects and plans an empty episode', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
@@ -454,6 +494,15 @@ describe('Workspace', () => {
     expect(modernDesktopRule).toBeGreaterThan(-1);
     expect(compactDesktopRule).toBeGreaterThan(modernDesktopRule);
     expect(mobileRule).toBeGreaterThan(compactDesktopRule);
+  });
+
+  it('keeps the empty workspace grid full-width after responsive grid overrides', () => {
+    const compactDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 210px minmax(400px, 1fr) 296px;');
+    const narrowDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 200px minmax(0, 1fr) 280px;');
+    const emptyRule = workspaceStyles.lastIndexOf('.workspace-grid.workspace-grid-empty { grid-template-columns: minmax(0, 1fr);');
+
+    expect(emptyRule).toBeGreaterThan(compactDesktopRule);
+    expect(emptyRule).toBeGreaterThan(narrowDesktopRule);
   });
 
   it('uses stronger semantic colors with accessible shell contrast', () => {
