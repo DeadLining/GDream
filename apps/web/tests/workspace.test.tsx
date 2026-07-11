@@ -318,6 +318,18 @@ describe('Workspace', () => {
     await userEvent.click(screen.getByRole('tab', {name: '检查器'}));
     expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-inspector');
     expect(workspaceStyles).toMatch(/\.mobile-inspector \.workspace-center\s*\{\s*display:\s*none/);
+
+    await userEvent.click(screen.getByRole('tab', {name: '模型渠道'}));
+    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-settings');
+    expect(workspaceStyles).toMatch(/\.mobile-settings \.workspace-inspector[^}]*display:\s*none/);
+  });
+
+  it('keeps five mobile work areas in one stable 44px tab row', () => {
+    const mobileTabsRule = workspaceStyles.match(/\.workspace-tabs-mobile\s*\{[^}]*grid-template-columns:\s*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)[^}]*\}/);
+
+    expect(mobileTabsRule?.[1]).toBe('5');
+    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*display:\s*grid/);
+    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*none/);
   });
 
   it('opens the first relevant blocker in the mobile inspector from the review action', async () => {
