@@ -24,6 +24,7 @@ from comic_studio.routes.renders import router as renders_router
 from comic_studio.routes.projects import character_router, router as projects_router
 from comic_studio.routes.production import router as production_router
 from comic_studio.routes.provider_channels import router as provider_channels_router
+from comic_studio.routes.script_imports import router as script_imports_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
 from comic_studio.services.production_coordinator import ProductionCoordinator
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
         settings.data_root.mkdir(parents=True, exist_ok=True)
         run_migrations(settings.database_url)
         recover_production_runs()
+        recover_script_imports()
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
@@ -113,7 +115,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origin_regex=r"http://(?:127\.0\.0\.1|localhost):\d{1,5}",
         allow_credentials=False,
-        allow_methods=["GET", "PUT", "POST", "OPTIONS"],
+        allow_methods=["GET", "PUT", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
 
@@ -154,6 +156,24 @@ def create_app() -> FastAPI:
 
     app.state.recover_production_runs = recover_production_runs
 
+    def recover_script_imports():
+        recovered = []
+        with session_factory() as session:
+            imports = list(
+                session.query(models.ScriptImport).filter(
+                    models.ScriptImport.status.in_({"parsing", "applying"})
+                )
+            )
+            for script_import in imports:
+                script_import.status = "failed"
+                script_import.error_category = "interrupted"
+                script_import.error = "Import was interrupted and can be retried"
+                recovered.append(script_import.id)
+            session.commit()
+        return recovered
+
+    app.state.recover_script_imports = recover_script_imports
+
     async def produce_panel(item):
         with session_factory() as session:
             provider = app.state.provider_factory.create_image()
@@ -190,6 +210,7 @@ def create_app() -> FastAPI:
     app.include_router(renders_router)
     app.include_router(production_router)
     app.include_router(provider_channels_router)
+    app.include_router(script_imports_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

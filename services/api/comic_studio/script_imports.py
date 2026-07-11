@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictDraftModel(BaseModel):
@@ -101,3 +104,40 @@ class ScriptImportDraft(StrictDraftModel):
                                 f"unknown speaker_draft_id: {line.speaker_draft_id}"
                             )
         return self
+
+
+class ScriptImportCreate(StrictDraftModel):
+    mode: Literal["auto", "screenplay", "prose"] = "auto"
+    text: str = Field(min_length=1)
+
+
+class ScriptImportConfirm(StrictDraftModel):
+    character_mappings: dict[str, str] = {}
+
+
+class ScriptImportRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    status: str
+    mode: str
+    source_format: str
+    original_filename: str
+    checksum: str
+    extracted_text: str
+    structured_draft: dict
+    error: str
+    error_category: str
+    created_at: datetime
+    updated_at: datetime
+    applied_at: datetime | None
+
+
+class ScriptImportModeForm(StrictDraftModel):
+    mode: Literal["auto", "screenplay", "prose"] = "auto"
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def normalize_mode(cls, value):
+        return value or "auto"
