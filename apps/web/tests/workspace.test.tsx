@@ -164,6 +164,106 @@ describe('Workspace', () => {
     expect(mocks.getEpisode).not.toHaveBeenCalledWith('episode-2');
   });
 
+  it('selects the next episode after deleting the active first episode',async()=>{
+    const second={...projectDetail.episodes[0],id:'episode-2',title:'第二集'};
+    const before={...projectDetail,episodes:[projectDetail.episodes[0],second]};
+    const after={...projectDetail,episodes:[second]};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValueOnce(before).mockResolvedValueOnce(after);
+    mocks.getEpisode.mockImplementation(async(id:string)=>({...plannedEpisode,id,title:id==='episode-2'?'第二集':'失窃的雨夜'}));
+    mocks.previewEpisodeDeletion.mockResolvedValue({episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0}});
+    mocks.deleteEpisode.mockResolvedValue({episode_id:'episode-1',deleted_episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0},cleanup_warnings:[]});
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：失窃的雨夜'}));
+    await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    await waitFor(()=>expect(mocks.getEpisode).toHaveBeenLastCalledWith('episode-2'));
+    expect(localStorage.getItem('ai-comic-episode')).toBe('episode-2');
+  });
+
+  it('selects the previous episode after deleting the active last episode',async()=>{
+    const first={...projectDetail.episodes[0],id:'episode-1',title:'第一集'};
+    const second={...projectDetail.episodes[0],id:'episode-2',title:'第二集'};
+    const third={...projectDetail.episodes[0],id:'episode-3',title:'第三集'};
+    localStorage.setItem('ai-comic-episode','episode-3');
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValueOnce({...projectDetail,episodes:[first,second,third]}).mockResolvedValueOnce({...projectDetail,episodes:[first,second]});
+    mocks.getEpisode.mockImplementation(async(id:string)=>({...plannedEpisode,id,title:id==='episode-3'?'第三集':'第二集'}));
+    mocks.previewEpisodeDeletion.mockResolvedValue({episode_id:'episode-3',title:'第三集',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0}});
+    mocks.deleteEpisode.mockResolvedValue({episode_id:'episode-3',deleted_episode_id:'episode-3',title:'第三集',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0},cleanup_warnings:[]});
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：第三集'}));
+    await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    await waitFor(()=>expect(mocks.getEpisode).toHaveBeenLastCalledWith('episode-2'));
+  });
+
+  it('clears the selected episode after deleting the only episode',async()=>{
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValueOnce(projectDetail).mockResolvedValueOnce({...projectDetail,episodes:[]});
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.previewEpisodeDeletion.mockResolvedValue({episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0}});
+    mocks.deleteEpisode.mockResolvedValue({episode_id:'episode-1',deleted_episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0},cleanup_warnings:[]});
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：失窃的雨夜'}));
+    await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    await waitFor(()=>expect(localStorage.getItem('ai-comic-episode')).toBeNull());
+    expect(await screen.findByRole('button',{name:'新建剧集'})).toBeVisible();
+  });
+
+  it('keeps the dialog open when episode deletion fails',async()=>{
+    mocks.listProjects.mockResolvedValue([project]);mocks.getProject.mockResolvedValue(projectDetail);mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.previewEpisodeDeletion.mockResolvedValue({episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0}});
+    mocks.deleteEpisode.mockRejectedValue(new Error('删除服务不可用'));
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：失窃的雨夜'}));
+    await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('删除服务不可用');
+    expect(screen.getByRole('dialog',{name:'永久删除剧集'})).toBeVisible();
+  });
+
+  it('preserves the active episode when deleting another episode',async()=>{
+    const second={...projectDetail.episodes[0],id:'episode-2',title:'第二集'};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValueOnce({...projectDetail,episodes:[projectDetail.episodes[0],second]}).mockResolvedValueOnce(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.deleteEpisode.mockResolvedValue({episode_id:'episode-2',deleted_episode_id:'episode-2',title:'第二集',deleted:{scenes:2,shots:3,dialogue_lines:4,assets:5},cleanup_warnings:[]});
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：第二集'}));
+    await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    await waitFor(()=>expect(mocks.deleteEpisode).toHaveBeenCalledWith('episode-2'));
+    expect(mocks.getEpisode).toHaveBeenLastCalledWith('episode-1');
+    expect(localStorage.getItem('ai-comic-episode')).toBe('episode-1');
+  });
+
+  it('shows a cleanup warning after the episode has been deleted',async()=>{
+    mocks.listProjects.mockResolvedValue([project]);mocks.getProject.mockResolvedValueOnce(projectDetail).mockResolvedValueOnce({...projectDetail,episodes:[]});mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.previewEpisodeDeletion.mockResolvedValue({episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:1}});
+    mocks.deleteEpisode.mockResolvedValue({episode_id:'episode-1',deleted_episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:1},cleanup_warnings:['Could not remove one local media file']});
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：失窃的雨夜'}));await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    expect(await screen.findByRole('status')).toHaveTextContent('本地文件未能清理');
+    expect(screen.queryByRole('button',{name:'永久删除'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'关闭清理提示'})).toBeVisible();
+  });
+
+  it('ignores a deletion completion after navigating to another project',async()=>{
+    const pending=deferred<Awaited<ReturnType<typeof mocks.deleteEpisode>>>();
+    const projectB={...project,id:'project-2',title:'另一个项目'};
+    const episodeB={...projectDetail.episodes[0],id:'episode-b',project_id:'project-2',title:'另一集'};
+    mocks.listProjects.mockResolvedValue([project,projectB]);
+    mocks.getProject.mockImplementation(async(id:string)=>id==='project-2'?{...projectB,characters:[],episodes:[episodeB]}:projectDetail);
+    mocks.getEpisode.mockImplementation(async(id:string)=>({...plannedEpisode,id,project_id:id==='episode-b'?'project-2':'project-1',title:id==='episode-b'?'另一集':'失窃的雨夜'}));
+    mocks.previewEpisodeDeletion.mockResolvedValue({episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0}});
+    mocks.deleteEpisode.mockReturnValue(pending.promise);
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'删除剧集：失窃的雨夜'}));await userEvent.click(await screen.findByRole('button',{name:'永久删除'}));
+    await userEvent.selectOptions(screen.getAllByLabelText('选择项目')[1],'project-2');
+    expect(await screen.findByRole('heading',{name:'另一集'})).toBeVisible();
+    pending.resolve({episode_id:'episode-1',deleted_episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:0},cleanup_warnings:[]});
+    await act(async()=>{await Promise.resolve();});
+    expect(screen.getByRole('heading',{name:'另一集'})).toBeVisible();
+    expect(screen.queryByRole('dialog',{name:'永久删除剧集'})).not.toBeInTheDocument();
+  });
+
   it('opens provider settings without a project and returns to the create-project empty state', async () => {
     mocks.listProjects.mockResolvedValue([]);
     mocks.getProviderChannels.mockResolvedValue({

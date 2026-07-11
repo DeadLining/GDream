@@ -42,6 +42,7 @@ export function Workspace() {
   const [deletionError,setDeletionError]=useState('');
   const [deletionWarnings,setDeletionWarnings]=useState<string[]>([]);
   const navigationRequest = useRef(0);
+  const deletionGeneration=useRef(0);
 
   useEffect(() => {
     const query = window.matchMedia?.('(max-width: 899px)');
@@ -141,11 +142,27 @@ export function Workspace() {
     return true;
   };
   const canLeaveSettings = () => workArea !== 'settings' || !settingsDirty || window.confirm('模型渠道有未保存更改，确定离开吗？');
-  const navigateProject = (id: string) => {if (canLeaveSettings()) void loadProject(id);};
+  const navigateProject = (id: string) => {if (canLeaveSettings()){deletionGeneration.current+=1;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);void loadProject(id);}};
   const navigateEpisode = (id: string) => {if (canLeaveSettings()) void loadEpisode(id);};
-  const openEpisodeDeletion=async(id:string)=>{const target=project?.episodes.find(item=>item.id===id);if(!target)return;setDeletingEpisode(target);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);try{setDeletionPreview(await previewEpisodeDeletion(id));}catch(cause){setDeletionError(cause instanceof Error?cause.message:'无法读取删除影响');}};
-  const closeEpisodeDeletion=()=>{if(deletionBusy)return;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);};
-  const confirmEpisodeDeletion=async()=>{if(!deletingEpisode||deletionBusy)return;setDeletionBusy(true);setDeletionError('');try{const result=await deleteEpisode(deletingEpisode.id);setDeletionWarnings(result.cleanup_warnings);await loadProject(deletingEpisode.project_id);setDeletingEpisode(null);setDeletionPreview(null);}catch(cause){setDeletionError(cause instanceof Error?cause.message:'删除失败');}finally{setDeletionBusy(false);}};
+  const openEpisodeDeletion=async(id:string)=>{const target=project?.episodes.find(item=>item.id===id);if(!target)return;const generation=++deletionGeneration.current;setDeletingEpisode(target);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);try{const preview=await previewEpisodeDeletion(id);if(deletionGeneration.current===generation)setDeletionPreview(preview);}catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'无法读取删除影响');}};
+  const closeEpisodeDeletion=()=>{if(deletionBusy)return;deletionGeneration.current+=1;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);};
+  const confirmEpisodeDeletion=async()=>{
+    if(!deletingEpisode||deletionBusy||!project)return;
+    const target=deletingEpisode;const targetProjectId=target.project_id;const navigationAtStart=navigationRequest.current;const generation=++deletionGeneration.current;
+    const selectedId=episode?.id??null;const targetIndex=project.episodes.findIndex(item=>item.id===target.id);const adjacent=project.episodes[targetIndex+1]??project.episodes[targetIndex-1]??null;
+    setDeletionBusy(true);setDeletionError('');
+    try{
+      const result=await deleteEpisode(target.id);
+      if(deletionGeneration.current!==generation||navigationRequest.current!==navigationAtStart)return;
+      const preferred=selectedId===target.id?adjacent?.id??null:selectedId;
+      if(preferred)localStorage.setItem('ai-comic-episode',preferred);else localStorage.removeItem('ai-comic-episode');
+      await loadProject(targetProjectId);
+      if(deletionGeneration.current!==generation)return;
+      if(result.cleanup_warnings.length){setDeletionWarnings(result.cleanup_warnings);setDeletionPreview(null);}
+      else {setDeletingEpisode(null);setDeletionPreview(null);}
+    }catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'删除失败');}
+    finally{if(deletionGeneration.current===generation)setDeletionBusy(false);}
+  };
   const openReview = () => {
     if (!mobile) {
       changeWorkArea('review');
