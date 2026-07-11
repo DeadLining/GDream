@@ -37,15 +37,54 @@ test('workspace shows generated panel and shot production controls', async ({pag
   await expect(page.getByLabel('审核状态')).toHaveValue('draft');
 });
 
-test('mobile shot selection opens the inspector without overlap', async ({page}, testInfo) => {
+test('mobile navigation keeps work areas separated and within the viewport', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
   await page.goto('/');
 
+  await expect(page.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
+  await page.getByRole('tab', {name: '分镜'}).click();
+  const shotCards = page.getByRole('button', {name: /镜头 [12]/});
+  const [firstShotBox, secondShotBox] = await Promise.all([shotCards.nth(0).boundingBox(), shotCards.nth(1).boundingBox()]);
+  expect(firstShotBox).not.toBeNull();
+  expect(secondShotBox).not.toBeNull();
+  expect(secondShotBox!.y).toBe(firstShotBox!.y);
+  expect(secondShotBox!.x).toBeGreaterThan(firstShotBox!.x + firstShotBox!.width - 1);
   await page.getByRole('button', {name: /镜头 2/}).click();
+  await expect(page.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
   await page.getByRole('button', {name: '生成画面'}).scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeInViewport();
-  await expect(page.getByRole('main')).toBeHidden();
+
+  await page.getByRole('tab', {name: '生产'}).click();
+  const main = page.getByRole('main');
+  await expect(page.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
+
+  const toolbar = page.locator('.app-toolbar');
+  const selectors = page.locator('.mobile-project-bar');
+  const tabs = page.getByRole('tablist', {name: '工作区'});
+  const [toolbarBox, selectorsBox, tabsBox, mainBox, dimensions] = await Promise.all([
+    toolbar.boundingBox(),
+    selectors.boundingBox(),
+    tabs.boundingBox(),
+    main.boundingBox(),
+    page.evaluate(() => ({clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth})),
+  ]);
+  expect(toolbarBox).not.toBeNull();
+  expect(selectorsBox).not.toBeNull();
+  expect(tabsBox).not.toBeNull();
+  expect(mainBox).not.toBeNull();
+  const tabBoxes = await tabs.getByRole('tab').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
+  expect(new Set(tabBoxes.map(width => Math.round(width))).size).toBe(1);
+  await expect(selectors).toHaveCSS('position', 'sticky');
+  expect(selectorsBox!.y).toBeGreaterThanOrEqual(toolbarBox!.y + toolbarBox!.height);
+  expect(tabsBox!.y).toBeGreaterThanOrEqual(selectorsBox!.y + selectorsBox!.height);
+  expect(mainBox!.y).toBeGreaterThanOrEqual(tabsBox!.y + tabsBox!.height);
+  expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+  for (const control of await page.locator('button:visible, select:visible, input:visible, textarea:visible').all()) {
+    const box = await control.boundingBox();
+    expect(box?.x ?? 0).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+  }
 });
 
 test('mixed production retry clears readiness blockers and enables render', async ({page}) => {

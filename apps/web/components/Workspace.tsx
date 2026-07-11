@@ -119,7 +119,7 @@ export function Workspace() {
     const target = shots.find(shot => shot.id === id || shot.dialogue.some(line => line.id === id));
     if (!target) return;
     setSelectedShotId(target.id);
-    if (window.matchMedia?.('(max-width: 899px)').matches) setWorkArea('inspector');
+    if (mobile) setWorkArea('inspector');
   };
   const selectShot = (shot: Shot) => selectShotById(shot.id);
   const refreshEpisode = async () => {

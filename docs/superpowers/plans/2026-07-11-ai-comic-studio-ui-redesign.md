@@ -371,7 +371,7 @@ git commit -m "feat: redesign production and review workspaces"
 - Modify: `apps/web/app/globals.css`
 - Modify: `apps/web/e2e/production-flow.spec.ts`
 
-- [ ] **Step 1: Add failing mobile E2E navigation assertions**
+- [x] **Step 1: Add failing mobile E2E navigation assertions**
 
 Add a mobile-only flow:
 
@@ -386,7 +386,7 @@ await expect(page.getByRole('heading', {name: '剧集生产队列'})).toBeVisibl
 
 Also assert that toolbar, tabs, and main content bounding boxes do not overlap.
 
-- [ ] **Step 2: Run mobile E2E and confirm failure**
+- [x] **Step 2: Run mobile E2E and confirm failure**
 
 ```bash
 npm run test:e2e --workspace @comic-studio/web -- --project=mobile
@@ -394,11 +394,11 @@ npm run test:e2e --workspace @comic-studio/web -- --project=mobile
 
 Expected: FAIL because the four-area mobile navigation and new layout are incomplete.
 
-- [ ] **Step 3: Implement mobile work-area behavior**
+- [x] **Step 3: Implement mobile work-area behavior**
 
 When a shot is selected below 900px, set `workArea` to `inspector`. Desktop selection must not change the active work area. Preserve the selected shot while switching tabs.
 
-- [ ] **Step 4: Complete responsive CSS**
+- [x] **Step 4: Complete responsive CSS**
 
 At widths below 900px:
 
@@ -409,7 +409,7 @@ At widths below 900px:
 - hide the desktop inspector unless the inspector work area is active;
 - keep all controls within viewport width.
 
-- [ ] **Step 5: Run mobile and full E2E**
+- [x] **Step 5: Run mobile and full E2E**
 
 ```bash
 npm run test:e2e --workspace @comic-studio/web -- --project=mobile
@@ -418,7 +418,7 @@ npm run test:e2e --workspace @comic-studio/web
 
 Expected: mobile tests pass; full suite passes with the existing expected skip only.
 
-- [ ] **Step 6: Commit responsive behavior**
+- [x] **Step 6: Commit responsive behavior**
 
 ```bash
 git add apps/web/components/Workspace.tsx apps/web/components/WorkspaceTabs.tsx apps/web/app/globals.css apps/web/e2e/production-flow.spec.ts

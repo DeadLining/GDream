@@ -43,7 +43,6 @@ export function WorkspaceTabs({
       className={mobile ? 'workspace-tabs workspace-tabs-mobile mobile-tabs' : 'workspace-tabs workspace-tabs-desktop'}
       role="tablist"
       aria-label="工作区"
-      style={{display: mobile ? 'grid' : 'flex', gridTemplateColumns: mobile ? 'repeat(4, minmax(0, 1fr))' : undefined, height: 44}}
     >
       {tabs.map((tab, index) => (
         <button
@@ -55,7 +54,6 @@ export function WorkspaceTabs({
           aria-controls={`workspace-panel-${tab.value}`}
           tabIndex={value === tab.value ? 0 : -1}
           className={value === tab.value ? 'active' : ''}
-          style={{flex: mobile ? undefined : '1 1 0', minWidth: 72, height: 44}}
           onClick={() => onChange(tab.value)}
           onKeyDown={event => moveSelection(event, index)}
         >
