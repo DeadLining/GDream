@@ -4,6 +4,7 @@ import type {
   ProviderHealth, Shot, ShotPatch, ProductionReadiness, ProductionRun,
   ProductionRunCreate, ProductionItem, ProviderChannelKind, ProviderChannelsRead,
   ProviderChannelTestResult, ProviderChannelUpdate, ProviderChannelUpdateRead,
+  ScriptImport, ScriptImportDraft, ScriptImportMode,
 } from './types';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -72,3 +73,13 @@ export const listProductionItems = (runId:string) => apiRequest<ProductionItem[]
 export const pauseProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/pause`,json('POST'));
 export const continueProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/continue`,json('POST'));
 export const retryProductionRun = (runId:string,itemIds?:string[]) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/retry`,json('POST',{item_ids:itemIds}));
+export const createPastedScriptImport = (projectId:string,mode:ScriptImportMode,text:string) => apiRequest<ScriptImport>(`/api/projects/${projectId}/script-imports`,json('POST',{mode,text}));
+export async function uploadScriptImport(projectId:string,mode:ScriptImportMode,file:File):Promise<ScriptImport> {
+  const form = new FormData(); form.set('mode',mode); form.set('file',file);
+  const response = await fetch(`${API_BASE}/api/projects/${projectId}/script-imports`,{method:'POST',body:form});
+  if (!response.ok) {const body=await response.json() as {detail?:unknown}; const detail=String(body.detail??'上传失败'); throw new ApiError(detail,response.status,detail);}
+  return response.json() as Promise<ScriptImport>;
+}
+export const parseScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/parse`,json('POST'));
+export const updateScriptImportDraft = (id:string,draft:ScriptImportDraft) => apiRequest<ScriptImport>(`/api/script-imports/${id}/draft`,json('PATCH',draft));
+export const confirmScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/confirm`,json('POST',{}));

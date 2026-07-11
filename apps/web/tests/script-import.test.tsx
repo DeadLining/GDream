@@ -1,0 +1,16 @@
+import {cleanup,render,screen,waitFor} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {ScriptImportWorkspace} from '../components/ScriptImportWorkspace';
+
+const mocks=vi.hoisted(()=>({create:vi.fn(),upload:vi.fn(),parse:vi.fn(),update:vi.fn(),confirm:vi.fn()}));
+vi.mock('../lib/api',()=>({createPastedScriptImport:mocks.create,uploadScriptImport:mocks.upload,parseScriptImport:mocks.parse,updateScriptImportDraft:mocks.update,confirmScriptImport:mocks.confirm}));
+const draft={project:{title:'雨夜',logline:'追查芯片'},characters:[{draft_id:'c1',name:'林夏',aliases:[],role:'主角',appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:''}],episodes:[{draft_id:'e1',enabled:true,title:'第一集',premise:'发现芯片',target_duration_seconds:60,scenes:[{location:'天台',time_of_day:'night',summary:'追逐',continuity_state:{},estimated_duration_seconds:5,shots:[{shot_type:'wide',duration_seconds:5,composition:'天台',camera_motion:'push_in',character_state:{},image_prompt:'roof',negative_prompt:'',dialogue:[]}]}]}],warnings:[]};
+const imported={id:'i1',project_id:'p1',status:'ready',mode:'auto',source_format:'paste',original_filename:'',checksum:'x',extracted_text:'剧本',structured_draft:draft,error:'',error_category:'',created_at:'',updated_at:'',applied_at:null};
+
+beforeEach(()=>{vi.clearAllMocks();mocks.create.mockResolvedValue({...imported,status:'uploaded',structured_draft:{}});mocks.parse.mockResolvedValue(imported);mocks.update.mockResolvedValue(imported);mocks.confirm.mockResolvedValue({...imported,status:'applied'});});
+afterEach(cleanup);
+
+it('parses edits and confirms a pasted script preview',async()=>{const onConfirmed=vi.fn();const user=userEvent.setup();render(<ScriptImportWorkspace projectId="p1" onConfirmed={onConfirmed}/>);await user.type(screen.getByPlaceholderText('粘贴剧本、小说或故事文本'),'雨夜剧本');await user.click(screen.getByRole('button',{name:'解析并预览'}));await screen.findByDisplayValue('林夏');await user.clear(screen.getByDisplayValue('林夏'));await user.type(screen.getByDisplayValue(''),'林夏新版');await user.click(screen.getByRole('button',{name:/确认导入/}));await waitFor(()=>expect(mocks.confirm).toHaveBeenCalledWith('i1'));expect(mocks.update.mock.calls.at(-1)?.[1].characters[0].name).toBe('林夏新版');expect(onConfirmed).toHaveBeenCalled();});
+
+it('can disable an episode before confirmation',async()=>{const user=userEvent.setup();render(<ScriptImportWorkspace projectId="p1" onConfirmed={()=>{}}/>);await user.type(screen.getByPlaceholderText('粘贴剧本、小说或故事文本'),'剧本');await user.click(screen.getByRole('button',{name:'解析并预览'}));await user.click(await screen.findByRole('checkbox',{name:'导入第 1 集'}));await user.click(screen.getByRole('button',{name:/保存修改/}));await waitFor(()=>expect(mocks.update).toHaveBeenCalled());expect(mocks.update.mock.calls[0][1].episodes[0].enabled).toBe(false);});

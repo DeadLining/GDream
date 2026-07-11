@@ -15,6 +15,7 @@ import {ProjectNavigator} from './ProjectNavigator';
 import {ReviewPanel} from './ReviewPanel';
 import {Storyboard} from './Storyboard';
 import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
+import {ScriptImportWorkspace} from './ScriptImportWorkspace';
 
 export function Workspace() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -167,6 +168,7 @@ export function Workspace() {
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
   let center;
   if (workArea === 'settings') center = <ProviderSettings onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>;
+  else if (workArea === 'import' && project) center = <ScriptImportWorkspace projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => changeWorkArea('production')} onOpenReview={openReview}/>;
@@ -177,8 +179,8 @@ export function Workspace() {
   const visibleWorkAreas: WorkArea[] = !projects.length
     ? ['overview', 'settings']
     : mobile
-    ? ['overview', 'storyboard', 'production', 'inspector', 'settings']
-    : ['overview', 'storyboard', 'production', 'review', 'settings'];
+    ? ['overview', 'import', 'storyboard', 'production', 'inspector', 'settings']
+    : ['overview', 'import', 'storyboard', 'production', 'review', 'settings'];
 
   return <div className="app-shell">
     {toolbar}
@@ -187,7 +189,17 @@ export function Workspace() {
     <WorkspaceTabs value={workArea} onChange={changeWorkArea} mobile={mobile} areas={visibleWorkAreas} fullWidth={!projects.length}/>
     {visibleWorkAreas.filter(area => area !== workArea).map(area => <section key={area} id={`workspace-panel-${area}`} role="tabpanel" aria-labelledby={`workspace-tab-${area}`} hidden/>)}
     <div className={`workspace-grid mobile-${workArea} ${projects.length ? '' : 'workspace-grid-empty'}`}>
-      {projects.length > 0 && <ProjectNavigator projects={projects} project={project} episodeId={episode?.id ?? null} onProject={navigateProject} onEpisode={navigateEpisode} onNewProject={() => setProjectDialog(true)} onNewEpisode={() => setEpisodeDialog(true)} onProviderSettings={() => changeWorkArea('settings')}/>}
+      {projects.length > 0 && <ProjectNavigator
+        projects={projects}
+        project={project}
+        episodeId={episode?.id ?? null}
+        onProject={navigateProject}
+        onEpisode={navigateEpisode}
+        onNewProject={() => setProjectDialog(true)}
+        onNewEpisode={() => setEpisodeDialog(true)}
+        onScriptImport={() => changeWorkArea('import')}
+        onProviderSettings={() => changeWorkArea('settings')}
+      />}
       <section
         className="workspace-center"
         id={workArea === 'inspector' ? undefined : `workspace-panel-${workArea}`}

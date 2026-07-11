@@ -592,11 +592,15 @@ describe('Workspace', () => {
   it('supports roving keyboard navigation across workspace tabs', async () => {
     render(<TabsHarness />);
     const overview = screen.getByRole('tab', {name: '总览'});
+    const scriptImport = screen.getByRole('tab', {name: '剧本导入'});
     const storyboard = screen.getByRole('tab', {name: '分镜'});
 
     expect(overview).toHaveAttribute('tabindex', '0');
     expect(storyboard).toHaveAttribute('tabindex', '-1');
     overview.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(scriptImport).toHaveFocus();
+    expect(scriptImport).toHaveAttribute('aria-selected', 'true');
     await userEvent.keyboard('{ArrowRight}');
     expect(storyboard).toHaveFocus();
     expect(storyboard).toHaveAttribute('aria-selected', 'true');

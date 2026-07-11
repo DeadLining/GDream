@@ -1,0 +1,21 @@
+'use client';
+
+import {FileUp, Save, Sparkles} from 'lucide-react';
+import {useState} from 'react';
+import {confirmScriptImport, createPastedScriptImport, parseScriptImport, updateScriptImportDraft, uploadScriptImport} from '../lib/api';
+import type {ScriptImport, ScriptImportDraft, ScriptImportMode} from '../lib/types';
+
+export function ScriptImportWorkspace({projectId,onConfirmed}:{projectId:string;onConfirmed:()=>Promise<void>|void}) {
+  const [mode,setMode]=useState<ScriptImportMode>('auto'); const [text,setText]=useState(''); const [file,setFile]=useState<File|null>(null);
+  const [current,setCurrent]=useState<ScriptImport|null>(null); const [draft,setDraft]=useState<ScriptImportDraft|null>(null);
+  const [busy,setBusy]=useState(false); const [error,setError]=useState('');
+  const start=async()=>{setBusy(true);setError('');try{const created=file?await uploadScriptImport(projectId,mode,file):await createPastedScriptImport(projectId,mode,text);const parsed=await parseScriptImport(created.id);setCurrent(parsed);setDraft(parsed.structured_draft as ScriptImportDraft);}catch(cause){setError(cause instanceof Error?cause.message:'导入失败');}finally{setBusy(false);}};
+  const save=async()=>{if(!current||!draft)return;setBusy(true);setError('');try{const updated=await updateScriptImportDraft(current.id,draft);setCurrent(updated);}catch(cause){setError(cause instanceof Error?cause.message:'保存失败');}finally{setBusy(false);}};
+  const confirm=async()=>{if(!current||!draft)return;setBusy(true);setError('');try{await updateScriptImportDraft(current.id,draft);await confirmScriptImport(current.id);await onConfirmed();}catch(cause){setError(cause instanceof Error?cause.message:'确认失败');}finally{setBusy(false);}};
+  return <main className="script-import-workspace">
+    <header><div><h1>剧本导入</h1><p>解析结果确认后才会写入角色、剧集和分镜。</p></div>{draft&&<button className="command-button" disabled={busy} onClick={confirm}><Sparkles size={16}/>确认导入</button>}</header>
+    {!draft?<section className="script-import-source"><div className="mode-segments" role="group" aria-label="导入模式">{([['auto','自动识别'],['screenplay','剧本'],['prose','小说']] as const).map(([value,label])=><button key={value} className={mode===value?'active':''} onClick={()=>setMode(value)}>{label}</button>)}</div><label>粘贴文本<textarea value={text} onChange={event=>setText(event.target.value)} placeholder="粘贴剧本、小说或故事文本"/></label><div className="source-divider"><span>或</span></div><label className="file-command"><FileUp size={17}/><span>{file?.name??'选择 TXT、DOCX 或 PDF'}</span><input aria-label="选择剧本文件" type="file" accept=".txt,.docx,.pdf" onChange={event=>setFile(event.target.files?.[0]??null)}/></label><button className="command-button" disabled={busy||(!file&&!text.trim())} onClick={start}>{busy?'正在解析':'解析并预览'}</button></section>:
+    <section className="script-import-preview"><div className="preview-heading"><div><strong>{draft.characters.length}</strong><span>角色</span></div><div><strong>{draft.episodes.filter(item=>item.enabled).length}</strong><span>启用分集</span></div><button disabled={busy} onClick={save}><Save size={15}/>保存修改</button></div><div className="import-preview-columns"><section><h2>角色</h2>{draft.characters.map((character,index)=><label key={character.draft_id}>角色 {index+1}<input value={character.name} onChange={event=>setDraft({...draft,characters:draft.characters.map(item=>item.draft_id===character.draft_id?{...item,name:event.target.value}:item)})}/><small>{character.role} · {character.appearance_bible}</small></label>)}</section><section><h2>分集</h2>{draft.episodes.map((episode,index)=><div className="import-episode" key={episode.draft_id}><label className="episode-enabled"><input type="checkbox" checked={episode.enabled} onChange={event=>setDraft({...draft,episodes:draft.episodes.map(item=>item.draft_id===episode.draft_id?{...item,enabled:event.target.checked}:item)})}/>导入第 {index+1} 集</label><input aria-label={`第 ${index+1} 集标题`} value={episode.title} onChange={event=>setDraft({...draft,episodes:draft.episodes.map(item=>item.draft_id===episode.draft_id?{...item,title:event.target.value}:item)})}/><small>{episode.scenes.length} 场 · {episode.target_duration_seconds} 秒</small></div>)}</section></div></section>}
+    {error&&<p className="form-error" role="alert">{error}</p>}
+  </main>;
+}
