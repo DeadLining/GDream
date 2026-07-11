@@ -1,4 +1,6 @@
 import json
+import threading
+from datetime import datetime
 
 import pytest
 
@@ -70,7 +72,8 @@ def test_get_reports_defaults_when_configuration_file_is_absent(client):
     [
         ("a", "*"),
         ("abcd", "****"),
-        ("abcde", "*bcde"),
+        ("abcde", "*****"),
+        ("abcdefgh", "********"),
         ("sk-example-secret-8adr", "sk-****8adr"),
     ],
 )
@@ -168,6 +171,40 @@ def test_put_redacts_malformed_api_key_input(client, malformed_secret, caplog):
     assert secret_text not in caplog.text
 
 
+@pytest.mark.parametrize("field_name", ["apiKey", "api-key", "apikey", "credential"])
+def test_validation_redacts_normalized_secret_field_names(client, field_name):
+    secret = f"arbitrary-{field_name}-value"
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(enabled=False, **{field_name: secret}),
+    )
+
+    assert response.status_code == 422
+    error = next(
+        item for item in response.json()["detail"] if item["loc"][-1] == field_name
+    )
+    assert error["input"] == "[REDACTED]"
+    assert secret not in response.text
+
+
+def test_validation_redacts_whole_input_for_malformed_json(client):
+    secret = "malformed-json-secret-value"
+    malformed_body = f'{{"name":"provider","api_key":"{secret}"'
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        content=malformed_body,
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["type"] == "json_invalid"
+    assert error["input"] == "[REDACTED]"
+    assert secret not in response.text
+
+
 @pytest.mark.parametrize("kind", ["video", "LLM", "llm/extra"])
 def test_put_rejects_invalid_channel_kind(client, kind):
     response = client.put(f"/api/provider-channels/{kind}", json=channel_update())
@@ -258,3 +295,65 @@ def test_put_write_failure_returns_sanitized_500_without_secret_or_path(
     }
     assert secret not in response.text
     assert private_path not in response.text
+
+
+def test_concurrent_put_responses_use_their_exact_committed_snapshots(
+    client, monkeypatch
+):
+    store = seed_channels(client)
+    original_image_model = store.snapshot.image.model
+    real_update = store.update
+    first_committed = threading.Event()
+    second_committed = threading.Event()
+    responses = {}
+    failures = []
+
+    def coordinated_update(mutator):
+        result = real_update(mutator)
+        snapshot = getattr(result, "channels", result)
+        if snapshot.image.model == "image-response-two":
+            assert first_committed.wait(timeout=2)
+            second_committed.set()
+        elif snapshot.llm.model == "llm-response-one":
+            first_committed.set()
+            assert second_committed.wait(timeout=2)
+        return result
+
+    monkeypatch.setattr(store, "update", coordinated_update)
+
+    def put(kind, payload):
+        try:
+            responses[kind] = client.put(
+                f"/api/provider-channels/{kind}", json=payload
+            )
+        except Exception as error:
+            failures.append(error)
+
+    first = threading.Thread(
+        target=put,
+        args=("llm", channel_update(model="llm-response-one")),
+    )
+    second = threading.Thread(
+        target=put,
+        args=("image", channel_update(model="image-response-two")),
+    )
+    first.start()
+    assert first_committed.wait(timeout=2)
+    second.start()
+    first.join(timeout=2)
+    second.join(timeout=2)
+
+    assert failures == []
+    assert not first.is_alive()
+    assert not second.is_alive()
+    first_body = responses["llm"].json()
+    second_body = responses["image"].json()
+    assert responses["llm"].status_code == 200
+    assert responses["image"].status_code == 200
+    assert first_body["channel"] == first_body["current"]["llm"]
+    assert first_body["current"]["image"]["model"] == original_image_model
+    assert second_body["channel"] == second_body["current"]["image"]
+    assert second_body["current"]["llm"]["model"] == "llm-response-one"
+    assert datetime.fromisoformat(first_body["current"]["reloaded_at"]) < (
+        datetime.fromisoformat(second_body["current"]["reloaded_at"])
+    )
