@@ -61,7 +61,7 @@ ai-comic-studio/
 - Create: `services/api/comic_studio/main.py`
 - Test: `services/api/tests/test_health.py`
 
-- [ ] **Step 1: Write the failing health test**
+- [x] **Step 1: Write the failing health test**
 
 ```python
 from fastapi.testclient import TestClient
@@ -74,12 +74,12 @@ def test_health_reports_service_name():
     assert response.json() == {"status": "ok", "service": "ai-comic-studio"}
 ```
 
-- [ ] **Step 2: Verify the test fails because the application package does not exist**
+- [x] **Step 2: Verify the test fails because the application package does not exist**
 
 Run: `cd services/api && uv run pytest tests/test_health.py -q`
 Expected: import failure for `comic_studio.main`.
 
-- [ ] **Step 3: Implement settings and the health endpoint**
+- [x] **Step 3: Implement settings and the health endpoint**
 
 ```python
 from fastapi import FastAPI
@@ -98,12 +98,12 @@ def create_app() -> FastAPI:
 app = create_app()
 ```
 
-- [ ] **Step 4: Run the health test and full API test suite**
+- [x] **Step 4: Run the health test and full API test suite**
 
 Run: `cd services/api && uv run pytest -q`
 Expected: one passing test.
 
-- [ ] **Step 5: Commit the skeleton**
+- [x] **Step 5: Commit the skeleton**
 
 ```bash
 git add package.json .gitignore .env.example services/api
@@ -121,7 +121,7 @@ git commit -m "chore: scaffold comic studio services"
 - Modify: `services/api/comic_studio/main.py`
 - Test: `services/api/tests/test_projects_api.py`
 
-- [ ] **Step 1: Write failing project and character persistence tests**
+- [x] **Step 1: Write failing project and character persistence tests**
 
 ```python
 def test_project_and_characters_survive_new_request(client):
@@ -146,21 +146,21 @@ def test_project_and_characters_survive_new_request(client):
     assert loaded["characters"][0]["id"] == character["id"]
 ```
 
-- [ ] **Step 2: Run the test and confirm missing routes fail**
+- [x] **Step 2: Run the test and confirm missing routes fail**
 
 Run: `cd services/api && uv run pytest tests/test_projects_api.py -q`
 Expected: HTTP 404 for `/api/projects`.
 
-- [ ] **Step 3: Implement SQLAlchemy models, repositories, schemas, and routes**
+- [x] **Step 3: Implement SQLAlchemy models, repositories, schemas, and routes**
 
 Implement UUID string IDs, UTC timestamps, project ownership foreign keys, cascade deletes, and a transaction per request. Character voice fields must be server validated and API secrets must not appear in any model.
 
-- [ ] **Step 4: Run persistence tests with a temporary SQLite database**
+- [x] **Step 4: Run persistence tests with a temporary SQLite database**
 
 Run: `cd services/api && uv run pytest tests/test_projects_api.py -q`
 Expected: project and character tests pass.
 
-- [ ] **Step 5: Commit domain persistence**
+- [x] **Step 5: Commit domain persistence**
 
 ```bash
 git add services/api
@@ -178,7 +178,7 @@ git commit -m "feat: add project and character persistence"
 - Test: `services/api/tests/test_episode_graph.py`
 - Test: `services/api/tests/test_job_transitions.py`
 
-- [ ] **Step 1: Write failing episode graph ordering test**
+- [x] **Step 1: Write failing episode graph ordering test**
 
 ```python
 def test_episode_graph_returns_scenes_shots_and_dialogue_in_order(client, seeded_project):
@@ -190,7 +190,7 @@ def test_episode_graph_returns_scenes_shots_and_dialogue_in_order(client, seeded
     assert graph["status"] == "draft"
 ```
 
-- [ ] **Step 2: Write failing legal job transition tests**
+- [x] **Step 2: Write failing legal job transition tests**
 
 ```python
 def test_job_rejects_transition_from_succeeded_to_running(job_store):
@@ -201,21 +201,21 @@ def test_job_rejects_transition_from_succeeded_to_running(job_store):
         job_store.transition(job.id, "running")
 ```
 
-- [ ] **Step 3: Verify both tests fail for missing models and state machine**
+- [x] **Step 3: Verify both tests fail for missing models and state machine**
 
 Run: `cd services/api && uv run pytest tests/test_episode_graph.py tests/test_job_transitions.py -q`
 Expected: missing episode routes and `InvalidJobTransition`.
 
-- [ ] **Step 4: Implement ordered graph persistence and job states**
+- [x] **Step 4: Implement ordered graph persistence and job states**
 
 Allowed job transitions are `queued -> running`, `running -> succeeded`, `running -> failed`, and `failed -> queued`. Store progress from 0 through 100 and sanitized error text.
 
-- [ ] **Step 5: Run API and state-machine tests**
+- [x] **Step 5: Run API and state-machine tests**
 
 Run: `cd services/api && uv run pytest -q`
 Expected: all API tests pass.
 
-- [ ] **Step 6: Commit episode graph and jobs**
+- [x] **Step 6: Commit episode graph and jobs**
 
 ```bash
 git add services/api
@@ -233,7 +233,7 @@ git commit -m "feat: model episode production graph and jobs"
 - Test: `services/api/tests/providers/test_minimax.py`
 - Test: `services/api/tests/test_episode_planning.py`
 
-- [ ] **Step 1: Write failing Anthropic request contract test**
+- [x] **Step 1: Write failing Anthropic request contract test**
 
 ```python
 async def test_minimax_uses_m3_and_never_logs_api_key(http_fake, minimax_provider):
@@ -245,25 +245,25 @@ async def test_minimax_uses_m3_and_never_logs_api_key(http_fake, minimax_provide
     assert plan.scenes[0].shots[0].dialogue[0].character_id == "char-1"
 ```
 
-- [ ] **Step 2: Verify the provider test fails because no adapter exists**
+- [x] **Step 2: Verify the provider test fails because no adapter exists**
 
 Run: `cd services/api && uv run pytest tests/providers/test_minimax.py -q`
 Expected: missing `providers.minimax`.
 
-- [ ] **Step 3: Implement strict planning schemas and MiniMax adapter**
+- [x] **Step 3: Implement strict planning schemas and MiniMax adapter**
 
 The prompt contains the story bible, characters, episode brief, continuity constraints, and exact JSON shape. Strip optional Markdown fences, parse once, validate with Pydantic, and retry once with validation errors.
 
-- [ ] **Step 4: Implement planning job persistence transaction**
+- [x] **Step 4: Implement planning job persistence transaction**
 
 Persist the entire generated scene graph only after validation succeeds. A failed retry marks the job failed and leaves the existing episode graph unchanged.
 
-- [ ] **Step 5: Run provider and planning integration tests**
+- [x] **Step 5: Run provider and planning integration tests**
 
 Run: `cd services/api && uv run pytest tests/providers/test_minimax.py tests/test_episode_planning.py -q`
 Expected: request contract, retry, rollback, and graph creation tests pass.
 
-- [ ] **Step 6: Commit MiniMax planning**
+- [x] **Step 6: Commit MiniMax planning**
 
 ```bash
 git add services/api
@@ -280,7 +280,7 @@ git commit -m "feat: generate structured episodes with MiniMax M3"
 - Test: `services/api/tests/providers/test_gpt_image.py`
 - Test: `services/api/tests/test_panel_versions.py`
 
-- [ ] **Step 1: Write failing generation contract and immutable version tests**
+- [x] **Step 1: Write failing generation contract and immutable version tests**
 
 ```python
 async def test_generate_panel_uses_gpt_image_2(gpt_image_provider, image_http_fake):
@@ -297,25 +297,25 @@ def test_rejected_panel_version_does_not_replace_active_asset(panel_service, sho
     assert first.id != second.id
 ```
 
-- [ ] **Step 2: Run tests and confirm missing provider and asset store failures**
+- [x] **Step 2: Run tests and confirm missing provider and asset store failures**
 
 Run: `cd services/api && uv run pytest tests/providers/test_gpt_image.py tests/test_panel_versions.py -q`
 Expected: imports fail for the new provider and service.
 
-- [ ] **Step 3: Implement safe local asset storage and GPT Image adapter**
+- [x] **Step 3: Implement safe local asset storage and GPT Image adapter**
 
 Use `GPT_IMAGE_BASE_URL`, `GPT_IMAGE_KEY`, and `GPT_IMAGE_MODEL`. Decode base64 or download returned URLs, calculate SHA-256, probe PNG dimensions, and write with an atomic temporary-file rename under the project directory.
 
-- [ ] **Step 4: Implement panel prompt construction and version activation**
+- [x] **Step 4: Implement panel prompt construction and version activation**
 
 Combine visual style, character appearance bibles, continuity constraints, shot composition, camera language, and negative constraints. Store the sanitized request metadata with every asset.
 
-- [ ] **Step 5: Run image and versioning tests**
+- [x] **Step 5: Run image and versioning tests**
 
 Run: `cd services/api && uv run pytest -q`
 Expected: all API tests pass without real provider calls.
 
-- [ ] **Step 6: Commit panel generation**
+- [x] **Step 6: Commit panel generation**
 
 ```bash
 git add services/api
@@ -334,7 +334,7 @@ git commit -m "feat: add GPT Image panel generation and versions"
 - Test: `services/api/tests/providers/test_qwen_tts.py`
 - Test: `services/api/tests/test_dialogue_speech.py`
 
-- [ ] **Step 1: Write failing TTS HTTP contract test**
+- [x] **Step 1: Write failing TTS HTTP contract test**
 
 ```python
 async def test_qwen_tts_sends_character_performance(qwen_provider, tts_http_fake):
@@ -348,24 +348,24 @@ async def test_qwen_tts_sends_character_performance(qwen_provider, tts_http_fake
     assert audio.startswith(b"RIFF")
 ```
 
-- [ ] **Step 2: Verify the speech tests fail before implementation**
+- [x] **Step 2: Verify the speech tests fail before implementation**
 
 Run: `cd services/api && uv run pytest tests/providers/test_qwen_tts.py tests/test_dialogue_speech.py -q`
 Expected: missing Qwen provider.
 
-- [ ] **Step 3: Implement the remote service contract**
+- [x] **Step 3: Implement the remote service contract**
 
 Expose `/health`, `/v1/voices`, and `/v1/audio/speech`. Load `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` once on startup using bfloat16, reject unsupported speakers, synthesize WAV into memory, and return `audio/wav`.
 
-- [ ] **Step 4: Deploy to A800_94 through HostBridge**
+- [x] **Step 4: Deploy to A800_94 through HostBridge**
 
 Upload deployment files to `/opt/ai-comic-studio/qwen3-tts`, create a Python 3.12 uv environment, install requirements, download the ModelScope weights, configure a systemd service bound to an allowlisted port, and verify `/health`, `/v1/voices`, and a Chinese synthesis request.
 
-- [ ] **Step 5: Implement dialogue audio storage and duration probing**
+- [x] **Step 5: Implement dialogue audio storage and duration probing**
 
 Merge character defaults with line instructions, store WAV assets immutably, use `ffprobe` for duration, and warn when speech exceeds shot duration.
 
-- [ ] **Step 6: Run speech contract tests and live smoke test**
+- [x] **Step 6: Run speech contract tests and live smoke test**
 
 Run: `cd services/api && uv run pytest tests/providers/test_qwen_tts.py tests/test_dialogue_speech.py -q`
 Expected: contract tests pass.
@@ -373,7 +373,7 @@ Expected: contract tests pass.
 Run: `AI_COMIC_LIVE_TESTS=1 uv run pytest tests/live/test_qwen_tts_live.py -q`
 Expected: one playable nonempty WAV is returned from A800_94.
 
-- [ ] **Step 7: Commit TTS deployment and adapter**
+- [x] **Step 7: Commit TTS deployment and adapter**
 
 ```bash
 git add deploy services/api
@@ -394,7 +394,7 @@ git commit -m "feat: deploy Qwen3 TTS and synthesize dialogue"
 - Create: `services/api/comic_studio/routes/renders.py`
 - Test: `services/api/tests/test_render_manifest.py`
 
-- [ ] **Step 1: Write failing render manifest tests**
+- [x] **Step 1: Write failing render manifest tests**
 
 ```typescript
 it('rejects a shot without an approved panel', () => {
@@ -409,7 +409,7 @@ def test_render_manifest_uses_only_active_approved_assets(render_service, approv
     assert all(shot["review_status"] == "approved" for shot in manifest["shots"])
 ```
 
-- [ ] **Step 2: Run TypeScript and Python tests and confirm failure**
+- [x] **Step 2: Run TypeScript and Python tests and confirm failure**
 
 Run: `npm test --workspace @comic-studio/compositor`
 Expected: missing manifest module.
@@ -417,20 +417,20 @@ Expected: missing manifest module.
 Run: `cd services/api && uv run pytest tests/test_render_manifest.py -q`
 Expected: missing rendering service.
 
-- [ ] **Step 3: Implement manifest validation and composition**
+- [x] **Step 3: Implement manifest validation and composition**
 
 Render fixed-size portrait or landscape frames. Use stable shot durations, panel motion presets, subtitle-safe regions, dialogue bubbles, audio sequences, and restrained transitions. Dimensions must not change based on loading or text length.
 
-- [ ] **Step 4: Implement render launcher and FFmpeg verification**
+- [x] **Step 4: Implement render launcher and FFmpeg verification**
 
 Launch Remotion with a JSON manifest path. Verify file existence, video and audio streams, dimensions, H.264-compatible video, AAC audio, positive duration, and nonzero frame count before marking the job succeeded.
 
-- [ ] **Step 5: Run a deterministic smoke render**
+- [x] **Step 5: Run a deterministic smoke render**
 
 Run: `npm run render:fixture --workspace @comic-studio/compositor`
 Expected: `packages/compositor/out/fixture.mp4` exists and `ffprobe` reports video and audio streams.
 
-- [ ] **Step 6: Commit compositor and rendering API**
+- [x] **Step 6: Commit compositor and rendering API**
 
 ```bash
 git add packages/compositor services/api
@@ -454,7 +454,7 @@ git commit -m "feat: render verified dynamic comic episodes"
 - Create: `apps/web/lib/types.ts`
 - Test: `apps/web/tests/workspace.test.tsx`
 
-- [ ] **Step 1: Write failing workspace behavior tests**
+- [x] **Step 1: Write failing workspace behavior tests**
 
 ```tsx
 it('selects a shot and exposes generation controls in the inspector', async () => {
@@ -465,29 +465,29 @@ it('selects a shot and exposes generation controls in the inspector', async () =
 });
 ```
 
-- [ ] **Step 2: Run the test and confirm the workspace is missing**
+- [x] **Step 2: Run the test and confirm the workspace is missing**
 
 Run: `npm test --workspace @comic-studio/web`
 Expected: missing workspace component.
 
-- [ ] **Step 3: Implement the dense production layout**
+- [x] **Step 3: Implement the dense production layout**
 
 Use a 52px top toolbar, 248px left navigator, flexible storyboard center, and 320px inspector. Use Lucide icons for icon actions with tooltips, 6px card radii, neutral surfaces plus distinct success/warning/error accents, and stable shot-card aspect ratios.
 
-- [ ] **Step 4: Implement mobile behavior**
+- [x] **Step 4: Implement mobile behavior**
 
 Below 900px, use a two-view segmented control for storyboard and inspector; the project navigator becomes a drawer. Keep the selected shot and active job visible without overlapping controls.
 
-- [ ] **Step 5: Connect project, episode, generation, speech, job, and render APIs**
+- [x] **Step 5: Connect project, episode, generation, speech, job, and render APIs**
 
 All mutations show pending, succeeded, and failed states. Poll active jobs with bounded intervals and stop polling on terminal states.
 
-- [ ] **Step 6: Run component tests and production build**
+- [x] **Step 6: Run component tests and production build**
 
 Run: `npm test --workspace @comic-studio/web && npm run build --workspace @comic-studio/web`
 Expected: tests and Next.js build exit successfully.
 
-- [ ] **Step 7: Commit the production workspace**
+- [x] **Step 7: Commit the production workspace**
 
 ```bash
 git add apps/web package.json
@@ -504,7 +504,7 @@ git commit -m "feat: add dynamic comic production workspace"
 - Test: `services/api/tests/test_provider_health.py`
 - Test: `services/api/tests/test_redaction.py`
 
-- [ ] **Step 1: Write failing secret redaction and health tests**
+- [x] **Step 1: Write failing secret redaction and health tests**
 
 ```python
 def test_redacts_api_keys_from_nested_provider_errors():
@@ -519,16 +519,16 @@ def test_provider_health_returns_models_without_credentials(client):
     assert "api_key" not in str(payload).lower()
 ```
 
-- [ ] **Step 2: Verify tests fail for missing redaction and route**
+- [x] **Step 2: Verify tests fail for missing redaction and route**
 
 Run: `cd services/api && uv run pytest tests/test_provider_health.py tests/test_redaction.py -q`
 Expected: missing functions and HTTP 404.
 
-- [ ] **Step 3: Implement sanitized provider checks and local startup**
+- [x] **Step 3: Implement sanitized provider checks and local startup**
 
 Health checks report configured status, model, endpoint host, latency, and sanitized error. `scripts/dev.sh` starts API and web processes, traps signals, and prints local URLs.
 
-- [ ] **Step 4: Run security and full test suites**
+- [x] **Step 4: Run security and full test suites**
 
 Run: `cd services/api && uv run pytest -q`
 Expected: all Python tests pass.
@@ -536,7 +536,7 @@ Expected: all Python tests pass.
 Run: `npm test --workspaces --if-present`
 Expected: all TypeScript tests pass.
 
-- [ ] **Step 5: Commit operations support**
+- [x] **Step 5: Commit operations support**
 
 ```bash
 git add services/api scripts README.md
@@ -551,21 +551,21 @@ git commit -m "feat: add provider diagnostics and local startup"
 - Create: `services/api/tests/live/test_model_stack_live.py`
 - Modify: `README.md`
 
-- [ ] **Step 1: Write the deterministic Playwright workflow**
+- [x] **Step 1: Write the deterministic Playwright workflow**
 
 The test creates a project, adds two characters, creates an episode, loads a seeded planned graph, selects a shot, generates a deterministic test panel and dialogue asset, approves the shot, starts a fixture render, and confirms the MP4 link appears.
 
-- [ ] **Step 2: Run Playwright against desktop and mobile viewports**
+- [x] **Step 2: Run Playwright against desktop and mobile viewports**
 
 Run: `npm run test:e2e --workspace @comic-studio/web`
 Expected: Chromium desktop and mobile projects pass with no overlap screenshots.
 
-- [ ] **Step 3: Run opt-in live provider smoke tests**
+- [x] **Step 3: Run opt-in live provider smoke tests**
 
 Run: `AI_COMIC_LIVE_TESTS=1 cd services/api && uv run pytest tests/live/test_model_stack_live.py -q`
 Expected: MiniMax returns valid structured JSON, GPT Image returns a decodable PNG, and Qwen3-TTS returns a playable WAV.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run: `cd services/api && uv run pytest -q`
 
@@ -579,7 +579,7 @@ Run: `git diff --check && git status --short`
 
 Expected: all tests and builds exit 0, the app is reachable locally, generated media probes successfully, and only intentional files remain uncommitted.
 
-- [ ] **Step 5: Commit end-to-end coverage**
+- [x] **Step 5: Commit end-to-end coverage**
 
 ```bash
 git add apps/web services/api README.md
