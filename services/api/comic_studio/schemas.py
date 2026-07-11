@@ -214,6 +214,24 @@ class EpisodeCreate(BaseModel):
     target_duration_seconds: int = Field(ge=15, le=1800)
 
 
+class EpisodeDeletionCounts(BaseModel):
+    scenes: int
+    shots: int
+    dialogue_lines: int
+    assets: int
+
+
+class EpisodeDeletionPreview(BaseModel):
+    episode_id: str
+    title: str
+    deleted: EpisodeDeletionCounts
+
+
+class EpisodeDeletionRead(EpisodeDeletionPreview):
+    deleted_episode_id: str
+    cleanup_warnings: list[str]
+
+
 class DialogueRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

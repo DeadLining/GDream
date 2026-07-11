@@ -236,3 +236,60 @@ def test_delete_rolls_back_when_database_commit_fails(
     monkeypatch.setattr(db_session, "commit", original_commit)
     assert db_session.get(models.Episode, target.id) is not None
     assert db_session.get(models.Asset, assets[0].id) is not None
+
+
+def test_deletion_preview_route_returns_public_counts(client):
+    with client.app.state.session_factory() as session:
+        target, _unrelated, assets, _unrelated_asset, _line_b = _episode_graph(session)
+        target_id = target.id
+
+    response = client.get(f"/api/episodes/{target_id}/deletion-preview")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "episode_id": target_id,
+        "title": "第一集",
+        "deleted": {
+            "scenes": 2,
+            "shots": 3,
+            "dialogue_lines": 2,
+            "assets": 6,
+        },
+    }
+    encoded = response.text
+    assert assets[0].id not in encoded
+    assert assets[0].local_path not in encoded
+
+
+def test_delete_episode_route_removes_episode_and_returns_cleanup_result(client):
+    with client.app.state.session_factory() as session:
+        target, _unrelated, assets, _unrelated_asset, _line_b = _episode_graph(session)
+        target_id = target.id
+        asset_id = assets[0].id
+        media = client.app.state.settings.data_root / assets[0].local_path
+        media.parent.mkdir(parents=True)
+        media.write_bytes(b"panel")
+
+    response = client.delete(f"/api/episodes/{target_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "episode_id": target_id,
+        "title": "第一集",
+        "deleted_episode_id": target_id,
+        "deleted": {
+            "scenes": 2,
+            "shots": 3,
+            "dialogue_lines": 2,
+            "assets": 6,
+        },
+        "cleanup_warnings": [],
+    }
+    assert client.get(f"/api/episodes/{target_id}").status_code == 404
+    assert asset_id not in response.text
+    assert not media.exists()
+
+
+def test_episode_deletion_routes_return_404_for_unknown_episode(client):
+    assert client.get("/api/episodes/missing/deletion-preview").status_code == 404
+    assert client.delete("/api/episodes/missing").status_code == 404
