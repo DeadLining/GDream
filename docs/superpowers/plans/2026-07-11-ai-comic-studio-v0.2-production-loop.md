@@ -292,7 +292,7 @@ git commit -m "feat: add typed production API client"
 - Modify: `apps/web/app/globals.css`
 - Modify: `apps/web/tests/workspace.test.tsx`
 
-- [ ] **Step 1: Replace demo assertions with failing persisted-workspace tests**
+- [x] **Step 1: Replace demo assertions with failing persisted-workspace tests**
 
 Test loading projects, no-project state, project selection, episode creation, empty episode planning, and successful episode graph refresh using mocked API functions.
 
@@ -303,33 +303,33 @@ await user.click(screen.getByRole('button', {name: '生成剧本与分镜'}));
 expect(await screen.findByText('场景 1')).toBeInTheDocument();
 ```
 
-- [ ] **Step 2: Run workspace tests and confirm prop/API mismatch**
+- [x] **Step 2: Run workspace tests and confirm prop/API mismatch**
 
 Run: `npm test --workspace @comic-studio/web -- --run tests/workspace.test.tsx`
 Expected: FAIL because `Workspace` still requires `initialEpisode` and renders demo navigation.
 
-- [ ] **Step 3: Mount an API-backed workspace**
+- [x] **Step 3: Mount an API-backed workspace**
 
 Remove `demoEpisode` from `page.tsx`. On mount, load projects, restore a valid selected project/episode ID, and represent loading, empty, connectivity failure, and selected states explicitly.
 
-- [ ] **Step 4: Implement creation dialogs**
+- [x] **Step 4: Implement creation dialogs**
 
 Project fields: title, logline, story bible, visual style, aspect ratio. Episode fields: title, premise, target duration. Disable submit while saving and preserve entered values on errors.
 
-- [ ] **Step 5: Connect planning job lifecycle**
+- [x] **Step 5: Connect planning job lifecycle**
 
 Create an episode, launch planning, show queued/running progress, reload the episode after success, and expose retry after failure. Prevent duplicate planning commands for the same episode.
 
-- [ ] **Step 6: Preserve responsive production layout**
+- [x] **Step 6: Preserve responsive production layout**
 
 Keep the three-column desktop grid and mobile storyboard/inspector tabs. Empty and loading states occupy the storyboard content region without card nesting.
 
-- [ ] **Step 7: Run component, build, and desktop/mobile E2E smoke tests**
+- [x] **Step 7: Run component, build, and desktop/mobile E2E smoke tests**
 
 Run: `npm test --workspace @comic-studio/web && npm run build --workspace @comic-studio/web && npm run test:e2e --workspace @comic-studio/web`
 Expected: all deterministic tests pass.
 
-- [ ] **Step 8: Commit real workspace navigation**
+- [x] **Step 8: Commit real workspace navigation**
 
 ```bash
 git add apps/web
