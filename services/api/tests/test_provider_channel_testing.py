@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import time
 from contextlib import asynccontextmanager
@@ -182,8 +183,11 @@ async def test_image_checks_capabilities_without_generating_an_image():
 
 
 @pytest.mark.anyio
-async def test_image_falls_back_to_endpoint_reachability_when_capabilities_absent():
-    client = RecordingClient([FakeResponse(404), FakeResponse(200)])
+@pytest.mark.parametrize("root_status", [200, 401, 404])
+async def test_image_falls_back_to_endpoint_reachability_when_capabilities_absent(
+    root_status,
+):
+    client = RecordingClient([FakeResponse(404), FakeResponse(root_status)])
     service = ProviderChannelTestingService(
         stored_channel=lambda kind: candidate(kind),
         provider_factory=lambda kind, channel, http_client: http_client,
@@ -201,8 +205,24 @@ async def test_image_falls_back_to_endpoint_reachability_when_capabilities_absen
 
 
 @pytest.mark.anyio
+async def test_image_endpoint_fallback_rejects_server_errors():
+    client = RecordingClient([FakeResponse(404), FakeResponse(503)])
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        provider_factory=lambda kind, channel, http_client: http_client,
+        client_factory=ClientFactory(client),
+    )
+
+    result = await service.test("image", candidate("image"))
+
+    assert result.status == "failed"
+    assert result.check_scope == "endpoint"
+    assert result.error == "Provider returned HTTP 503"
+
+
+@pytest.mark.anyio
 async def test_tts_uses_short_phrase_validates_wav_and_discards_bytes():
-    wav = b"RIFF" + b"discard-me"
+    wav = b"RIFF\x04\x00\x00\x00WAVE"
     client = RecordingClient(
         [FakeResponse(content=wav, headers={"content-type": "audio/wav"})]
     )
@@ -227,6 +247,66 @@ async def test_tts_uses_short_phrase_validates_wav_and_discards_bytes():
         "instruct": "",
         "response_format": "wav",
     }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failure", ["transport", "502"])
+async def test_tts_uses_configured_ssh_fallback_and_discards_wav(failure):
+    wav = b"RIFF\x04\x00\x00\x00WAVE"
+
+    class TransportFailureClient:
+        async def post(self, path, **kwargs):
+            request = httpx.Request("POST", f"https://tts.example{path}")
+            if failure == "transport":
+                raise httpx.ConnectError("direct unavailable", request=request)
+            return httpx.Response(502, request=request)
+
+    ssh_calls = []
+
+    def ssh_executor(command, payload):
+        ssh_calls.append((command, payload))
+        return base64.b64encode(wav)
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        client_factory=ClientFactory(TransportFailureClient()),
+        ssh_executor=ssh_executor,
+    )
+
+    result = await service.test("tts", candidate("tts", api_key=None))
+
+    assert result.status == "ok"
+    assert result.check_scope == "audio"
+    assert ssh_calls[0][0][0:2] == ["ssh", "tts-candidate"]
+    assert not hasattr(result, "content")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "invalid_wav",
+    [
+        b"RIFF",
+        b"RIFF\x04\x00\x00\x00NOPE",
+    ],
+)
+async def test_tts_rejects_truncated_or_non_wave_riff(invalid_wav):
+    client = RecordingClient(
+        [
+            FakeResponse(
+                content=invalid_wav,
+                headers={"content-type": "audio/wav"},
+            )
+        ]
+    )
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        client_factory=ClientFactory(client),
+    )
+
+    result = await service.test("tts", candidate("tts", api_key=None))
+
+    assert result.status == "failed"
+    assert result.error == "TTS returned invalid WAV data"
 
 
 @pytest.mark.anyio

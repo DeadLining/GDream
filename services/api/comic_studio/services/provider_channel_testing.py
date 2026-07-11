@@ -9,6 +9,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from comic_studio.provider_channels import ProviderChannel
+from comic_studio.providers.qwen_tts import QwenTTSProvider
 from comic_studio.schemas import ProviderChannelTestRead, ProviderChannelUpdate
 
 
@@ -23,7 +24,11 @@ class ProviderTestError(ValueError):
 
 @asynccontextmanager
 async def default_client_factory(*, base_url: str, timeout: httpx.Timeout):
-    async with httpx.AsyncClient(base_url=base_url, timeout=timeout) as client:
+    async with httpx.AsyncClient(
+        base_url=base_url,
+        timeout=timeout,
+        follow_redirects=False,
+    ) as client:
         yield client
 
 
@@ -35,6 +40,20 @@ def default_provider_factory(
     return client
 
 
+def default_tts_provider_factory(
+    channel: ProviderChannel,
+    client: httpx.AsyncClient,
+    ssh_executor: Callable[[list[str], bytes], bytes] | None,
+) -> QwenTTSProvider:
+    return QwenTTSProvider(
+        model=channel.model,
+        base_url=channel.base_url,
+        client=client,
+        ssh_host=channel.ssh_host,
+        ssh_executor=ssh_executor,
+    )
+
+
 class ProviderChannelTestingService:
     def __init__(
         self,
@@ -44,13 +63,17 @@ class ProviderChannelTestingService:
         provider_factory: Callable[
             [ProviderKind, ProviderChannel, Any], Any
         ] = default_provider_factory,
+        tts_provider_factory: Callable[..., Any] = default_tts_provider_factory,
         client_factory: Callable[..., Any] = default_client_factory,
+        ssh_executor: Callable[[list[str], bytes], bytes] | None = None,
         total_timeout_seconds: float = TOTAL_TIMEOUT_SECONDS,
     ):
         self._stored_channel = stored_channel
         self._clock = clock
         self._provider_factory = provider_factory
+        self._tts_provider_factory = tts_provider_factory
         self._client_factory = client_factory
+        self._ssh_executor = ssh_executor
         self._total_timeout_seconds = total_timeout_seconds
 
     async def test(
@@ -79,15 +102,22 @@ class ProviderChannelTestingService:
                     base_url=channel.base_url,
                     timeout=timeout,
                 ) as client:
-                    provider = self._provider_factory(kind, channel, client)
                     if kind == "llm":
+                        provider = self._provider_factory(kind, channel, client)
                         await self._test_llm(provider, channel)
                     elif kind == "image":
+                        provider = self._provider_factory(kind, channel, client)
                         scope = await self._test_image(provider, channel)
                     else:
-                        await self._test_tts(provider, channel)
+                        provider = self._tts_provider_factory(
+                            channel,
+                            client,
+                            self._ssh_executor,
+                        )
+                        await self._test_tts(provider)
         except Exception as exc:
             status = "failed"
+            scope = getattr(exc, "check_scope", scope)
             error = self._sanitize_error(exc)
 
         elapsed_ms = self._elapsed_ms(started_at, self._clock())
@@ -171,27 +201,28 @@ class ProviderChannelTestingService:
             response.raise_for_status()
             return "model"
 
-        endpoint_response = await provider.get("", headers=headers)
-        endpoint_response.raise_for_status()
+        try:
+            endpoint_response = await provider.get("", headers=headers)
+            if endpoint_response.status_code >= 500:
+                endpoint_response.raise_for_status()
+        except Exception as error:
+            error.check_scope = "endpoint"
+            raise
         return "endpoint"
 
     @staticmethod
-    async def _test_tts(provider: Any, channel: ProviderChannel) -> None:
-        response = await provider.post(
-            "/v1/audio/speech",
-            json={
-                "model": channel.model,
-                "text": "测试",
-                "speaker": "Dylan",
-                "language": "Chinese",
-                "instruct": "",
-                "response_format": "wav",
-            },
+    async def _test_tts(provider: Any) -> None:
+        content = await provider.synthesize(
+            "测试",
+            "Dylan",
+            "Chinese",
+            "",
         )
-        response.raise_for_status()
-        if "audio/wav" not in response.headers.get("content-type", ""):
-            raise ProviderTestError("TTS returned a non-WAV response")
-        if not response.content.startswith(b"RIFF"):
+        if (
+            len(content) < 12
+            or content[:4] != b"RIFF"
+            or content[8:12] != b"WAVE"
+        ):
             raise ProviderTestError("TTS returned invalid WAV data")
 
     @staticmethod
