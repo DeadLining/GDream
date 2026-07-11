@@ -44,3 +44,26 @@ def test_failed_job_persists_recursively_redacted_readable_error(db_session):
     assert "bearer-secret" not in failed.error
     assert secret not in failed.error
     assert "nested-secret" not in failed.error
+
+
+def test_failed_job_redacts_unquoted_composite_secrets_and_preserves_context(
+    db_session,
+):
+    store = JobStore(db_session)
+    job = store.create("plan_episode", "episode", "ep-2", {})
+    store.transition(job.id, "running")
+    error = (
+        "Request failed api_key=raw-key, token: raw-token; "
+        "access_token=access-value client_secret: client-value} retry available"
+    )
+
+    failed = store.transition(job.id, "failed", error=error)
+
+    assert failed.error == (
+        "Request failed api_key=[REDACTED], token: [REDACTED]; "
+        "access_token=[REDACTED] client_secret: [REDACTED]} retry available"
+    )
+    assert all(
+        secret not in failed.error
+        for secret in ("raw-key", "raw-token", "access-value", "client-value")
+    )

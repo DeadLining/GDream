@@ -98,12 +98,20 @@ async def test_qwen_tts_falls_back_to_hostbridge_ssh_on_transport_failure():
         audio = await provider.synthesize("别回头。", "Dylan", "Chinese", "低声")
 
     assert captured["command"][0:2] == ["ssh", "ai-comic-tts"]
-    encoded_payload = (
-        captured["command"][2].split("printf '%s' '", 1)[1].split("' |", 1)[0]
+    assert captured["command"][2] == (
+        "set -o pipefail; curl -fsS --max-time 180 --config - | base64 -w 0"
     )
-    remote_payload = json.loads(base64.b64decode(encoded_payload))
+    config = captured["payload"].decode()
+    assert 'url = "http://127.0.0.1:18080/v1/audio/speech"' in config
+    assert 'header = "content-type: application/json"' in config
+    data_line = next(line for line in config.splitlines() if line.startswith("data = "))
+    escaped_data = data_line.removeprefix('data = "').removesuffix('"')
+    remote_payload = json.loads(json.loads(f'"{escaped_data}"'))
     assert remote_payload["speaker"] == "Dylan"
-    assert captured["payload"] == b""
+    assert remote_payload["text"] == "别回头。"
+    assert remote_payload["instruct"] == "低声"
+    assert "别回头。" not in " ".join(captured["command"])
+    assert "低声" not in " ".join(captured["command"])
     assert audio == WAV_BYTES
 
 
@@ -131,12 +139,11 @@ async def test_qwen_tts_ssh_fallback_sends_bearer_header_without_payload_leak():
         )
         await provider.synthesize("测试", "Dylan")
 
-    command = captured["command"][2]
-    encoded_payload = command.split("printf '%s' '", 1)[1].split("' |", 1)[0]
-    decoded_payload = base64.b64decode(encoded_payload)
-    assert f"Authorization: Bearer {secret}" in command
-    assert secret.encode() not in decoded_payload
-    assert captured["payload"] == b""
+    command_text = " ".join(captured["command"])
+    assert secret not in command_text
+    assert "测试" not in command_text
+    assert f'header = "Authorization: Bearer {secret}"'.encode() in captured["payload"]
+    assert "测试".encode() in captured["payload"]
     assert secret not in repr(provider)
 
 
@@ -148,7 +155,11 @@ async def test_qwen_tts_ssh_failure_does_not_leak_bearer_token_in_error():
         raise httpx.ConnectTimeout("unreachable", request=request)
 
     def ssh_executor(command, payload):
-        raise subprocess.CalledProcessError(1, command, stderr=b"failed")
+        raise subprocess.CalledProcessError(
+            1,
+            command,
+            stderr=f"failed with stdin {payload.decode()}".encode(),
+        )
 
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler), base_url="http://tts.local"
@@ -164,6 +175,8 @@ async def test_qwen_tts_ssh_failure_does_not_leak_bearer_token_in_error():
 
     assert secret not in str(caught.value)
     assert secret not in repr(caught.value)
+    assert "测试" not in str(caught.value)
+    assert "测试" not in repr(caught.value)
     assert caught.value.__cause__ is None
 
 

@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import shlex
 import subprocess
 from collections.abc import Callable
 
@@ -77,23 +76,32 @@ class QwenTTSProvider:
                 await client.aclose()
 
     def _synthesize_via_ssh(self, payload: dict) -> bytes:
-        payload_b64 = base64.b64encode(
-            json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        ).decode("ascii")
-        authorization = ""
+        config_lines = [
+            'url = "http://127.0.0.1:18080/v1/audio/speech"',
+            'header = "content-type: application/json"',
+        ]
         if api_key := self._api_key.get_secret_value():
-            authorization = f" -H {shlex.quote(f'Authorization: Bearer {api_key}')}"
+            authorization = self._escape_curl_config(
+                f"Authorization: Bearer {api_key}"
+            )
+            config_lines.append(f'header = "{authorization}"')
+        payload_json = json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        config_lines.append(
+            f'data = "{self._escape_curl_config(payload_json)}"'
+        )
+        config_payload = ("\n".join(config_lines) + "\n").encode("utf-8")
         remote_command = (
             "set -o pipefail; "
-            f"printf '%s' '{payload_b64}' | base64 -d | "
-            "curl -fsS --max-time 180 http://127.0.0.1:18080/v1/audio/speech "
-            f"-H 'content-type: application/json'{authorization} "
-            "--data-binary @- | base64 -w 0"
+            "curl -fsS --max-time 180 --config - | base64 -w 0"
         )
         try:
             encoded = self.ssh_executor(
                 ["ssh", self.ssh_host or "", remote_command],
-                b"",
+                config_payload,
             )
         except subprocess.TimeoutExpired:
             raise TimeoutError("Qwen TTS SSH fallback timed out") from None
@@ -107,6 +115,16 @@ class QwenTTSProvider:
     def _authorization_headers(self) -> dict[str, str]:
         api_key = self._api_key.get_secret_value()
         return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+    @staticmethod
+    def _escape_curl_config(value: str) -> str:
+        return (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\t", "\\t")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+        )
 
     @staticmethod
     def _default_ssh_executor(command: list[str], payload: bytes) -> bytes:
