@@ -1,10 +1,12 @@
 import asyncio
 import base64
 import json
+import shlex
 import subprocess
 from collections.abc import Callable
 
 import httpx
+from pydantic import SecretStr
 
 from comic_studio.providers.base import ProviderError
 
@@ -15,12 +17,14 @@ class QwenTTSProvider:
         *,
         base_url: str = "http://192.168.18.94:18080",
         model: str = "Qwen3-TTS-12Hz-1.7B-CustomVoice",
+        api_key: str = "",
         client: httpx.AsyncClient | None = None,
         ssh_host: str | None = None,
         ssh_executor: Callable[[list[str], bytes], bytes] | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self._api_key = SecretStr(api_key.strip())
         self._client = client
         self.ssh_host = ssh_host
         self.ssh_executor = ssh_executor or self._default_ssh_executor
@@ -46,7 +50,12 @@ class QwenTTSProvider:
             timeout=httpx.Timeout(180, connect=3),
         )
         try:
-            response = await client.post("/v1/audio/speech", json=payload)
+            headers = self._authorization_headers()
+            response = await client.post(
+                "/v1/audio/speech",
+                headers=headers or None,
+                json=payload,
+            )
             response.raise_for_status()
             if "audio/wav" not in response.headers.get("content-type", ""):
                 raise ProviderError("Qwen TTS returned a non-WAV response")
@@ -71,20 +80,33 @@ class QwenTTSProvider:
         payload_b64 = base64.b64encode(
             json.dumps(payload, ensure_ascii=False).encode("utf-8")
         ).decode("ascii")
+        authorization = ""
+        if api_key := self._api_key.get_secret_value():
+            authorization = f" -H {shlex.quote(f'Authorization: Bearer {api_key}')}"
         remote_command = (
             "set -o pipefail; "
             f"printf '%s' '{payload_b64}' | base64 -d | "
             "curl -fsS --max-time 180 http://127.0.0.1:18080/v1/audio/speech "
-            "-H 'content-type: application/json' --data-binary @- | base64 -w 0"
+            f"-H 'content-type: application/json'{authorization} "
+            "--data-binary @- | base64 -w 0"
         )
-        encoded = self.ssh_executor(
-            ["ssh", self.ssh_host or "", remote_command],
-            b"",
-        )
+        try:
+            encoded = self.ssh_executor(
+                ["ssh", self.ssh_host or "", remote_command],
+                b"",
+            )
+        except subprocess.TimeoutExpired:
+            raise TimeoutError("Qwen TTS SSH fallback timed out") from None
+        except Exception:
+            raise ProviderError("Qwen TTS SSH fallback failed") from None
         try:
             return base64.b64decode(encoded.strip(), validate=True)
         except ValueError as exc:
             raise ProviderError("Qwen TTS SSH fallback returned invalid Base64") from exc
+
+    def _authorization_headers(self) -> dict[str, str]:
+        api_key = self._api_key.get_secret_value()
+        return {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     @staticmethod
     def _default_ssh_executor(command: list[str], payload: bytes) -> bytes:

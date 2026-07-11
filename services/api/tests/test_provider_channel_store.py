@@ -206,6 +206,37 @@ def test_missing_file_reloads_constructor_defaults_after_previous_save(tmp_path)
     assert store.snapshot == defaults
 
 
+def test_update_after_runtime_file_deletion_uses_active_snapshot(tmp_path):
+    path = tmp_path / "provider-channels.json"
+    defaults = make_channels()
+    active = make_channels(
+        image=channel_payload(name="Active Image", model="active-image"),
+        tts=channel_payload(
+            name="Active TTS",
+            model="active-tts",
+            api_key=None,
+            ssh_host="active-host",
+        ),
+    )
+    store = ProviderChannelStore(path, defaults)
+    store.save(active)
+    path.unlink()
+
+    state = store.update(
+        lambda snapshot: snapshot.model_copy(
+            update={
+                "llm": snapshot.llm.model_copy(update={"model": "updated-llm"})
+            }
+        )
+    )
+
+    assert state.channels.image.model == "active-image"
+    assert state.channels.tts.model == "active-tts"
+    assert json.loads(path.read_text(encoding="utf-8"))["image"]["model"] == (
+        "active-image"
+    )
+
+
 def test_save_is_atomic_private_and_updates_snapshot(tmp_path):
     path = tmp_path / "nested/provider-channels.json"
     store = ProviderChannelStore(path, make_channels())

@@ -46,6 +46,7 @@ def channels(*, llm_model="MiniMax-M3", llm_enabled=True):
             enabled=True,
             base_url="https://tts.example/v1",
             model="tts-model",
+            api_key=SecretStr("tts-secret"),
             ssh_host="tts-host",
         ),
     )
@@ -106,7 +107,8 @@ def test_factory_maps_all_channel_values_to_provider_constructors(tmp_path):
         "image-model",
         "https://image.example/v1",
     )
-    assert (tts.model, tts.base_url, tts.ssh_host) == (
+    assert (tts.api_key, tts.model, tts.base_url, tts.ssh_host) == (
+        "tts-secret",
         "tts-model",
         "https://tts.example/v1",
         "tts-host",

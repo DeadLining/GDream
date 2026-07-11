@@ -364,6 +364,101 @@ def test_disabled_key_required_channel_may_omit_key(client):
     assert response.status_code == 200
 
 
+@pytest.mark.parametrize("kind", ["llm", "image", "tts"])
+def test_disabled_channel_accepts_blank_connection_fields(client, kind):
+    response = client.put(
+        f"/api/provider-channels/{kind}",
+        json={
+            "name": "",
+            "enabled": False,
+            "base_url": "",
+            "model": "",
+            "api_key": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["channel"]["name"] == ""
+    assert response.json()["channel"]["base_url"] == ""
+    assert response.json()["channel"]["model"] == ""
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        ({"name": ""}, "name"),
+        ({"model": ""}, "model"),
+        ({"base_url": ""}, "base_url"),
+        ({"base_url": "ftp://provider.example"}, "base_url"),
+    ],
+)
+def test_reenabling_channel_validates_required_connection_fields(
+    client, overrides, field
+):
+    disabled = {
+        "name": "",
+        "enabled": False,
+        "base_url": "",
+        "model": "",
+        "clear_api_key": True,
+    }
+    assert client.put("/api/provider-channels/llm", json=disabled).status_code == 200
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(api_key="new-key", **overrides),
+    )
+
+    assert response.status_code == 422
+    assert field in response.text
+
+
+def test_runtime_update_after_json_deletion_preserves_active_other_channels(client):
+    store = seed_channels(client)
+    active = store.snapshot.model_copy(
+        update={
+            "image": store.snapshot.image.model_copy(update={"model": "active-image"}),
+            "tts": store.snapshot.tts.model_copy(update={"model": "active-tts"}),
+        }
+    )
+    store.save(active)
+    store._path.unlink()
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(model="updated-llm"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current"]["image"]["model"] == "active-image"
+    assert response.json()["current"]["tts"]["model"] == "active-tts"
+    persisted = json.loads(store._path.read_text(encoding="utf-8"))
+    assert persisted["image"]["model"] == "active-image"
+    assert persisted["tts"]["model"] == "active-tts"
+
+
+def test_put_persistence_is_used_by_runtime_provider_factory(client, monkeypatch):
+    captured = []
+
+    class FakeLLM:
+        def __init__(self, api_key, *, model, base_url):
+            captured.append((api_key, model, base_url))
+
+    client.app.state.provider_factory._llm_provider_class = FakeLLM
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(model="runtime-model", api_key="runtime-key"),
+    )
+
+    provider = client.app.state.provider_factory.create_llm()
+
+    assert response.status_code == 200
+    assert provider is not None
+    assert captured == [
+        ("runtime-key", "runtime-model", "https://providers.example.com/v1")
+    ]
+
+
 def test_tts_may_be_enabled_without_key_and_accepts_ssh_host(client):
     response = client.put(
         "/api/provider-channels/tts",

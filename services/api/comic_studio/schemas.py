@@ -2,14 +2,16 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import (
-    AnyHttpUrl,
     BaseModel,
     ConfigDict,
     Field,
     SecretStr,
     ValidationInfo,
     field_validator,
+    model_validator,
 )
+
+from comic_studio.provider_channels import validate_http_url
 
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
@@ -22,19 +24,23 @@ class ProviderChannelUpdate(BaseModel):
 
     name: str
     enabled: bool
-    base_url: AnyHttpUrl
+    base_url: str
     model: str
     api_key: SecretStr = SecretStr("")
     clear_api_key: bool = False
     ssh_host: str = ""
 
-    @field_validator("name", "model")
+    @field_validator("name", "base_url", "model")
     @classmethod
-    def strip_required_text(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("Field must not be blank")
-        return stripped
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_enabled_base_url(cls, value: str, info: ValidationInfo) -> str:
+        if info.data.get("enabled") and value:
+            validate_http_url(value)
+        return value
 
     @field_validator("ssh_host")
     @classmethod
@@ -53,6 +59,17 @@ class ProviderChannelUpdate(BaseModel):
         if value and api_key and api_key.get_secret_value():
             raise ValueError("api_key and clear_api_key are mutually exclusive")
         return value
+
+    @model_validator(mode="after")
+    def validate_enabled_connection(self):
+        if not self.enabled:
+            return self
+        missing = [
+            field for field in ("name", "base_url", "model") if not getattr(self, field)
+        ]
+        if missing:
+            raise ValueError(f"Enabled channel requires: {', '.join(missing)}")
+        return self
 
 
 class ProviderChannelRead(BaseModel):

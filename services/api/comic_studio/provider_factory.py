@@ -55,6 +55,7 @@ class ProviderFactory:
         channel = self._store.snapshot.tts
         self._require_configured("tts", channel)
         return self._tts_provider_class(
+            api_key=channel.api_key_value or "",
             model=channel.model,
             base_url=channel.base_url,
             ssh_host=channel.ssh_host,

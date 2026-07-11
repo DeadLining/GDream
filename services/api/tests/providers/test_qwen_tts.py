@@ -1,5 +1,6 @@
 import base64
 import json
+import subprocess
 
 import httpx
 import pytest
@@ -37,6 +38,28 @@ async def test_qwen_tts_sends_character_performance_contract():
     assert body["speaker"] == "Dylan"
     assert body["instruct"] == "低声、紧张、快速"
     assert audio == WAV_BYTES
+
+
+@pytest.mark.anyio
+async def test_qwen_tts_sends_configured_bearer_token_and_omits_empty_token():
+    headers = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        headers.append(dict(request.headers))
+        return httpx.Response(
+            200, content=WAV_BYTES, headers={"content-type": "audio/wav"}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        await QwenTTSProvider(client=client, api_key="tts-secret").synthesize(
+            "测试", "Dylan"
+        )
+        await QwenTTSProvider(client=client, api_key="").synthesize("测试", "Dylan")
+
+    assert headers[0]["authorization"] == "Bearer tts-secret"
+    assert "authorization" not in headers[1]
 
 
 @pytest.mark.anyio
@@ -82,6 +105,66 @@ async def test_qwen_tts_falls_back_to_hostbridge_ssh_on_transport_failure():
     assert remote_payload["speaker"] == "Dylan"
     assert captured["payload"] == b""
     assert audio == WAV_BYTES
+
+
+@pytest.mark.anyio
+async def test_qwen_tts_ssh_fallback_sends_bearer_header_without_payload_leak():
+    secret = "tts-secret-never-in-payload"
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("unreachable", request=request)
+
+    def ssh_executor(command, payload):
+        captured["command"] = command
+        captured["payload"] = payload
+        return base64.b64encode(WAV_BYTES)
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        provider = QwenTTSProvider(
+            client=client,
+            api_key=secret,
+            ssh_host="ai-comic-tts",
+            ssh_executor=ssh_executor,
+        )
+        await provider.synthesize("测试", "Dylan")
+
+    command = captured["command"][2]
+    encoded_payload = command.split("printf '%s' '", 1)[1].split("' |", 1)[0]
+    decoded_payload = base64.b64decode(encoded_payload)
+    assert f"Authorization: Bearer {secret}" in command
+    assert secret.encode() not in decoded_payload
+    assert captured["payload"] == b""
+    assert secret not in repr(provider)
+
+
+@pytest.mark.anyio
+async def test_qwen_tts_ssh_failure_does_not_leak_bearer_token_in_error():
+    secret = "tts-secret-never-in-error"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("unreachable", request=request)
+
+    def ssh_executor(command, payload):
+        raise subprocess.CalledProcessError(1, command, stderr=b"failed")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        provider = QwenTTSProvider(
+            client=client,
+            api_key=secret,
+            ssh_host="ai-comic-tts",
+            ssh_executor=ssh_executor,
+        )
+        with pytest.raises(RuntimeError, match="SSH fallback failed") as caught:
+            await provider.synthesize("测试", "Dylan")
+
+    assert secret not in str(caught.value)
+    assert secret not in repr(caught.value)
+    assert caught.value.__cause__ is None
 
 
 @pytest.mark.anyio

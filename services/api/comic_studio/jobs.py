@@ -3,6 +3,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from comic_studio.models import Job
+from comic_studio.redaction import redact
 
 
 class InvalidJobTransition(ValueError):
@@ -62,7 +63,7 @@ class JobStore:
             job.progress = 0
             job.result_metadata = {}
         else:
-            job.error = error[:4000]
+            job.error = str(redact(error))[:4000]
         job.status = next_status
         if progress is not None:
             job.progress = max(0, min(100, progress))

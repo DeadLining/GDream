@@ -48,6 +48,7 @@ def default_tts_provider_factory(
     ssh_executor: Callable[[list[str], bytes], bytes] | None,
 ) -> QwenTTSProvider:
     return QwenTTSProvider(
+        api_key=channel.api_key_value or "",
         model=channel.model,
         base_url=channel.base_url,
         client=client,

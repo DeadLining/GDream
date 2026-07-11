@@ -35,6 +35,11 @@ _UNSUPPORTED_ERRNOS = {
 }
 
 
+def validate_http_url(value: str) -> str:
+    _HTTP_URL.validate_python(value)
+    return value
+
+
 class ProviderChannel(BaseModel):
     name: str
     enabled: bool
@@ -66,7 +71,7 @@ class ProviderChannel(BaseModel):
     @classmethod
     def validate_base_url(cls, value: str) -> str:
         if value:
-            _HTTP_URL.validate_python(value)
+            validate_http_url(value)
         return value
 
     @model_validator(mode="after")
@@ -210,7 +215,7 @@ class ProviderChannelStore:
         mutator: Callable[[ProviderChannels], ProviderChannels],
     ) -> ProviderChannelState:
         with self._lock:
-            current = self.load()
+            current = self.load() if self._path.exists() else self.snapshot
             updated = mutator(current.model_copy(deep=True))
             self.save(updated)
             return self.state

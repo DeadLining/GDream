@@ -252,6 +252,32 @@ async def test_tts_uses_short_phrase_validates_wav_and_discards_bytes():
 
 
 @pytest.mark.anyio
+async def test_tts_test_uses_candidate_api_key():
+    captured = []
+
+    def tts_provider_factory(channel, client, ssh_executor):
+        captured.append(channel.api_key_value)
+        return type(
+            "Provider",
+            (),
+            {"synthesize": lambda self, *args: asyncio.sleep(
+                0, result=b"RIFF\x04\x00\x00\x00WAVE"
+            )},
+        )()
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind, api_key="stored-secret"),
+        client_factory=ClientFactory(RecordingClient([])),
+        tts_provider_factory=tts_provider_factory,
+    )
+
+    result = await service.test("tts", candidate("tts", api_key="candidate-tts-key"))
+
+    assert result.status == "ok"
+    assert captured == ["candidate-tts-key"]
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("failure", ["transport", "502"])
 async def test_tts_uses_configured_ssh_fallback_and_discards_wav(failure):
     wav = b"RIFF\x04\x00\x00\x00WAVE"
