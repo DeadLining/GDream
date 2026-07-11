@@ -1,10 +1,13 @@
-from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
-from comic_studio.provider_channels import ProviderChannel, ProviderChannels
+from comic_studio.provider_channels import (
+    ProviderChannel,
+    ProviderChannels,
+    ProviderChannelState,
+)
 from comic_studio.schemas import (
     ProviderChannelKind,
     ProviderChannelRead,
@@ -23,7 +26,7 @@ def mask_api_key(api_key: str | None) -> str:
     if len(api_key) <= 4:
         return "*" * len(api_key)
     if len(api_key) <= 8:
-        return "*" * (len(api_key) - 4) + api_key[-4:]
+        return "*" * len(api_key)
     return f"{api_key[:3]}****{api_key[-4:]}"
 
 
@@ -49,19 +52,23 @@ def display_path(path: Path, data_root: Path) -> str:
     return path.name
 
 
-def channels_read(request: Request) -> ProviderChannelsRead:
+def channels_read(
+    request: Request,
+    state: ProviderChannelState | None = None,
+) -> ProviderChannelsRead:
     settings = request.app.state.settings
     path = settings.provider_channels_path
-    snapshot = request.app.state.provider_channel_store.snapshot
+    state = state or request.app.state.provider_channel_store.state
+    snapshot = state.channels
     return ProviderChannelsRead(
         llm=channel_read(snapshot.llm),
         image=channel_read(snapshot.image),
         tts=channel_read(snapshot.tts),
         persistence={
-            "status": "saved" if path.exists() else "defaults",
+            "status": "saved" if state.persisted else "defaults",
             "file_path": display_path(path, settings.data_root),
         },
-        reloaded_at=request.app.state.provider_channels_reloaded_at,
+        reloaded_at=state.reloaded_at,
     )
 
 
@@ -106,7 +113,7 @@ def update_provider_channel(
 
     store = request.app.state.provider_channel_store
     try:
-        saved = store.update(merge)
+        committed = store.update(merge)
     except HTTPException:
         raise
     except (TypeError, ValueError, ValidationError) as error:
@@ -120,9 +127,8 @@ def update_provider_channel(
             detail="Unable to save provider channel configuration",
         ) from error
 
-    request.app.state.provider_channels_reloaded_at = datetime.now(UTC)
-    current_read = channels_read(request)
+    current_read = channels_read(request, committed)
     return ProviderChannelUpdateRead(
-        channel=channel_read(getattr(saved, kind)),
+        channel=channel_read(getattr(committed.channels, kind)),
         current=current_read,
     )

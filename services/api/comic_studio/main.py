@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
@@ -14,7 +13,7 @@ from comic_studio.provider_channels import (
     provider_channel_defaults,
 )
 from comic_studio.provider_factory import ProviderFactory
-from comic_studio.redaction import SECRET_KEYS, redact
+from comic_studio.redaction import redact
 from comic_studio.routes.episodes import router as episodes_router
 from comic_studio.routes.assets import router as assets_router
 from comic_studio.routes.jobs import router as jobs_router
@@ -31,20 +30,71 @@ from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
 
 
+_SENSITIVE_VALIDATION_FIELDS = {
+    "apikey",
+    "authorization",
+    "credential",
+    "credentials",
+    "key",
+    "password",
+    "secret",
+    "token",
+}
+
+
+def _normalize_validation_field(value: str) -> str:
+    return value.casefold().replace("_", "").replace("-", "")
+
+
 def _validation_location_is_secret(location: tuple | list) -> bool:
     return any(
         isinstance(part, str)
-        and any(secret_key in part.lower() for secret_key in SECRET_KEYS)
+        and _normalize_validation_field(part) in _SENSITIVE_VALIDATION_FIELDS
         for part in location
     )
+
+
+def _validation_error_contains_root_input(item: dict) -> bool:
+    location = item.get("loc", ())
+    normalized_location = [
+        _normalize_validation_field(part)
+        for part in location
+        if isinstance(part, str)
+    ]
+    return item.get("type") == "json_invalid" or normalized_location in (
+        ["body"],
+        ["body", "root"],
+    )
+
+
+def _sanitize_validation_value(value):
+    if isinstance(value, dict):
+        return {
+            key: (
+                "[REDACTED]"
+                if isinstance(key, str)
+                and _normalize_validation_field(key)
+                in _SENSITIVE_VALIDATION_FIELDS
+                else _sanitize_validation_value(item)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_validation_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_validation_value(item) for item in value)
+    return redact(value)
 
 
 def _sanitized_validation_errors(error: RequestValidationError) -> list[dict]:
     sanitized = []
     for item in error.errors():
-        safe_item = redact(dict(item))
-        if _validation_location_is_secret(item.get("loc", ())):
+        safe_item = _sanitize_validation_value(dict(item))
+        if _validation_location_is_secret(
+            item.get("loc", ())
+        ) or _validation_error_contains_root_input(item):
             safe_item["input"] = "[REDACTED]"
+            safe_item.pop("ctx", None)
         sanitized.append(safe_item)
     return sanitized
 
@@ -83,7 +133,6 @@ def create_app() -> FastAPI:
     app.state.session_factory = session_factory
     app.state.settings = settings
     app.state.provider_channel_store = provider_channel_store
-    app.state.provider_channels_reloaded_at = datetime.now(UTC)
     app.state.provider_factory = provider_factory
 
     def recover_production_runs():

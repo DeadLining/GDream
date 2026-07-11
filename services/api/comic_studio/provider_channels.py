@@ -4,6 +4,8 @@ import os
 import stat
 import tempfile
 import threading
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, ClassVar, Literal
 
@@ -114,6 +116,13 @@ class ProviderChannels(BaseModel):
         return self
 
 
+@dataclass(frozen=True)
+class ProviderChannelState:
+    channels: ProviderChannels
+    reloaded_at: datetime
+    persisted: bool
+
+
 def provider_channel_defaults(settings: Settings) -> ProviderChannels:
     return ProviderChannels(
         llm=ProviderChannel(
@@ -156,6 +165,8 @@ class ProviderChannelStore:
             )
         self._defaults = defaults.model_copy(deep=True)
         self._snapshot = self._defaults.model_copy(deep=True)
+        self._reloaded_at = datetime.now(UTC)
+        self._persisted = False
 
     def load(self) -> ProviderChannels:
         with self._lock:
@@ -176,6 +187,8 @@ class ProviderChannelStore:
                         f"Invalid provider channel configuration: {self._path}"
                     ) from exc
             self._snapshot = loaded.model_copy(deep=True)
+            self._reloaded_at = datetime.now(UTC)
+            self._persisted = self._path.exists()
             return loaded.model_copy(deep=True)
 
     @property
@@ -183,14 +196,24 @@ class ProviderChannelStore:
         with self._lock:
             return self._snapshot.model_copy(deep=True)
 
+    @property
+    def state(self) -> ProviderChannelState:
+        with self._lock:
+            return ProviderChannelState(
+                channels=self._snapshot.model_copy(deep=True),
+                reloaded_at=self._reloaded_at,
+                persisted=self._persisted,
+            )
+
     def update(
         self,
         mutator: Callable[[ProviderChannels], ProviderChannels],
-    ) -> ProviderChannels:
+    ) -> ProviderChannelState:
         with self._lock:
             current = self.load()
             updated = mutator(current.model_copy(deep=True))
-            return self.save(updated)
+            self.save(updated)
+            return self.state
 
     def save(self, channels: ProviderChannels) -> ProviderChannels:
         validated = ProviderChannels.model_validate(
@@ -222,6 +245,8 @@ class ProviderChannelStore:
                 replaced = True
                 self._fsync_parent()
                 self._snapshot = validated.model_copy(deep=True)
+                self._reloaded_at = datetime.now(UTC)
+                self._persisted = True
                 return self._snapshot.model_copy(deep=True)
             except Exception as save_error:
                 if replaced:
