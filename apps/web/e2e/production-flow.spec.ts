@@ -227,6 +227,36 @@ test('dynamic production workflow exposes import references and shot video', asy
   await page.getByRole('tab',{name:'分镜'}).click(); await page.getByRole('button',{name:/镜头 1/}).click(); await page.getByRole('button',{name:'生成视频'}).click(); await expect(page.locator('.video-versions video')).toHaveCount(1);
 });
 
+test('AI script creation streams before completion and waits for manual parsing',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='desktop','Streaming interaction is covered once on desktop');
+  const draft={project:{title:'雨夜',logline:'追查芯片'},characters:[],episodes:[],warnings:[]};
+  const imported={id:'import-stream',project_id:'project-1',status:'ready',mode:'auto',source_format:'paste',original_filename:'',checksum:'x',extracted_text:'第一集：雨夜\n场景一',structured_draft:draft,error:'',error_category:'',created_at:'',updated_at:'',applied_at:null};
+  let parseRequests=0;
+  await page.addInitScript(()=>{
+    const nativeFetch=window.fetch.bind(window);
+    window.fetch=async(input,init)=>{
+      const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
+      if(!url.includes('/api/projects/project-1/script-generation/stream'))return nativeFetch(input,init);
+      const encoder=new TextEncoder();
+      const body=new ReadableStream({start(controller){controller.enqueue(encoder.encode('event: chunk\ndata: {"text":"第一集：雨夜\\n"}\n\n'));setTimeout(()=>{controller.enqueue(encoder.encode('event: chunk\ndata: {"text":"场景一"}\n\nevent: done\ndata: {"finish_reason":"stop"}\n\n'));controller.close();(window as typeof window&{scriptStreamFinished?:boolean}).scriptStreamFinished=true;},250);}});
+      return new Response(body,{status:200,headers:{'content-type':'text/event-stream'}});
+    };
+  });
+  await page.route('**/api/projects/project-1/script-imports',async route=>{parseRequests+=1;await route.fulfill({status:201,json:{...imported,status:'uploaded',structured_draft:{}}});});
+  await page.route('**/api/script-imports/import-stream/parse',route=>route.fulfill({json:imported}));
+
+  await page.goto('/');
+  await page.getByRole('tab',{name:'剧本创作'}).click();
+  await page.getByLabel('本次创作要求（可选）').fill('生成一集雨夜追逐戏');
+  await page.getByRole('button',{name:'开始 AI 创作'}).click();
+  await expect(page.getByLabel('AI 剧本草稿')).toHaveValue('第一集：雨夜\n');
+  expect(await page.evaluate(()=>(window as typeof window&{scriptStreamFinished?:boolean}).scriptStreamFinished??false)).toBe(false);
+  await expect(page.getByLabel('AI 剧本草稿')).toHaveValue('第一集：雨夜\n场景一');
+  expect(parseRequests).toBe(0);
+  await page.getByRole('button',{name:'解析并预览'}).click();
+  await expect.poll(()=>parseRequests).toBe(1);
+});
+
 test('desktop shot selection keeps the storyboard work area active', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'Desktop-specific behavior');
   await page.goto('/');

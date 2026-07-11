@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import ValidationError
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import select
 
 from comic_studio import models
 from comic_studio.script_imports import (
@@ -20,15 +24,65 @@ from comic_studio.services.script_extraction import (
 from comic_studio.services.script_imports import (
     ScriptImportConfirmationService,
     ScriptImportParserService,
+    build_script_project_context,
+    script_project_load_options,
 )
 
 
 router = APIRouter(tags=["script-imports"])
 
 
+class ScriptGenerationRequest(BaseModel):
+    brief: str = Field(default="", max_length=20_000)
+    existing_draft: str = Field(default="", max_length=500_000)
+
+
+def _sse(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 def _source_error(exc: ScriptSourceError) -> HTTPException:
     status_code = 413 if exc.category == "source_too_large" else 422
     return HTTPException(status_code=status_code, detail=exc.category)
+
+
+@router.post("/api/projects/{project_id}/script-generation/stream")
+def stream_script_generation(
+    project_id: str,
+    payload: ScriptGenerationRequest,
+    request: Request,
+):
+    with request.app.state.session_factory() as session:
+        project = session.scalar(
+            select(models.Project)
+            .options(*script_project_load_options())
+            .where(models.Project.id == project_id)
+        )
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        context = {
+            **build_script_project_context(project),
+            "brief": payload.brief.strip(),
+            "existing_draft": payload.existing_draft,
+        }
+    provider = request.app.state.provider_factory.create_llm()
+
+    async def events():
+        try:
+            async for chunk in provider.stream_script(context):
+                yield _sse("chunk", {"text": chunk})
+            yield _sse("done", {"finish_reason": "stop"})
+        except Exception:
+            yield _sse("error", {"message": "Script generation failed"})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(

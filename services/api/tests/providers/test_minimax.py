@@ -303,6 +303,49 @@ async def test_script_generation_hoists_episode_warnings_to_draft_root():
 
 
 @pytest.mark.anyio
+async def test_minimax_streams_readable_script_from_anthropic_events():
+    captured = {}
+    stream = "\n".join(
+        [
+            'event: message_start',
+            'data: {"type":"message_start"}',
+            '',
+            'event: content_block_delta',
+            'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"第一集：雨夜"}}',
+            '',
+            'event: content_block_delta',
+            'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"\\n场景一"}}',
+            '',
+            'event: message_stop',
+            'data: {"type":"message_stop"}',
+            '',
+        ]
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=stream.encode(),
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        chunks = [
+            chunk
+            async for chunk in MiniMaxProvider(
+                api_key="secret", client=client
+            ).stream_script({"project": {"title": "雨夜"}, "brief": "三集"})
+        ]
+
+    assert chunks == ["第一集：雨夜", "\n场景一"]
+    assert captured["body"]["stream"] is True
+    assert "readable Chinese dynamic-comic script" in captured["body"]["system"]
+
+
+@pytest.mark.anyio
 async def test_minimax_script_import_retries_once_then_raises_sanitized_error():
     requests = []
 

@@ -32,6 +32,12 @@ established character constraints and continuity, and avoid duplicating existing
 draft character and episode a stable draft_id. Dialogue must reference a supplied character draft_id
 or be explicitly marked as narration. Expose uncertainty through warnings and do not use Markdown fences."""
 
+READABLE_SCRIPT_SYSTEM_PROMPT = """You are the lead writer for a Chinese dynamic-comic studio.
+Write a readable Chinese dynamic-comic script, not JSON. Use clear episode, scene, action, speaker,
+and dialogue headings. Preserve all supplied character and continuity constraints, avoid duplicating
+existing episodes, and make the result easy for a later structured parser to understand. Continue
+from an existing partial draft without repeating it when one is supplied."""
+
 
 def _extract_text(payload: dict[str, Any]) -> str:
     for item in payload.get("content", []):
@@ -192,6 +198,62 @@ class MiniMaxProvider:
                         f"MiniMax returned an invalid script import draft: {validation_feedback}"
                     ) from exc
         raise ProviderError("MiniMax script import parsing failed")
+
+    async def stream_script(self, context: dict[str, Any]):
+        owns_client = self._client is None
+        client = self._client or httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=httpx.Timeout(240, connect=10),
+        )
+        try:
+            async with client.stream(
+                "POST",
+                "v1/messages",
+                headers={
+                    "x-api-key": self.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "max_tokens": 8192,
+                    "temperature": 0.7,
+                    "stream": True,
+                    "system": READABLE_SCRIPT_SYSTEM_PROMPT,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                "Create or continue the readable script from this context:\n"
+                                + json.dumps(context, ensure_ascii=False)
+                            ),
+                        }
+                    ],
+                },
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    raw = line.removeprefix("data:").strip()
+                    if not raw or raw == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if event.get("type") != "content_block_delta":
+                        continue
+                    delta = event.get("delta", {})
+                    if delta.get("type") == "text_delta" and delta.get("text"):
+                        yield str(delta["text"])
+        except httpx.HTTPError as exc:
+            raise ProviderError(
+                f"MiniMax streaming request failed: {type(exc).__name__}"
+            ) from exc
+        finally:
+            if owns_client:
+                await client.aclose()
 
     async def _request(
         self,
