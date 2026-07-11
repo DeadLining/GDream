@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -16,6 +17,7 @@ from comic_studio.schemas import ProviderChannelTestRead, ProviderChannelUpdate
 ProviderKind = Literal["llm", "image", "tts"]
 CONNECT_TIMEOUT_SECONDS = 2
 TOTAL_TIMEOUT_SECONDS = 8
+SSH_TIMEOUT_MARGIN_SECONDS = 0.25
 
 
 class ProviderTestError(ValueError):
@@ -66,6 +68,8 @@ class ProviderChannelTestingService:
         tts_provider_factory: Callable[..., Any] = default_tts_provider_factory,
         client_factory: Callable[..., Any] = default_client_factory,
         ssh_executor: Callable[[list[str], bytes], bytes] | None = None,
+        subprocess_runner: Callable[..., Any] = subprocess.run,
+        ssh_timeout_margin_seconds: float = SSH_TIMEOUT_MARGIN_SECONDS,
         total_timeout_seconds: float = TOTAL_TIMEOUT_SECONDS,
     ):
         self._stored_channel = stored_channel
@@ -74,6 +78,8 @@ class ProviderChannelTestingService:
         self._tts_provider_factory = tts_provider_factory
         self._client_factory = client_factory
         self._ssh_executor = ssh_executor
+        self._subprocess_runner = subprocess_runner
+        self._ssh_timeout_margin_seconds = ssh_timeout_margin_seconds
         self._total_timeout_seconds = total_timeout_seconds
 
     async def test(
@@ -86,6 +92,7 @@ class ProviderChannelTestingService:
         error: str | None = None
         status: Literal["ok", "failed"] = "ok"
         channel: ProviderChannel | None = None
+        deadline = perf_counter() + self._total_timeout_seconds
 
         try:
             async with asyncio.timeout(self._total_timeout_seconds):
@@ -112,7 +119,8 @@ class ProviderChannelTestingService:
                         provider = self._tts_provider_factory(
                             channel,
                             client,
-                            self._ssh_executor,
+                            self._ssh_executor
+                            or self._make_bounded_ssh_executor(deadline),
                         )
                         await self._test_tts(provider)
         except Exception as exc:
@@ -231,6 +239,8 @@ class ProviderChannelTestingService:
 
     @staticmethod
     def _sanitize_error(error: Exception) -> str:
+        if isinstance(error, subprocess.TimeoutExpired):
+            return "Connection timed out"
         if isinstance(error, TimeoutError):
             return "Connection timed out"
         if isinstance(error, httpx.HTTPStatusError):
@@ -242,6 +252,26 @@ class ProviderChannelTestingService:
         if isinstance(error, ValueError):
             return "Provider returned an invalid response"
         return f"Provider test failed ({type(error).__name__})"
+
+    def _make_bounded_ssh_executor(
+        self,
+        deadline: float,
+    ) -> Callable[[list[str], bytes], bytes]:
+        def execute(command: list[str], payload: bytes) -> bytes:
+            timeout = max(
+                0.001,
+                deadline - perf_counter() - self._ssh_timeout_margin_seconds,
+            )
+            result = self._subprocess_runner(
+                command,
+                input=payload,
+                capture_output=True,
+                check=True,
+                timeout=timeout,
+            )
+            return result.stdout
+
+        return execute
 
     @staticmethod
     def _elapsed_ms(started_at: Any, finished_at: Any) -> int:

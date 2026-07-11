@@ -1,6 +1,8 @@
 import asyncio
 import base64
 import json
+import subprocess
+import threading
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -279,6 +281,56 @@ async def test_tts_uses_configured_ssh_fallback_and_discards_wav(failure):
     assert result.check_scope == "audio"
     assert ssh_calls[0][0][0:2] == ["ssh", "tts-candidate"]
     assert not hasattr(result, "content")
+
+
+@pytest.mark.anyio
+async def test_tts_ssh_timeouts_finish_workers_without_accumulating():
+    class TransportFailureClient:
+        async def post(self, path, **kwargs):
+            request = httpx.Request("POST", f"https://tts.example{path}")
+            raise httpx.ConnectError("direct unavailable", request=request)
+
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+    passed_timeouts = []
+
+    def bounded_runner(command, **kwargs):
+        nonlocal active, max_active
+        timeout = kwargs["timeout"]
+        passed_timeouts.append(timeout)
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            time.sleep(timeout)
+            raise subprocess.TimeoutExpired(command, timeout)
+        finally:
+            with lock:
+                active -= 1
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        client_factory=ClientFactory(TransportFailureClient()),
+        subprocess_runner=bounded_runner,
+        ssh_timeout_margin_seconds=0.03,
+        total_timeout_seconds=0.08,
+    )
+
+    started_at = time.perf_counter()
+    results = [
+        await service.test("tts", candidate("tts", api_key=None))
+        for _ in range(3)
+    ]
+    wall_seconds = time.perf_counter() - started_at
+
+    assert wall_seconds < 0.3
+    assert all(result.status == "failed" for result in results)
+    assert all(result.error == "Connection timed out" for result in results)
+    assert len(passed_timeouts) == 3
+    assert all(0 < timeout < 0.08 for timeout in passed_timeouts)
+    assert active == 0
+    assert max_active == 1
 
 
 @pytest.mark.anyio
