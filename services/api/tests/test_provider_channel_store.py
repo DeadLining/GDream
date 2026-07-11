@@ -1,5 +1,7 @@
 import json
 import os
+import stat
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -237,5 +239,58 @@ def test_atomic_save_failure_preserves_file_snapshot_and_cleans_temp(
         store.save(updated)
 
     assert path.read_bytes() == original_bytes
+    assert store.snapshot == previous_snapshot
+    assert list(tmp_path.glob("provider-channels.json.*.tmp")) == []
+
+
+def test_parent_open_failure_rolls_back_replaced_file_and_snapshot(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "provider-channels.json"
+    original = make_channels()
+    store = ProviderChannelStore(path, original)
+    store.save(original)
+    original_bytes = path.read_bytes()
+    previous_snapshot = store.snapshot
+    updated = make_channels(
+        llm=channel_payload(name="Updated LLM", model="updated-model")
+    )
+    real_open = os.open
+
+    def fail_parent_open(target, flags, *args, **kwargs):
+        if Path(target) == path.parent:
+            raise OSError("parent open failed")
+        return real_open(target, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", fail_parent_open)
+
+    with pytest.raises(OSError, match="parent open failed"):
+        store.save(updated)
+
+    assert path.read_bytes() == original_bytes
+    assert store.snapshot == previous_snapshot
+    assert list(tmp_path.glob("provider-channels.json.*.tmp")) == []
+
+
+def test_parent_fsync_failure_removes_new_file_and_preserves_snapshot(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "provider-channels.json"
+    defaults = make_channels()
+    store = ProviderChannelStore(path, defaults)
+    previous_snapshot = store.snapshot
+    real_fsync = os.fsync
+
+    def fail_directory_fsync(file_descriptor):
+        if stat.S_ISDIR(os.fstat(file_descriptor).st_mode):
+            raise OSError("parent fsync failed")
+        return real_fsync(file_descriptor)
+
+    monkeypatch.setattr(os, "fsync", fail_directory_fsync)
+
+    with pytest.raises(OSError, match="parent fsync failed"):
+        store.save(defaults)
+
+    assert not path.exists()
     assert store.snapshot == previous_snapshot
     assert list(tmp_path.glob("provider-channels.json.*.tmp")) == []

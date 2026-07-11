@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 import tempfile
 import threading
 from pathlib import Path
@@ -148,39 +149,81 @@ class ProviderChannelStore:
 
         with self._lock:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+            previous_bytes = (
+                self._path.read_bytes() if self._path.exists() else None
+            )
+            previous_mode = (
+                stat.S_IMODE(self._path.stat().st_mode)
+                if previous_bytes is not None
+                else 0o600
+            )
             temporary_path: Path | None = None
+            replaced = False
             try:
-                with tempfile.NamedTemporaryFile(
-                    dir=self._path.parent,
-                    prefix=f"{self._path.name}.",
-                    suffix=".tmp",
-                    delete=False,
-                ) as temporary_file:
-                    temporary_path = Path(temporary_file.name)
-                    os.fchmod(temporary_file.fileno(), 0o600)
-                    temporary_file.write(serialized)
-                    temporary_file.flush()
-                    os.fsync(temporary_file.fileno())
-
+                temporary_path = self._write_temporary_file(serialized, 0o600)
                 os.replace(temporary_path, self._path)
                 temporary_path = None
+                replaced = True
                 self._fsync_parent()
                 self._snapshot = validated.model_copy(deep=True)
                 return self._snapshot.model_copy(deep=True)
+            except Exception as save_error:
+                if replaced:
+                    try:
+                        self._rollback_file(previous_bytes, previous_mode)
+                    except Exception as rollback_error:
+                        raise ExceptionGroup(
+                            "Provider channel save and rollback both failed",
+                            [save_error, rollback_error],
+                        ) from rollback_error
+                raise
             finally:
                 if temporary_path is not None:
                     temporary_path.unlink(missing_ok=True)
 
+    def _write_temporary_file(self, payload: bytes, mode: int) -> Path:
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=self._path.parent,
+                prefix=f"{self._path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+                os.fchmod(temporary_file.fileno(), mode)
+                temporary_file.write(payload)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            return temporary_path
+        except Exception:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+            raise
+
+    def _rollback_file(self, previous_bytes: bytes | None, previous_mode: int) -> None:
+        if previous_bytes is None:
+            self._path.unlink(missing_ok=True)
+        else:
+            rollback_path = self._write_temporary_file(
+                previous_bytes,
+                previous_mode,
+            )
+            try:
+                os.replace(rollback_path, self._path)
+            finally:
+                rollback_path.unlink(missing_ok=True)
+
+        try:
+            self._fsync_parent()
+        except OSError:
+            # The original directory durability failure is already propagated.
+            pass
+
     def _fsync_parent(self) -> None:
         flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        directory_fd = os.open(self._path.parent, flags)
         try:
-            directory_fd = os.open(self._path.parent, flags)
-        except OSError:
-            return
-        try:
-            try:
-                os.fsync(directory_fd)
-            except OSError:
-                pass
+            os.fsync(directory_fd)
         finally:
             os.close(directory_fd)
