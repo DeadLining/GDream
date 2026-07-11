@@ -1,7 +1,7 @@
 'use client';
 
 import {useState} from 'react';
-import {Activity, Boxes, Download, Film, Play, RefreshCw, Settings} from 'lucide-react';
+import {Activity, Boxes, Download, Film, Play, RefreshCw} from 'lucide-react';
 import {getProviderHealth, mediaUrl, startRender} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import type {Job} from '../lib/types';
@@ -67,7 +67,6 @@ export function AppToolbar({
             <span className="mobile-command-label">渲染</span>
           </button>
         )}
-        <button className="icon-button" title="设置" aria-label="设置"><Settings aria-hidden="true" size={17}/></button>
       </div>
     </header>
   );

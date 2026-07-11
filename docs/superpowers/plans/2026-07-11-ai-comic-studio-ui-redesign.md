@@ -235,7 +235,7 @@ git diff --check
 
 Expected: all pass with no CSS overflow-causing negative spacing.
 
-- [ ] **Step 6: Commit the studio shell**
+- [x] **Step 6: Commit the studio shell**
 
 ```bash
 git add .gitignore apps/web/components/AppToolbar.tsx apps/web/components/ProjectNavigator.tsx apps/web/app/globals.css apps/web/tests/workspace.test.tsx

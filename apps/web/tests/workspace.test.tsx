@@ -162,7 +162,7 @@ describe('Workspace', () => {
     expect(await screen.findByText('霓虹夜行 / 失窃的雨夜')).toBeVisible();
     expect(screen.getByRole('button', {name: '刷新项目'})).toHaveAttribute('title', '刷新项目');
     expect(screen.getByRole('button', {name: '批量生产'})).toHaveAttribute('title', '批量生产');
-    expect(screen.getByRole('button', {name: '设置'})).toHaveAttribute('title', '设置');
+    expect(screen.queryByRole('button', {name: '设置'})).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: '渲染本集'})).toHaveAttribute('title', '素材未就绪');
 
     await userEvent.click(screen.getByRole('button', {name: '模型服务状态'}));
