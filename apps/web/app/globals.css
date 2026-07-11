@@ -116,6 +116,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .empty-inspector { color: var(--muted-strong); }
 .job-status { background: var(--surface-subtle); }
 .readiness-summary span { background: #edf2f3; color: var(--info); }
+.readiness-error { margin: 0; padding: 8px 16px; border-bottom: 1px solid #e3b5b1; background: #f8e4e2; color: #8c2d27; font-size: 12px; }
 .primary-action, .inspector-actions .primary-action { border-color: var(--accent-strong); background: var(--accent-strong); }
 
 /* Storyboard and inspector operational layout */

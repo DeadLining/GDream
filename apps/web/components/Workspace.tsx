@@ -15,22 +15,12 @@ import {ReviewPanel} from './ReviewPanel';
 import {Storyboard} from './Storyboard';
 import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
 
-function unavailableReadiness(episode: EpisodeDetail): ProductionReadiness {
-  const shots = episode.scenes.flatMap(scene => scene.shots);
-  return {
-    episode_id: episode.id,
-    ready: false,
-    totals: {shots: shots.length, dialogue: shots.flatMap(shot => shot.dialogue).length},
-    ready_counts: {panels: 0, approved: 0, speech: 0},
-    blockers: {missing_panels: [], unapproved_shots: [], missing_speech: []},
-  };
-}
-
 export function Workspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
+  const [readinessError, setReadinessError] = useState('');
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [workArea, setWorkArea] = useState<WorkArea>('overview');
   const [mobile, setMobile] = useState(false);
@@ -57,10 +47,17 @@ export function Workspace() {
 
   const loadEpisodeForRequest = async (id: string, request: number, preserveSelection = false) => {
     const loaded = await getEpisode(id);
-    const loadedReadiness = await getProductionReadiness(id).catch(() => unavailableReadiness(loaded));
+    let loadedReadiness: ProductionReadiness | null = null;
+    let readinessFailure = '';
+    try {
+      loadedReadiness = await getProductionReadiness(id);
+    } catch {
+      readinessFailure = '渲染准备状态暂时无法获取。';
+    }
     if (navigationRequest.current !== request) return;
     setEpisode(loaded);
-    setReadiness(loadedReadiness);
+    setReadiness(current => loadedReadiness ?? (current?.episode_id === id ? current : null));
+    setReadinessError(readinessFailure);
     const loadedShots = loaded.scenes.flatMap(scene => scene.shots);
     setSelectedShotId(current => preserveSelection && loadedShots.some(shot => shot.id === current) ? current : loadedShots[0]?.id ?? null);
     localStorage.setItem('ai-comic-episode', id);
@@ -82,6 +79,7 @@ export function Workspace() {
       if (navigationRequest.current !== request) return;
       setEpisode(null);
       setReadiness(null);
+      setReadinessError('');
       setSelectedShotId(null);
     }
   };
@@ -103,6 +101,7 @@ export function Workspace() {
       setProject(null);
       setEpisode(null);
       setReadiness(null);
+      setReadinessError('');
     }
   };
 
@@ -122,6 +121,16 @@ export function Workspace() {
     if (mobile) setWorkArea('inspector');
   };
   const selectShot = (shot: Shot) => selectShotById(shot.id);
+  const openReview = () => {
+    if (!mobile) {
+      setWorkArea('review');
+      return;
+    }
+    const blockers = readiness?.blockers;
+    const blockedShot = blockers && shots.find(shot => blockers.unapproved_shots.includes(shot.id) || blockers.missing_panels.includes(shot.id));
+    if (blockedShot) selectShotById(blockedShot.id);
+    else setWorkArea('overview');
+  };
   const refreshEpisode = async () => {
     if (episode) await loadEpisodeForRequest(episode.id, navigationRequest.current, true);
   };
@@ -138,13 +147,13 @@ export function Workspace() {
     if (finished.status === 'succeeded') await loadEpisode(episode.id);
   };
 
-  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => setWorkArea('production')} renderReady={readiness?.ready ?? false}/>;
+  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => setWorkArea('production')} renderReady={Boolean(readiness?.ready && !readinessError)}/>;
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
   if (!projects.length) return <div className="app-shell">{toolbar}<main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main><CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async data => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/></div>;
 
   let center;
   if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
-  else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => setWorkArea('production')} onOpenReview={() => setWorkArea('review')}/>;
+  else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => setWorkArea('production')} onOpenReview={openReview}/>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
@@ -154,6 +163,7 @@ export function Workspace() {
 
   return <div className="app-shell">
     {toolbar}
+    {readinessError && <p className="readiness-error" role="alert">{readinessError}</p>}
     <div className="mobile-project-bar"><select aria-label="选择项目" value={project?.id ?? ''} onChange={event => loadProject(event.target.value)}>{projects.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select><select aria-label="选择剧集" value={episode?.id ?? ''} onChange={event => loadEpisode(event.target.value)}>{project?.episodes.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
     <WorkspaceTabs value={workArea} onChange={setWorkArea} mobile={mobile}/>
     {visibleWorkAreas.filter(area => area !== workArea).map(area => <section key={area} id={`workspace-panel-${area}`} role="tabpanel" aria-labelledby={`workspace-tab-${area}`} hidden/>)}

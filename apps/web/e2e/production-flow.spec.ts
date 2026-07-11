@@ -126,6 +126,19 @@ test('mobile navigation keeps work areas separated and within the viewport', asy
   }
 });
 
+test('mobile review action opens a relevant shot in the inspector', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
+  await page.unroute('**/api/episodes/episode-1/production-readiness');
+  await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:{episode_id:'episode-1',ready:false,totals:{shots:2,dialogue:0},ready_counts:{panels:1,approved:1,speech:0},blockers:{missing_panels:['shot-2'],unapproved_shots:['shot-2'],missing_speech:[]}}}));
+  await page.goto('/');
+
+  await page.getByRole('button', {name: '审核镜头'}).click();
+
+  await expect(page.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
+  await expect(page.getByLabel('审核状态')).toHaveValue('draft');
+});
+
 test('narrow mobile layout uses one shot column without clipping controls', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
   await page.setViewportSize({width: 360, height: 800});

@@ -1,0 +1,73 @@
+import {act, cleanup, render, screen} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {AppToolbar} from '../components/AppToolbar';
+import type {Job} from '../lib/types';
+
+const mocks = vi.hoisted(() => ({
+  getProviderHealth: vi.fn(),
+  startRender: vi.fn(),
+  pollJob: vi.fn(),
+}));
+
+vi.mock('../lib/api', () => ({
+  getProviderHealth: mocks.getProviderHealth,
+  startRender: mocks.startRender,
+  mediaUrl: (path: string) => path,
+}));
+vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => {resolve = done;});
+  return {promise, resolve};
+}
+
+const completed = (episodeId: string, path: string): Job => ({
+  id: `job-${episodeId}`,
+  operation: 'render_episode',
+  target_type: 'episode',
+  target_id: episodeId,
+  status: 'succeeded',
+  progress: 100,
+  result_metadata: {media_url: path},
+  error: '',
+  retry_count: 0,
+  created_at: '',
+  updated_at: '',
+});
+
+describe('AppToolbar episode render state', () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(cleanup);
+
+  it('does not let a deferred render completion overwrite the next episode', async () => {
+    const pending = deferred<Job>();
+    mocks.startRender.mockResolvedValue({job_id: 'job-a', status: 'queued'});
+    mocks.pollJob.mockReturnValue(pending.promise);
+    const view = render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" />);
+
+    await userEvent.click(screen.getByRole('button', {name: '渲染本集'}));
+    view.rerender(<AppToolbar projectLabel="Project" episodeLabel="B" episodeId="episode-b" />);
+    expect(screen.getByRole('button', {name: '渲染本集'})).toBeEnabled();
+
+    await act(async () => pending.resolve(completed('episode-a', '/media/a.mp4')));
+
+    expect(screen.queryByRole('link', {name: '下载 MP4'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: '渲染本集'})).toBeEnabled();
+  });
+
+  it('removes a rendered download when switching episodes', async () => {
+    mocks.startRender.mockResolvedValue({job_id: 'job-a', status: 'queued'});
+    mocks.pollJob.mockResolvedValue(completed('episode-a', '/media/a.mp4'));
+    const view = render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" />);
+
+    await userEvent.click(screen.getByRole('button', {name: '渲染本集'}));
+    expect(await screen.findByRole('link', {name: '下载 MP4'})).toHaveAttribute('href', '/media/a.mp4');
+
+    view.rerender(<AppToolbar projectLabel="Project" episodeLabel="B" episodeId="episode-b" />);
+
+    expect(screen.queryByRole('link', {name: '下载 MP4'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: '渲染本集'})).toBeEnabled();
+  });
+});

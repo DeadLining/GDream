@@ -268,6 +268,62 @@ describe('Workspace', () => {
     expect(workspaceStyles).toMatch(/\.mobile-inspector \.workspace-center\s*\{\s*display:\s*none/);
   });
 
+  it('opens the first relevant blocker in the mobile inspector from the review action', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => mediaController(true).media));
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('button', {name: '审核镜头'}));
+
+    expect(screen.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
+    expect(screen.getByLabelText('审核状态')).toHaveValue('draft');
+    expect(screen.queryByRole('tab', {name: '审核'})).not.toBeInTheDocument();
+  });
+
+  it('keeps a valid mobile overview tab when review has no relevant shot', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => mediaController(true).media));
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProductionReadiness.mockResolvedValue({...readiness, blockers: {missing_panels: [], unapproved_shots: [], missing_speech: []}});
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('button', {name: '审核镜头'}));
+
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab').some(tab => tab.getAttribute('aria-selected') === 'true')).toBe(true);
+  });
+
+  it('reports initial readiness failure without authoritative zero blockers', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProductionReadiness.mockRejectedValue(new Error('readiness offline'));
+    render(<Workspace />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('渲染准备状态暂时无法获取');
+    expect(screen.queryByText('缺少画面 0')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: '渲染本集'})).toBeDisabled();
+  });
+
+  it('preserves the last valid readiness when refresh fails', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProductionReadiness.mockResolvedValueOnce(readiness).mockRejectedValueOnce(new Error('readiness offline'));
+    render(<Workspace />);
+    expect(await screen.findByText('缺少画面 1')).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', {name: '刷新项目'}));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('渲染准备状态暂时无法获取');
+    expect(screen.getByText('缺少画面 1')).toBeVisible();
+    expect(screen.getByRole('button', {name: '渲染本集'})).toBeDisabled();
+  });
+
   it('uses a non-clipping flex layout for toolbar, tabs, and workspace', () => {
     expect(workspaceStyles).toMatch(/\.app-shell\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/);
     expect(workspaceStyles).toMatch(/\.workspace-grid\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*height:\s*auto/);

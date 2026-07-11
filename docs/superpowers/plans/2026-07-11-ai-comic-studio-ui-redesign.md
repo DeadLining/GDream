@@ -453,6 +453,8 @@ Expected: API, web, compositor, build, E2E, and fixture checks pass. If local Ch
 
 Release audit note: API, workspace tests, builds, isolated-port E2E, and diff checks passed. The compositor fixture command was attempted, but Remotion could not finish downloading its pinned 93.5 MiB Chrome Headless Shell from Google Storage; both the built-in downloader and a ranged retry timed out, so a fresh fixture and `ffprobe` result could not be produced in this environment.
 
+Final integration review: episode-scoped render state, mobile review routing, and readiness failure handling have focused regression coverage. The full web suite, web build, and desktop/mobile Playwright matrix passed on isolated port 3100. The fixture limitation above remains unchanged.
+
 - [x] **Step 3: Capture browser screenshots**
 
 Use Playwright against the running local app at:

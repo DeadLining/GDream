@@ -1,6 +1,6 @@
 'use client';
 
-import {useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Activity, Boxes, Download, Film, Play, RefreshCw} from 'lucide-react';
 import {getProviderHealth, mediaUrl, startRender} from '../lib/api';
 import {pollJob} from '../lib/jobs';
@@ -26,8 +26,15 @@ export function AppToolbar({
   const [healthCount, setHealthCount] = useState<number | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [renderUrl, setRenderUrl] = useState('');
+  const renderGeneration = useRef(0);
   const rendering = job && ['queued', 'running'].includes(job.status);
   const breadcrumb = [projectLabel, episodeLabel].filter(Boolean).join(' / ');
+
+  useEffect(() => {
+    renderGeneration.current += 1;
+    setJob(null);
+    setRenderUrl('');
+  }, [episodeId]);
 
   const checkHealth = async () => {
     const health = await getProviderHealth();
@@ -35,8 +42,10 @@ export function AppToolbar({
   };
   const render = async () => {
     if (!episodeId || rendering) return;
+    const generation = renderGeneration.current;
     const started = await startRender(episodeId);
     const finished = await pollJob(started.job_id);
+    if (renderGeneration.current !== generation) return;
     setJob(finished);
     const path = finished.result_metadata.media_url;
     if (finished.status === 'succeeded' && typeof path === 'string') setRenderUrl(mediaUrl(path));
