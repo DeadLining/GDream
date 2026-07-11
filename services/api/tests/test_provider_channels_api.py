@@ -144,6 +144,30 @@ def test_put_rejects_replacement_and_clear_together_without_leaking_key(client):
     assert secret not in response.text
 
 
+@pytest.mark.parametrize(
+    "malformed_secret",
+    [
+        ["list-secret-value"],
+        {"nested": ["dict-secret-value"]},
+    ],
+)
+def test_put_redacts_malformed_api_key_input(client, malformed_secret, caplog):
+    secret_text = json.dumps(malformed_secret)
+
+    response = client.put(
+        "/api/provider-channels/llm",
+        json=channel_update(enabled=False, api_key=malformed_secret),
+    )
+
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["loc"] == ["body", "api_key"]
+    assert error["msg"] == "Input should be a valid string"
+    assert error["input"] == "[REDACTED]"
+    assert secret_text not in response.text
+    assert secret_text not in caplog.text
+
+
 @pytest.mark.parametrize("kind", ["video", "LLM", "llm/extra"])
 def test_put_rejects_invalid_channel_kind(client, kind):
     response = client.put(f"/api/provider-channels/{kind}", json=channel_update())
@@ -167,6 +191,9 @@ def test_put_rejects_invalid_nonsecret_fields(client):
     )
 
     assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["loc"] == ["body", "base_url"]
+    assert error["input"] == "not-a-url"
 
 
 @pytest.mark.parametrize("kind", ["llm", "image"])

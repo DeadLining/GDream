@@ -226,6 +226,61 @@ def test_save_is_atomic_private_and_updates_snapshot(tmp_path):
     assert list(path.parent.glob("provider-channels.json.*.tmp")) == []
 
 
+def test_concurrent_updates_serialize_read_modify_save_without_lost_changes(tmp_path):
+    path = tmp_path / "provider-channels.json"
+    store = ProviderChannelStore(path, make_channels())
+    store.save(make_channels())
+    first_entered = threading.Event()
+    release_first = threading.Event()
+    second_entered = threading.Event()
+    failures = []
+
+    def update_llm(snapshot):
+        first_entered.set()
+        assert release_first.wait(timeout=2)
+        return snapshot.model_copy(
+            update={
+                "llm": snapshot.llm.model_copy(update={"model": "llm-concurrent"})
+            }
+        )
+
+    def update_image(snapshot):
+        second_entered.set()
+        return snapshot.model_copy(
+            update={
+                "image": snapshot.image.model_copy(
+                    update={"model": "image-concurrent"}
+                )
+            }
+        )
+
+    def run_update(mutator):
+        try:
+            store.update(mutator)
+        except Exception as error:
+            failures.append(error)
+
+    first = threading.Thread(target=run_update, args=(update_llm,))
+    second = threading.Thread(target=run_update, args=(update_image,))
+    first.start()
+    assert first_entered.wait(timeout=2)
+    second.start()
+    assert not second_entered.wait(timeout=0.1)
+    release_first.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert failures == []
+    assert second_entered.is_set()
+    assert store.snapshot.llm.model == "llm-concurrent"
+    assert store.snapshot.image.model == "image-concurrent"
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    assert persisted["llm"]["model"] == "llm-concurrent"
+    assert persisted["image"]["model"] == "image-concurrent"
+
+
 def test_atomic_save_failure_preserves_file_snapshot_and_cleans_temp(
     tmp_path, monkeypatch
 ):
