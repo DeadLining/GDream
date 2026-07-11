@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
@@ -21,6 +21,12 @@ class EpisodeDeletionImpact:
     dialogue_ids: tuple[str, ...]
     asset_ids: tuple[str, ...]
     local_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class EpisodeDeletionResult:
+    impact: EpisodeDeletionImpact
+    cleanup_warnings: tuple[str, ...]
 
 
 class EpisodeDeletionService:
@@ -71,3 +77,92 @@ class EpisodeDeletionService:
             asset_ids=tuple(asset.id for asset in assets),
             local_paths=tuple(asset.local_path for asset in assets if asset.local_path),
         )
+
+    def delete(self, episode_id: str) -> EpisodeDeletionResult | None:
+        impact = self.preview(episode_id)
+        if impact is None:
+            return None
+        episode = self.session.get(models.Episode, episode_id)
+        if episode is None:
+            return None
+
+        run_ids = tuple(
+            self.session.scalars(
+                select(models.ProductionRun.id).where(
+                    models.ProductionRun.episode_id == episode_id
+                )
+            )
+        )
+        try:
+            if impact.asset_ids:
+                self.session.execute(
+                    delete(models.Asset).where(models.Asset.id.in_(impact.asset_ids))
+                )
+            job_targets = [
+                and_(
+                    models.Job.target_type == "episode",
+                    models.Job.target_id == episode_id,
+                )
+            ]
+            if impact.shot_ids:
+                job_targets.append(
+                    and_(
+                        models.Job.target_type == "shot",
+                        models.Job.target_id.in_(impact.shot_ids),
+                    )
+                )
+            if impact.dialogue_ids:
+                job_targets.append(
+                    and_(
+                        models.Job.target_type == "dialogue",
+                        models.Job.target_id.in_(impact.dialogue_ids),
+                    )
+                )
+            self.session.execute(delete(models.Job).where(or_(*job_targets)))
+            if run_ids:
+                self.session.execute(
+                    delete(models.ProductionItem).where(
+                        models.ProductionItem.run_id.in_(run_ids)
+                    )
+                )
+                self.session.execute(
+                    delete(models.ProductionRun).where(
+                        models.ProductionRun.id.in_(run_ids)
+                    )
+                )
+            self.session.delete(episode)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+        return EpisodeDeletionResult(
+            impact=impact,
+            cleanup_warnings=self._cleanup_files(impact.local_paths),
+        )
+
+    def _cleanup_files(self, local_paths: tuple[str, ...]) -> tuple[str, ...]:
+        warnings: list[str] = []
+        for local_path in local_paths:
+            candidate = (self.data_root / local_path).resolve()
+            if candidate == self.data_root or self.data_root not in candidate.parents:
+                if "Skipped unsafe media path" not in warnings:
+                    warnings.append("Skipped unsafe media path")
+                continue
+            try:
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                if "Could not remove one local media file" not in warnings:
+                    warnings.append("Could not remove one local media file")
+                continue
+            self._remove_empty_parents(candidate.parent)
+        return tuple(warnings)
+
+    def _remove_empty_parents(self, directory: Path) -> None:
+        current = directory
+        while current != self.data_root and self.data_root in current.parents:
+            try:
+                current.rmdir()
+            except OSError:
+                return
+            current = current.parent

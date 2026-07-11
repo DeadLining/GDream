@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from comic_studio import models
 from comic_studio.services.episode_deletion import EpisodeDeletionService
 
@@ -135,3 +137,102 @@ def test_preview_reports_only_the_requested_episode_graph(db_session, tmp_path: 
 
 def test_preview_returns_none_for_an_unknown_episode(db_session, tmp_path: Path):
     assert EpisodeDeletionService(db_session, tmp_path).preview("missing") is None
+
+
+def test_delete_removes_episode_graph_assets_jobs_runs_and_local_files(
+    db_session, tmp_path: Path
+):
+    target, unrelated, assets, unrelated_asset, line_b = _episode_graph(db_session)
+    data_root = tmp_path / "media"
+    removable = data_root / assets[0].local_path
+    removable.parent.mkdir(parents=True)
+    removable.write_bytes(b"panel")
+    job_episode = models.Job(
+        operation="plan_episode", target_type="episode", target_id=target.id
+    )
+    job_shot = models.Job(
+        operation="generate_panel",
+        target_type="shot",
+        target_id=target.scenes[0].shots[0].id,
+    )
+    job_dialogue = models.Job(
+        operation="speech", target_type="dialogue", target_id=line_b.id
+    )
+    unrelated_job = models.Job(
+        operation="plan_episode", target_type="episode", target_id=unrelated.id
+    )
+    run = models.ProductionRun(episode_id=target.id, stages=["panels"])
+    item = models.ProductionItem(
+        run=run,
+        stage="panels",
+        target_type="shot",
+        target_id=target.scenes[0].shots[0].id,
+        position=1,
+    )
+    db_session.add_all([job_episode, job_shot, job_dialogue, unrelated_job, run, item])
+    db_session.commit()
+
+    result = EpisodeDeletionService(db_session, data_root).delete(target.id)
+
+    assert result is not None
+    assert result.impact.episode_id == target.id
+    assert result.cleanup_warnings == ()
+    assert db_session.get(models.Episode, target.id) is None
+    assert db_session.get(models.Episode, unrelated.id) is not None
+    assert all(db_session.get(models.Asset, asset.id) is None for asset in assets)
+    assert db_session.get(models.Asset, unrelated_asset.id) is not None
+    assert db_session.get(models.Job, job_episode.id) is None
+    assert db_session.get(models.Job, job_shot.id) is None
+    assert db_session.get(models.Job, job_dialogue.id) is None
+    assert db_session.get(models.Job, unrelated_job.id) is not None
+    assert db_session.get(models.ProductionRun, run.id) is None
+    assert db_session.get(models.ProductionItem, item.id) is None
+    assert not removable.exists()
+
+
+def test_delete_skips_symlink_escape_without_exposing_paths(db_session, tmp_path: Path):
+    target, _unrelated, assets, _unrelated_asset, _line_b = _episode_graph(db_session)
+    data_root = tmp_path / "media"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    escaped = outside / "secret.bin"
+    escaped.write_bytes(b"secret")
+    data_root.mkdir()
+    (data_root / "link").symlink_to(outside, target_is_directory=True)
+    assets[0].local_path = "link/secret.bin"
+    db_session.commit()
+
+    result = EpisodeDeletionService(db_session, data_root).delete(target.id)
+
+    assert result is not None
+    assert escaped.exists()
+    assert result.cleanup_warnings == ("Skipped unsafe media path",)
+    assert str(outside) not in result.cleanup_warnings[0]
+
+
+def test_delete_treats_missing_media_as_already_cleaned(db_session, tmp_path: Path):
+    target, _unrelated, _assets, _unrelated_asset, _line_b = _episode_graph(db_session)
+
+    result = EpisodeDeletionService(db_session, tmp_path / "missing").delete(target.id)
+
+    assert result is not None
+    assert result.cleanup_warnings == ()
+
+
+def test_delete_rolls_back_when_database_commit_fails(
+    db_session, tmp_path: Path, monkeypatch
+):
+    target, _unrelated, assets, _unrelated_asset, _line_b = _episode_graph(db_session)
+    original_commit = db_session.commit
+
+    def fail_commit():
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        EpisodeDeletionService(db_session, tmp_path).delete(target.id)
+
+    monkeypatch.setattr(db_session, "commit", original_commit)
+    assert db_session.get(models.Episode, target.id) is not None
+    assert db_session.get(models.Asset, assets[0].id) is not None
