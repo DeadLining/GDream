@@ -24,6 +24,7 @@ export function ProviderChannelSection({kind, label, draft, testing, disabled, t
   const update = <Key extends keyof ProviderChannelDraft>(key: Key, value: ProviderChannelDraft[Key]) =>
     onChange({...draft, [key]: value});
   const statusId = `provider-${kind}-status`;
+  const resultState = testError || testResult?.status === 'failed' ? 'failure' : testResult?.status === 'ok' ? 'success' : '';
 
   return (
     <form className="provider-channel-section" aria-label={`${label}渠道`} onSubmit={event => {event.preventDefault(); onTest();}}>
@@ -56,7 +57,7 @@ export function ProviderChannelSection({kind, label, draft, testing, disabled, t
       {validationError && <p className="form-error" role="alert">{validationError}</p>}
       <div className="provider-test-row">
         <button type="submit" disabled={testing || disabled} aria-describedby={statusId}>{testing ? '正在测试' : `测试${label}连接`}</button>
-        <p id={statusId} role="status" aria-live="polite">
+        <p id={statusId} className={`provider-test-result${resultState ? ` ${resultState}` : ''}`} role={resultState === 'failure' ? 'alert' : 'status'} aria-live={resultState === 'failure' ? 'assertive' : 'polite'}>
           {testResult?.status === 'ok' && `连接成功，${testResult.host}，${testResult.elapsed_ms} ms`}
           {testResult?.status === 'failed' && (testResult.error || '连接失败')}
           {testError}

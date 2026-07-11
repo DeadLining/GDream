@@ -29,10 +29,14 @@ test('provider channel settings stay operable and bounded across studio viewport
   let current = structuredClone(providerChannels);
   const writes: Array<Record<string, unknown>> = [];
   let expectedModel = '';
+  let probeCount = 0;
   await page.route('**/api/provider-channels', route => route.fulfill({json:current}));
   await page.route('**/api/provider-channels/llm/test', async route => {
     expect((await route.request().postDataJSON()).model).toBe(expectedModel);
-    await route.fulfill({json:{status:'ok',model:expectedModel,host:'api.example.com',elapsed_ms:7,check_scope:'model',error:null}});
+    probeCount += 1;
+    await route.fulfill({json:probeCount % 2 === 1
+      ? {status:'ok',model:expectedModel,host:'api.example.com',elapsed_ms:7,check_scope:'model',error:null}
+      : {status:'failed',model:expectedModel,host:'api.example.com',elapsed_ms:8,check_scope:'model',error:'Provider rejected model'}});
   });
   await page.route('**/api/provider-channels/llm', async route => {
     const body = await route.request().postDataJSON();
@@ -95,7 +99,9 @@ test('provider channel settings stay operable and bounded across studio viewport
     await page.getByLabel('剧本规划模型').fill(expectedModel);
     await expect(page.getByText('有未保存更改')).toBeVisible();
     await page.getByRole('button',{name:'测试剧本规划连接'}).click();
-    await expect(page.getByText(/连接成功.*7 ms/)).toBeVisible();
+    await expect(page.getByText(/连接成功.*7 ms/)).toHaveClass(/success/);
+    await page.getByRole('button',{name:'测试剧本规划连接'}).click();
+    await expect(page.getByRole('alert').filter({hasText:'Provider rejected model'})).toHaveClass(/failure/);
     await page.getByLabel('语音合成 SSH Host').scrollIntoViewIfNeeded();
     await expect(page.getByLabel('语音合成 SSH Host')).toBeInViewport();
     await page.getByRole('button',{name:'保存全部更改'}).scrollIntoViewIfNeeded();

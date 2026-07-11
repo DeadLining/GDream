@@ -102,6 +102,7 @@ describe('ProviderSettings', () => {
   it('tests unsaved values and reports sanitized success or failure inline', async () => {
     mocks.testProviderChannel
       .mockResolvedValueOnce({status: 'ok', model: 'MiniMax-M4', host: 'api.example.com', elapsed_ms: 9, check_scope: 'model', error: null})
+      .mockResolvedValueOnce({status: 'failed', model: 'MiniMax-M4', host: 'api.example.com', elapsed_ms: 11, check_scope: 'model', error: 'Model unavailable'})
       .mockRejectedValueOnce(new Error('Provider returned HTTP 503'));
     render(<ProviderSettings/>);
     await screen.findByRole('heading', {name: '模型渠道'});
@@ -109,11 +110,17 @@ describe('ProviderSettings', () => {
     await userEvent.clear(screen.getByLabelText('剧本规划模型'));
     await userEvent.type(screen.getByLabelText('剧本规划模型'), 'MiniMax-M4');
     await userEvent.click(screen.getByRole('button', {name: '测试剧本规划连接'}));
-    expect(await screen.findByText(/连接成功.*9 ms/)).toBeVisible();
+    expect(await screen.findByText(/连接成功.*9 ms/)).toHaveClass('provider-test-result', 'success');
+    expect(screen.getByText(/连接成功.*9 ms/)).toHaveAttribute('role', 'status');
     expect(mocks.testProviderChannel).toHaveBeenCalledWith('llm', expect.objectContaining({model: 'MiniMax-M4', api_key: '', clear_api_key: false}));
 
     await userEvent.click(screen.getByRole('button', {name: '测试剧本规划连接'}));
-    expect(await screen.findByText('Provider returned HTTP 503')).toHaveAttribute('role', 'status');
+    expect(await screen.findByText('Model unavailable')).toHaveClass('provider-test-result', 'failure');
+    expect(screen.getByText('Model unavailable')).toHaveAttribute('role', 'alert');
+
+    await userEvent.click(screen.getByRole('button', {name: '测试剧本规划连接'}));
+    expect(await screen.findByText('Provider returned HTTP 503')).toHaveClass('provider-test-result', 'failure');
+    expect(screen.getByText('Provider returned HTTP 503')).toHaveAttribute('role', 'alert');
   });
 
   it('preserves, replaces, and clears keys with explicit payload semantics', async () => {
@@ -294,7 +301,9 @@ describe('ProviderSettings', () => {
     expect(settingsStyles).toMatch(/@media \(max-width:\s*1100px\)[\s\S]*\.provider-settings-sections\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     expect(settingsStyles).toMatch(/\.provider-channel-section input\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*height:\s*36px/);
     expect(settingsStyles).toMatch(/\.provider-test-row\s*\{[^}]*min-height:\s*44px/);
-    expect(settingsStyles).toMatch(/\.provider-test-row p\s*\{[^}]*min-height:\s*34px[^}]*overflow-wrap:\s*anywhere/);
+    expect(settingsStyles).toMatch(/\.provider-test-result\s*\{[^}]*min-height:\s*34px[^}]*overflow-wrap:\s*anywhere/);
+    expect(settingsStyles).toMatch(/\.provider-test-result\.success\s*\{[^}]*background:\s*#edf6f1[^}]*color:\s*#286044/);
+    expect(settingsStyles).toMatch(/\.provider-test-result\.failure\s*\{[^}]*background:\s*#f8e4e2[^}]*color:\s*#8c2d27/);
   });
 
   it('keeps three fixed channel sections linked to stable inline result regions', async () => {
