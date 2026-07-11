@@ -1,9 +1,9 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {createEpisode, createProject, getEpisode, getProductionReadiness, getProject, listProjects, startPlanning} from '../lib/api';
+import {createEpisode, createProject, deleteEpisode, getEpisode, getProductionReadiness, getProject, listProjects, previewEpisodeDeletion, startPlanning} from '../lib/api';
 import {pollJob} from '../lib/jobs';
-import type {EpisodeCreate, EpisodeDetail, Job, ProductionReadiness, Project, ProjectCreate, ProjectDetail, Shot} from '../lib/types';
+import type {EpisodeCreate, EpisodeDeletionPreview, EpisodeDetail, EpisodeSummary, Job, ProductionReadiness, Project, ProjectCreate, ProjectDetail, Shot} from '../lib/types';
 import {AppToolbar} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
 import {CreateProjectDialog} from './CreateProjectDialog';
@@ -17,6 +17,7 @@ import {Storyboard} from './Storyboard';
 import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
 import {ScriptImportWorkspace} from './ScriptImportWorkspace';
 import {CharacterWorkspace} from './CharacterWorkspace';
+import {DeleteEpisodeDialog} from './DeleteEpisodeDialog';
 
 export function Workspace() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -35,6 +36,11 @@ export function Workspace() {
   const [episodeDialog, setEpisodeDialog] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [healthRefreshKey, setHealthRefreshKey] = useState(0);
+  const [deletingEpisode,setDeletingEpisode]=useState<EpisodeSummary|null>(null);
+  const [deletionPreview,setDeletionPreview]=useState<EpisodeDeletionPreview|null>(null);
+  const [deletionBusy,setDeletionBusy]=useState(false);
+  const [deletionError,setDeletionError]=useState('');
+  const [deletionWarnings,setDeletionWarnings]=useState<string[]>([]);
   const navigationRequest = useRef(0);
 
   useEffect(() => {
@@ -137,6 +143,9 @@ export function Workspace() {
   const canLeaveSettings = () => workArea !== 'settings' || !settingsDirty || window.confirm('模型渠道有未保存更改，确定离开吗？');
   const navigateProject = (id: string) => {if (canLeaveSettings()) void loadProject(id);};
   const navigateEpisode = (id: string) => {if (canLeaveSettings()) void loadEpisode(id);};
+  const openEpisodeDeletion=async(id:string)=>{const target=project?.episodes.find(item=>item.id===id);if(!target)return;setDeletingEpisode(target);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);try{setDeletionPreview(await previewEpisodeDeletion(id));}catch(cause){setDeletionError(cause instanceof Error?cause.message:'无法读取删除影响');}};
+  const closeEpisodeDeletion=()=>{if(deletionBusy)return;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);};
+  const confirmEpisodeDeletion=async()=>{if(!deletingEpisode||deletionBusy)return;setDeletionBusy(true);setDeletionError('');try{const result=await deleteEpisode(deletingEpisode.id);setDeletionWarnings(result.cleanup_warnings);await loadProject(deletingEpisode.project_id);setDeletingEpisode(null);setDeletionPreview(null);}catch(cause){setDeletionError(cause instanceof Error?cause.message:'删除失败');}finally{setDeletionBusy(false);}};
   const openReview = () => {
     if (!mobile) {
       changeWorkArea('review');
@@ -204,6 +213,7 @@ export function Workspace() {
         episodeId={episode?.id ?? null}
         onProject={navigateProject}
         onEpisode={navigateEpisode}
+        onDeleteEpisode={id=>void openEpisodeDeletion(id)}
         onNewProject={() => setProjectDialog(true)}
         onNewEpisode={() => setEpisodeDialog(true)}
         onScriptImport={() => changeWorkArea('import')}
@@ -225,5 +235,6 @@ export function Workspace() {
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>
+    <DeleteEpisodeDialog episode={deletingEpisode} preview={deletionPreview} busy={deletionBusy} error={deletionError} warnings={deletionWarnings} onCancel={closeEpisodeDeletion} onConfirm={()=>void confirmEpisodeDeletion()}/>
   </div>;
 }

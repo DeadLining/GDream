@@ -41,6 +41,13 @@ export type Scene = {
 };
 
 export type EpisodeDetail = EpisodeSummary & {scenes: Scene[]};
+export type EpisodeDeletionPreview = {
+  episode_id:string; title:string;
+  deleted:{scenes:number;shots:number;dialogue_lines:number;assets:number};
+};
+export type EpisodeDeletionResult = EpisodeDeletionPreview & {
+  deleted_episode_id:string; cleanup_warnings:string[];
+};
 
 export type Asset = {
   id: string; kind: string; media_url: string; media_type: string; provider: string;

@@ -11,6 +11,7 @@ import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} fr
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
+  previewEpisodeDeletion: vi.fn(), deleteEpisode: vi.fn(),
   listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
   getProductionRun: vi.fn(), createProductionRun: vi.fn(), continueProductionRun: vi.fn(), pauseProductionRun: vi.fn(),
   listProductionItems: vi.fn(), retryProductionRun: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('../lib/api', () => ({
   listProjects: mocks.listProjects, getProject: mocks.getProject,
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
+  previewEpisodeDeletion: mocks.previewEpisodeDeletion, deleteEpisode: mocks.deleteEpisode,
   listPanelVersions: mocks.listPanelVersions,
   getProductionReadiness: mocks.getProductionReadiness,
   getProviderHealth: mocks.getProviderHealth, startRender: mocks.startRender,
@@ -136,6 +138,30 @@ describe('Workspace', () => {
     mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
     mocks.listProductionItems.mockResolvedValue([]);
+    mocks.previewEpisodeDeletion.mockResolvedValue({
+      episode_id:'episode-2',title:'第二集',
+      deleted:{scenes:2,shots:3,dialogue_lines:4,assets:5},
+    });
+  });
+
+  it('opens episode deletion impact without selecting the requested episode', async () => {
+    const second={...projectDetail.episodes[0],id:'episode-2',title:'第二集'};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue({...projectDetail,episodes:[projectDetail.episodes[0],second]});
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace/>);
+
+    expect(await screen.findByRole('heading',{name:'失窃的雨夜'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'删除剧集：第二集'}));
+
+    expect(await screen.findByRole('dialog',{name:'永久删除剧集'})).toBeVisible();
+    expect(screen.getByText('2 个场景')).toBeVisible();
+    expect(screen.getByText('3 个分镜')).toBeVisible();
+    expect(screen.getByText('4 条对白')).toBeVisible();
+    expect(screen.getByText('5 个媒体素材')).toBeVisible();
+    expect(mocks.previewEpisodeDeletion).toHaveBeenCalledWith('episode-2');
+    expect(mocks.getEpisode).not.toHaveBeenCalledWith('episode-2');
   });
 
   it('opens provider settings without a project and returns to the create-project empty state', async () => {
@@ -316,7 +342,7 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', {name: '项目资料'})).toBeVisible();
     expect(screen.getByRole('button', {name: '故事圣经'})).toBeVisible();
     expect(screen.getByRole('button', {name: '角色设定'})).toBeVisible();
-    expect(screen.getByRole('button', {name: /失窃的雨夜/})).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', {current: 'page'})).toHaveAccessibleName(/失窃的雨夜/);
   });
 
   it('opens the real provider settings workspace and confirms leaving dirty changes', async () => {

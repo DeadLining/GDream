@@ -105,12 +105,17 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .nav-group-heading h2 { margin: 0; font-size: 11px; font-weight: 700; }
 .nav-group-heading > span { font-size: 10px; }
 .episode-list { display: grid; gap: 2px; }
-.episode-item { min-height: 52px; padding: 8px 7px; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; }
+.episode-row { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) 32px; align-items: stretch; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; }
+.episode-row:hover { background: #eef1f2; }.episode-row.active { border-left-color: var(--accent); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.episode-item { min-width: 0; min-height: 52px; padding: 8px 5px; border-left: 0; border-radius: 0; }
 .episode-item:hover { background: #eef1f2; }
-.episode-item.active { border-left-color: var(--accent); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.episode-row.active .episode-item { background: transparent; }
 .episode-item > span:first-child { color: var(--muted-strong); }
 .episode-item strong { color: var(--ink); font-size: 12px; }
 .episode-item small { color: var(--muted-strong); font-size: 10px; }
+.episode-delete { width: 32px; min-height: 32px; align-self: center; border: 0; border-radius: 4px; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; opacity: 0; }.episode-row:hover .episode-delete,.episode-delete:focus-visible { opacity: 1; }.episode-delete:hover { background: #f8e9e7; color: #a72e26; }
+.delete-episode-dialog header p { margin: 4px 0 0; color: var(--muted-strong); font-size: 12px; }.delete-episode-copy { margin: 16px 0 12px; color: var(--muted-strong); font-size: 13px; line-height: 1.55; }.delete-impact { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }.delete-impact span { border-top: 1px solid var(--line); padding: 9px 0; color: var(--ink); font-size: 12px; }.delete-preview-loading { color: var(--muted); font-size: 12px; }.danger-action { min-height: 38px; border: 1px solid #a72e26; background: #a72e26; color: white; padding: 0 16px; font-weight: 700; }.danger-action:disabled { opacity: .55; }.cleanup-warning { color: #7a5412; font-size: 12px; }
+@media (max-width: 600px) { .delete-episode-dialog footer { display: grid; grid-template-columns: 1fr; }.delete-episode-dialog footer button { width: 100%; } }
 .nav-item { min-height: 36px; padding: 0 8px; border-radius: 4px; color: var(--muted-strong); }
 .nav-item > span { margin: 0; color: var(--ink); font-size: 12px; }
 .nav-item > small { margin-left: auto; color: var(--muted-strong); }

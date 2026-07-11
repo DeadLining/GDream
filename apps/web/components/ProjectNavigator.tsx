@@ -1,12 +1,13 @@
-import {BookOpen, Clapperboard, FileText, Plus, Settings2, Users} from 'lucide-react';
+import {BookOpen, Clapperboard, FileText, Plus, Settings2, Trash2, Users} from 'lucide-react';
 import type {Project, ProjectDetail} from '../lib/types';
 
-export function ProjectNavigator({projects, project, episodeId, onProject, onEpisode, onNewProject, onNewEpisode, onScriptImport, onCharacters, onProviderSettings}: {
+export function ProjectNavigator({projects, project, episodeId, onProject, onEpisode, onDeleteEpisode, onNewProject, onNewEpisode, onScriptImport, onCharacters, onProviderSettings}: {
   projects: Project[];
   project: ProjectDetail | null;
   episodeId: string | null;
   onProject: (id: string) => void;
   onEpisode: (id: string) => void;
+  onDeleteEpisode: (id: string) => void;
   onNewProject: () => void;
   onNewEpisode: () => void;
   onScriptImport: () => void;
@@ -30,17 +31,10 @@ export function ProjectNavigator({projects, project, episodeId, onProject, onEpi
             <span>{project?.episodes.length ?? 0}</span>
           </div>
           <div className="episode-list">
-            {project?.episodes.map((episode, index) => (
-              <button
-                key={episode.id}
-                className={`episode-item ${episodeId === episode.id ? 'active' : ''}`}
-                aria-current={episodeId === episode.id ? 'page' : undefined}
-                onClick={() => onEpisode(episode.id)}
-              >
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <span><strong>{episode.title}</strong><small>{episode.status === 'planned' ? '已规划' : '尚未规划'}</small></span>
-              </button>
-            ))}
+            {project?.episodes.map((episode, index) => <div key={episode.id} className={`episode-row ${episodeId===episode.id?'active':''}`}>
+              <button className="episode-item" aria-current={episodeId===episode.id?'page':undefined} onClick={()=>onEpisode(episode.id)}><span>{String(index+1).padStart(2,'0')}</span><span><strong>{episode.title}</strong><small>{episode.status==='planned'?'已规划':'尚未规划'}</small></span></button>
+              <button className="episode-delete" aria-label={`删除剧集：${episode.title}`} title={`删除剧集：${episode.title}`} onClick={()=>onDeleteEpisode(episode.id)}><Trash2 aria-hidden="true" size={15}/></button>
+            </div>)}
           </div>
           <button className="creation-command" onClick={onNewEpisode}><Plus aria-hidden="true" size={16}/>新建剧集</button>
         </section>

@@ -1,6 +1,6 @@
 import type {
   Asset, DialogueLine, DialoguePatch, EpisodeCreate, EpisodeDetail, EpisodePatch,
-  EpisodeSummary, Job, Project, ProjectCreate, ProjectDetail, ProjectPatch,
+  EpisodeSummary, EpisodeDeletionPreview, EpisodeDeletionResult, Job, Project, ProjectCreate, ProjectDetail, ProjectPatch,
   ProviderHealth, Shot, ShotPatch, ProductionReadiness, ProductionRun,
   ProductionRunCreate, ProductionItem, ProviderChannelKind, ProviderChannelsRead,
   ProviderChannelTestResult, ProviderChannelUpdate, ProviderChannelUpdateRead,
@@ -51,6 +51,8 @@ export const updateProject = (id: string, data: ProjectPatch) => apiRequest<Proj
 export const createEpisode = (projectId: string, data: EpisodeCreate) => apiRequest<EpisodeSummary>(`/api/projects/${projectId}/episodes`, json('POST', data));
 export const getEpisode = (id: string) => apiRequest<EpisodeDetail>(`/api/episodes/${id}`);
 export const updateEpisode = (id: string, data: EpisodePatch) => apiRequest<EpisodeSummary>(`/api/episodes/${id}`, json('PATCH', data));
+export const previewEpisodeDeletion = (id:string) => apiRequest<EpisodeDeletionPreview>(`/api/episodes/${id}/deletion-preview`);
+export const deleteEpisode = (id:string) => apiRequest<EpisodeDeletionResult>(`/api/episodes/${id}`, {method:'DELETE'});
 export const updateShot = (id: string, data: ShotPatch) => apiRequest<Shot>(`/api/shots/${id}`, json('PATCH', data));
 export const updateDialogue = (id: string, data: DialoguePatch) => apiRequest<DialogueLine>(`/api/dialogue/${id}`, json('PATCH', data));
 export const startPlanning = (episodeId: string) => apiRequest<Job>(`/api/episodes/${episodeId}/plan`, json('POST'));
