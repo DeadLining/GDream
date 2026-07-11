@@ -1,13 +1,15 @@
-import {render, screen, waitFor} from '@testing-library/react';
+import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Workspace} from '../components/Workspace';
-import type {EpisodeDetail, Job, Project, ProjectDetail} from '../lib/types';
+import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
   listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
+  getProductionRun: vi.fn(), createProductionRun: vi.fn(), continueProductionRun: vi.fn(), pauseProductionRun: vi.fn(),
+  listProductionItems: vi.fn(), retryProductionRun: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -17,6 +19,9 @@ vi.mock('../lib/api', () => ({
   listPanelVersions: mocks.listPanelVersions,
   getProductionReadiness: mocks.getProductionReadiness,
   getProviderHealth: mocks.getProviderHealth, startRender: mocks.startRender,
+  getProductionRun: mocks.getProductionRun, createProductionRun: mocks.createProductionRun,
+  continueProductionRun: mocks.continueProductionRun, pauseProductionRun: mocks.pauseProductionRun,
+  listProductionItems: mocks.listProductionItems, retryProductionRun: mocks.retryProductionRun,
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
@@ -41,8 +46,19 @@ const plannedEpisode: EpisodeDetail = {
       composition: '林默走入巷道', camera_motion: 'push_in', character_state: {},
       review_status: 'draft', render_status: 'pending', image_prompt: 'wide comic shot',
       negative_prompt: '', active_panel_asset_id: null, dialogue: [],
+    }, {
+      id: 'shot-2', position: 2, shot_type: 'close_up', duration_seconds: 3,
+      composition: '林默拾起发光芯片', camera_motion: 'still', character_state: {},
+      review_status: 'approved', render_status: 'completed', image_prompt: 'close comic shot',
+      negative_prompt: '', active_panel_asset_id: 'asset-2', dialogue: [],
     }],
   }],
+};
+const readiness: ProductionReadiness = {
+  episode_id: 'episode-1', ready: false,
+  totals: {shots: 2, dialogue: 0},
+  ready_counts: {panels: 1, approved: 1, speech: 0},
+  blockers: {missing_panels: ['shot-1'], unapproved_shots: ['shot-1'], missing_speech: []},
 };
 const succeededJob: Job = {
   id: 'job-1', operation: 'plan_episode', target_type: 'episode', target_id: 'episode-1',
@@ -51,11 +67,14 @@ const succeededJob: Job = {
 };
 
 describe('Workspace', () => {
+  afterEach(cleanup);
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.listPanelVersions.mockResolvedValue([]);
-    mocks.getProductionReadiness.mockResolvedValue({ready: false, blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}});
+    mocks.getProductionReadiness.mockResolvedValue(readiness);
+    mocks.listProductionItems.mockResolvedValue([]);
   });
 
   it('loads an explicit empty state when no projects exist', async () => {
@@ -79,10 +98,48 @@ describe('Workspace', () => {
     render(<Workspace />);
 
     expect(await screen.findByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
+    await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
     await userEvent.click(screen.getByRole('button', {name: '生成剧本与分镜'}));
 
     expect(await screen.findByText('场景 1')).toBeVisible();
     expect(screen.getByRole('button', {name: /镜头 1/})).toBeEnabled();
     await waitFor(() => expect(mocks.startPlanning).toHaveBeenCalledWith('episode-1'));
+  });
+
+  it('opens on overview and navigates between episode work areas', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+
+    expect(await screen.findByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
+    expect(screen.getByRole('tab', {name: '分镜'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '生产'}));
+    expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '审核'}));
+    expect(screen.getByTestId('review-placeholder')).toBeVisible();
+  });
+
+  it('preserves the selected shot when switching from overview to storyboard', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('button', {name: /镜头 2/}));
+    expect(screen.getByRole('heading', {name: '镜头 2'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
+
+    expect(screen.getByRole('heading', {name: '镜头 2'})).toBeVisible();
+    expect(screen.getByRole('button', {name: /镜头 2/})).toHaveClass('selected');
   });
 });

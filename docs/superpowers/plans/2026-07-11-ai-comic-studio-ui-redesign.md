@@ -102,7 +102,7 @@ git commit -m "feat: add episode production overview"
 - Modify: `apps/web/components/Workspace.tsx`
 - Modify: `apps/web/tests/workspace.test.tsx`
 
-- [ ] **Step 1: Write failing workspace navigation tests**
+- [x] **Step 1: Write failing workspace navigation tests**
 
 Extend `workspace.test.tsx` to verify:
 
@@ -116,7 +116,7 @@ expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
 
 Also select a shot from overview, switch to storyboard, and assert the same shot remains selected and appears in the inspector.
 
-- [ ] **Step 2: Run the workspace test and confirm missing tabs**
+- [x] **Step 2: Run the workspace test and confirm missing tabs**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/workspace.test.tsx
@@ -124,7 +124,7 @@ npm test --workspace @comic-studio/web -- --run tests/workspace.test.tsx
 
 Expected: FAIL because the overview-first tab workflow does not exist.
 
-- [ ] **Step 3: Implement `WorkspaceTabs`**
+- [x] **Step 3: Implement `WorkspaceTabs`**
 
 Use a typed work-area contract:
 
@@ -140,7 +140,7 @@ export function WorkspaceTabs({value, onChange, mobile = false}: {
 
 Desktop tabs expose overview, storyboard, production, and review. Mobile exposes overview, storyboard, production, and inspector.
 
-- [ ] **Step 4: Refactor `Workspace` orchestration**
+- [x] **Step 4: Refactor `Workspace` orchestration**
 
 Add `workArea`, `readiness`, and one shared selected-shot ID. Render the center work area by typed branch:
 
@@ -156,7 +156,7 @@ const center = workArea === 'overview'
 
 Refresh both episode and readiness after edits or terminal production states. Do not duplicate selection state inside child views.
 
-- [ ] **Step 5: Run tests and build**
+- [x] **Step 5: Run tests and build**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/workspace.test.tsx tests/episode-overview.test.tsx
@@ -165,7 +165,7 @@ npm run build --workspace @comic-studio/web
 
 Expected: tests and TypeScript build pass.
 
-- [ ] **Step 6: Commit workspace navigation**
+- [x] **Step 6: Commit workspace navigation**
 
 ```bash
 git add apps/web/components/WorkspaceTabs.tsx apps/web/components/Workspace.tsx apps/web/tests/workspace.test.tsx
