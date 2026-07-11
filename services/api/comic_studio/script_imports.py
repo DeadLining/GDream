@@ -107,8 +107,14 @@ class ScriptImportDraft(StrictDraftModel):
 
 
 class ScriptImportCreate(StrictDraftModel):
-    mode: Literal["auto", "screenplay", "prose"] = "auto"
-    text: str = Field(min_length=1)
+    mode: Literal["generate", "auto", "screenplay", "prose"] = "auto"
+    text: str = ""
+
+    @model_validator(mode="after")
+    def validate_source(self):
+        if self.mode != "generate" and not self.text.strip():
+            raise ValueError("source text is required")
+        return self
 
 
 class ScriptImportConfirm(StrictDraftModel):
@@ -135,7 +141,7 @@ class ScriptImportRead(BaseModel):
 
 
 class ScriptImportModeForm(StrictDraftModel):
-    mode: Literal["auto", "screenplay", "prose"] = "auto"
+    mode: Literal["generate", "auto", "screenplay", "prose"] = "auto"
 
     @field_validator("mode", mode="before")
     @classmethod

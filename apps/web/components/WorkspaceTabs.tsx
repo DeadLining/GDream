@@ -4,7 +4,7 @@ export type WorkArea = 'overview' | 'import' | 'characters' | 'storyboard' | 'pr
 
 const desktopTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'overview', label: '总览'},
-  {value: 'import', label: '剧本导入'},
+  {value: 'import', label: '剧本创作'},
   {value: 'characters', label: '角色'},
   {value: 'storyboard', label: '分镜'},
   {value: 'production', label: '生产'},
@@ -14,7 +14,7 @@ const desktopTabs: Array<{value: WorkArea; label: string}> = [
 
 const mobileTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'overview', label: '总览'},
-  {value: 'import', label: '导入'},
+  {value: 'import', label: '创作'},
   {value: 'characters', label: '角色'},
   {value: 'storyboard', label: '分镜'},
   {value: 'production', label: '生产'},

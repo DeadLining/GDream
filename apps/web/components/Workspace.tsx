@@ -30,6 +30,7 @@ export function Workspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [job, setJob] = useState<Job | null>(null);
+  const [planStarting, setPlanStarting] = useState(false);
   const [projectDialog, setProjectDialog] = useState(false);
   const [episodeDialog, setEpisodeDialog] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
@@ -154,12 +155,18 @@ export function Workspace() {
     await refreshEpisode();
   };
   const planEpisode = async () => {
-    if (!episode || (job && ['queued', 'running'].includes(job.status))) return;
-    const started = await startPlanning(episode.id);
-    setJob(started);
-    const finished = await pollJob(started.id);
-    setJob(finished);
-    if (finished.status === 'succeeded') await loadEpisode(episode.id);
+    if (!episode || planStarting || (job && ['queued', 'running'].includes(job.status))) return;
+    setPlanStarting(true);
+    try {
+      const started = await startPlanning(episode.id);
+      setJob(started);
+      setPlanStarting(false);
+      const finished = await pollJob(started.id);
+      setJob(finished);
+      if (finished.status === 'succeeded') await loadEpisode(episode.id);
+    } finally {
+      setPlanStarting(false);
+    }
   };
 
   const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => changeWorkArea('production')} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey}/>;
@@ -172,12 +179,12 @@ export function Workspace() {
   else if (workArea === 'import' && project) center = <ScriptImportWorkspace projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (workArea === 'characters' && project) center = <CharacterWorkspace characters={project.characters}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
-  else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
+  else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => changeWorkArea('production')} onOpenReview={openReview}/>;
   else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
-  else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job}/>;
+  else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   const visibleWorkAreas: WorkArea[] = !projects.length
     ? ['overview', 'settings']
     : mobile
@@ -214,7 +221,7 @@ export function Workspace() {
         id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
         role={workArea === 'inspector' ? 'tabpanel' : undefined}
         aria-labelledby={workArea === 'inspector' ? 'workspace-tab-inspector' : undefined}
-      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
+      >{selectedShot ? <Inspector shot={selectedShot} characters={project?.characters ?? []} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>

@@ -101,9 +101,9 @@ export type ProjectPatch = Partial<ProjectCreate>;
 export type EpisodeCreate = Pick<EpisodeSummary, 'title' | 'premise' | 'target_duration_seconds'>;
 export type EpisodePatch = Partial<EpisodeCreate>;
 export type ShotPatch = Partial<Pick<Shot, 'duration_seconds' | 'composition' | 'camera_motion' | 'image_prompt' | 'negative_prompt' | 'video_prompt' | 'negative_video_prompt' | 'review_status'>>;
-export type DialoguePatch = Partial<Pick<DialogueLine, 'text' | 'subtitle_text' | 'emotion' | 'performance_instruction' | 'start_seconds'>>;
+export type DialoguePatch = Partial<Pick<DialogueLine, 'character_id' | 'text' | 'subtitle_text' | 'emotion' | 'performance_instruction' | 'start_seconds'>>;
 
-export type ScriptImportMode = 'auto' | 'screenplay' | 'prose';
+export type ScriptImportMode = 'generate' | 'auto' | 'screenplay' | 'prose';
 export type ScriptImportDialogue = {speaker_draft_id:string|null;narration:boolean;text:string;subtitle_text:string;emotion:string;performance_instruction:string};
 export type ScriptImportShot = {shot_type:string;duration_seconds:number;composition:string;camera_motion:string;character_state:Record<string,unknown>;image_prompt:string;negative_prompt:string;dialogue:ScriptImportDialogue[]};
 export type ScriptImportScene = {location:string;time_of_day:string;summary:string;continuity_state:Record<string,unknown>;estimated_duration_seconds:number;shots:ScriptImportShot[]};

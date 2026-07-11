@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -17,6 +17,33 @@ from comic_studio.provider_channels import validate_http_url
 AspectRatio = Literal["9:16", "16:9", "1:1"]
 ReviewStatus = Literal["draft", "needs_changes", "approved"]
 ProviderChannelKind = Literal["llm", "image", "tts", "video"]
+SafeIdentifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")]
+
+
+class MockSshStart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    host_id: SafeIdentifier
+    alias: SafeIdentifier
+
+
+class MockSshHostRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: SafeIdentifier
+    name: str
+    type: str
+
+
+class MockSshStatusRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    desired_running: bool
+    state: Literal["stopped", "starting", "running", "stopping", "failed"]
+    host_id: str = ""
+    alias: str = ""
+    port: int | None = Field(default=None, ge=1, le=65535)
+    error: str | None = None
 
 
 class ProviderChannelUpdate(BaseModel):
@@ -203,6 +230,7 @@ class DialogueRead(BaseModel):
 
 
 class DialoguePatch(PatchModel):
+    character_id: str | None = None
     text: str | None = Field(default=None, min_length=1)
     subtitle_text: str | None = Field(default=None, min_length=1)
     emotion: str | None = Field(default=None, min_length=1, max_length=80)

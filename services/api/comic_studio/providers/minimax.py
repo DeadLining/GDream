@@ -25,6 +25,13 @@ scenes, shots, and dialogue when needed. Give every draft character and episode 
 Dialogue must reference a supplied character draft_id or be explicitly marked as narration. Preserve
 story meaning, expose uncertainty through warnings, and do not use Markdown fences."""
 
+SCRIPT_GENERATION_SYSTEM_PROMPT = """You are the lead writer and storyboard planner for a serialized
+Chinese dynamic comic studio. Return one JSON object only using the supplied strict import schema.
+Create coherent new episodes, scenes, shots, and dialogue from the complete project canon. Preserve
+established character constraints and continuity, and avoid duplicating existing episodes. Give every
+draft character and episode a stable draft_id. Dialogue must reference a supplied character draft_id
+or be explicitly marked as narration. Expose uncertainty through warnings and do not use Markdown fences."""
+
 
 def _extract_text(payload: dict[str, Any]) -> str:
     for item in payload.get("content", []):
@@ -105,11 +112,16 @@ class MiniMaxProvider:
         raise ProviderError("MiniMax planning failed")
 
     async def parse_script_import(self, context: dict[str, Any]) -> ScriptImportDraft:
+        generating = context.get("mode") == "generate"
+        instruction = (
+            "Create a new script and storyboard draft using the required import JSON schema:\n"
+            if generating
+            else "Structure this script using the required import JSON schema:\n"
+        )
         messages = [
             {
                 "role": "user",
-                "content": "Structure this script using the required import JSON schema:\n"
-                + json.dumps(context, ensure_ascii=False),
+                "content": instruction + json.dumps(context, ensure_ascii=False),
             }
         ]
         validation_feedback = ""
@@ -125,7 +137,14 @@ class MiniMaxProvider:
                     }
                 )
             try:
-                text = await self._request(messages, system=SCRIPT_IMPORT_SYSTEM_PROMPT)
+                text = await self._request(
+                    messages,
+                    system=(
+                        SCRIPT_GENERATION_SYSTEM_PROMPT
+                        if generating
+                        else SCRIPT_IMPORT_SYSTEM_PROMPT
+                    ),
+                )
                 repaired = repair_json(_strip_fences(text), return_objects=True)
                 return ScriptImportDraft.model_validate(repaired)
             except (json.JSONDecodeError, ValidationError, ValueError) as exc:

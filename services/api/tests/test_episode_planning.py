@@ -36,6 +36,13 @@ class FakePlanner:
         )
 
 
+class UnknownCharacterPlanner(FakePlanner):
+    async def plan_episode(self, context):
+        plan = await super().plan_episode(context)
+        plan.scenes[0].shots[0].dialogue[0].character_id = "missing-character"
+        return plan
+
+
 def test_planning_persists_a_complete_ordered_graph(db_session):
     project = models.Project(
         title="霓虹夜行",
@@ -62,3 +69,27 @@ def test_planning_persists_a_complete_ordered_graph(db_session):
     assert planned.scenes[0].position == 1
     assert planned.scenes[0].shots[0].position == 1
     assert planned.scenes[0].shots[0].dialogue[0].position == 1
+
+
+def test_planning_discards_character_ids_not_in_the_project(db_session):
+    project = models.Project(
+        title="霓虹夜行",
+        logline="失忆侦探寻找记忆",
+        story_bible="近未来重庆",
+        visual_style="Chinese noir",
+        aspect_ratio="9:16",
+    )
+    episode = models.Episode(
+        project=project,
+        title="失窃的雨夜",
+        premise="林默寻找芯片",
+        target_duration_seconds=60,
+    )
+    db_session.add(episode)
+    db_session.commit()
+
+    planned = asyncio.run(
+        PlanningService(db_session, UnknownCharacterPlanner()).plan_episode(episode.id)
+    )
+
+    assert planned.scenes[0].shots[0].dialogue[0].character_id is None

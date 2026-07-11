@@ -227,6 +227,28 @@ async def test_minimax_parses_script_import_with_import_specific_prompt():
 
 
 @pytest.mark.anyio
+async def test_minimax_generates_script_from_project_context():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"content": [{"type": "text", "text": json.dumps(VALID_IMPORT_DRAFT)}]},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        await MiniMaxProvider(api_key="secret", client=client).parse_script_import(
+            {"mode": "generate", "project": {"title": "雨夜"}, "creation_brief": "新冲突"}
+        )
+
+    assert "create" in captured["body"]["messages"][0]["content"].lower()
+    assert "avoid duplicating" in captured["body"]["system"].lower()
+
+
+@pytest.mark.anyio
 async def test_minimax_script_import_retries_once_then_raises_sanitized_error():
     requests = []
 

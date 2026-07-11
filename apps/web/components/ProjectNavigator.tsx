@@ -47,7 +47,7 @@ export function ProjectNavigator({projects, project, episodeId, onProject, onEpi
 
         <section className="nav-group" aria-labelledby="resources-heading">
           <div className="nav-group-heading"><h2 id="resources-heading">项目资料</h2></div>
-          <button className="nav-item" onClick={onScriptImport}><FileText aria-hidden="true" size={17}/><span>剧本导入</span></button>
+          <button className="nav-item" onClick={onScriptImport}><FileText aria-hidden="true" size={17}/><span>剧本创作</span></button>
           <button className="nav-item" aria-label="角色设定" onClick={onCharacters}><Users aria-hidden="true" size={17}/><span>角色设定</span><small aria-hidden="true">{project?.characters.length ?? 0}</small></button>
           <button className="nav-item placeholder" title="故事圣经将在后续任务中接入"><BookOpen aria-hidden="true" size={17}/><span>故事圣经</span></button>
         </section>

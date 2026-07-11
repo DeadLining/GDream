@@ -36,9 +36,17 @@ const manifest = {
 const propsPath = resolve(outDir, 'fixture-props.json');
 writeFileSync(propsPath, JSON.stringify({manifest}, null, 2));
 
+const chromePath = process.platform === 'darwin'
+  ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+  : null;
+const browserArgs = chromePath && existsSync(chromePath)
+  ? ['--browser-executable', chromePath]
+  : [];
+
 execFileSync(
   'npx',
   ['remotion', 'render', 'src/index.tsx', 'ComicEpisode', resolve(outDir, 'fixture.mp4'),
-    '--props', propsPath, '--codec', 'h264', '--crf', '20'],
+    '--props', propsPath, '--codec', 'h264', '--crf', '20', '--concurrency', '1',
+    '--port', '3199', ...browserArgs],
   {cwd: root, stdio: 'inherit'},
 );

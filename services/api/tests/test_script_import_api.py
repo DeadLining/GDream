@@ -35,6 +35,28 @@ def test_creates_pasted_script_import_without_mutating_project(client):
     assert detail["episodes"] == []
 
 
+def test_creates_generated_script_import_with_optional_brief(client):
+    project = _create_project(client)
+
+    empty = client.post(
+        f"/api/projects/{project['id']}/script-imports",
+        json={"mode": "generate", "text": ""},
+    )
+    guided = client.post(
+        f"/api/projects/{project['id']}/script-imports",
+        json={"mode": "generate", "text": "聚焦角色冲突"},
+    )
+
+    assert empty.status_code == 201
+    assert empty.json()["mode"] == "generate"
+    assert empty.json()["source_format"] == "generated"
+    assert empty.json()["extracted_text"] == ""
+    assert guided.status_code == 201
+    assert guided.json()["source_format"] == "generated"
+    assert guided.json()["extracted_text"] == "聚焦角色冲突"
+    assert guided.json()["checksum"] != empty.json()["checksum"]
+
+
 def test_creates_multipart_docx_import(client):
     project = _create_project(client)
     from tests.test_script_extraction import _docx_bytes

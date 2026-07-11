@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from comic_studio import schemas
+from comic_studio import models, schemas
 from comic_studio.db import get_session
 from comic_studio.jobs import JobStore
 from comic_studio.repositories import EpisodeRepository
@@ -58,9 +58,18 @@ def update_shot(shot_id: str, data: schemas.ShotPatch, session: SessionDependenc
 def update_dialogue(
     dialogue_id: str, data: schemas.DialoguePatch, session: SessionDependency
 ):
-    dialogue = EpisodeRepository(session).update_dialogue(dialogue_id, data)
+    dialogue = session.get(models.DialogueLine, dialogue_id)
     if dialogue is None:
         raise HTTPException(status_code=404, detail="Dialogue line not found")
+    if "character_id" in data.model_fields_set and data.character_id is not None:
+        character = session.get(models.Character, data.character_id)
+        project_id = dialogue.shot.scene.episode.project_id
+        if character is None or character.project_id != project_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Dialogue character must belong to the episode project",
+            )
+    dialogue = EpisodeRepository(session).update_dialogue(dialogue_id, data)
     return dialogue
 
 

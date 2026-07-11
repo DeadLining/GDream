@@ -253,6 +253,41 @@ describe('Workspace', () => {
     await waitFor(() => expect(mocks.startPlanning).toHaveBeenCalledWith('episode-1'));
   });
 
+  it('shows immediate feedback while the planning request is starting', async () => {
+    const pending = deferred<Job>();
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue({...projectDetail.episodes[0], scenes: []});
+    mocks.startPlanning.mockReturnValue(pending.promise);
+
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '分镜'}));
+    await userEvent.click(screen.getByRole('button', {name: '生成剧本与分镜'}));
+
+    expect(screen.getByRole('button', {name: '正在启动剧本规划'})).toBeDisabled();
+    expect(screen.getByLabelText('剧本规划启动中')).toBeVisible();
+  });
+
+  it('guards replacement planning for an episode with existing shots', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.startPlanning.mockResolvedValue(succeededJob);
+    mocks.pollJob.mockResolvedValue(succeededJob);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '分镜'}));
+    const regenerate = screen.getByRole('button', {name: '重新生成分镜'});
+    await userEvent.click(regenerate);
+    expect(mocks.startPlanning).not.toHaveBeenCalled();
+    await userEvent.click(regenerate);
+    await waitFor(() => expect(mocks.startPlanning).toHaveBeenCalledWith('episode-1'));
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
   it('exposes the active project context and accessible studio commands', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
@@ -417,10 +452,10 @@ describe('Workspace', () => {
     expect(workspaceStyles).toMatch(/\.mobile-settings \.workspace-inspector[^}]*display:\s*none/);
   });
 
-  it('keeps five mobile work areas in one stable 44px tab row', () => {
+  it('keeps seven mobile work areas in one stable 44px tab row', () => {
     const mobileTabsRule = workspaceStyles.match(/\.workspace-tabs-mobile\s*\{[^}]*grid-template-columns:\s*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)[^}]*\}/);
 
-    expect(mobileTabsRule?.[1]).toBe('5');
+    expect(mobileTabsRule?.[1]).toBe('7');
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*display:\s*grid/);
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*none/);
   });
@@ -595,7 +630,7 @@ describe('Workspace', () => {
   it('supports roving keyboard navigation across workspace tabs', async () => {
     render(<TabsHarness />);
     const overview = screen.getByRole('tab', {name: '总览'});
-    const scriptImport = screen.getByRole('tab', {name: '剧本导入'});
+    const scriptImport = screen.getByRole('tab', {name: '剧本创作'});
     const characters = screen.getByRole('tab', {name: '角色'});
     const storyboard = screen.getByRole('tab', {name: '分镜'});
 

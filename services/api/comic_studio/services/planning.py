@@ -57,6 +57,7 @@ class PlanningService:
             ],
         }
         plan = await self.planner.plan_episode(context)
+        valid_character_ids = {character.id for character in episode.project.characters}
 
         try:
             self.session.execute(
@@ -85,11 +86,14 @@ class PlanningService:
                     for line_position, planned_line in enumerate(
                         planned_shot.dialogue, start=1
                     ):
+                        line_data = planned_line.model_dump()
+                        if line_data["character_id"] not in valid_character_ids:
+                            line_data["character_id"] = None
                         self.session.add(
                             models.DialogueLine(
                                 shot_id=shot.id,
                                 position=line_position,
-                                **planned_line.model_dump(),
+                                **line_data,
                             )
                         )
             episode.status = "planned"

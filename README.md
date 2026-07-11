@@ -1,18 +1,20 @@
-# AI Comic Studio v0.3.0
+# AI Comic Studio v0.4.0
 
 Local production workspace for serialized Chinese dynamic comics.
 
-The v0.3 workspace adds persisted episode production runs to the existing project, episode, review, and render workflow. Creators can batch eligible panel and speech work, pause scheduling, recover after restart, retry selected failures, and render only when the readiness report is clear.
+The v0.4 workspace adds reviewed script imports, versioned character references, reference-aware panel generation, and MiniMax image-to-video production. Existing v0.3 projects and production runs are upgraded in place through Alembic migrations.
 
 ## Interface Workflow
 
 The studio opens on an overview-first episode cockpit. The overview summarizes shot, panel, speech, and approval progress, keeps readiness blockers visible, and links directly to the affected shot or work area.
 
-Desktop work is organized into four areas:
+Desktop work includes these primary areas:
 
 - `总览` tracks episode progress and render readiness.
+- `剧本导入` accepts pasted text, TXT, DOCX, and text PDFs, then previews the graph before transactional confirmation.
+- `角色` manages approved active reference images used by panel generation.
 - `分镜` presents stable shot cards for selecting and comparing the episode sequence.
-- `生产` runs and monitors persisted panel and speech batches, including readable per-item failures and selective retries.
+- `生产` runs and monitors persisted panel, speech, and video batches, including readable per-item failures and selective retries.
 - `审核` collects only shots that still need a panel or approval and routes them back to the shared shot context.
 
 The shot inspector remains visible beside the desktop work area. Selection is shared across overview, storyboard, production, and review, so switching areas does not lose the active shot. Use the inspector to edit shot details, generate or activate panel versions, update review state, and manage dialogue and speech.
@@ -24,13 +26,14 @@ On mobile, the same workflow is exposed as four equal navigation areas: `总览`
 - Planning: MiniMax Anthropic API, model `MiniMax-M3`
 - Images: internal GPT Image API, model `gpt-image-2`
 - Speech: Qwen3-TTS service on A800_94, model `Qwen3-TTS-12Hz-1.7B-CustomVoice`
+- Video: MiniMax image-to-video, default model `MiniMax-Hailuo-02`
 - Composition: Remotion and FFmpeg
 
 No API key is stored in source code, SQLite, browser storage, or generated metadata.
 
 ## Provider Channel Configuration
 
-Open `模型渠道` in the Studio to manage planning, image, and speech providers at runtime. The backend owns this configuration; the browser receives only redacted key status and never stores provider keys.
+Open `模型渠道` in the Studio to manage planning, image, speech, and video providers at runtime. The backend owns this configuration; the browser receives only redacted key status and never stores provider keys.
 
 On the first startup without `data/provider-channels.json`, provider values are bootstrapped from `.env`. Once the JSON file exists, it is authoritative across API restarts even if `.env` changes. The file is written atomically with owner-only `0600` permissions and is ignored by Git. Do not copy it into logs, screenshots, bug reports, or source control.
 
@@ -52,7 +55,7 @@ cd services/api && uv sync
 cd ../.. && npm install
 ```
 
-Set `MINIMAX_API_KEY` and `GPT_IMAGE_KEY` in `.env`. Confirm the trusted LAN can reach `QWEN_TTS_BASE_URL`.
+Set `MINIMAX_API_KEY`, `GPT_IMAGE_KEY`, and `MINIMAX_VIDEO_API_KEY` in `.env`. Confirm the trusted LAN can reach `QWEN_TTS_BASE_URL`.
 
 When the Mac cannot route directly to A800_94, start the HostBridge SSH endpoint before the API:
 
@@ -84,10 +87,10 @@ The generated fixture is written to `packages/compositor/out/fixture.mp4` and mu
 ## Production Flow
 
 1. Create a project and enter its story bible and visual style.
-2. Add each speaking character with a valid Qwen voice speaker before planning, so MiniMax can preserve real character IDs in dialogue.
-3. Create an episode brief and generate scenes, shots, and dialogue with MiniMax-M3.
+2. Import a script or story, review the structured characters and episodes, then confirm it into the project graph.
+3. Upload or generate a primary character reference, approve it, and activate it before generating panels containing that character.
 4. Select a shot to edit duration, composition, camera motion, prompts, and review state.
-5. Open the production view and select panel generation, speech synthesis, or both.
+5. Open the production view and select panel generation, speech synthesis, video generation, or a custom combination.
 6. Choose bounded concurrency from 1 to 4. By default, approved panels and completed speech are recorded as skipped; enable regeneration only when replacing existing assets intentionally.
 7. Start the persisted run. Each item completes independently, so one provider failure does not stop later eligible work.
 8. Pause to stop new claims while already-running items finish. Continue is idempotent, and an interrupted running process is recovered as paused on API startup.

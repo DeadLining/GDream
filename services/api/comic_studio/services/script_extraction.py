@@ -60,6 +60,19 @@ def extract_pasted_text(text: str) -> ExtractedScript:
     return _result(text, "paste", "", content)
 
 
+def extract_generation_brief(text: str) -> ExtractedScript:
+    brief = text.strip()
+    content = brief.encode("utf-8")
+    if len(content) > MAX_SCRIPT_SOURCE_BYTES:
+        raise ScriptSourceError("source_too_large")
+    return ExtractedScript(
+        text=brief,
+        source_format="generated",
+        filename="",
+        checksum=hashlib.sha256(content).hexdigest(),
+    )
+
+
 def _extract_txt(content: bytes) -> str:
     for encoding in ("utf-8", "gb18030"):
         try:

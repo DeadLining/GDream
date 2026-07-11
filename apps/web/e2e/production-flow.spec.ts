@@ -3,7 +3,8 @@ import path from 'node:path';
 
 const project = {id:'project-1',title:'霓虹夜行',logline:'寻找记忆',story_bible:'近未来重庆',visual_style:'Chinese noir',aspect_ratio:'9:16',language:'Chinese',created_at:'',updated_at:''};
 const episodeSummary = {id:'episode-1',project_id:'project-1',title:'失窃的雨夜',premise:'寻找芯片',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''};
-const projectDetail = {...project,characters:[],episodes:[episodeSummary]};
+const character = {id:'character-1',project_id:'project-1',name:'林夏',role:'主角',appearance_bible:'黑色风衣，银色耳钉',personality:'冷静',continuity_rules:'保持银色耳钉',negative_constraints:'',voice_speaker:'female-1',voice_instruction:'',created_at:'',updated_at:''};
+const projectDetail = {...project,characters:[character],episodes:[episodeSummary]};
 const episode = {...episodeSummary,scenes:[{id:'scene-1',position:1,location:'雨夜巷道',time_of_day:'night',summary:'发现芯片',continuity_state:{},estimated_duration_seconds:10,shots:[
   {id:'shot-1',position:1,shot_type:'wide',duration_seconds:4,composition:'林默走入巷道',camera_motion:'push_in',character_state:{},review_status:'approved',render_status:'pending',image_prompt:'wide comic shot',negative_prompt:'',active_panel_asset_id:'asset-1',dialogue:[]},
   {id:'shot-2',position:2,shot_type:'close_up',duration_seconds:5,composition:'银色左眼映出芯片',camera_motion:'push_in',character_state:{},review_status:'draft',render_status:'pending',image_prompt:'close-up comic shot',negative_prompt:'',active_panel_asset_id:null,dialogue:[]},
@@ -12,6 +13,7 @@ const providerChannels = {
   llm:{name:'MiniMax',enabled:true,base_url:'https://api.example.com/a/very/long/provider/path/that/must/not/overflow',model:'MiniMax-M3-Long-Context-Model',ssh_host:'',api_key_configured:true,api_key_masked:'sk-•••8adr'},
   image:{name:'Internal GPT Image',enabled:true,base_url:'http://192.168.18.80:14000/v1/images/generations',model:'gpt-image-2-production-preview',ssh_host:'',api_key_configured:true,api_key_masked:'sk-•••img9'},
   tts:{name:'A800_94',enabled:true,base_url:'http://192.168.18.94:18080/v1/audio/speech',model:'Qwen3-TTS-12Hz-1.7B-CustomVoice',ssh_host:'ai-comic-tts',api_key_configured:false,api_key_masked:''},
+  video:{name:'MiniMax Video',enabled:true,base_url:'https://api.minimaxi.com',model:'MiniMax-Hailuo-02',ssh_host:'',api_key_configured:true,api_key_masked:'sk-•••vid9'},
   persistence:{status:'saved',file_path:'data/provider-channels.json'},reloaded_at:'2026-07-11T10:00:00Z',
 };
 
@@ -54,16 +56,16 @@ test('provider channel settings stay operable and bounded across studio viewport
     await page.setViewportSize(viewport);
     await page.goto('/');
     const settingsCommand = testInfo.project.name === 'desktop'
-      ? page.getByRole('button',{name:'模型渠道'})
+      ? page.getByRole('button',{name:'模型渠道',exact:true})
       : page.getByRole('tab',{name:'模型渠道'});
     await settingsCommand.click();
 
     await expect(page.getByRole('heading',{name:'模型渠道'})).toBeVisible();
-    await expect(page.getByRole('form')).toHaveCount(3);
+    await expect(page.getByRole('form')).toHaveCount(4);
     await expect(page.getByLabel('剧本规划 Base URL')).toBeVisible();
     const tabs = page.getByRole('tablist',{name:'工作区'});
     const tabButtons = tabs.getByRole('tab');
-    await expect(tabButtons).toHaveCount(5);
+    await expect(tabButtons).toHaveCount(7);
     const controls = [
       page.getByLabel('剧本规划 Base URL'),
       page.getByLabel('替换剧本规划 API Key'),
@@ -156,14 +158,14 @@ test('provider channel settings persist safely and affect the next planning oper
   });
 
   await page.goto('/');
-  await page.getByRole('button', {name: '模型渠道'}).click();
+  await page.getByRole('button', {name: '模型渠道',exact:true}).click();
   await expect(page.getByLabel('剧本规划模型')).toHaveValue(providerChannels.llm.model);
 
   await page.getByLabel('剧本规划模型').fill('MiniMax-Unsaved');
   await expect(page.getByText('有未保存更改')).toBeVisible();
   page.once('dialog', dialog => dialog.accept());
   await page.reload();
-  await page.getByRole('button', {name: '模型渠道'}).click();
+  await page.getByRole('button', {name: '模型渠道',exact:true}).click();
   await expect(page.getByLabel('剧本规划模型')).toHaveValue(providerChannels.llm.model);
   expect(putCount).toBe(0);
 
@@ -202,6 +204,27 @@ test('workspace shows generated panel and shot production controls', async ({pag
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeVisible();
   await expect(page.getByLabel('审核状态')).toHaveValue('draft');
+});
+
+test('dynamic production workflow exposes import references and shot video', async ({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='desktop','Full workflow is covered once on desktop');
+  const draft={project:{title:'雨夜',logline:'追查芯片'},characters:[{draft_id:'c1',name:'林夏',aliases:[],role:'主角',appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'银色耳钉',negative_constraints:'',voice_speaker:'female-1',voice_instruction:''}],episodes:[{draft_id:'e2',enabled:true,title:'第二集',premise:'继续追查',target_duration_seconds:60,scenes:[{location:'天台',time_of_day:'night',summary:'追逐',continuity_state:{},estimated_duration_seconds:5,shots:[{shot_type:'wide',duration_seconds:5,composition:'天台',camera_motion:'push_in',character_state:{},image_prompt:'roof',negative_prompt:'',dialogue:[]}]}]}],warnings:[]};
+  const imported={id:'import-1',project_id:'project-1',status:'ready',mode:'auto',source_format:'paste',original_filename:'',checksum:'x',extracted_text:'雨夜剧本',structured_draft:draft,error:'',error_category:'',created_at:'',updated_at:'',applied_at:null};
+  let reference={id:'ref-1',character_id:'character-1',reference_type:'primary',label:'主参考',position:0,is_active:false,review_status:'draft',created_at:'',asset:{id:'ref-asset',kind:'character-reference',media_url:'/demo-panel.png',media_type:'image/png',provider:'upload',model:'local',generation_attempt:1,review_status:'draft',width:1,height:1,duration_seconds:null,created_at:''}};
+  let videos:any[]=[];
+  await page.route('**/api/projects/project-1/script-imports',route=>route.fulfill({status:201,json:{...imported,status:'uploaded',structured_draft:{}}}));
+  await page.route('**/api/script-imports/import-1/parse',route=>route.fulfill({json:imported}));
+  await page.route('**/api/script-imports/import-1/draft',route=>route.fulfill({json:imported}));
+  await page.route('**/api/script-imports/import-1/confirm',route=>route.fulfill({json:{...imported,status:'applied'}}));
+  await page.route('**/api/characters/character-1/references',route=>route.fulfill({json:[reference]}));
+  await page.route('**/api/character-references/ref-1',async route=>{reference={...reference,review_status:'approved'};await route.fulfill({json:reference});});
+  await page.route('**/api/characters/character-1/references/ref-1/active',async route=>{reference={...reference,is_active:true};await route.fulfill({json:reference});});
+  await page.route('**/api/shots/shot-1/videos*',route=>route.request().method()==='POST'?route.fulfill({status:202,json:{job_id:'video-1',status:'queued'}}):route.fulfill({json:videos}));
+  await page.route('**/api/jobs/video-1',route=>{videos=[{id:'video-asset',kind:'video:shot-1',media_url:'/render.mp4',media_type:'video/mp4',provider:'minimax-video',model:'MiniMax-Hailuo-02',generation_attempt:1,review_status:'draft',width:null,height:null,duration_seconds:6,created_at:''}];return route.fulfill({json:{id:'video-1',operation:'generate_video',target_type:'shot',target_id:'shot-1',status:'succeeded',progress:100,result_metadata:{asset_id:'video-asset'},error:'',retry_count:0,created_at:'',updated_at:''}});});
+
+  await page.goto('/'); await page.getByRole('tab',{name:'剧本创作'}).click(); await page.getByRole('button',{name:'自动识别'}).click(); await page.getByPlaceholder('粘贴剧本、小说或故事文本').fill('雨夜剧本'); await page.getByRole('button',{name:'解析并预览'}).click(); await expect(page.locator('input[value="第二集"]')).toBeVisible(); await page.getByRole('button',{name:/确认导入/}).click();
+  await page.getByRole('tab',{name:'角色'}).click(); await page.getByRole('button',{name:/批准/}).click(); await page.getByRole('button',{name:'设为使用'}).click(); await expect(page.getByText(/使用中/)).toBeVisible();
+  await page.getByRole('tab',{name:'分镜'}).click(); await page.getByRole('button',{name:/镜头 1/}).click(); await page.getByRole('button',{name:'生成视频'}).click(); await expect(page.locator('.video-versions video')).toHaveCount(1);
 });
 
 test('desktop shot selection keeps the storyboard work area active', async ({page}, testInfo) => {

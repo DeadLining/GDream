@@ -125,6 +125,71 @@ def test_parser_persists_preview_without_mutating_project_graph(db_session):
     assert db_session.scalar(select(func.count()).select_from(models.Episode)) == 0
 
 
+def test_generation_context_uses_project_canon_and_existing_episodes(db_session):
+    project = models.Project(
+        title="已有项目",
+        logline="原始梗概",
+        story_bible="原始设定",
+        visual_style="水墨",
+        aspect_ratio="9:16",
+    )
+    character = models.Character(
+        project=project,
+        name="旧角色",
+        role="主角",
+        appearance_bible="灰色外套",
+        personality="谨慎",
+        continuity_rules="戴眼镜",
+        negative_constraints="不要改变发色",
+        voice_speaker="male-1",
+        voice_instruction="低沉",
+    )
+    episode = models.Episode(
+        project=project,
+        title="旧日回声",
+        premise="角色发现旧线索",
+        target_duration_seconds=90,
+        status="planned",
+    )
+    scene = models.Scene(
+        episode=episode,
+        position=1,
+        location="档案馆",
+        time_of_day="night",
+        summary="角色找到被删除的档案",
+        continuity_state={"clue": "red-folder"},
+        estimated_duration_seconds=12,
+    )
+    script_import = models.ScriptImport(
+        project=project,
+        status="uploaded",
+        mode="generate",
+        source_format="generated",
+        checksum="g" * 64,
+        extracted_text="聚焦角色冲突",
+    )
+    db_session.add_all([character, scene, script_import])
+    db_session.commit()
+    planner = FakeImportPlanner()
+
+    asyncio.run(ScriptImportParserService(db_session, planner).parse(script_import.id))
+
+    assert planner.context["mode"] == "generate"
+    assert planner.context["creation_brief"] == "聚焦角色冲突"
+    assert "text" not in planner.context
+    assert planner.context["project"] == {
+        "title": "已有项目",
+        "logline": "原始梗概",
+        "story_bible": "原始设定",
+        "visual_style": "水墨",
+        "aspect_ratio": "9:16",
+    }
+    assert planner.context["characters"][0]["negative_constraints"] == "不要改变发色"
+    assert planner.context["characters"][0]["voice_instruction"] == "低沉"
+    assert planner.context["existing_episodes"][0]["title"] == "旧日回声"
+    assert planner.context["existing_episodes"][0]["scenes"][0]["summary"] == "角色找到被删除的档案"
+
+
 def test_parser_marks_provider_failure_without_replacing_previous_draft(db_session):
     class FailingPlanner:
         async def parse_script_import(self, context):

@@ -13,6 +13,7 @@ from comic_studio.script_imports import (
 )
 from comic_studio.services.script_extraction import (
     ScriptSourceError,
+    extract_generation_brief,
     extract_pasted_text,
     extract_uploaded_script,
 )
@@ -43,7 +44,11 @@ async def create_script_import(project_id: str, request: Request):
         try:
             if content_type.startswith("application/json"):
                 data = ScriptImportCreate.model_validate(await request.json())
-                source = extract_pasted_text(data.text)
+                source = (
+                    extract_generation_brief(data.text)
+                    if data.mode == "generate"
+                    else extract_pasted_text(data.text)
+                )
                 mode = data.mode
             elif content_type.startswith("multipart/form-data"):
                 form = await request.form()

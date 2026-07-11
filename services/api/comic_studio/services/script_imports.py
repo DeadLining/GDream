@@ -25,7 +25,10 @@ class ScriptImportParserService:
             .options(
                 selectinload(models.ScriptImport.project).selectinload(
                     models.Project.characters
-                )
+                ).selectinload(models.Character.references),
+                selectinload(models.ScriptImport.project).selectinload(
+                    models.Project.episodes
+                ).selectinload(models.Episode.scenes),
             )
             .where(models.ScriptImport.id == import_id)
         )
@@ -42,9 +45,9 @@ class ScriptImportParserService:
         self.session.commit()
         context = {
             "mode": script_import.mode,
-            "text": script_import.extracted_text,
             "project": {
                 "title": script_import.project.title,
+                "logline": script_import.project.logline,
                 "story_bible": script_import.project.story_bible,
                 "visual_style": script_import.project.visual_style,
                 "aspect_ratio": script_import.project.aspect_ratio,
@@ -52,8 +55,53 @@ class ScriptImportParserService:
             "existing_characters": [
                 character.name for character in script_import.project.characters
             ],
+            "characters": [
+                {
+                    "id": character.id,
+                    "name": character.name,
+                    "role": character.role,
+                    "appearance_bible": character.appearance_bible,
+                    "personality": character.personality,
+                    "continuity_rules": character.continuity_rules,
+                    "negative_constraints": character.negative_constraints,
+                    "voice_speaker": character.voice_speaker,
+                    "voice_instruction": character.voice_instruction,
+                    "references": [
+                        {
+                            "reference_type": reference.reference_type,
+                            "label": reference.label,
+                            "is_active": reference.is_active,
+                            "review_status": reference.review_status,
+                        }
+                        for reference in character.references
+                    ],
+                }
+                for character in script_import.project.characters
+            ],
+            "existing_episodes": [
+                {
+                    "title": episode.title,
+                    "premise": episode.premise,
+                    "target_duration_seconds": episode.target_duration_seconds,
+                    "status": episode.status,
+                    "scenes": [
+                        {
+                            "location": scene.location,
+                            "time_of_day": scene.time_of_day,
+                            "summary": scene.summary,
+                            "continuity_state": scene.continuity_state,
+                        }
+                        for scene in episode.scenes
+                    ],
+                }
+                for episode in script_import.project.episodes
+            ],
             "desired_episode_duration_seconds": 60,
         }
+        if script_import.mode == "generate":
+            context["creation_brief"] = script_import.extracted_text
+        else:
+            context["text"] = script_import.extracted_text
         try:
             draft = await self.planner.parse_script_import(context)
             script_import.structured_draft = draft.model_dump(mode="json")

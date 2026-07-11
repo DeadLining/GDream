@@ -2,7 +2,7 @@ import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Inspector} from '../components/Inspector';
-import type {Asset, Job, Shot} from '../lib/types';
+import type {Asset, Character, Job, Shot} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
   listPanelVersions: vi.fn(), updateShot: vi.fn(), startPanelGeneration: vi.fn(),
@@ -23,6 +23,7 @@ const shot: Shot = {
 };
 const succeeded: Job = {id:'job-1',operation:'generate_panel',target_type:'shot',target_id:'shot-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/panel.png'},error:'',retry_count:0,created_at:'',updated_at:''};
 const asset: Asset = {id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'openai',model:'gpt-image-2',generation_attempt:2,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''};
+const character: Character = {id:'character-1',project_id:'project-1',name:'林默',role:'protagonist',appearance_bible:'black coat',personality:'quiet',continuity_rules:'',negative_constraints:'',voice_speaker:'Dylan',voice_instruction:'',created_at:'',updated_at:''};
 
 describe('Inspector', () => {
   afterEach(cleanup);
@@ -55,7 +56,7 @@ describe('Inspector', () => {
     mocks.startPanelGeneration.mockResolvedValue({job_id:'job-1',status:'queued'});
     mocks.startSpeech.mockResolvedValue({job_id:'job-2',status:'queued'});
     mocks.pollJob.mockResolvedValue(succeeded);
-    render(<Inspector shot={shot}/>);
+    render(<Inspector shot={{...shot,dialogue:[{...shot.dialogue[0],character_id:character.id}]}} characters={[character]}/>);
     await userEvent.click(screen.getByRole('button',{name:'生成画面'}));
     await waitFor(()=>expect(mocks.listPanelVersions).toHaveBeenCalledTimes(2));
     await userEvent.click(screen.getByRole('button',{name:'生成配音'}));
@@ -73,5 +74,16 @@ describe('Inspector', () => {
     await userEvent.type(screen.getByLabelText('对白文本'),'快走。');
     await userEvent.click(screen.getByRole('button',{name:'保存对白'}));
     expect(mocks.updateDialogue).toHaveBeenCalledWith('line-1',expect.objectContaining({text:'快走。'}));
+  });
+
+  it('assigns a dialogue speaker and presents speech as the primary action', async () => {
+    mocks.updateDialogue.mockResolvedValue({...shot.dialogue[0],character_id:character.id});
+    render(<Inspector shot={shot} characters={[character]}/>);
+
+    await userEvent.selectOptions(screen.getByLabelText('对白角色'), character.id);
+    await userEvent.click(screen.getByRole('button',{name:'保存对白'}));
+
+    expect(mocks.updateDialogue).toHaveBeenCalledWith('line-1',expect.objectContaining({character_id:character.id}));
+    expect(screen.getByRole('button',{name:'生成配音'})).toHaveClass('dialogue-primary-action');
   });
 });

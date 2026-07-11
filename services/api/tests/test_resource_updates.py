@@ -94,6 +94,18 @@ def test_patch_routes_update_only_supplied_fields(client):
     assert dialogue.json()["emotion"] == "tense"
 
 
+def test_dialogue_can_be_assigned_to_a_project_character(client):
+    ids = seed_production_graph(client)
+
+    response = client.patch(
+        f"/api/dialogue/{ids['dialogue']}",
+        json={"character_id": ids["character"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["character_id"] == ids["character"]
+
+
 def test_patch_routes_reject_unknown_and_invalid_fields(client):
     ids = seed_production_graph(client)
 

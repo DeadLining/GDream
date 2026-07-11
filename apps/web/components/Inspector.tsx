@@ -4,12 +4,12 @@ import {Film, ImagePlus, Save, Sparkles} from 'lucide-react';
 import {activatePanel, activateVideo, listPanelVersions, listVideoVersions, startPanelGeneration, startVideoGeneration, updateShot} from '../lib/api';
 import {mediaUrl} from '../lib/api';
 import {pollJob} from '../lib/jobs';
-import type {Asset, Job, ReviewStatus, Shot} from '../lib/types';
+import type {Asset, Character, Job, ReviewStatus, Shot} from '../lib/types';
 import {DialogueEditor} from './DialogueEditor';
 import {JobStatus} from './JobStatus';
 import {PanelVersions} from './PanelVersions';
 
-export function Inspector({shot, onShotUpdated}: {shot: Shot; onShotUpdated?: (shot: Shot) => void}) {
+export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; characters?: Character[]; onShotUpdated?: (shot: Shot) => void}) {
   const [form, setForm] = useState(shot); const [assets, setAssets] = useState<Asset[]>([]); const [job, setJob] = useState<Job | null>(null); const [error, setError] = useState('');
   const [videos,setVideos]=useState<Asset[]>([]);
   useEffect(() => {setForm(shot); setError(''); listPanelVersions(shot.id).then(setAssets).catch(() => setAssets([])); listVideoVersions(shot.id).then(setVideos).catch(()=>setVideos([]));}, [shot]);
@@ -42,7 +42,7 @@ export function Inspector({shot, onShotUpdated}: {shot: Shot; onShotUpdated?: (s
     <section className="inspector-section video-section"><div className="section-heading-row"><h3>视频生成</h3><span>{videos.length} 个版本</span></div><label>视频提示词<textarea value={form.video_prompt??''} onChange={event=>setForm({...form,video_prompt:event.target.value})} rows={3}/></label><label className="field-spacer">视频负面提示词<textarea value={form.negative_video_prompt??''} onChange={event=>setForm({...form,negative_video_prompt:event.target.value})} rows={2}/></label><button className="primary-action video-generate" onClick={generateVideo} disabled={!form.active_panel_asset_id||form.review_status!=='approved'}><Film size={16}/>生成视频</button><div className="video-versions">{videos.map(asset=><button key={asset.id} className={form.active_video_asset_id===asset.id?'active':''} onClick={()=>selectVideo(asset.id)}><video src={mediaUrl(asset.media_url)} muted playsInline controls/><span>V{asset.generation_attempt}</span></button>)}</div></section>
     <section className="inspector-section dialogue-section" aria-labelledby="dialogue-heading">
       <div className="section-heading-row"><h3 id="dialogue-heading">对白与配音</h3><span>{shot.dialogue.length} 条对白</span></div>
-      {shot.dialogue.length ? shot.dialogue.map(line => <DialogueEditor key={line.id} line={line}/>) : <p className="section-empty">此镜头没有对白</p>}
+      {shot.dialogue.length ? shot.dialogue.map(line => <DialogueEditor key={line.id} line={line} characters={characters}/>) : <p className="section-empty">此镜头没有对白</p>}
     </section>
     <div className="model-note"><Sparkles size={16}/><span>图像由 <strong>gpt-image-2</strong> 生成</span></div>
   </aside>;
