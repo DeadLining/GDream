@@ -21,6 +21,18 @@ class Settings(BaseSettings):
         default="MiniMax-M3",
         validation_alias=AliasChoices("MINIMAX_MODEL", "AI_COMIC_MINIMAX_MODEL"),
     )
+    gpt_image_base_url: str = Field(
+        default="http://192.168.18.80:14000",
+        validation_alias=AliasChoices("GPT_IMAGE_BASE_URL", "AI_COMIC_GPT_IMAGE_BASE_URL"),
+    )
+    gpt_image_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("GPT_IMAGE_KEY", "AI_COMIC_GPT_IMAGE_KEY"),
+    )
+    gpt_image_model: str = Field(
+        default="gpt-image-2",
+        validation_alias=AliasChoices("GPT_IMAGE_MODEL", "AI_COMIC_GPT_IMAGE_MODEL"),
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
