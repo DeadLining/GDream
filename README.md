@@ -4,6 +4,21 @@ Local production workspace for serialized Chinese dynamic comics.
 
 The v0.3 workspace adds persisted episode production runs to the existing project, episode, review, and render workflow. Creators can batch eligible panel and speech work, pause scheduling, recover after restart, retry selected failures, and render only when the readiness report is clear.
 
+## Interface Workflow
+
+The studio opens on an overview-first episode cockpit. The overview summarizes shot, panel, speech, and approval progress, keeps readiness blockers visible, and links directly to the affected shot or work area.
+
+Desktop work is organized into four areas:
+
+- `总览` tracks episode progress and render readiness.
+- `分镜` presents stable shot cards for selecting and comparing the episode sequence.
+- `生产` runs and monitors persisted panel and speech batches, including readable per-item failures and selective retries.
+- `审核` collects only shots that still need a panel or approval and routes them back to the shared shot context.
+
+The shot inspector remains visible beside the desktop work area. Selection is shared across overview, storyboard, production, and review, so switching areas does not lose the active shot. Use the inspector to edit shot details, generate or activate panel versions, update review state, and manage dialogue and speech.
+
+On mobile, the same workflow is exposed as four equal navigation areas: `总览`, `分镜`, `生产`, and `检查器`. Selecting a shot opens its inspector while preserving selection when moving between tabs.
+
 ## Model Stack
 
 - Planning: MiniMax Anthropic API, model `MiniMax-M3`

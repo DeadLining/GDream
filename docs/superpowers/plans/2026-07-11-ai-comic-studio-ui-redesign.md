@@ -431,7 +431,7 @@ git commit -m "feat: add responsive studio navigation"
 - Modify: `README.md`
 - Modify: `docs/superpowers/plans/2026-07-11-ai-comic-studio-ui-redesign.md`
 
-- [ ] **Step 1: Update README interface workflow**
+- [x] **Step 1: Update README interface workflow**
 
 Document the overview-first cockpit, four work areas, persistent inspector, review workflow, and mobile navigation. Do not change model or deployment documentation.
 
@@ -451,7 +451,9 @@ git diff --check
 
 Expected: API, web, compositor, build, E2E, and fixture checks pass. If local Chrome context creation fails before page assertions, rerun Playwright alone before diagnosing production code.
 
-- [ ] **Step 3: Capture browser screenshots**
+Release audit note: API, workspace tests, builds, isolated-port E2E, and diff checks passed. The compositor fixture command was attempted, but Remotion could not finish downloading its pinned 93.5 MiB Chrome Headless Shell from Google Storage; both the built-in downloader and a ranged retry timed out, so a fresh fixture and `ffprobe` result could not be produced in this environment.
+
+- [x] **Step 3: Capture browser screenshots**
 
 Use Playwright against the running local app at:
 
@@ -468,7 +470,7 @@ Verify visually and with bounding-box assertions:
 - production rows and failure text remain readable;
 - mobile controls stay within viewport width.
 
-- [ ] **Step 4: Run final security and repository checks**
+- [x] **Step 4: Run final security and repository checks**
 
 ```bash
 npm audit --omit=dev --registry=https://registry.npmjs.org || true
@@ -478,7 +480,7 @@ git status --short
 
 Record the known upstream Next.js/PostCSS advisory if it remains without a non-breaking update. Confirm no secrets or generated visual-companion files are staged.
 
-- [ ] **Step 5: Mark all plan steps complete and commit**
+- [x] **Step 5: Mark all plan steps complete and commit**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-07-11-ai-comic-studio-ui-redesign.md apps/web
