@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from comic_studio.providers.minimax import MiniMaxProvider
+from comic_studio.providers.base import ProviderError
 
 
 VALID_PLAN = {
@@ -37,6 +38,64 @@ VALID_PLAN = {
             ],
         }
     ]
+}
+
+VALID_IMPORT_DRAFT = {
+    "project": {"title": "雨夜失忆", "logline": "追查记忆交易"},
+    "characters": [
+        {
+            "draft_id": "char-1",
+            "name": "林夏",
+            "aliases": [],
+            "role": "主角",
+            "appearance_bible": "黑色风衣",
+            "personality": "冷静",
+            "continuity_rules": "银色耳钉",
+            "negative_constraints": "",
+            "voice_speaker": "female-1",
+            "voice_instruction": "",
+        }
+    ],
+    "episodes": [
+        {
+            "draft_id": "episode-1",
+            "enabled": True,
+            "title": "失窃的雨夜",
+            "premise": "林夏发现芯片",
+            "target_duration_seconds": 60,
+            "scenes": [
+                {
+                    "location": "天台",
+                    "time_of_day": "night",
+                    "summary": "林夏面对追兵",
+                    "continuity_state": {},
+                    "estimated_duration_seconds": 5,
+                    "shots": [
+                        {
+                            "shot_type": "close_up",
+                            "duration_seconds": 5,
+                            "composition": "林夏回头",
+                            "camera_motion": "push_in",
+                            "character_state": {"char-1": {"outfit": "coat"}},
+                            "image_prompt": "noir close-up",
+                            "negative_prompt": "",
+                            "dialogue": [
+                                {
+                                    "speaker_draft_id": "char-1",
+                                    "narration": False,
+                                    "text": "别回头。",
+                                    "subtitle_text": "别回头。",
+                                    "emotion": "tense",
+                                    "performance_instruction": "低声",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ],
+    "warnings": [],
 }
 
 
@@ -142,3 +201,47 @@ async def test_minimax_extracts_scenes_from_a_wrapped_episode_object():
         plan = await MiniMaxProvider(api_key="secret", client=client).plan_episode({})
 
     assert plan.scenes[0].location == "雨夜巷道"
+
+
+@pytest.mark.anyio
+async def test_minimax_parses_script_import_with_import_specific_prompt():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"content": [{"type": "text", "text": json.dumps(VALID_IMPORT_DRAFT)}]},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        draft = await MiniMaxProvider(api_key="secret", client=client).parse_script_import(
+            {"mode": "prose", "text": "雨夜故事"}
+        )
+
+    assert draft.episodes[0].scenes[0].shots[0].dialogue[0].speaker_draft_id == "char-1"
+    assert "script import" in captured["body"]["system"].lower()
+    assert captured["body"]["messages"][0]["content"].startswith("Structure this script")
+
+
+@pytest.mark.anyio
+async def test_minimax_script_import_retries_once_then_raises_sanitized_error():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"content": [{"type": "text", "text": "{}"}]})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        with pytest.raises(ProviderError, match="invalid script import draft"):
+            await MiniMaxProvider(api_key="secret", client=client).parse_script_import(
+                {"mode": "screenplay", "text": "secret-source-text"}
+            )
+
+    assert len(requests) == 2
+    assert "validation" in requests[1]["messages"][-1]["content"].lower()
+    assert "secret-source-text" not in requests[1]["messages"][-1]["content"]

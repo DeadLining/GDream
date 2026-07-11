@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from comic_studio.providers.base import ProviderError
 from comic_studio.schemas import EpisodePlan
+from comic_studio.script_imports import ScriptImportDraft
 
 
 SYSTEM_PROMPT = """You are the planning engine for a serialized Chinese dynamic comic.
@@ -17,6 +18,12 @@ shot_type, duration_seconds, composition, camera_motion, character_state,
 image_prompt, negative_prompt, and dialogue. Dialogue entries contain character_id,
 text, subtitle_text, emotion, and performance_instruction. Preserve the supplied
 character IDs exactly. Do not use Markdown fences."""
+
+SCRIPT_IMPORT_SYSTEM_PROMPT = """You are the script import engine for a Chinese dynamic comic studio.
+Return one JSON object only using the supplied strict schema. Convert prose into ordered episodes,
+scenes, shots, and dialogue when needed. Give every draft character and episode a stable draft_id.
+Dialogue must reference a supplied character draft_id or be explicitly marked as narration. Preserve
+story meaning, expose uncertainty through warnings, and do not use Markdown fences."""
 
 
 def _extract_text(payload: dict[str, Any]) -> str:
@@ -97,7 +104,44 @@ class MiniMaxProvider:
                     ) from exc
         raise ProviderError("MiniMax planning failed")
 
-    async def _request(self, messages: list[dict[str, str]]) -> str:
+    async def parse_script_import(self, context: dict[str, Any]) -> ScriptImportDraft:
+        messages = [
+            {
+                "role": "user",
+                "content": "Structure this script using the required import JSON schema:\n"
+                + json.dumps(context, ensure_ascii=False),
+            }
+        ]
+        validation_feedback = ""
+        for attempt in range(2):
+            if validation_feedback:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "The prior response failed JSON schema validation. "
+                            f"Validation details: {validation_feedback}. Return corrected JSON only."
+                        ),
+                    }
+                )
+            try:
+                text = await self._request(messages, system=SCRIPT_IMPORT_SYSTEM_PROMPT)
+                repaired = repair_json(_strip_fences(text), return_objects=True)
+                return ScriptImportDraft.model_validate(repaired)
+            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+                validation_feedback = str(exc)[:1500]
+                if attempt == 1:
+                    raise ProviderError(
+                        f"MiniMax returned an invalid script import draft: {validation_feedback}"
+                    ) from exc
+        raise ProviderError("MiniMax script import parsing failed")
+
+    async def _request(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        system: str = SYSTEM_PROMPT,
+    ) -> str:
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(base_url=self.base_url, timeout=90)
         try:
@@ -112,7 +156,7 @@ class MiniMaxProvider:
                     "model": self.model,
                     "max_tokens": 8192,
                     "temperature": 0.4,
-                    "system": SYSTEM_PROMPT,
+                    "system": system,
                     "messages": messages,
                 },
             )
