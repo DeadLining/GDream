@@ -1,6 +1,6 @@
 [project]
 name = "ai-comic-studio-api"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local API for the AI Comic Studio production workspace"
 requires-python = ">=3.12"
 dependencies = [

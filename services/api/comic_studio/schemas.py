@@ -194,6 +194,38 @@ class AssetRead(BaseModel):
     created_at: datetime
 
 
+ProductionStage = Literal["panels", "speech"]
+
+
+class ProductionRunCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stages: list[ProductionStage] = Field(min_length=1)
+    concurrency: int = Field(default=2, ge=1, le=4)
+    regenerate_panels: bool = False
+    regenerate_speech: bool = False
+
+
+class ProductionRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str; episode_id: str; status: str; stages: list[str]; concurrency: int
+    regenerate_panels: bool; regenerate_speech: bool; pause_requested: bool
+    total_items: int; queued_items: int; running_items: int; succeeded_items: int
+    failed_items: int; skipped_items: int; summary_error: str
+    created_at: datetime; updated_at: datetime
+
+
+class ProductionItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str; run_id: str; stage: str; target_type: str; target_id: str
+    position: int; status: str; attempt_count: int; result_metadata: dict; error: str
+    created_at: datetime; updated_at: datetime
+
+
+class ProductionRetry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    item_ids: list[str] | None = None
+
+
 class PlannedDialogue(BaseModel):
     character_id: str | None
     text: str = Field(min_length=1)

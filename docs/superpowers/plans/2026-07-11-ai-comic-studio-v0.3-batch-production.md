@@ -23,7 +23,7 @@
 - Create: `services/api/comic_studio/production.py`
 - Create: `services/api/tests/test_production_state.py`
 
-- [ ] **Step 1: Write failing run and item state tests**
+- [x] **Step 1: Write failing run and item state tests**
 
 ```python
 run = store.create_run(episode.id, stages=["panels", "speech"], concurrency=2)
@@ -36,28 +36,28 @@ assert store.get_item(item.id).error == "Bearer [REDACTED]"
 
 Verify run transitions reject `completed -> running` and item uniqueness rejects duplicate `(run_id, stage, target_id)`.
 
-- [ ] **Step 2: Run the state test and confirm missing models/store**
+- [x] **Step 2: Run the state test and confirm missing models/store**
 
 Run: `cd services/api && uv run pytest tests/test_production_state.py -q`
 Expected: FAIL because production domain types do not exist.
 
-- [ ] **Step 3: Add ProductionRun and ProductionItem models**
+- [x] **Step 3: Add ProductionRun and ProductionItem models**
 
 Use string UUIDs, JSON stage configuration, counters, pause flag, deterministic `position`, unique constraint on run/stage/target, and cascade delete from run to items.
 
-- [ ] **Step 4: Implement ProductionStore transitions and counter refresh**
+- [x] **Step 4: Implement ProductionStore transitions and counter refresh**
 
 Provide create/get/list/add/transition/pause/continue/retry methods. Redact errors with the existing recursive redactor before persistence. Derive counters from item statuses in one query per refresh.
 
-- [ ] **Step 5: Add strict Pydantic contracts**
+- [x] **Step 5: Add strict Pydantic contracts**
 
 Define `ProductionRunCreate`, `ProductionRunRead`, `ProductionItemRead`, `ProductionRetry`, and literal status/stage types. Reject extra fields and concurrency outside 1-4.
 
-- [ ] **Step 6: Set manifests and lockfile to 0.3.0**
+- [x] **Step 6: Set manifests and lockfile to 0.3.0**
 
 Update all source manifests and run `npm install --package-lock-only`.
 
-- [ ] **Step 7: Run focused and full API tests, then commit**
+- [x] **Step 7: Run focused and full API tests, then commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_production_state.py -q && uv run pytest -q

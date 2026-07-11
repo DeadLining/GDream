@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from comic_studio.db import Base
@@ -193,3 +193,49 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class ProductionRun(Base):
+    __tablename__ = "production_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    stages: Mapped[list] = mapped_column(JSON, default=list)
+    concurrency: Mapped[int] = mapped_column(Integer, default=2)
+    regenerate_panels: Mapped[bool] = mapped_column(Boolean, default=False)
+    regenerate_speech: Mapped[bool] = mapped_column(Boolean, default=False)
+    pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    total_items: Mapped[int] = mapped_column(Integer, default=0)
+    queued_items: Mapped[int] = mapped_column(Integer, default=0)
+    running_items: Mapped[int] = mapped_column(Integer, default=0)
+    succeeded_items: Mapped[int] = mapped_column(Integer, default=0)
+    failed_items: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_items: Mapped[int] = mapped_column(Integer, default=0)
+    summary_error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    items: Mapped[list[ProductionItem]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="ProductionItem.position"
+    )
+
+
+class ProductionItem(Base):
+    __tablename__ = "production_items"
+    __table_args__ = (UniqueConstraint("run_id", "stage", "target_id", name="uq_production_item_target"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("production_runs.id", ondelete="CASCADE"), index=True)
+    stage: Mapped[str] = mapped_column(String(24))
+    target_type: Mapped[str] = mapped_column(String(24))
+    target_id: Mapped[str] = mapped_column(String(36), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    result_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    run: Mapped[ProductionRun] = relationship(back_populates="items")
