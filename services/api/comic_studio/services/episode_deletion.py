@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -21,6 +21,7 @@ class EpisodeDeletionImpact:
     dialogue_ids: tuple[str, ...]
     asset_ids: tuple[str, ...]
     local_paths: tuple[str, ...]
+    cleanup_warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -65,17 +66,49 @@ class EpisodeDeletionService:
             if asset_kinds
             else []
         )
+        render_paths: list[str] = []
+        cleanup_warnings: list[str] = []
+        render_jobs = self.session.scalars(
+            select(models.Job).where(
+                models.Job.operation == "render_episode",
+                models.Job.target_type == "episode",
+                models.Job.target_id == episode.id,
+            )
+        )
+        expected_prefix = (
+            "projects",
+            episode.project_id,
+            "episodes",
+            episode.id,
+            "renders",
+        )
+        for job in render_jobs:
+            output_path = job.result_metadata.get("output_path")
+            if not isinstance(output_path, str):
+                continue
+            relative = PurePosixPath(output_path)
+            if relative.is_absolute() or relative.parts[:5] != expected_prefix:
+                if "Skipped unsafe media path" not in cleanup_warnings:
+                    cleanup_warnings.append("Skipped unsafe media path")
+                continue
+            render_paths.extend(
+                [str(relative), str(relative.with_suffix(".manifest.json"))]
+            )
         return EpisodeDeletionImpact(
             episode_id=episode.id,
             title=episode.title,
             scenes=len(episode.scenes),
             shots=len(shots),
             dialogue_lines=len(dialogue),
-            assets=len(assets),
+            assets=len(assets) + len(render_paths) // 2,
             shot_ids=shot_ids,
             dialogue_ids=dialogue_ids,
             asset_ids=tuple(asset.id for asset in assets),
-            local_paths=tuple(asset.local_path for asset in assets if asset.local_path),
+            local_paths=(
+                *(asset.local_path for asset in assets if asset.local_path),
+                *render_paths,
+            ),
+            cleanup_warnings=tuple(cleanup_warnings),
         )
 
     def delete(self, episode_id: str) -> EpisodeDeletionResult | None:
@@ -138,7 +171,11 @@ class EpisodeDeletionService:
 
         return EpisodeDeletionResult(
             impact=impact,
-            cleanup_warnings=self._cleanup_files(impact.local_paths),
+            cleanup_warnings=tuple(
+                dict.fromkeys(
+                    (*impact.cleanup_warnings, *self._cleanup_files(impact.local_paths))
+                )
+            ),
         )
 
     def _cleanup_files(self, local_paths: tuple[str, ...]) -> tuple[str, ...]:

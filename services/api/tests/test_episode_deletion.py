@@ -150,6 +150,14 @@ def test_delete_removes_episode_graph_assets_jobs_runs_and_local_files(
     job_episode = models.Job(
         operation="plan_episode", target_type="episode", target_id=target.id
     )
+    render_relative = f"projects/{target.project_id}/episodes/{target.id}/renders/render-job.mp4"
+    render_job = models.Job(
+        operation="render_episode",
+        target_type="episode",
+        target_id=target.id,
+        status="succeeded",
+        result_metadata={"output_path": render_relative},
+    )
     job_shot = models.Job(
         operation="generate_panel",
         target_type="shot",
@@ -169,8 +177,13 @@ def test_delete_removes_episode_graph_assets_jobs_runs_and_local_files(
         target_id=target.scenes[0].shots[0].id,
         position=1,
     )
-    db_session.add_all([job_episode, job_shot, job_dialogue, unrelated_job, run, item])
+    db_session.add_all([job_episode, render_job, job_shot, job_dialogue, unrelated_job, run, item])
     db_session.commit()
+    render_file = data_root / render_relative
+    render_file.parent.mkdir(parents=True, exist_ok=True)
+    render_file.write_bytes(b"video")
+    render_manifest = render_file.with_suffix(".manifest.json")
+    render_manifest.write_text("{}", encoding="utf-8")
 
     result = EpisodeDeletionService(db_session, data_root).delete(target.id)
 
@@ -182,12 +195,15 @@ def test_delete_removes_episode_graph_assets_jobs_runs_and_local_files(
     assert all(db_session.get(models.Asset, asset.id) is None for asset in assets)
     assert db_session.get(models.Asset, unrelated_asset.id) is not None
     assert db_session.get(models.Job, job_episode.id) is None
+    assert db_session.get(models.Job, render_job.id) is None
     assert db_session.get(models.Job, job_shot.id) is None
     assert db_session.get(models.Job, job_dialogue.id) is None
     assert db_session.get(models.Job, unrelated_job.id) is not None
     assert db_session.get(models.ProductionRun, run.id) is None
     assert db_session.get(models.ProductionItem, item.id) is None
     assert not removable.exists()
+    assert not render_file.exists()
+    assert not render_manifest.exists()
 
 
 def test_delete_skips_symlink_escape_without_exposing_paths(db_session, tmp_path: Path):
