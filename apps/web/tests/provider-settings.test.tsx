@@ -290,8 +290,23 @@ describe('ProviderSettings', () => {
 
   it('provides a scrollable responsive settings surface with reachable channel sections', () => {
     expect(settingsStyles).toMatch(/\.provider-settings\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/);
-    expect(settingsStyles).toMatch(/\.provider-settings-sections\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/);
-    expect(settingsStyles).toMatch(/@media \(max-width:\s*899px\)[\s\S]*\.provider-settings-sections\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-    expect(settingsStyles).toMatch(/\.provider-channel-section input\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0/);
+    expect(settingsStyles).toMatch(/\.provider-settings-sections\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    expect(settingsStyles).toMatch(/@media \(max-width:\s*1100px\)[\s\S]*\.provider-settings-sections\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(settingsStyles).toMatch(/\.provider-channel-section input\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*height:\s*36px/);
+    expect(settingsStyles).toMatch(/\.provider-test-row\s*\{[^}]*min-height:\s*44px/);
+    expect(settingsStyles).toMatch(/\.provider-test-row p\s*\{[^}]*min-height:\s*34px[^}]*overflow-wrap:\s*anywhere/);
+  });
+
+  it('keeps three fixed channel sections linked to stable inline result regions', async () => {
+    render(<ProviderSettings/>);
+
+    const forms = await screen.findAllByRole('form');
+    expect(forms.map(form => form.getAttribute('aria-label'))).toEqual(['剧本规划渠道', '画面生成渠道', '语音合成渠道']);
+    for (const [index, label] of ['剧本规划', '画面生成', '语音合成'].entries()) {
+      const button = within(forms[index]).getByRole('button', {name: `测试${label}连接`});
+      const statusId = button.getAttribute('aria-describedby');
+      expect(statusId).toBe(`provider-${['llm', 'image', 'tts'][index]}-status`);
+      expect(document.getElementById(statusId!)).toHaveAttribute('role', 'status');
+    }
   });
 });

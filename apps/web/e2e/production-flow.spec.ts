@@ -8,6 +8,12 @@ const episode = {...episodeSummary,scenes:[{id:'scene-1',position:1,location:'�
   {id:'shot-1',position:1,shot_type:'wide',duration_seconds:4,composition:'林默走入巷道',camera_motion:'push_in',character_state:{},review_status:'approved',render_status:'pending',image_prompt:'wide comic shot',negative_prompt:'',active_panel_asset_id:'asset-1',dialogue:[]},
   {id:'shot-2',position:2,shot_type:'close_up',duration_seconds:5,composition:'银色左眼映出芯片',camera_motion:'push_in',character_state:{},review_status:'draft',render_status:'pending',image_prompt:'close-up comic shot',negative_prompt:'',active_panel_asset_id:null,dialogue:[]},
 ]}]};
+const providerChannels = {
+  llm:{name:'MiniMax',enabled:true,base_url:'https://api.example.com/a/very/long/provider/path/that/must/not/overflow',model:'MiniMax-M3-Long-Context-Model',ssh_host:'',api_key_configured:true,api_key_masked:'sk-•••8adr'},
+  image:{name:'Internal GPT Image',enabled:true,base_url:'http://192.168.18.80:14000/v1/images/generations',model:'gpt-image-2-production-preview',ssh_host:'',api_key_configured:true,api_key_masked:'sk-•••img9'},
+  tts:{name:'A800_94',enabled:true,base_url:'http://192.168.18.94:18080/v1/audio/speech',model:'Qwen3-TTS-12Hz-1.7B-CustomVoice',ssh_host:'ai-comic-tts',api_key_configured:false,api_key_masked:''},
+  persistence:{status:'saved',file_path:'data/provider-channels.json'},reloaded_at:'2026-07-11T10:00:00Z',
+};
 
 test.beforeEach(async ({page}) => {
   await page.route('**/api/projects', route => route.fulfill({json:[project]}));
@@ -17,6 +23,88 @@ test.beforeEach(async ({page}) => {
   await page.route('**/api/providers/health', route => route.fulfill({json:{minimax:{status:'ok'},gpt_image:{status:'ok'},qwen_tts:{status:'ok'}}}));
   await page.route('**/api/episodes/episode-1/render', route => route.fulfill({status:202,json:{job_id:'render-1',status:'queued'}}));
   await page.route('**/api/jobs/render-1', route => route.fulfill({json:{id:'render-1',operation:'render_episode',target_type:'episode',target_id:'episode-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/render.mp4',probe:{format:{duration:'60'}}},error:'',retry_count:0,created_at:'',updated_at:''}}));
+});
+
+test('provider channel settings stay operable and bounded across studio viewports', async ({page}, testInfo) => {
+  let current = structuredClone(providerChannels);
+  const writes: Array<Record<string, unknown>> = [];
+  let expectedModel = '';
+  await page.route('**/api/provider-channels', route => route.fulfill({json:current}));
+  await page.route('**/api/provider-channels/llm/test', async route => {
+    expect((await route.request().postDataJSON()).model).toBe(expectedModel);
+    await route.fulfill({json:{status:'ok',model:expectedModel,host:'api.example.com',elapsed_ms:7,check_scope:'model',error:null}});
+  });
+  await page.route('**/api/provider-channels/llm', async route => {
+    const body = await route.request().postDataJSON();
+    writes.push(body);
+    current = {...current,llm:{...current.llm,...body,api_key_configured:true,api_key_masked:'sk-•••saved'}};
+    await route.fulfill({json:{channel:current.llm,current}});
+  });
+
+  const viewports = testInfo.project.name === 'desktop'
+    ? [{width:1440,height:900},{width:1024,height:768}]
+    : [{width:390,height:844},{width:360,height:800}];
+
+  for (const viewport of viewports) {
+    expectedModel = `MiniMax-M4-${viewport.width}`;
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    const settingsCommand = testInfo.project.name === 'desktop'
+      ? page.getByRole('button',{name:'模型渠道'})
+      : page.getByRole('tab',{name:'模型渠道'});
+    await settingsCommand.click();
+
+    await expect(page.getByRole('heading',{name:'模型渠道'})).toBeVisible();
+    await expect(page.getByRole('form')).toHaveCount(3);
+    await expect(page.getByLabel('剧本规划 Base URL')).toBeVisible();
+    const tabs = page.getByRole('tablist',{name:'工作区'});
+    const tabButtons = tabs.getByRole('tab');
+    await expect(tabButtons).toHaveCount(5);
+    const controls = [
+      page.getByLabel('剧本规划 Base URL'),
+      page.getByLabel('替换剧本规划 API Key'),
+      page.getByRole('button',{name:'清除剧本规划 API Key'}),
+      page.getByRole('button',{name:'测试剧本规划连接'}),
+      page.getByRole('button',{name:'保存全部更改'}),
+    ];
+    const dimensions = await page.evaluate(() => ({clientWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth}));
+    expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
+    for (const locator of [tabs,...controls]) {
+      const box = await locator.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+    }
+    const [tabBoxes,keyBox,clearBox,testBox,statusBox] = await Promise.all([
+      tabButtons.evaluateAll(elements => elements.map(element => {
+        const {x,y,width,height} = element.getBoundingClientRect();
+        return {x,y,width,height};
+      })),
+      page.getByLabel('替换剧本规划 API Key').boundingBox(),
+      page.getByRole('button',{name:'清除剧本规划 API Key'}).boundingBox(),
+      page.getByRole('button',{name:'测试剧本规划连接'}).boundingBox(),
+      page.locator('#provider-llm-status').boundingBox(),
+    ]);
+    expect(tabBoxes.every((box,index) => box.x >= 0 && box.x + box.width <= viewport.width + 1 && (index === 0 || box.x >= tabBoxes[index - 1].x + tabBoxes[index - 1].width - 1))).toBe(true);
+    expect(keyBox).not.toBeNull(); expect(clearBox).not.toBeNull(); expect(testBox).not.toBeNull(); expect(statusBox).not.toBeNull();
+    const separate = (a: NonNullable<typeof keyBox>, b: NonNullable<typeof keyBox>) =>
+      a.x + a.width <= b.x + 1 || b.x + b.width <= a.x + 1 || a.y + a.height <= b.y + 1 || b.y + b.height <= a.y + 1;
+    expect(separate(keyBox!,clearBox!)).toBe(true);
+    expect(separate(testBox!,statusBox!)).toBe(true);
+
+    await page.getByLabel('剧本规划模型').fill(expectedModel);
+    await expect(page.getByText('有未保存更改')).toBeVisible();
+    await page.getByRole('button',{name:'测试剧本规划连接'}).click();
+    await expect(page.getByText(/连接成功.*7 ms/)).toBeVisible();
+    await page.getByLabel('语音合成 SSH Host').scrollIntoViewIfNeeded();
+    await expect(page.getByLabel('语音合成 SSH Host')).toBeInViewport();
+    await page.getByRole('button',{name:'保存全部更改'}).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button',{name:'保存全部更改'})).toBeInViewport();
+    await page.getByRole('button',{name:'保存全部更改'}).click();
+    await expect(page.getByText('所有更改已保存')).toBeVisible();
+  }
+  expect(writes).toHaveLength(viewports.length);
+  expect(writes.map(write => write.model)).toEqual(viewports.map(viewport => `MiniMax-M4-${viewport.width}`));
 });
 
 test('render success exposes the verified MP4 download', async ({page}) => {

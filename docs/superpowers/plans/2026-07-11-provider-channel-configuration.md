@@ -349,7 +349,7 @@ git commit -m "feat: add provider channel settings workspace"
 - Modify: `apps/web/tests/provider-settings.test.tsx`
 - Modify: `apps/web/e2e/production-flow.spec.ts`
 
-- [ ] **Step 1: Add failing responsive and layout assertions**
+- [x] **Step 1: Add failing responsive and layout assertions**
 
 Component tests assert the three fixed channel sections and connection-result regions have stable structure. Add Playwright flow for desktop and mobile:
 
@@ -361,7 +361,7 @@ await expect(page.getByLabel('LLM Base URL')).toBeInViewport();
 
 Assert no horizontal overflow at 1440, 1024, 390, and 360 pixels; save/test controls fit and do not overlap.
 
-- [ ] **Step 2: Run focused tests and confirm layout contract fails**
+- [x] **Step 2: Run focused tests and confirm layout contract fails**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/provider-settings.test.tsx
@@ -370,11 +370,11 @@ E2E_PORT=3100 npm run test:e2e --workspace @comic-studio/web -- --grep "provider
 
 Expected: FAIL on missing final layout and responsive styling.
 
-- [ ] **Step 3: Add Studio settings CSS**
+- [x] **Step 3: Add Studio settings CSS**
 
 Implement a two-column settings workspace on desktop and one-column channel sections on mobile. Use existing Studio tokens, 4-8px corners, no gradients, no nested cards, strong focus states, contrast-compliant status colors, fixed control heights, and truncation/wrapping for long model names and endpoints.
 
-- [ ] **Step 4: Run focused/full verification and commit**
+- [x] **Step 4: Run focused/full verification and commit**
 
 ```bash
 npm test --workspace @comic-studio/web
