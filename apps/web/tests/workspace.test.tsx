@@ -500,9 +500,14 @@ describe('Workspace', () => {
     const compactDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 210px minmax(400px, 1fr) 296px;');
     const narrowDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 200px minmax(0, 1fr) 280px;');
     const emptyRule = workspaceStyles.lastIndexOf('.workspace-grid.workspace-grid-empty { grid-template-columns: minmax(0, 1fr);');
+    const compactTabsRule = workspaceStyles.lastIndexOf('.workspace-tabs { padding-left: 210px;');
+    const narrowTabsRule = workspaceStyles.lastIndexOf('.workspace-tabs { padding-left: 200px;');
+    const fullTabsRule = workspaceStyles.lastIndexOf('.workspace-tabs.workspace-tabs-full { padding-left: 0;');
 
     expect(emptyRule).toBeGreaterThan(compactDesktopRule);
     expect(emptyRule).toBeGreaterThan(narrowDesktopRule);
+    expect(fullTabsRule).toBeGreaterThan(compactTabsRule);
+    expect(fullTabsRule).toBeGreaterThan(narrowTabsRule);
   });
 
   it('uses stronger semantic colors with accessible shell contrast', () => {
