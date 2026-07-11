@@ -242,7 +242,7 @@ git commit -m "feat: retry failed production jobs"
 - Create: `apps/web/tests/api.test.ts`
 - Create: `apps/web/tests/jobs.test.ts`
 
-- [ ] **Step 1: Write failing API error and polling tests**
+- [x] **Step 1: Write failing API error and polling tests**
 
 Mock fetch to verify structured errors, queued/running/succeeded polling, one-to-three-second backoff, and ten-minute timeout.
 
@@ -251,29 +251,29 @@ await expect(apiRequest('/api/projects')).rejects.toMatchObject({status: 422, de
 await expect(pollJob('job-1', {sleep: async () => {}})).resolves.toMatchObject({status: 'succeeded'});
 ```
 
-- [ ] **Step 2: Run the focused Vitest suite and confirm missing contracts**
+- [x] **Step 2: Run the focused Vitest suite and confirm missing contracts**
 
 Run: `npm test --workspace @comic-studio/web -- --run tests/api.test.ts tests/jobs.test.ts`
 Expected: FAIL because `ApiError` and `pollJob` do not exist.
 
-- [ ] **Step 3: Complete TypeScript resource types**
+- [x] **Step 3: Complete TypeScript resource types**
 
 Define `Project`, `ProjectDetail`, `Character`, `EpisodeSummary`, `EpisodeDetail`, `Scene`, `Shot`, `DialogueLine`, `Asset`, `Job`, `ProviderHealth`, and patch input types with required fields matching Pydantic responses.
 
-- [ ] **Step 4: Implement endpoint functions**
+- [x] **Step 4: Implement endpoint functions**
 
 Add typed functions for every list, create, patch, generation, activation, health, retry, and render endpoint. Encode query parameters with `URLSearchParams` and construct media URLs through one helper.
 
-- [ ] **Step 5: Implement persisted job polling**
+- [x] **Step 5: Implement persisted job polling**
 
 `pollJob` repeatedly calls `getJob`, returns terminal jobs, uses one-second delay for attempts 1-10 and three seconds afterward, accepts an `AbortSignal`, and throws `JobPollingTimeoutError` after ten minutes.
 
-- [ ] **Step 6: Run web tests and typecheck**
+- [x] **Step 6: Run web tests and typecheck**
 
 Run: `npm test --workspace @comic-studio/web && npm run build --workspace @comic-studio/web`
 Expected: tests and Next.js TypeScript build pass.
 
-- [ ] **Step 7: Commit the web data boundary**
+- [x] **Step 7: Commit the web data boundary**
 
 ```bash
 git add apps/web/lib apps/web/tests

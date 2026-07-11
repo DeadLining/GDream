@@ -1,49 +1,63 @@
+export type AspectRatio = '9:16' | '16:9' | '1:1';
+export type ReviewStatus = 'draft' | 'needs_changes' | 'approved';
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export type Character = {
+  id: string; project_id: string; name: string; role: string;
+  appearance_bible: string; personality: string; continuity_rules: string;
+  negative_constraints: string; voice_speaker: string; voice_instruction: string;
+  created_at: string; updated_at: string;
+};
+
+export type EpisodeSummary = {
+  id: string; project_id: string; title: string; premise: string;
+  target_duration_seconds: number; status: string; created_at: string; updated_at: string;
+};
+
+export type Project = {
+  id: string; title: string; logline: string; story_bible: string; visual_style: string;
+  aspect_ratio: AspectRatio; language: string; created_at: string; updated_at: string;
+};
+
+export type ProjectDetail = Project & {characters: Character[]; episodes: EpisodeSummary[]};
+
 export type DialogueLine = {
-  id: string;
-  character_id?: string | null;
-  text?: string;
-  subtitle_text?: string;
-  emotion?: string;
-  performance_instruction?: string;
-  audio_asset_id?: string | null;
-  start_seconds?: number;
-  duration_seconds?: number;
+  id: string; character_id: string | null; position: number; text: string;
+  subtitle_text: string; emotion: string; performance_instruction: string;
+  audio_asset_id: string | null; start_seconds: number; duration_seconds: number;
 };
 
 export type Shot = {
-  id: string;
-  position: number;
-  shot_type: string;
-  duration_seconds: number;
-  composition: string;
-  camera_motion: string;
-  review_status: string;
-  image_prompt: string;
-  active_panel_asset_id: string | null;
-  dialogue: DialogueLine[];
+  id: string; position: number; shot_type: string; duration_seconds: number;
+  composition: string; camera_motion: string; character_state: Record<string, unknown>;
+  image_prompt: string; negative_prompt: string; active_panel_asset_id: string | null;
+  review_status: ReviewStatus; render_status: string; dialogue: DialogueLine[];
 };
 
 export type Scene = {
-  id: string;
-  position: number;
-  location: string;
-  time_of_day: string;
-  summary: string;
-  estimated_duration_seconds: number;
-  shots: Shot[];
+  id: string; position: number; location: string; time_of_day: string; summary: string;
+  continuity_state: Record<string, unknown>; estimated_duration_seconds: number; shots: Shot[];
 };
 
-export type EpisodeDetail = {
-  id: string;
-  project_id: string;
-  title: string;
-  premise: string;
-  target_duration_seconds: number;
-  status: string;
-  scenes: Scene[];
+export type EpisodeDetail = EpisodeSummary & {scenes: Scene[]};
+
+export type Asset = {
+  id: string; kind: string; media_url: string; media_type: string; provider: string;
+  model: string; generation_attempt: number; review_status: string; width: number | null;
+  height: number | null; duration_seconds: number | null; created_at: string;
 };
 
-export type ProjectSummary = {
-  id: string;
-  title: string;
+export type Job = {
+  id: string; operation: string; target_type: string; target_id: string; status: JobStatus;
+  progress: number; result_metadata: Record<string, unknown>; error: string; retry_count: number;
+  created_at: string; updated_at: string;
 };
+
+export type ProviderHealth = Record<string, {status: string; model?: string; error?: string}>;
+
+export type ProjectCreate = Pick<Project, 'title' | 'logline' | 'story_bible' | 'visual_style' | 'aspect_ratio'> & {language?: string};
+export type ProjectPatch = Partial<ProjectCreate>;
+export type EpisodeCreate = Pick<EpisodeSummary, 'title' | 'premise' | 'target_duration_seconds'>;
+export type EpisodePatch = Partial<EpisodeCreate>;
+export type ShotPatch = Partial<Pick<Shot, 'duration_seconds' | 'composition' | 'camera_motion' | 'image_prompt' | 'negative_prompt' | 'review_status'>>;
+export type DialoguePatch = Partial<Pick<DialogueLine, 'text' | 'subtitle_text' | 'emotion' | 'performance_instruction' | 'start_seconds'>>;

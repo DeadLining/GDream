@@ -1,7 +1,7 @@
 import {Workspace} from '../components/Workspace';
 import type {EpisodeDetail} from '../lib/types';
 
-const demoEpisode: EpisodeDetail = {
+const demoEpisode = {
   id: 'demo-episode', project_id: 'demo-project', title: '失窃的雨夜',
   premise: '林默在暴雨中追查一段不属于死者的记忆。', target_duration_seconds: 60, status: 'planned',
   scenes: [
@@ -17,6 +17,6 @@ const demoEpisode: EpisodeDetail = {
         {id: 'shot-5', position: 5, shot_type: 'insert', duration_seconds: 4, composition: '屏幕只显示一行警告：你已经看过这段记忆。', camera_motion: 'still', review_status: 'draft', image_prompt: 'Insert shot of retro terminal in darkness, ominous interface glow, no readable text', active_panel_asset_id: null, dialogue: []},
       ]},
   ],
-};
+} as EpisodeDetail;
 
 export default function Home() { return <Workspace initialEpisode={demoEpisode} />; }
