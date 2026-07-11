@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from comic_studio import schemas
 from comic_studio.db import get_session
 from comic_studio.jobs import JobStore
-from comic_studio.providers.minimax import MiniMaxProvider
 from comic_studio.repositories import EpisodeRepository
 from comic_studio.services.planning import PlanningService
 
@@ -69,13 +68,8 @@ async def run_planning_job(app, job_id: str, episode_id: str) -> None:
     with app.state.session_factory() as session:
         jobs = JobStore(session)
         jobs.transition(job_id, "running", progress=5)
-        settings = app.state.settings
         try:
-            provider = MiniMaxProvider(
-                api_key=settings.minimax_api_key,
-                model=settings.minimax_model,
-                base_url=settings.minimax_base_url,
-            )
+            provider = app.state.provider_factory.create_llm()
             await PlanningService(session, provider).plan_episode(episode_id)
             jobs.transition(job_id, "succeeded", result_metadata={"episode_id": episode_id})
         except Exception as exc:

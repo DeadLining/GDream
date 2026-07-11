@@ -12,6 +12,10 @@ def client(tmp_path, monkeypatch):
         "AI_COMIC_DATABASE_URL", f"sqlite:///{tmp_path / 'studio.db'}"
     )
     monkeypatch.setenv("AI_COMIC_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv(
+        "AI_COMIC_PROVIDER_CHANNELS_PATH",
+        str(tmp_path / "provider-channels.json"),
+    )
     get_settings.cache_clear()
     with TestClient(create_app()) as test_client:
         yield test_client

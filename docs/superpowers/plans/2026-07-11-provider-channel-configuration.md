@@ -105,7 +105,7 @@ git commit -m "feat: persist local provider channels"
 - Modify: `services/api/comic_studio/routes/speech.py`
 - Modify: `services/api/comic_studio/routes/providers.py`
 
-- [ ] **Step 1: Write failing factory and hot-reload tests**
+- [x] **Step 1: Write failing factory and hot-reload tests**
 
 Use fake provider constructors to assert:
 
@@ -119,7 +119,7 @@ assert second.model == "MiniMax-M3-new"
 
 Assert the first provider retains its captured endpoint after save. Assert disabled or incomplete channels raise a stable `ProviderConfigurationError` with no key material.
 
-- [ ] **Step 2: Run focused tests and confirm missing factory**
+- [x] **Step 2: Run focused tests and confirm missing factory**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_factory.py -q
@@ -127,7 +127,7 @@ cd services/api && uv run pytest tests/test_provider_factory.py -q
 
 Expected: FAIL because `ProviderFactory` does not exist.
 
-- [ ] **Step 3: Implement provider creation**
+- [x] **Step 3: Implement provider creation**
 
 Expose:
 
@@ -140,13 +140,13 @@ class ProviderFactory:
 
 Each method reads one snapshot, validates `enabled`, captures the channel values, and creates one provider. Do not pass the store into provider instances.
 
-- [ ] **Step 4: Wire routes and production workers**
+- [x] **Step 4: Wire routes and production workers**
 
 Initialize `ProviderChannelStore` and `ProviderFactory` in `create_app()`. Replace direct `Settings` provider construction in planning, panel, speech, and production coordinator workers with factory calls.
 
 Update provider health to read the current redacted snapshot so reported host/model/status matches actual routing.
 
-- [ ] **Step 5: Run focused and full API tests, then commit**
+- [x] **Step 5: Run focused and full API tests, then commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_factory.py tests/test_provider_health.py tests/test_episode_planning.py tests/test_panel_versions.py tests/test_dialogue_speech.py tests/test_production_coordinator.py -q

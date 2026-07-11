@@ -3,7 +3,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from comic_studio import models, schemas
 from comic_studio.assets import AssetStore
 from comic_studio.jobs import JobStore
-from comic_studio.providers.gpt_image import GPTImageProvider
 from comic_studio.services.panels import PanelService
 
 
@@ -33,11 +32,7 @@ async def run_panel_job(app, job_id: str, shot_id: str, activate: bool) -> None:
         jobs.transition(job_id, "running", progress=5)
         settings = app.state.settings
         try:
-            provider = GPTImageProvider(
-                api_key=settings.gpt_image_key,
-                model=settings.gpt_image_model,
-                base_url=settings.gpt_image_base_url,
-            )
+            provider = app.state.provider_factory.create_image()
             asset = await PanelService(
                 session, settings.data_root, provider
             ).generate_panel(shot_id, activate=activate)

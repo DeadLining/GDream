@@ -2,7 +2,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 
 from comic_studio import models
 from comic_studio.jobs import JobStore
-from comic_studio.providers.qwen_tts import QwenTTSProvider
 from comic_studio.services.speech import SpeechService
 
 
@@ -15,11 +14,7 @@ async def run_speech_job(app, job_id: str, dialogue_id: str) -> None:
         jobs.transition(job_id, "running", progress=5)
         settings = app.state.settings
         try:
-            provider = QwenTTSProvider(
-                base_url=settings.qwen_tts_base_url,
-                model=settings.qwen_tts_model,
-                ssh_host=settings.qwen_tts_ssh_host,
-            )
+            provider = app.state.provider_factory.create_tts()
             asset = await SpeechService(
                 session, settings.data_root, provider
             ).synthesize_dialogue(dialogue_id)
