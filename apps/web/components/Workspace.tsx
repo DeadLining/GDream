@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {createEpisode, createProject, getEpisode, getProductionReadiness, getProject, listProjects, startPlanning} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import type {EpisodeCreate, EpisodeDetail, Job, ProductionReadiness, Project, ProjectCreate, ProjectDetail, Shot} from '../lib/types';
@@ -38,47 +38,67 @@ export function Workspace() {
   const [job, setJob] = useState<Job | null>(null);
   const [projectDialog, setProjectDialog] = useState(false);
   const [episodeDialog, setEpisodeDialog] = useState(false);
+  const navigationRequest = useRef(0);
 
   useEffect(() => {
     const query = window.matchMedia?.('(max-width: 899px)');
     if (!query) return;
-    const update = () => setMobile(query.matches);
+    const update = () => {
+      setMobile(query.matches);
+      setWorkArea(current => query.matches
+        ? current === 'review' ? 'overview' : current
+        : current === 'inspector' ? 'overview' : current);
+    };
     update();
     query.addEventListener?.('change', update);
     return () => query.removeEventListener?.('change', update);
   }, []);
 
-  const loadEpisode = async (id: string, preserveSelection = false) => {
+  const loadEpisodeForRequest = async (id: string, request: number, preserveSelection = false) => {
     const loaded = await getEpisode(id);
     const loadedReadiness = await getProductionReadiness(id).catch(() => unavailableReadiness(loaded));
+    if (navigationRequest.current !== request) return;
     setEpisode(loaded);
     setReadiness(loadedReadiness);
     const loadedShots = loaded.scenes.flatMap(scene => scene.shots);
     setSelectedShotId(current => preserveSelection && loadedShots.some(shot => shot.id === current) ? current : loadedShots[0]?.id ?? null);
     localStorage.setItem('ai-comic-episode', id);
   };
+  const loadEpisode = (id: string, preserveSelection = false) => {
+    const request = ++navigationRequest.current;
+    return loadEpisodeForRequest(id, request, preserveSelection);
+  };
 
-  const loadProject = async (id: string) => {
+  const loadProjectForRequest = async (id: string, request: number) => {
     const loaded = await getProject(id);
+    if (navigationRequest.current !== request) return;
     setProject(loaded);
     localStorage.setItem('ai-comic-project', id);
     const preferred = localStorage.getItem('ai-comic-episode');
     const selected = loaded.episodes.find(item => item.id === preferred) ?? loaded.episodes[0];
-    if (selected) await loadEpisode(selected.id);
+    if (selected) await loadEpisodeForRequest(selected.id, request);
     else {
+      if (navigationRequest.current !== request) return;
       setEpisode(null);
       setReadiness(null);
       setSelectedShotId(null);
     }
   };
+  const loadProject = (id: string) => {
+    const request = ++navigationRequest.current;
+    return loadProjectForRequest(id, request);
+  };
 
   const reloadProjects = async (preferredId?: string) => {
+    const request = ++navigationRequest.current;
     const loaded = await listProjects();
+    if (navigationRequest.current !== request) return;
     setProjects(loaded);
     const stored = preferredId ?? localStorage.getItem('ai-comic-project');
     const selected = loaded.find(item => item.id === stored) ?? loaded[0];
-    if (selected) await loadProject(selected.id);
+    if (selected) await loadProjectForRequest(selected.id, request);
     else {
+      if (navigationRequest.current !== request) return;
       setProject(null);
       setEpisode(null);
       setReadiness(null);
@@ -102,7 +122,7 @@ export function Workspace() {
   };
   const selectShot = (shot: Shot) => selectShotById(shot.id);
   const refreshEpisode = async () => {
-    if (episode) await loadEpisode(episode.id, true);
+    if (episode) await loadEpisodeForRequest(episode.id, navigationRequest.current, true);
   };
   const updateShotInEpisode = async (updated: Shot) => {
     setEpisode(current => current ? {...current, scenes: current.scenes.map(scene => ({...scene, shots: scene.shots.map(item => item.id === updated.id ? updated : item)}))} : current);
@@ -134,8 +154,18 @@ export function Workspace() {
     <WorkspaceTabs value={workArea} onChange={setWorkArea} mobile={mobile}/>
     <div className={`workspace-grid mobile-${workArea}`}>
       <ProjectNavigator projects={projects} project={project} episodeId={episode?.id ?? null} onProject={loadProject} onEpisode={loadEpisode} onNewProject={() => setProjectDialog(true)} onNewEpisode={() => setEpisodeDialog(true)}/>
-      {center}
-      {selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}
+      <section
+        className="workspace-center"
+        id={workArea === 'inspector' ? undefined : `workspace-panel-${workArea}`}
+        role={workArea === 'inspector' ? undefined : 'tabpanel'}
+        aria-labelledby={workArea === 'inspector' ? undefined : `workspace-tab-${workArea}`}
+      >{center}</section>
+      <section
+        className="workspace-inspector"
+        id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
+        role={workArea === 'inspector' ? 'tabpanel' : undefined}
+        aria-labelledby={workArea === 'inspector' ? 'workspace-tab-inspector' : undefined}
+      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>

@@ -1,9 +1,11 @@
-import {cleanup, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {useState} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Workspace} from '../components/Workspace';
+import {WorkspaceTabs, type WorkArea} from '../components/WorkspaceTabs';
 import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
@@ -69,6 +71,39 @@ const succeededJob: Job = {
 };
 const workspaceStyles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => {resolve = done;});
+  return {promise, resolve};
+}
+
+function mediaController(initialMatches: boolean) {
+  let matches = initialMatches;
+  let listener: (() => void) | undefined;
+  const media = {
+    get matches() {return matches;},
+    media: '(max-width: 899px)',
+    onchange: null,
+    addEventListener: vi.fn((_event: string, next: () => void) => {listener = next;}),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  };
+  return {
+    media,
+    setMatches(next: boolean) {
+      matches = next;
+      listener?.();
+    },
+  };
+}
+
+function TabsHarness() {
+  const [value, setValue] = useState<WorkArea>('overview');
+  return <WorkspaceTabs value={value} onChange={setValue}/>;
+}
+
 describe('Workspace', () => {
   afterEach(() => {
     cleanup();
@@ -119,7 +154,10 @@ describe('Workspace', () => {
 
     render(<Workspace />);
 
-    expect(await screen.findByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    const overviewTab = await screen.findByRole('tab', {name: '总览'});
+    expect(overviewTab).toHaveAttribute('aria-selected', 'true');
+    expect(overviewTab).toHaveAttribute('aria-controls', 'workspace-panel-overview');
+    expect(document.getElementById('workspace-panel-overview')).toHaveAttribute('role', 'tabpanel');
     expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
 
     await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
@@ -168,14 +206,99 @@ describe('Workspace', () => {
 
     expect(await screen.findByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
     expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-overview');
-    expect(workspaceStyles).toMatch(/\.mobile-overview \.inspector\s*\{\s*display:\s*none/);
+    expect(workspaceStyles).toMatch(/\.mobile-overview \.workspace-inspector\s*\{\s*display:\s*none/);
 
     await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
     expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-storyboard');
-    expect(workspaceStyles).toMatch(/\.mobile-storyboard \.inspector\s*\{\s*display:\s*none/);
+    expect(workspaceStyles).toMatch(/\.mobile-storyboard \.workspace-inspector\s*\{\s*display:\s*none/);
 
     await userEvent.click(screen.getByRole('tab', {name: '检查器'}));
     expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-inspector');
-    expect(workspaceStyles).toMatch(/\.mobile-inspector :is\(\.storyboard, \.episode-overview\)\s*\{\s*display:\s*none/);
+    expect(workspaceStyles).toMatch(/\.mobile-inspector \.workspace-center\s*\{\s*display:\s*none/);
+  });
+
+  it('uses a non-clipping flex layout for toolbar, tabs, and workspace', () => {
+    expect(workspaceStyles).toMatch(/\.app-shell\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/);
+    expect(workspaceStyles).toMatch(/\.workspace-grid\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*height:\s*auto/);
+  });
+
+  it('normalizes inspector when the viewport switches from mobile to desktop', async () => {
+    const viewport = mediaController(true);
+    vi.stubGlobal('matchMedia', vi.fn(() => viewport.media));
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '检查器'}));
+    expect(screen.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
+    act(() => viewport.setMatches(false));
+
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', {name: '检查器'})).not.toBeInTheDocument();
+  });
+
+  it('normalizes review when the viewport switches from desktop to mobile', async () => {
+    const viewport = mediaController(false);
+    vi.stubGlobal('matchMedia', vi.fn(() => viewport.media));
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '审核'}));
+    expect(screen.getByRole('tab', {name: '审核'})).toHaveAttribute('aria-selected', 'true');
+    act(() => viewport.setMatches(true));
+
+    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', {name: '审核'})).not.toBeInTheDocument();
+  });
+
+  it('keeps the latest episode when an older request resolves last', async () => {
+    const episodeA = {...projectDetail.episodes[0], id: 'episode-a', title: '剧集 A'};
+    const episodeB = {...projectDetail.episodes[0], id: 'episode-b', title: '剧集 B'};
+    const episodeC = {...projectDetail.episodes[0], id: 'episode-c', title: '剧集 C'};
+    const detail = {...projectDetail, episodes: [episodeA, episodeB, episodeC]};
+    const requestA = deferred<EpisodeDetail>();
+    const requestB = deferred<EpisodeDetail>();
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(detail);
+    mocks.getEpisode.mockImplementation((id: string) => {
+      if (id === 'episode-a') return requestA.promise;
+      if (id === 'episode-b') return requestB.promise;
+      return Promise.resolve({...plannedEpisode, ...episodeC});
+    });
+    localStorage.setItem('ai-comic-episode', 'episode-c');
+    render(<Workspace />);
+    const selector = await screen.findByRole('combobox', {name: '选择剧集'});
+
+    await userEvent.selectOptions(selector, 'episode-a');
+    await userEvent.selectOptions(selector, 'episode-b');
+    requestB.resolve({...plannedEpisode, ...episodeB});
+    expect(await screen.findByRole('heading', {name: '剧集 B'})).toBeVisible();
+    requestA.resolve({...plannedEpisode, ...episodeA});
+    await act(async () => {await requestA.promise;});
+
+    expect(selector).toHaveValue('episode-b');
+    expect(screen.getByRole('heading', {name: '剧集 B'})).toBeVisible();
+    expect(localStorage.getItem('ai-comic-episode')).toBe('episode-b');
+  });
+
+  it('supports roving keyboard navigation across workspace tabs', async () => {
+    render(<TabsHarness />);
+    const overview = screen.getByRole('tab', {name: '总览'});
+    const storyboard = screen.getByRole('tab', {name: '分镜'});
+
+    expect(overview).toHaveAttribute('tabindex', '0');
+    expect(storyboard).toHaveAttribute('tabindex', '-1');
+    overview.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(storyboard).toHaveFocus();
+    expect(storyboard).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.keyboard('{End}');
+    expect(screen.getByRole('tab', {name: '审核'})).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(overview).toHaveFocus();
   });
 });
