@@ -128,3 +128,35 @@ class JobRead(BaseModel):
     retry_count: int
     created_at: datetime
     updated_at: datetime
+
+
+class PlannedDialogue(BaseModel):
+    character_id: str | None
+    text: str = Field(min_length=1)
+    subtitle_text: str = Field(min_length=1)
+    emotion: str = "neutral"
+    performance_instruction: str = ""
+
+
+class PlannedShot(BaseModel):
+    shot_type: str = Field(min_length=1)
+    duration_seconds: float = Field(gt=0, le=30)
+    composition: str = Field(min_length=1)
+    camera_motion: str = "push_in"
+    character_state: dict = {}
+    image_prompt: str = Field(min_length=1)
+    negative_prompt: str = ""
+    dialogue: list[PlannedDialogue] = []
+
+
+class PlannedScene(BaseModel):
+    location: str = Field(min_length=1)
+    time_of_day: str = ""
+    summary: str = Field(min_length=1)
+    continuity_state: dict = {}
+    estimated_duration_seconds: float = Field(gt=0)
+    shots: list[PlannedShot] = Field(min_length=1)
+
+
+class EpisodePlan(BaseModel):
+    scenes: list[PlannedScene] = Field(min_length=1)
