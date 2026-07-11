@@ -12,6 +12,7 @@ type Props = {
   label: string;
   draft: ProviderChannelDraft;
   testing: boolean;
+  disabled: boolean;
   testResult: ProviderChannelTestResult | null;
   testError: string;
   validationError: string;
@@ -19,13 +20,14 @@ type Props = {
   onTest: () => void;
 };
 
-export function ProviderChannelSection({kind, label, draft, testing, testResult, testError, validationError, onChange, onTest}: Props) {
+export function ProviderChannelSection({kind, label, draft, testing, disabled, testResult, testError, validationError, onChange, onTest}: Props) {
   const update = <Key extends keyof ProviderChannelDraft>(key: Key, value: ProviderChannelDraft[Key]) =>
     onChange({...draft, [key]: value});
   const statusId = `provider-${kind}-status`;
 
   return (
     <form className="provider-channel-section" aria-label={`${label}渠道`} onSubmit={event => {event.preventDefault(); onTest();}}>
+      <fieldset disabled={disabled}>
       <div className="provider-section-heading">
         <h2>{label}</h2>
         <label className="provider-enabled">
@@ -53,13 +55,14 @@ export function ProviderChannelSection({kind, label, draft, testing, testResult,
       </div>
       {validationError && <p className="form-error" role="alert">{validationError}</p>}
       <div className="provider-test-row">
-        <button type="submit" disabled={testing} aria-describedby={statusId}>{testing ? '正在测试' : `测试${label}连接`}</button>
+        <button type="submit" disabled={testing || disabled} aria-describedby={statusId}>{testing ? '正在测试' : `测试${label}连接`}</button>
         <p id={statusId} role="status" aria-live="polite">
           {testResult?.status === 'ok' && `连接成功，${testResult.host}，${testResult.elapsed_ms} ms`}
           {testResult?.status === 'failed' && (testResult.error || '连接失败')}
           {testError}
         </p>
       </div>
+      </fieldset>
     </form>
   );
 }

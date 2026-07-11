@@ -153,7 +153,7 @@ describe('ProviderSettings', () => {
 
     await userEvent.type(screen.getByLabelText('画面生成 Base URL'), 'https://images.example.com');
     await userEvent.click(screen.getByRole('button', {name: '保存全部更改'}));
-    expect(await screen.findByText('Unable to save provider channel configuration')).toHaveAttribute('role', 'alert');
+    expect(await screen.findByRole('alert')).toHaveTextContent('画面生成保存失败：Unable to save provider channel configuration');
     expect(screen.getByText('有未保存更改')).toBeVisible();
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
@@ -211,13 +211,14 @@ describe('ProviderSettings', () => {
     save.click();
 
     expect(mocks.updateProviderChannel).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole('form').flatMap(form => within(form).getAllByRole('textbox')).every(control => control.hasAttribute('disabled'))).toBe(true);
+    expect(document.querySelectorAll('.provider-channel-section fieldset[disabled]')).toHaveLength(3);
+    expect(screen.getByLabelText('画面生成渠道名称')).toBeDisabled();
     expect(screen.getByLabelText('替换剧本规划 API Key')).toBeDisabled();
     expect(screen.getByRole('button', {name: '测试画面生成连接'})).toBeDisabled();
     expect(screen.getByDisplayValue('typed-before-save')).toBeDisabled();
 
     saving.resolve(updateResponse(current, 'llm'));
-    await waitFor(() => expect(save).toBeEnabled());
+    await waitFor(() => expect(screen.getByLabelText('画面生成渠道名称')).toBeEnabled());
   });
 
   it('reconciles partial sequential saves and retries only the failed credential operation', async () => {

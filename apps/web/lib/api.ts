@@ -60,7 +60,7 @@ export const startRender = (episodeId: string) => apiRequest<{job_id: string; st
 export const getJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}`);
 export const retryJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}/retry`, json('POST'));
 export const getProviderHealth = () => apiRequest<ProviderHealth>('/api/providers/health');
-export const getProviderChannels = () => apiRequest<ProviderChannelsRead>('/api/provider-channels');
+export const getProviderChannels = (signal?: AbortSignal) => apiRequest<ProviderChannelsRead>('/api/provider-channels', {signal});
 export const updateProviderChannel = (kind: ProviderChannelKind, update: ProviderChannelUpdate) =>
   apiRequest<ProviderChannelUpdateRead>(`/api/provider-channels/${kind}`, json('PUT', update));
 export const testProviderChannel = (kind: ProviderChannelKind, candidate: ProviderChannelUpdate) =>

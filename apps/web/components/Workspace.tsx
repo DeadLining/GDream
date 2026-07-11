@@ -125,9 +125,10 @@ export function Workspace() {
   };
   const selectShot = (shot: Shot) => selectShotById(shot.id);
   const changeWorkArea = (next: WorkArea) => {
-    if (next === workArea) return;
-    if (workArea === 'settings' && settingsDirty && !window.confirm('模型渠道有未保存更改，确定离开吗？')) return;
+    if (next === workArea) return true;
+    if (workArea === 'settings' && settingsDirty && !window.confirm('模型渠道有未保存更改，确定离开吗？')) return false;
     setWorkArea(next);
+    return true;
   };
   const canLeaveSettings = () => workArea !== 'settings' || !settingsDirty || window.confirm('模型渠道有未保存更改，确定离开吗？');
   const navigateProject = (id: string) => {if (canLeaveSettings()) void loadProject(id);};

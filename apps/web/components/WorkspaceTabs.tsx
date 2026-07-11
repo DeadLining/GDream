@@ -24,7 +24,7 @@ export function WorkspaceTabs({
   mobile = false,
 }: {
   value: WorkArea;
-  onChange: (value: WorkArea) => void;
+  onChange: (value: WorkArea) => boolean | void;
   mobile?: boolean;
 }) {
   const tabs = mobile ? mobileTabs : desktopTabs;
@@ -37,8 +37,8 @@ export function WorkspaceTabs({
     if (nextIndex === null) return;
     event.preventDefault();
     const next = tabs[nextIndex];
-    onChange(next.value);
-    document.getElementById(`workspace-tab-${next.value}`)?.focus();
+    const accepted = onChange(next.value);
+    document.getElementById(`workspace-tab-${accepted === false ? value : next.value}`)?.focus();
   };
   return (
     <nav
@@ -56,7 +56,10 @@ export function WorkspaceTabs({
           aria-controls={`workspace-panel-${tab.value}`}
           tabIndex={value === tab.value ? 0 : -1}
           className={value === tab.value ? 'active' : ''}
-          onClick={() => onChange(tab.value)}
+          onClick={() => {
+            const accepted = onChange(tab.value);
+            if (accepted === false) document.getElementById(`workspace-tab-${value}`)?.focus();
+          }}
           onKeyDown={event => moveSelection(event, index)}
         >
           {tab.label}
