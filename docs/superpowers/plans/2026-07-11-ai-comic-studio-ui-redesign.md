@@ -19,7 +19,7 @@
 - Create: `apps/web/components/EpisodeOverview.tsx`
 - Create: `apps/web/tests/episode-overview.test.tsx`
 
-- [ ] **Step 1: Write failing overview derivation tests**
+- [x] **Step 1: Write failing overview derivation tests**
 
 Test that the derived overview combines episode shots and readiness without a new API:
 
@@ -35,7 +35,7 @@ expect(overview.renderReady).toBe(false);
 
 Render `EpisodeOverview` and assert that clicking a shot calls `onSelectShot('shot-2')`, while blocker actions call `onOpenReview()` or `onOpenProduction()`.
 
-- [ ] **Step 2: Run the focused test and confirm missing modules**
+- [x] **Step 2: Run the focused test and confirm missing modules**
 
 Run:
 
@@ -45,7 +45,7 @@ npm test --workspace @comic-studio/web -- --run tests/episode-overview.test.tsx
 
 Expected: FAIL because `deriveEpisodeOverview` and overview components do not exist.
 
-- [ ] **Step 3: Implement the typed overview derivation**
+- [x] **Step 3: Implement the typed overview derivation**
 
 Create this public shape in `episode-overview.ts`:
 
@@ -79,7 +79,7 @@ export function deriveEpisodeOverview(
 
 Implement `StatusMetric` with a label, numeric summary, and semantic `<progress>`. Implement `ReadinessBlockers` with exact blocker counts and navigation callbacks. Implement `EpisodeOverview` as an unframed work area with metrics and stable thumbnail cards.
 
-- [ ] **Step 4: Run focused and full web tests**
+- [x] **Step 4: Run focused and full web tests**
 
 ```bash
 npm test --workspace @comic-studio/web -- --run tests/episode-overview.test.tsx
@@ -88,7 +88,7 @@ npm test --workspace @comic-studio/web
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit the overview unit**
+- [x] **Step 5: Commit the overview unit**
 
 ```bash
 git add apps/web/lib/episode-overview.ts apps/web/components/StatusMetric.tsx apps/web/components/ReadinessBlockers.tsx apps/web/components/EpisodeOverview.tsx apps/web/tests/episode-overview.test.tsx
