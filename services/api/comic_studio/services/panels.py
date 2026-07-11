@@ -19,7 +19,9 @@ class PanelService:
         self.assets = AssetStore(session, data_root)
         self.provider = provider
 
-    async def generate_panel(self, shot_id: str, *, activate: bool = False) -> models.Asset:
+    async def generate_panel(
+        self, shot_id: str, *, activate: bool = False
+    ) -> models.Asset:
         statement = (
             select(models.Shot)
             .options(
@@ -34,6 +36,52 @@ class PanelService:
         if shot is None:
             raise KeyError(shot_id)
         project = shot.scene.episode.project
+        present_character_ids = {
+            key for key in shot.character_state if isinstance(key, str)
+        } | {
+            line.character_id for line in shot.dialogue if line.character_id is not None
+        }
+        reference_assets: list[models.Asset] = []
+        if present_character_ids:
+            references = list(
+                self.session.scalars(
+                    select(models.CharacterReference).where(
+                        models.CharacterReference.character_id.in_(
+                            present_character_ids
+                        ),
+                        models.CharacterReference.is_active.is_(True),
+                        models.CharacterReference.review_status == "approved",
+                    )
+                )
+            )
+            by_character: dict[str, list[models.CharacterReference]] = {}
+            for reference in references:
+                by_character.setdefault(reference.character_id, []).append(reference)
+            for character_id in present_character_ids:
+                candidates = by_character.get(character_id, [])
+                identity = next(
+                    (
+                        item
+                        for kind in ("primary", "front")
+                        for item in candidates
+                        if item.reference_type == kind
+                    ),
+                    None,
+                )
+                if identity is None:
+                    raise ValueError(f"missing_character_reference:{character_id}")
+                selected = [identity]
+                outfit = next(
+                    (item for item in candidates if item.reference_type == "outfit"),
+                    None,
+                )
+                if outfit is not None:
+                    selected.append(outfit)
+                for reference in selected:
+                    asset = self.session.get(models.Asset, reference.asset_id)
+                    if asset is not None:
+                        reference_assets.append(asset)
+            reference_assets = reference_assets[:4]
         character_rules = "\n".join(
             f"- {character.name}: {character.appearance_bible}. "
             f"Continuity: {character.continuity_rules}. Avoid: {character.negative_constraints}"
@@ -48,7 +96,17 @@ class PanelService:
             f"Characters:\n{character_rules}\n"
             f"Negative constraints: {shot.negative_prompt}"
         )
-        result = await self.provider.generate(prompt, "1024x1536")
+        reference_inputs = []
+        for asset in reference_assets:
+            path = (self.assets.data_root / asset.local_path).resolve()
+            if self.assets.data_root not in path.parents:
+                raise ValueError("Asset path escaped data root")
+            reference_inputs.append((path.read_bytes(), asset.media_type))
+        result = (
+            await self.provider.edit(prompt, reference_inputs, "1024x1536")
+            if reference_inputs
+            else await self.provider.generate(prompt, "1024x1536")
+        )
         return self.assets.register_panel(
             project_id=project.id,
             shot_id=shot.id,
@@ -56,6 +114,10 @@ class PanelService:
             media_type=result.media_type,
             provider="gpt-image",
             model=self.provider.model,
-            request_metadata={"prompt": prompt, "size": "1024x1536"},
+            request_metadata={
+                "prompt": prompt,
+                "size": "1024x1536",
+                "reference_asset_ids": [asset.id for asset in reference_assets],
+            },
             activate=activate,
         )

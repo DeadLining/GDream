@@ -168,3 +168,46 @@ class CharacterReferenceService:
         self.session.commit()
         if asset_path is not None and self.data_root in asset_path.parents:
             asset_path.unlink(missing_ok=True)
+
+    async def generate(
+        self, character_id: str, reference_type: str, label: str, provider
+    ):
+        character = self.session.get(models.Character, character_id)
+        if character is None:
+            raise KeyError(character_id)
+        prompt = (
+            f"Create a clean character reference image for {character.name}. "
+            f"Appearance: {character.appearance_bible}. Continuity: {character.continuity_rules}. "
+            f"Reference view: {reference_type}. Plain neutral background, no text."
+        )
+        parent_asset_id = None
+        if reference_type in {"primary", "front"}:
+            result = await provider.generate(prompt, "1024x1536")
+        else:
+            primary = self.session.scalar(
+                select(models.CharacterReference).where(
+                    models.CharacterReference.character_id == character_id,
+                    models.CharacterReference.reference_type.in_({"primary", "front"}),
+                    models.CharacterReference.is_active.is_(True),
+                    models.CharacterReference.review_status == "approved",
+                )
+            )
+            if primary is None:
+                raise CharacterReferenceError("approved_primary_reference_required")
+            asset = self.session.get(models.Asset, primary.asset_id)
+            path = (self.data_root / asset.local_path).resolve()
+            if self.data_root not in path.parents:
+                raise CharacterReferenceError("asset_path_escape")
+            result = await provider.edit(
+                prompt, [(path.read_bytes(), asset.media_type)], "1024x1536"
+            )
+            parent_asset_id = asset.id
+        reference, asset = self.upload(
+            character_id, result.content, reference_type, label
+        )
+        asset.provider = "gpt-image"
+        asset.model = provider.model
+        asset.parent_asset_id = parent_asset_id
+        asset.request_metadata = {"prompt": prompt, "parent_asset_id": parent_asset_id}
+        self.session.commit()
+        return reference, asset

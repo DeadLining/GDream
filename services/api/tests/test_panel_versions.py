@@ -1,5 +1,8 @@
 from comic_studio import models
 from comic_studio.assets import AssetStore
+from comic_studio.services.character_references import CharacterReferenceService
+from comic_studio.services.panels import PanelService
+from tests.test_character_references import PNG
 
 
 def seed_shot(session):
@@ -142,3 +145,76 @@ def test_panel_api_rejects_asset_from_another_shot(client):
     response = client.put(f"/api/shots/{second_shot_id}/panels/{asset.id}/active")
 
     assert response.status_code == 422
+
+
+def test_panel_generation_uses_active_approved_character_references(
+    db_session, tmp_path
+):
+    project, shot = seed_shot(db_session)
+    character = models.Character(
+        project_id=project.id,
+        name="林夏",
+        role="主角",
+        appearance_bible="黑色风衣",
+        personality="冷静",
+        continuity_rules="耳钉",
+        voice_speaker="v1",
+    )
+    db_session.add(character)
+    db_session.flush()
+    shot.character_state = {character.id: {"outfit": "coat"}}
+    db_session.commit()
+    reference, _ = CharacterReferenceService(db_session, tmp_path).upload(
+        character.id, PNG, "primary", "主参考"
+    )
+    reference.review_status = "approved"
+    db_session.commit()
+    CharacterReferenceService(db_session, tmp_path).activate(character.id, reference.id)
+
+    class Provider:
+        model = "test-image"
+        references = None
+
+        async def edit(self, prompt, references, size="1024x1536", quality="auto"):
+            self.references = references
+            from comic_studio.providers.gpt_image import ImageResult
+
+            return ImageResult(b"panel")
+
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("must not use text-only generation")
+
+    import asyncio
+
+    provider = Provider()
+    asset = asyncio.run(
+        PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
+    )
+    assert provider.references == [(PNG, "image/png")]
+    assert asset.request_metadata["reference_asset_ids"]
+
+
+def test_panel_generation_fails_when_present_character_lacks_reference(
+    db_session, tmp_path
+):
+    project, shot = seed_shot(db_session)
+    character = models.Character(
+        project_id=project.id,
+        name="林夏",
+        role="主角",
+        appearance_bible="黑色风衣",
+        personality="冷静",
+        continuity_rules="耳钉",
+        voice_speaker="v1",
+    )
+    db_session.add(character)
+    db_session.flush()
+    shot.character_state = {character.id: {}}
+    db_session.commit()
+    import asyncio
+    import pytest
+
+    with pytest.raises(ValueError, match="missing_character_reference"):
+        asyncio.run(
+            PanelService(db_session, tmp_path, object()).generate_panel(shot.id)
+        )

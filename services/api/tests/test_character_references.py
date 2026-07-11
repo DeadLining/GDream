@@ -123,3 +123,48 @@ def test_delete_inactive_reference_removes_relation_and_file(client):
         client.delete(f"/api/character-references/{reference['id']}").status_code == 204
     )
     assert not path.exists()
+
+
+def test_generates_primary_and_reference_based_variant(client):
+    _, character = _character(client)
+
+    class Provider:
+        model = "gpt-image-test"
+        edits = 0
+
+        async def generate(self, prompt, size="1024x1536", quality="auto"):
+            from comic_studio.providers.gpt_image import ImageResult
+
+            return ImageResult(PNG)
+
+        async def edit(self, prompt, references, size="1024x1536", quality="auto"):
+            self.edits += 1
+            from comic_studio.providers.gpt_image import ImageResult
+
+            return ImageResult(PNG)
+
+    provider = Provider()
+
+    class Factory:
+        def create_image(self):
+            return provider
+
+    client.app.state.provider_factory = Factory()
+    primary = client.post(
+        f"/api/characters/{character['id']}/references/generate",
+        json={"reference_type": "primary", "label": "AI 主参考"},
+    ).json()
+    client.patch(
+        f"/api/character-references/{primary['id']}",
+        json={"review_status": "approved"},
+    )
+    client.put(f"/api/characters/{character['id']}/references/{primary['id']}/active")
+
+    variant = client.post(
+        f"/api/characters/{character['id']}/references/generate",
+        json={"reference_type": "side", "label": "侧面"},
+    )
+
+    assert variant.status_code == 201
+    assert variant.json()["reference_type"] == "side"
+    assert provider.edits == 1

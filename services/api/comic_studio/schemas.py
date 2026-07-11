@@ -314,6 +314,12 @@ class CharacterReferencePatch(PatchModel):
     review_status: ReviewStatus | None = None
 
 
+class CharacterReferenceGenerate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reference_type: ReferenceType
+    label: str = Field(default="", max_length=120)
+
+
 class CharacterReferenceRead(BaseModel):
     id: str
     character_id: str

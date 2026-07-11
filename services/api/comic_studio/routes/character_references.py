@@ -78,6 +78,30 @@ async def upload_reference(character_id: str, request: Request):
             ) from exc
 
 
+@router.post(
+    "/api/characters/{character_id}/references/generate",
+    response_model=schemas.CharacterReferenceRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def generate_reference(
+    character_id: str, data: schemas.CharacterReferenceGenerate, request: Request
+):
+    with request.app.state.session_factory() as session:
+        try:
+            provider = request.app.state.provider_factory.create_image()
+            ref, asset = await CharacterReferenceService(
+                session, request.app.state.settings.data_root
+            ).generate(character_id, data.reference_type, data.label, provider)
+            return response_for(ref, asset)
+        except KeyError as exc:
+            raise HTTPException(404, "Character not found") from exc
+        except CharacterReferenceError as exc:
+            raise HTTPException(
+                409 if str(exc) == "approved_primary_reference_required" else 422,
+                str(exc),
+            ) from exc
+
+
 @router.patch(
     "/api/character-references/{reference_id}",
     response_model=schemas.CharacterReferenceRead,
