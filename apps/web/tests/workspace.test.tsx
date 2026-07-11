@@ -7,7 +7,7 @@ import type {EpisodeDetail, Job, Project, ProjectDetail} from '../lib/types';
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
-  listPanelVersions: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
+  listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -15,6 +15,7 @@ vi.mock('../lib/api', () => ({
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
   listPanelVersions: mocks.listPanelVersions,
+  getProductionReadiness: mocks.getProductionReadiness,
   getProviderHealth: mocks.getProviderHealth, startRender: mocks.startRender,
   mediaUrl: (path: string) => path,
 }));
@@ -54,6 +55,7 @@ describe('Workspace', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.listPanelVersions.mockResolvedValue([]);
+    mocks.getProductionReadiness.mockResolvedValue({ready: false, blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}});
   });
 
   it('loads an explicit empty state when no projects exist', async () => {

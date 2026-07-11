@@ -215,28 +215,28 @@ git add apps/web && git commit -m "feat: add batch production web client"
 - Create: `apps/web/tests/production-panel.test.tsx`
 - Modify: `apps/web/tests/workspace.test.tsx`
 
-- [ ] **Step 1: Write failing production panel tests**
+- [x] **Step 1: Write failing production panel tests**
 
 Cover readiness blockers, default options, concurrency stepper, start, counters, pause, continue, filters, selected retry, and item-to-shot selection.
 
-- [ ] **Step 2: Run tests and confirm panel is absent**
+- [x] **Step 2: Run tests and confirm panel is absent**
 
 Run: `npm test --workspace @comic-studio/web -- --run tests/production-panel.test.tsx`
 Expected: FAIL because components do not exist.
 
-- [ ] **Step 3: Implement production panel controls and rows**
+- [x] **Step 3: Implement production panel controls and rows**
 
 Use checkboxes for stages, toggles for regeneration, numeric stepper 1-4, progress semantics, filter tabs, and compact item rows. Keep stable dimensions across state changes.
 
-- [ ] **Step 4: Integrate a third workspace view**
+- [x] **Step 4: Integrate a third workspace view**
 
 Toolbar opens production. Desktop uses the center region; mobile adds a `生产` segmented tab. Selecting an item selects its target shot. Persist current run ID per episode in local storage and reload it after refresh.
 
-- [ ] **Step 5: Gate render by readiness**
+- [x] **Step 5: Gate render by readiness**
 
 Disable render with a tooltip while blockers remain. Refresh readiness after run terminal states and manual asset edits.
 
-- [ ] **Step 6: Run component tests, build, and E2E smoke, then commit**
+- [x] **Step 6: Run component tests, build, and E2E smoke, then commit**
 
 ```bash
 npm test --workspace @comic-studio/web
