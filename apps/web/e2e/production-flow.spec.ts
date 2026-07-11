@@ -90,9 +90,9 @@ test('compact overview keeps primary content inside the first viewport', async (
     const blockers = page.locator('.readiness-blockers');
     const shotWallHeading = page.locator('.episode-overview-shots-heading');
     await expect(shotCard).toBeInViewport();
-    await expect(blockers).toContainText('缺少画面 0');
-    await expect(blockers).toContainText('未审核镜头 0');
-    await expect(blockers).toContainText('缺少配音 0');
+    await expect(blockers).toContainText('素材已就绪');
+    await expect(blockers).not.toContainText(/缺少画面|未审核镜头|缺少配音/);
+    await expect(page.getByRole('button', {name: '处理阻塞项'})).toHaveCount(0);
     await expect(metrics).toHaveCount(3);
 
     const [headerBox, metricBoxes, blockersBox, shotWallHeadingBox] = await Promise.all([
@@ -113,10 +113,7 @@ test('compact overview keeps primary content inside the first viewport', async (
     expect(blockersBox!.y + blockersBox!.height).toBeLessThanOrEqual(shotWallHeadingBox!.y + 1);
 
     if (testInfo.project.name === 'mobile') {
-      const commands = [
-        page.getByRole('button', {name: '打开生产'}),
-        page.getByRole('button', {name: '处理阻塞项'}),
-      ];
+      const commands = [page.getByRole('button', {name: '打开生产'})];
       const dimensions = await page.evaluate(() => ({
         clientWidth: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,

@@ -133,6 +133,39 @@ describe('episode overview', () => {
     expect(onOpenReview).toHaveBeenCalledOnce();
   });
 
+  it('shows a truthful ready state without blocker language or actions', async () => {
+    const onOpenProduction = vi.fn();
+    const readyReadiness: ProductionReadiness = {
+      ...readiness,
+      ready: true,
+      ready_counts: {panels: 2, approved: 2, speech: 1},
+      blockers: {missing_panels: [], unapproved_shots: [], missing_speech: []},
+    };
+
+    const {container} = render(
+      <EpisodeOverview
+        episode={episode}
+        episodeNumber={1}
+        readiness={readyReadiness}
+        onSelectShot={vi.fn()}
+        onOpenProduction={onOpenProduction}
+        onOpenReview={vi.fn()}
+      />,
+    );
+
+    const view = within(container);
+    expect(view.getByText('可渲染')).toBeVisible();
+    const readyHeading = view.getByRole('heading', {name: '素材已就绪'});
+    const readyStrip = readyHeading.closest('section')!;
+    expect(within(readyStrip).getByRole('heading', {name: '素材已就绪'})).toBeVisible();
+    expect(view.queryByRole('heading', {name: '渲染阻塞'})).not.toBeInTheDocument();
+    expect(within(readyStrip).queryByText(/缺少画面|未审核镜头|缺少配音/)).not.toBeInTheDocument();
+    expect(view.queryByRole('button', {name: '处理阻塞项'})).not.toBeInTheDocument();
+
+    await userEvent.click(view.getByRole('button', {name: '打开生产'}));
+    expect(onOpenProduction).toHaveBeenCalledOnce();
+  });
+
   it('uses an explicit episode number instead of deriving one from an opaque id', () => {
     const uuidEpisode = {...episode, id: '550e8400-e29b-41d4-a716-44665544abcd'};
 

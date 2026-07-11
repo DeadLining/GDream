@@ -48,7 +48,7 @@ export function EpisodeOverview({
         <div className="episode-overview-header-actions">
           <span className={`episode-render-status ${overview.renderReady ? 'ready' : 'blocked'}`}>{overview.renderReady ? '可渲染' : '尚未就绪'}</span>
           <button type="button" onClick={onOpenProduction}><Play size={14}/>打开生产</button>
-          <button type="button" onClick={onOpenReview}><ListChecks size={14}/>处理阻塞项</button>
+          {!overview.renderReady && <button type="button" onClick={onOpenReview}><ListChecks size={14}/>处理阻塞项</button>}
         </div>
       </header>
 
@@ -61,6 +61,7 @@ export function EpisodeOverview({
 
       <ReadinessBlockers
         blockers={readiness.blockers}
+        ready={overview.renderReady}
         onOpenProduction={onOpenProduction}
         onOpenReview={onOpenReview}
         compact
