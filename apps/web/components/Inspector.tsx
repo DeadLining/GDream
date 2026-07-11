@@ -1,28 +1,3 @@
-import {ImagePlus, Mic2, RotateCcw, Sparkles} from 'lucide-react';
-import type {Shot} from '../lib/types';
-
-export function Inspector({shot}: {shot: Shot}) {
-  return (
-    <aside className="inspector">
-      <div className="inspector-heading"><span>镜头检查器</span><h2>镜头 {shot.position}</h2><p>{shot.shot_type.replace('_', ' ')} · {shot.duration_seconds} 秒</p></div>
-      <section className="inspector-section">
-        <label>画面描述</label>
-        <textarea value={shot.composition} readOnly rows={3} />
-      </section>
-      <section className="inspector-section">
-        <label>生成提示词</label>
-        <textarea value={shot.image_prompt} readOnly rows={5} className="prompt-field" />
-      </section>
-      <section className="inspector-section inline-fields">
-        <div><label>运镜</label><button className="select-control">{shot.camera_motion}</button></div>
-        <div><label>审核</label><span className={`status-badge ${shot.review_status}`}>{shot.review_status === 'approved' ? '已通过' : '待审核'}</span></div>
-      </section>
-      <div className="inspector-actions">
-        <button className="primary-action"><ImagePlus size={18} />生成画面</button>
-        <button><RotateCcw size={17} />重新生成</button>
-        <button><Mic2 size={17} />生成对白</button>
-      </div>
-      <div className="model-note"><Sparkles size={16} /><span>图像由 <strong>gpt-image-2</strong> 生成</span></div>
-    </aside>
-  );
-}
+'use client';
+import {useEffect,useState} from 'react';import {ImagePlus,Save,Sparkles} from 'lucide-react';import {activatePanel,listPanelVersions,startPanelGeneration,updateShot} from '../lib/api';import {pollJob} from '../lib/jobs';import type {Asset,Job,ReviewStatus,Shot} from '../lib/types';import {DialogueEditor} from './DialogueEditor';import {JobStatus} from './JobStatus';import {PanelVersions} from './PanelVersions';
+export function Inspector({shot,onShotUpdated}:{shot:Shot;onShotUpdated?:(shot:Shot)=>void}){const[form,setForm]=useState(shot);const[assets,setAssets]=useState<Asset[]>([]);const[job,setJob]=useState<Job|null>(null);const[error,setError]=useState('');useEffect(()=>{setForm(shot);setError('');listPanelVersions(shot.id).then(setAssets).catch(()=>setAssets([]));},[shot]);const save=async()=>{try{const updated=await updateShot(shot.id,{duration_seconds:Number(form.duration_seconds),composition:form.composition,camera_motion:form.camera_motion,image_prompt:form.image_prompt,negative_prompt:form.negative_prompt,review_status:form.review_status});onShotUpdated?.(updated);setError('');}catch(cause){setError(cause instanceof Error?cause.message:'保存失败');}};const generate=async()=>{const started=await startPanelGeneration(shot.id,true);const finished=await pollJob(started.job_id);setJob(finished);if(finished.status==='succeeded'){setAssets(await listPanelVersions(shot.id));onShotUpdated?.({...shot,active_panel_asset_id:String(finished.result_metadata.asset_id??shot.active_panel_asset_id)});}};const activate=async(assetId:string)=>{const updated=await activatePanel(shot.id,assetId);onShotUpdated?.(updated);setForm(updated);};return <aside className="inspector"><div className="inspector-heading"><span>镜头检查器</span><h2>镜头 {shot.position}</h2><p>{shot.shot_type.replace('_',' ')} · {shot.duration_seconds} 秒</p></div><section className="inspector-section"><label htmlFor="shot-duration">时长（秒）</label><input id="shot-duration" type="number" min={0.1} max={30} step={0.1} value={form.duration_seconds} onChange={event=>setForm({...form,duration_seconds:Number(event.target.value)})}/></section><section className="inspector-section"><label htmlFor="shot-composition">画面描述</label><textarea id="shot-composition" value={form.composition} onChange={event=>setForm({...form,composition:event.target.value})} rows={3}/></section><section className="inspector-section"><label htmlFor="shot-prompt">生成提示词</label><textarea id="shot-prompt" value={form.image_prompt} onChange={event=>setForm({...form,image_prompt:event.target.value})} rows={5} className="prompt-field"/></section><section className="inspector-section inline-fields"><label>运镜<select aria-label="运镜" value={form.camera_motion} onChange={event=>setForm({...form,camera_motion:event.target.value})}><option value="push_in">push in</option><option value="pull_out">pull out</option><option value="pan_left">pan left</option><option value="pan_right">pan right</option><option value="still">still</option></select></label><label>审核状态<select aria-label="审核状态" value={form.review_status} onChange={event=>setForm({...form,review_status:event.target.value as ReviewStatus})}><option value="draft">待审核</option><option value="needs_changes">需修改</option><option value="approved">已通过</option></select></label></section>{error&&<p className="form-error">{error}</p>}<div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate}><ImagePlus size={18}/>生成画面</button></div><JobStatus job={job}/><PanelVersions assets={assets} activeId={form.active_panel_asset_id} onActivate={activate}/>{shot.dialogue.map(line=><DialogueEditor key={line.id} line={line}/>)}<div className="model-note"><Sparkles size={16}/><span>图像由 <strong>gpt-image-2</strong> 生成</span></div></aside>;}

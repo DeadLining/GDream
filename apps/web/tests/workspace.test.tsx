@@ -7,13 +7,14 @@ import type {EpisodeDetail, Job, Project, ProjectDetail} from '../lib/types';
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
-  pollJob: vi.fn(),
+  listPanelVersions: vi.fn(), pollJob: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
   listProjects: mocks.listProjects, getProject: mocks.getProject,
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
+  listPanelVersions: mocks.listPanelVersions,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
 
@@ -50,6 +51,7 @@ describe('Workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    mocks.listPanelVersions.mockResolvedValue([]);
   });
 
   it('loads an explicit empty state when no projects exist', async () => {

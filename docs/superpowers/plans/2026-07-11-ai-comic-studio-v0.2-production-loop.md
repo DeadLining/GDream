@@ -349,37 +349,37 @@ git commit -m "feat: connect projects and episodes to workspace"
 - Modify: `apps/web/tests/workspace.test.tsx`
 - Create: `apps/web/tests/inspector.test.tsx`
 
-- [ ] **Step 1: Write failing inspector production tests**
+- [x] **Step 1: Write failing inspector production tests**
 
 Verify explicit save, unsaved edit preservation after failure, panel generation and version activation, speech generation and audio player display, review status update, duplicate-job prevention, and failed-job retry.
 
-- [ ] **Step 2: Run inspector tests and confirm controls are read-only**
+- [x] **Step 2: Run inspector tests and confirm controls are read-only**
 
 Run: `npm test --workspace @comic-studio/web -- --run tests/inspector.test.tsx`
 Expected: FAIL because inspector fields and production actions are not connected.
 
-- [ ] **Step 3: Add reusable job status presentation**
+- [x] **Step 3: Add reusable job status presentation**
 
 Render queued/running progress, succeeded state, sanitized failure text, and retry command. Use icons and progress semantics; do not display provider payloads.
 
-- [ ] **Step 4: Implement shot editing and refresh**
+- [x] **Step 4: Implement shot editing and refresh**
 
 Edit duration, composition, camera motion, prompts, and review status in local form state. Save through `updateShot`; after success replace the shot in the current episode graph without resetting selection.
 
-- [ ] **Step 5: Implement panel generation and version selection**
+- [x] **Step 5: Implement panel generation and version selection**
 
 Load versions for the selected shot, launch generation with `activate=true`, poll the job, refresh versions and episode graph, and activate older versions through the PUT endpoint.
 
-- [ ] **Step 6: Implement dialogue editing and speech**
+- [x] **Step 6: Implement dialogue editing and speech**
 
 Render each dialogue line with text, subtitle, emotion, and performance instruction fields. Save through `updateDialogue`; synthesize through the job API and display an `<audio controls>` element from the returned media URL.
 
-- [ ] **Step 7: Run component, API-mock, and responsive E2E tests**
+- [x] **Step 7: Run component, API-mock, and responsive E2E tests**
 
 Run: `npm test --workspace @comic-studio/web && npm run test:e2e --workspace @comic-studio/web`
 Expected: all tests pass with no browser console errors.
 
-- [ ] **Step 8: Commit shot production tools**
+- [x] **Step 8: Commit shot production tools**
 
 ```bash
 git add apps/web

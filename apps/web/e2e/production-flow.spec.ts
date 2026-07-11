@@ -22,7 +22,7 @@ test('workspace shows generated panel and shot production controls', async ({pag
   await page.getByRole('button', {name: /镜头 2/}).click();
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeVisible();
-  await expect(page.getByText('待审核')).toBeVisible();
+  await expect(page.getByLabel('审核状态')).toHaveValue('draft');
 });
 
 test('mobile shot selection opens the inspector without overlap', async ({page}, testInfo) => {
@@ -31,6 +31,7 @@ test('mobile shot selection opens the inspector without overlap', async ({page},
 
   await page.getByRole('button', {name: /镜头 2/}).click();
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
+  await page.getByRole('button', {name: '生成画面'}).scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeInViewport();
   await expect(page.getByRole('main')).toBeHidden();
 });
