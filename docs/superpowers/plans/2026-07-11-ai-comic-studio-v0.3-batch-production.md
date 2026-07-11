@@ -110,24 +110,24 @@ cd ../.. && git add services/api && git commit -m "feat: report episode producti
 - Modify: `services/api/comic_studio/routes/production.py`
 - Create: `services/api/tests/test_production_run_creation.py`
 
-- [ ] **Step 1: Write failing run creation tests**
+- [x] **Step 1: Write failing run creation tests**
 
 Seed mixed ready and missing assets. Assert deterministic item order, approved panel skip, completed speech skip, regeneration inclusion, and HTTP 409 for a second active run.
 
-- [ ] **Step 2: Run tests and confirm creation endpoint is absent**
+- [x] **Step 2: Run tests and confirm creation endpoint is absent**
 
 Run: `cd services/api && uv run pytest tests/test_production_run_creation.py -q`
 Expected: FAIL with HTTP 404/405.
 
-- [ ] **Step 3: Implement eligibility snapshot creation**
+- [x] **Step 3: Implement eligibility snapshot creation**
 
 Create one item per requested target. Persist `skipped` items with reason `already_ready`; queue eligible items. Order panels by scene/shot and speech by scene/shot/dialogue.
 
-- [ ] **Step 4: Add run create/get/items routes**
+- [x] **Step 4: Add run create/get/items routes**
 
 Expose POST episode run, GET run, and GET items endpoints. Return HTTP 409 when an active run already exists for the episode.
 
-- [ ] **Step 5: Run creation and full API tests, then commit**
+- [x] **Step 5: Run creation and full API tests, then commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_production_run_creation.py -q && uv run pytest -q
