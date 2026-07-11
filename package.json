@@ -1,0 +1,12 @@
+{
+  "name": "ai-comic-studio",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/compositor"
+  ],
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  }
+}
