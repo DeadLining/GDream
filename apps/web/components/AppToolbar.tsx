@@ -26,6 +26,7 @@ export function AppToolbar({
   healthRefreshKey = 0,
 }: AppToolbarProps) {
   const [healthCount, setHealthCount] = useState<number | null>(null);
+  const [healthStatus, setHealthStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [job, setJob] = useState<Job | null>(null);
   const [renderUrl, setRenderUrl] = useState('');
   const renderGeneration = useRef(0);
@@ -39,8 +40,15 @@ export function AppToolbar({
   }, [episodeId]);
 
   const checkHealth = async () => {
-    const health = await getProviderHealth();
-    setHealthCount(Object.values(health).filter(item => item.status === 'configured').length);
+    setHealthStatus('checking');
+    try {
+      const health = await getProviderHealth();
+      setHealthCount(Object.values(health).filter(item => item.status === 'configured').length);
+      setHealthStatus('ok');
+    } catch {
+      setHealthCount(null);
+      setHealthStatus('error');
+    }
   };
   useEffect(() => {if (healthRefreshKey > 0) void checkHealth();}, [healthRefreshKey]);
   const render = async () => {
@@ -64,9 +72,9 @@ export function AppToolbar({
         {breadcrumb && <span className="workspace-breadcrumb" title={breadcrumb}>{breadcrumb}</span>}
       </div>
       <div className="toolbar-actions">
-        <button className="health-button" title="模型渠道配置状态" aria-label="模型渠道配置状态" onClick={checkHealth}>
+        <button className="health-button" title="模型渠道配置状态" aria-label="模型渠道配置状态" onClick={checkHealth} disabled={healthStatus === 'checking'}>
           <Activity aria-hidden="true" size={17}/>
-          <span>{healthCount === null ? '检查配置' : `${healthCount}/3 已配置`}</span>
+          <span>{healthStatus === 'checking' ? '检查中' : healthStatus === 'error' ? 'API 未连接' : healthCount === null ? '检查配置' : `${healthCount}/3 已配置`}</span>
         </button>
         <button className="icon-button" title="刷新项目" aria-label="刷新项目" onClick={onRefresh}><RefreshCw aria-hidden="true" size={17}/></button>
         <button className="icon-button" title="批量生产" aria-label="批量生产" onClick={onProduction} disabled={!episodeId}><Boxes aria-hidden="true" size={17}/></button>

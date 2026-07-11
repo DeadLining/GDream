@@ -70,4 +70,21 @@ describe('AppToolbar episode render state', () => {
     expect(screen.queryByRole('link', {name: '下载 MP4'})).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: '渲染本集'})).toBeEnabled();
   });
+
+  it('shows a retryable status instead of throwing when the local API is unavailable', async () => {
+    mocks.getProviderHealth.mockRejectedValueOnce(new Error('connectivity_failure'));
+    mocks.getProviderHealth.mockResolvedValueOnce({
+      llm: {status: 'configured'},
+      image: {status: 'configured'},
+      tts: {status: 'configured'},
+    });
+    render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" />);
+
+    const health = screen.getByRole('button', {name: '模型渠道配置状态'});
+    await userEvent.click(health);
+    expect(await screen.findByText('API 未连接')).toBeVisible();
+
+    await userEvent.click(health);
+    expect(await screen.findByText('3/3 已配置')).toBeVisible();
+  });
 });
