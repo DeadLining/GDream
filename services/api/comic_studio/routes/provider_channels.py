@@ -11,13 +11,19 @@ from comic_studio.provider_channels import (
 from comic_studio.schemas import (
     ProviderChannelKind,
     ProviderChannelRead,
+    ProviderChannelTestRead,
     ProviderChannelsRead,
     ProviderChannelUpdate,
     ProviderChannelUpdateRead,
 )
+from comic_studio.services.provider_channel_testing import (
+    ProviderChannelTestingService,
+    default_client_factory,
+)
 
 
 router = APIRouter(prefix="/api/provider-channels", tags=["provider-channels"])
+provider_testing_client_factory = default_client_factory
 
 
 def mask_api_key(api_key: str | None) -> str:
@@ -132,3 +138,20 @@ def update_provider_channel(
         channel=channel_read(getattr(committed.channels, kind)),
         current=current_read,
     )
+
+
+@router.post("/{kind:path}/test", response_model=ProviderChannelTestRead)
+async def test_provider_channel(
+    kind: ProviderChannelKind,
+    candidate: ProviderChannelUpdate,
+    request: Request,
+) -> ProviderChannelTestRead:
+    if kind != "tts" and candidate.ssh_host:
+        raise HTTPException(status_code=422, detail="ssh_host is only valid for tts")
+
+    store = request.app.state.provider_channel_store
+    service = ProviderChannelTestingService(
+        stored_channel=lambda channel_kind: getattr(store.snapshot, channel_kind),
+        client_factory=provider_testing_client_factory,
+    )
+    return await service.test(kind, candidate)

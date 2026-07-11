@@ -229,7 +229,7 @@ git commit -m "feat: expose provider channel configuration API"
 - Modify: `services/api/comic_studio/routes/provider_channels.py`
 - Modify: `services/api/comic_studio/schemas.py`
 
-- [ ] **Step 1: Write failing connection-test service tests**
+- [x] **Step 1: Write failing connection-test service tests**
 
 Inject fake providers/clients and assert:
 
@@ -243,7 +243,7 @@ Inject fake providers/clients and assert:
 - errors are sanitized;
 - elapsed time and model/host are returned.
 
-- [ ] **Step 2: Run focused tests and confirm service is missing**
+- [x] **Step 2: Run focused tests and confirm service is missing**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_channel_testing.py -q
@@ -251,13 +251,13 @@ cd services/api && uv run pytest tests/test_provider_channel_testing.py -q
 
 Expected: FAIL because the test service and endpoint do not exist.
 
-- [ ] **Step 3: Implement connection testing**
+- [x] **Step 3: Implement connection testing**
 
 Create `ProviderChannelTestingService.test(kind, candidate)` with injected clock and provider/client factories. Use strict connect/total timeouts. Never call `AssetStore`, `JobStore`, or `ProviderChannelStore.save()`.
 
 For image endpoints without a capabilities route, perform a sanitized HTTP reachability check and return `check_scope: "endpoint"` rather than generating an image.
 
-- [ ] **Step 4: Add the test endpoint**
+- [x] **Step 4: Add the test endpoint**
 
 ```text
 POST /api/provider-channels/{kind}/test
@@ -265,7 +265,7 @@ POST /api/provider-channels/{kind}/test
 
 Return HTTP 200 with `status: ok|failed`; transport/provider failure is represented as a sanitized failed result rather than an unhandled 500. Invalid input remains HTTP 422.
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 ```bash
 cd services/api && uv run pytest tests/test_provider_channel_testing.py tests/test_provider_channels_api.py -q

@@ -83,6 +83,17 @@ class ProviderChannelUpdateRead(BaseModel):
     current: ProviderChannelsRead
 
 
+class ProviderChannelTestRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "failed"]
+    model: str
+    host: str
+    elapsed_ms: int = Field(ge=0)
+    check_scope: Literal["model", "endpoint", "audio"]
+    error: str | None = None
+
+
 class PatchModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
