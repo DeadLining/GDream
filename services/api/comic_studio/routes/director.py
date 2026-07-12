@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from comic_studio import models,schemas
 from comic_studio.db import get_session
-from comic_studio.director import DirectorObjectCreateRequest,DirectorObjectRead,DirectorStageRead,DirectorSuggestionApplyRequest,DirectorSuggestionCreateRequest,DirectorSuggestionRead,ShotCameraRead,ShotCameraUpdateRequest
+from comic_studio.director import DirectorObjectCreateRequest,DirectorObjectRead,DirectorObjectUpdateRequest,DirectorRevisionRead,DirectorStageRead,DirectorStageUpdateRequest,DirectorSuggestionApplyRequest,DirectorSuggestionCreateRequest,DirectorSuggestionRead,DirectorVersionRequest,ShotCameraRead,ShotCameraUpdateRequest
 from comic_studio.providers.base import ProviderError
 from comic_studio.routes.assets import asset_response
 from comic_studio.services.director_previews import DirectorPreviewError,DirectorPreviewService
@@ -40,6 +40,40 @@ def get_director_stage(scene_id:str,session:SessionDependency):
 def create_director_object(stage_id:str,data:DirectorObjectCreateRequest,session:SessionDependency):
     try:return DirectorStageService(session).create_object(stage_id,data.expected_version,data.object)
     except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage not found") from exc
+    except DirectorVersionConflict as exc:raise _conflict(exc) from exc
+
+
+@router.patch("/api/director-stages/{stage_id}",response_model=DirectorStageRead)
+def update_director_stage(stage_id:str,data:DirectorStageUpdateRequest,session:SessionDependency):
+    try:return DirectorStageService(session).update_stage(stage_id,data.expected_version,data.stage)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage not found") from exc
+    except DirectorVersionConflict as exc:raise _conflict(exc) from exc
+
+
+@router.patch("/api/director-objects/{object_id}",response_model=DirectorObjectRead)
+def update_director_object(object_id:str,data:DirectorObjectUpdateRequest,session:SessionDependency):
+    try:return DirectorStageService(session).update_object(object_id,data.expected_version,data.object)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director object not found") from exc
+    except DirectorVersionConflict as exc:raise _conflict(exc) from exc
+
+
+@router.delete("/api/director-objects/{object_id}",status_code=status.HTTP_204_NO_CONTENT)
+def delete_director_object(object_id:str,data:DirectorVersionRequest,session:SessionDependency):
+    try:DirectorStageService(session).delete_object(object_id,data.expected_version)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director object not found") from exc
+    except DirectorVersionConflict as exc:raise _conflict(exc) from exc
+
+
+@router.get("/api/director-stages/{stage_id}/revisions",response_model=list[DirectorRevisionRead])
+def list_director_revisions(stage_id:str,session:SessionDependency):
+    try:return DirectorStageService(session).list_revisions(stage_id)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage not found") from exc
+
+
+@router.post("/api/director-stages/{stage_id}/revisions/{revision_id}/restore",response_model=DirectorStageRead)
+def restore_director_revision(stage_id:str,revision_id:str,data:DirectorVersionRequest,session:SessionDependency):
+    try:return DirectorStageService(session).restore_revision(stage_id,revision_id,data.expected_version)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director revision not found") from exc
     except DirectorVersionConflict as exc:raise _conflict(exc) from exc
 
 

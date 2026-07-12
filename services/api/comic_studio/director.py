@@ -32,6 +32,18 @@ class DirectorObjectCreate(StrictDirectorModel):
     visible:bool=True
 
 
+class DirectorObjectPatch(StrictDirectorModel):
+    label:str|None=Field(default=None,min_length=1,max_length=160)
+    transform:Transform|None=None
+    appearance:dict|None=None
+    metadata:dict|None=None
+    visible:bool|None=None
+
+
+class DirectorStagePatch(StrictDirectorModel):
+    environment:dict|None=None
+
+
 class ShotCameraPatch(StrictDirectorModel):
     position:list[float]|None=None
     target:list[float]|None=None
@@ -76,6 +88,25 @@ class DirectorStageRead(BaseModel):
 class DirectorObjectCreateRequest(StrictDirectorModel):
     expected_version:int=Field(ge=1)
     object:DirectorObjectCreate
+
+
+class DirectorObjectUpdateRequest(StrictDirectorModel):
+    expected_version:int=Field(ge=1)
+    object:DirectorObjectPatch
+
+
+class DirectorStageUpdateRequest(StrictDirectorModel):
+    expected_version:int=Field(ge=1)
+    stage:DirectorStagePatch
+
+
+class DirectorVersionRequest(StrictDirectorModel):
+    expected_version:int=Field(ge=1)
+
+
+class DirectorRevisionRead(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:str;stage_id:str;shot_camera_id:str|None;stage_snapshot:dict;camera_snapshot:dict;reason:str;created_at:datetime
 
 
 class ShotCameraUpdateRequest(StrictDirectorModel):

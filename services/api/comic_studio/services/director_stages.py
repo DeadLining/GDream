@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete,select
 from sqlalchemy.orm import Session,selectinload
 
 from comic_studio import models
-from comic_studio.director import DirectorObjectCreate,ShotCameraPatch
+from comic_studio.director import DirectorObjectCreate,DirectorObjectPatch,DirectorStagePatch,ShotCameraPatch
 
 
 class DirectorVersionConflict(RuntimeError):
@@ -32,19 +32,67 @@ class DirectorStageService:
         self.session.commit();return self.get_stage(stage.id)
 
     def _stage_snapshot(self,stage:models.DirectorStage)->dict:
-        return {"version":stage.version,"environment":stage.environment,"objects":[{"id":item.id,"kind":item.kind,"label":item.label,"transform":item.transform,"visible":item.visible} for item in stage.objects]}
+        return {"version":stage.version,"environment":stage.environment,"objects":[{"id":item.id,"kind":item.kind,"source_type":item.source_type,"source_id":item.source_id,"label":item.label,"position":item.position,"transform":item.transform,"appearance":item.appearance,"metadata":item.object_metadata,"visible":item.visible} for item in stage.objects]}
+
+    def _record_revision(self,stage:models.DirectorStage,*,camera:models.ShotCamera|None=None)->None:
+        snapshot={}
+        if camera is not None:snapshot={"version":camera.version,"position":camera.position,"target":camera.target,"rotation":camera.rotation,"focal_length_mm":camera.focal_length_mm,"near":camera.near,"far":camera.far,"shot_size":camera.shot_size,"camera_motion":camera.camera_motion,"framing_guides":camera.framing_guides,"object_overrides":camera.object_overrides}
+        stage.revisions.append(models.DirectorRevision(shot_camera_id=camera.id if camera else None,stage_snapshot=self._stage_snapshot(stage),camera_snapshot=snapshot,reason="manual_save"))
+
+    def _prune_revisions(self,stage_id:str)->None:
+        ids=list(self.session.scalars(select(models.DirectorRevision.id).where(models.DirectorRevision.stage_id==stage_id).order_by(models.DirectorRevision.created_at.desc(),models.DirectorRevision.id.desc()).offset(50)))
+        if ids:self.session.execute(delete(models.DirectorRevision).where(models.DirectorRevision.id.in_(ids)))
 
     def create_object(self,stage_id:str,expected_version:int,data:DirectorObjectCreate)->models.DirectorObject:
         stage=self.get_stage(stage_id)
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
-        stage.revisions.append(models.DirectorRevision(stage_snapshot=self._stage_snapshot(stage),camera_snapshot={},reason="manual_save"))
+        self._record_revision(stage)
         created=models.DirectorObject(stage_id=stage.id,kind=data.kind,source_type=data.source_type,source_id=data.source_id,label=data.label,position=len(stage.objects)+1,transform=data.transform.model_dump(),appearance=data.appearance,object_metadata=data.metadata,visible=data.visible)
-        self.session.add(created);stage.version+=1;self.session.commit();self.session.refresh(created);return created
+        self.session.add(created);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(created);return created
+
+    def update_stage(self,stage_id:str,expected_version:int,patch:DirectorStagePatch)->models.DirectorStage:
+        stage=self.get_stage(stage_id)
+        if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
+        self._record_revision(stage)
+        for key,value in patch.model_dump(exclude_none=True).items():setattr(stage,key,value)
+        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
+
+    def update_object(self,object_id:str,expected_version:int,patch:DirectorObjectPatch)->models.DirectorObject:
+        item=self.session.get(models.DirectorObject,object_id)
+        if item is None:raise KeyError(object_id)
+        stage=self.get_stage(item.stage_id)
+        if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
+        self._record_revision(stage)
+        for key,value in patch.model_dump(exclude_none=True).items():setattr(item,"object_metadata" if key=="metadata" else key,value.model_dump() if hasattr(value,"model_dump") else value)
+        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(item);return item
+
+    def delete_object(self,object_id:str,expected_version:int)->None:
+        item=self.session.get(models.DirectorObject,object_id)
+        if item is None:raise KeyError(object_id)
+        stage=self.get_stage(item.stage_id)
+        if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
+        self._record_revision(stage);self.session.delete(item);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit()
+
+    def list_revisions(self,stage_id:str)->list[models.DirectorRevision]:
+        if self.session.get(models.DirectorStage,stage_id) is None:raise KeyError(stage_id)
+        return list(self.session.scalars(select(models.DirectorRevision).where(models.DirectorRevision.stage_id==stage_id).order_by(models.DirectorRevision.created_at,models.DirectorRevision.id)))
+
+    def restore_revision(self,stage_id:str,revision_id:str,expected_version:int)->models.DirectorStage:
+        stage=self.get_stage(stage_id);revision=self.session.get(models.DirectorRevision,revision_id)
+        if revision is None or revision.stage_id!=stage.id:raise KeyError(revision_id)
+        if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
+        self._record_revision(stage)
+        snapshot=revision.stage_snapshot;stage.environment=snapshot.get("environment",{})
+        for item in list(stage.objects):self.session.delete(item)
+        self.session.flush()
+        for data in snapshot.get("objects",[]):
+            self.session.add(models.DirectorObject(id=data["id"],stage_id=stage.id,kind=data["kind"],source_type=data["source_type"],source_id=data.get("source_id"),label=data["label"],position=data.get("position",0),transform=data["transform"],appearance=data.get("appearance",{}),object_metadata=data.get("metadata",{}),visible=data.get("visible",True)))
+        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
 
     def update_camera(self,stage_id:str,shot_id:str,expected_version:int,patch:ShotCameraPatch)->models.ShotCamera:
         stage=self.get_stage(stage_id);camera=next((item for item in stage.shot_cameras if item.shot_id==shot_id),None)
         if camera is None:raise KeyError(shot_id)
         if camera.version!=expected_version:raise DirectorVersionConflict(camera.version)
-        stage.revisions.append(models.DirectorRevision(shot_camera_id=camera.id,stage_snapshot=self._stage_snapshot(stage),camera_snapshot={"version":camera.version,"position":camera.position,"target":camera.target,"rotation":camera.rotation,"focal_length_mm":camera.focal_length_mm},reason="manual_save"))
+        self._record_revision(stage,camera=camera)
         for key,value in patch.model_dump(exclude_none=True).items():setattr(camera,key,value)
-        camera.version+=1;self.session.commit();self.session.refresh(camera);return camera
+        camera.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(camera);return camera
