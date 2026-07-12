@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from hashlib import sha256
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from comic_studio import models
@@ -21,10 +26,23 @@ from comic_studio.services.script_documents import (
 )
 from comic_studio.services.script_extraction import ScriptSourceError, extract_uploaded_script
 from comic_studio.services.script_files import ScriptFilePathError, ScriptFileStore
+from comic_studio.services.script_imports import (
+    build_script_project_context,
+    script_project_load_options,
+)
 
 
 router = APIRouter(tags=["scripts"])
 SessionDependency = Annotated[Session, Depends(get_session)]
+
+
+class ScriptGenerationRequest(BaseModel):
+    brief: str = Field(default="", max_length=20_000)
+    expected_revision_id: str = Field(min_length=1, max_length=36)
+
+
+def _sse(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _current(document: models.ScriptDocument) -> models.ScriptRevision:
@@ -213,3 +231,86 @@ def delete_script(script_id: str, request: Request):
                 },
             ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/api/scripts/{script_id}/generation/stream")
+def stream_script_generation(
+    script_id: str,
+    payload: ScriptGenerationRequest,
+    request: Request,
+):
+    with request.app.state.session_factory() as session:
+        service = ScriptDocumentService(session)
+        try:
+            document = service.get(script_id)
+        except KeyError as exc:
+            raise _not_found(exc) from exc
+        current = _current(document)
+        if current.id != payload.expected_revision_id:
+            raise HTTPException(status_code=409, detail="revision_conflict")
+        if current.status == "finalized":
+            current = service.save(document.id, current.content, current.checksum)
+            document = service.get(document.id)
+        project = session.scalar(
+            select(models.Project)
+            .options(*script_project_load_options())
+            .where(models.Project.id == document.project_id)
+        )
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        current.generation_brief = payload.brief.strip()
+        document.status = "generating"
+        session.commit()
+        revision_id = current.id
+        context = {
+            **build_script_project_context(project),
+            "brief": payload.brief.strip(),
+            "existing_draft": current.content,
+        }
+    provider = request.app.state.provider_factory.create_llm()
+
+    async def events():
+        try:
+            async for chunk in provider.stream_script(context):
+                with request.app.state.session_factory() as chunk_session:
+                    revision = chunk_session.get(models.ScriptRevision, revision_id)
+                    document = chunk_session.get(models.ScriptDocument, script_id)
+                    if revision is None or document is None:
+                        raise RuntimeError("script_generation_target_missing")
+                    if document.current_revision_id != revision.id:
+                        raise RuntimeError("script_generation_revision_changed")
+                    revision.content += chunk
+                    revision.checksum = sha256(revision.content.encode()).hexdigest()
+                    persisted_length = len(revision.content)
+                    chunk_session.commit()
+                yield _sse(
+                    "chunk",
+                    {
+                        "text": chunk,
+                        "revision_id": revision_id,
+                        "persisted_length": persisted_length,
+                    },
+                )
+            with request.app.state.session_factory() as done_session:
+                service = ScriptDocumentService(done_session)
+                service.finalize(script_id)
+                document = service.get(script_id)
+                document.status = "ready"
+                done_session.commit()
+            yield _sse(
+                "done",
+                {"finish_reason": "stop", "revision_id": revision_id},
+            )
+        except Exception:
+            with request.app.state.session_factory() as failed_session:
+                document = failed_session.get(models.ScriptDocument, script_id)
+                if document is not None and document.current_revision_id == revision_id:
+                    document.status = "generation_failed"
+                    failed_session.commit()
+            yield _sse("error", {"message": "Script generation failed"})
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

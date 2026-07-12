@@ -26,6 +26,15 @@ def _events(body: str):
     return events
 
 
+def _script(client, project_id: str, content: str = ""):
+    response = client.post(
+        f"/api/projects/{project_id}/scripts",
+        json={"title": "AI 剧本", "source_type": "ai", "content": content},
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
 def test_streams_readable_script_chunks_with_trusted_project_context(client):
     captured = {}
 
@@ -92,3 +101,103 @@ def test_stream_returns_redacted_provider_error_event(client):
         {"message": "Script generation failed"},
     )
     assert "secret-token" not in response.text
+
+
+def test_document_stream_persists_chunks_and_finalizes_revision(client):
+    captured = {}
+
+    class Provider:
+        async def stream_script(self, context):
+            captured.update(context)
+            yield "第一集：雨夜"
+            yield "\n场景一"
+
+    class Factory:
+        def create_llm(self):
+            return Provider()
+
+    client.app.state.provider_factory = Factory()
+    project = _project(client)
+    script = _script(client, project["id"])
+    revision_id = script["current_revision"]["id"]
+
+    response = client.post(
+        f"/api/scripts/{script['id']}/generation/stream",
+        json={"brief": "生成三集", "expected_revision_id": revision_id},
+    )
+
+    assert response.status_code == 200
+    events = _events(response.text)
+    assert [event for event, _ in events] == ["chunk", "chunk", "done"]
+    assert events[0][1]["revision_id"] == revision_id
+    assert events[1][1]["persisted_length"] == len("第一集：雨夜\n场景一")
+    detail = client.get(f"/api/scripts/{script['id']}").json()
+    assert detail["current_revision"]["content"] == "第一集：雨夜\n场景一"
+    assert detail["current_revision"]["status"] == "finalized"
+    assert detail["status"] == "ready"
+    assert captured["brief"] == "生成三集"
+    assert captured["existing_draft"] == ""
+
+
+def test_document_stream_preserves_partial_text_after_provider_failure(client):
+    class Provider:
+        async def stream_script(self, context):
+            yield "已保存开头"
+            raise RuntimeError("provider sk-secret-value failed")
+
+    class Factory:
+        def create_llm(self):
+            return Provider()
+
+    client.app.state.provider_factory = Factory()
+    project = _project(client)
+    script = _script(client, project["id"])
+
+    response = client.post(
+        f"/api/scripts/{script['id']}/generation/stream",
+        json={
+            "brief": "",
+            "expected_revision_id": script["current_revision"]["id"],
+        },
+    )
+
+    assert _events(response.text)[-1] == (
+        "error",
+        {"message": "Script generation failed"},
+    )
+    detail = client.get(f"/api/scripts/{script['id']}").json()
+    assert detail["current_revision"]["content"] == "已保存开头"
+    assert detail["current_revision"]["status"] == "working"
+    assert detail["status"] == "generation_failed"
+    assert "secret-value" not in response.text
+
+
+def test_document_stream_rejects_stale_revision(client):
+    project = _project(client)
+    script = _script(client, project["id"])
+
+    response = client.post(
+        f"/api/scripts/{script['id']}/generation/stream",
+        json={"brief": "", "expected_revision_id": "stale"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "revision_conflict"
+
+
+def test_startup_recovery_marks_interrupted_generation_failed(client):
+    project = _project(client)
+    script = _script(client, project["id"], "部分内容")
+    with client.app.state.session_factory() as session:
+        from comic_studio import models
+
+        document = session.get(models.ScriptDocument, script["id"])
+        document.status = "generating"
+        session.commit()
+
+    recovered = client.app.state.recover_script_generations()
+
+    assert recovered == [script["id"]]
+    detail = client.get(f"/api/scripts/{script['id']}").json()
+    assert detail["status"] == "generation_failed"
+    assert detail["current_revision"]["content"] == "部分内容"

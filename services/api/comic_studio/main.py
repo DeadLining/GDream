@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
         run_migrations(settings.database_url)
         recover_production_runs()
         recover_script_imports()
+        recover_script_generations()
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
@@ -177,6 +178,22 @@ def create_app() -> FastAPI:
         return recovered
 
     app.state.recover_script_imports = recover_script_imports
+
+    def recover_script_generations():
+        recovered = []
+        with session_factory() as session:
+            documents = list(
+                session.query(models.ScriptDocument).filter(
+                    models.ScriptDocument.status == "generating"
+                )
+            )
+            for document in documents:
+                document.status = "generation_failed"
+                recovered.append(document.id)
+            session.commit()
+        return recovered
+
+    app.state.recover_script_generations = recover_script_generations
 
     async def produce_panel(item):
         with session_factory() as session:
