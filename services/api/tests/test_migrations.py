@@ -92,6 +92,12 @@ def test_fresh_database_upgrades_to_current_schema(tmp_path):
     inspector = inspect(create_engine(_database_url(database_path)))
     assert "script_imports" in inspector.get_table_names()
     assert "character_references" in inspector.get_table_names()
+    assert "script_documents" in inspector.get_table_names()
+    assert "script_revisions" in inspector.get_table_names()
+    assert "script_import_episodes" in inspector.get_table_names()
+    assert "script_revision_id" in {
+        column["name"] for column in inspector.get_columns("script_imports")
+    }
     assert "video_prompt" in {column["name"] for column in inspector.get_columns("shots")}
     assert "regenerate_videos" in {
         column["name"] for column in inspector.get_columns("production_runs")
@@ -113,6 +119,9 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
         assert connection.scalar(text("SELECT version_num FROM alembic_version"))
     assert "script_imports" in inspector.get_table_names()
     assert "character_references" in inspector.get_table_names()
+    assert "script_documents" in inspector.get_table_names()
+    assert "script_revisions" in inspector.get_table_names()
+    assert "script_import_episodes" in inspector.get_table_names()
     assert "active_video_asset_id" in {
         column["name"] for column in inspector.get_columns("shots")
     }
