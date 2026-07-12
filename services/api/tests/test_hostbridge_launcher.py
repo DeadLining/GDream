@@ -31,6 +31,8 @@ import os
 import subprocess
 import sys
 
+if sys.argv[1:] == ["-c", "import mcp"]:
+    raise SystemExit(0)
 if sys.argv[1:2] == ["-c"]:
     completed = subprocess.run([sys.executable, *sys.argv[1:]], check=False)
     raise SystemExit(completed.returncode)
@@ -240,3 +242,30 @@ def test_missing_runtime_entrypoint_fails_without_running_python(tmp_path: Path)
     assert result.returncode != 0
     assert "entrypoint not found" in result.stderr.lower()
     assert not capture_path.exists()
+
+
+def test_configured_python_must_provide_hostbridge_dependencies(tmp_path: Path):
+    runtime_root = _fake_runtime(tmp_path)
+    python = tmp_path / "python-without-mcp"
+    python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"${1:-}\" = \"-c\" ]; then exit 1; fi\n"
+        "printf 'gpu-1\\tGPU 1\\tssh\\n'\n",
+        encoding="ascii",
+    )
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+
+    result = subprocess.run(
+        [str(LAUNCHER), "hosts", "list"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "CS_BRIDGE_HOSTBRIDGE_ROOT": str(runtime_root),
+            "HOSTBRIDGE_PYTHON": str(python),
+        },
+    )
+
+    assert result.returncode != 0
+    assert "dependencies" in result.stderr.lower()

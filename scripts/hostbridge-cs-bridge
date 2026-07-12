@@ -15,24 +15,41 @@ if [ ! -f "$entrypoint" ]; then
     exit 66
 fi
 
-if [ -n "${HOSTBRIDGE_PYTHON:-}" ]; then
-    python=$HOSTBRIDGE_PYTHON
-elif command -v python3.12 >/dev/null 2>&1; then
-    python=$(command -v python3.12)
-elif command -v python3 >/dev/null 2>&1; then
-    python=$(command -v python3)
-else
-    printf 'hostbridge-cs-bridge: compatible Python executable not found\n' >&2
-    exit 69
+if ! { [ "$#" -eq 2 ] && [ "$1" = "hosts" ] && [ "$2" = "list" ]; } && \
+   ! { [ "$#" -ge 3 ] && [ "$1" = "mock-ssh" ] && [ "$2" = "start" ]; }; then
+    fail "unsupported command"
 fi
-
-case "$python" in
-    */*) [ -x "$python" ] || fail "configured Python is not executable" ;;
-    *) command -v "$python" >/dev/null 2>&1 || fail "configured Python is not executable" ;;
-esac
 
 export PYTHONPATH=$runtime_root
 export PYTHONDONTWRITEBYTECODE=1
+
+supports_hostbridge() {
+    "$1" -c 'import mcp' >/dev/null 2>&1
+}
+
+if [ -n "${HOSTBRIDGE_PYTHON:-}" ]; then
+    python=$HOSTBRIDGE_PYTHON
+    case "$python" in
+        */*) [ -x "$python" ] || fail "configured Python is not executable" ;;
+        *) command -v "$python" >/dev/null 2>&1 || fail "configured Python is not executable" ;;
+    esac
+    supports_hostbridge "$python" || fail "configured Python is missing HostBridge dependencies"
+else
+    python=
+    for candidate in \
+        /Library/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python \
+        "$(command -v python3.12 2>/dev/null || true)" \
+        "$(command -v python3 2>/dev/null || true)"
+    do
+        [ -n "$candidate" ] || continue
+        [ -x "$candidate" ] || continue
+        if supports_hostbridge "$candidate"; then
+            python=$candidate
+            break
+        fi
+    done
+    [ -n "$python" ] || fail "compatible Python with HostBridge dependencies not found"
+fi
 
 if [ "$#" -eq 2 ] && [ "$1" = "hosts" ] && [ "$2" = "list" ]; then
     temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/hostbridge-cs-bridge.XXXXXX") || {

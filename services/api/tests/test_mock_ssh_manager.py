@@ -763,6 +763,86 @@ def test_stop_retained_process_terminates_waits_and_reaps(tmp_path: Path):
     assert process.wait_calls
 
 
+def test_start_adopts_verified_detached_listener_for_stop(tmp_path: Path):
+    process = successful_process(port=2225)
+    factory = ProcessFactory(process)
+    listener_pid = 9201
+    alive = {listener_pid: True}
+    terminated = []
+
+    def identity(pid):
+        if pid != listener_pid:
+            return factory.identity(pid)
+        return {
+            "argv": [
+                "/usr/bin/python3", "-m", "server_control_mcp.server", "mock-ssh",
+                *process.argv[3:],
+            ],
+            "owner_token": process.owner_token,
+        }
+
+    def terminate(pid, force=False):
+        terminated.append((pid, force))
+        alive[pid] = False
+
+    service = manager(
+        tmp_path,
+        executable="/repo/hostbridge-cs-bridge",
+        process_factory=factory,
+        pid_identity=identity,
+        pid_exists=lambda pid: alive.get(pid, process.poll() is None),
+        listener_pids=lambda port: [listener_pid] if port == 2225 else [],
+        terminator=terminate,
+    )
+
+    assert service.start("gpu-1", "comic-tts").state == "running"
+    assert json.loads((tmp_path / "state.json").read_text())["pid"] == listener_pid
+    assert service.stop().state == "stopped"
+    assert terminated == [(listener_pid, False)]
+
+
+def test_stop_discovers_listener_that_registered_after_start(tmp_path: Path):
+    process = successful_process(port=2225)
+    factory = ProcessFactory(process)
+    listener_pid = 9202
+    lookups = 0
+    alive = {listener_pid: True}
+
+    def listener_pids(port):
+        nonlocal lookups
+        lookups += 1
+        return [] if lookups == 1 else [listener_pid]
+
+    def identity(pid):
+        if pid == listener_pid:
+            return {
+                "argv": [
+                    "/usr/bin/python3", "-m", "server_control_mcp", "mock-ssh", "start",
+                    *process.argv[3:],
+                ],
+                "owner_token": process.owner_token,
+            }
+        return factory.identity(pid)
+
+    def terminate(pid, force=False):
+        alive[pid] = False
+
+    service = manager(
+        tmp_path,
+        executable="/repo/hostbridge-cs-bridge",
+        process_factory=factory,
+        pid_identity=identity,
+        pid_exists=lambda pid: alive.get(pid, False if pid == process.pid else None),
+        listener_pids=listener_pids,
+        terminator=terminate,
+    )
+
+    assert service.start("gpu-1", "comic-tts").state == "running"
+    process.returncode = 0
+    assert service.stop().state == "stopped"
+    assert alive[listener_pid] is False
+
+
 def test_stop_retained_stubborn_process_escalates_to_kill(tmp_path: Path):
     class StubbornProcess(FakeProcess):
         def terminate(self):
@@ -998,6 +1078,19 @@ def test_launcher_identity_supports_restore_status_and_stop(tmp_path: Path):
     assert service.restore().state == "running"
     assert service.status().state == "running"
     assert service.stop().state == "stopped"
+
+
+def test_launcher_identity_accepts_detached_package_entrypoint():
+    expected = [
+        "/repo/hostbridge-cs-bridge", "mock-ssh", "start", "gpu-1",
+        "--ssh-host-alias", "comic-tts",
+    ]
+    actual = [
+        "/usr/bin/python3", "-m", "server_control_mcp", "mock-ssh", "start",
+        *expected[3:],
+    ]
+
+    assert _matches_expected_argv(actual, expected) is True
 
 
 def test_launcher_identity_supports_retained_reuse_and_stop(tmp_path: Path):

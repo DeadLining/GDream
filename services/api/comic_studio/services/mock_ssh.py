@@ -256,6 +256,23 @@ def _default_listener_probe(port: int) -> bool:
         return False
 
 
+def _default_listener_pids(port: int) -> list[int]:
+    try:
+        result = subprocess.run(
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return [int(line) for line in result.stdout.splitlines() if line.isdigit()]
+
+
 def _matches_expected_argv(actual: object, expected: object) -> bool:
     if actual == expected:
         return True
@@ -271,13 +288,23 @@ def _matches_expected_argv(actual: object, expected: object) -> bool:
             Path(str(actual[0])).name.casefold(),
         )
     ):
-        return actual == [
-            actual[0],
-            "-m",
-            "server_control_mcp.server",
-            "mock-ssh",
-            *expected[3:],
-        ]
+        return actual in (
+            [
+                actual[0],
+                "-m",
+                "server_control_mcp.server",
+                "mock-ssh",
+                *expected[3:],
+            ],
+            [
+                actual[0],
+                "-m",
+                "server_control_mcp",
+                "mock-ssh",
+                "start",
+                *expected[3:],
+            ],
+        )
     return (
         isinstance(actual, list)
         and isinstance(expected, list)
@@ -307,6 +334,7 @@ class MockSshManager:
         pid_exists: Callable[[int], bool | None] = _default_pid_exists,
         terminator: Callable[..., None] = _default_terminator,
         listener_probe: Callable[[int], bool] = _default_listener_probe,
+        listener_pids: Callable[[int], list[int]] = _default_listener_pids,
         shutdown_timeout: float = 2.0,
         max_log_bytes: int = 64 * 1024,
     ):
@@ -325,6 +353,7 @@ class MockSshManager:
         self._pid_exists = pid_exists
         self._terminator = terminator
         self._listener_probe = listener_probe
+        self._listener_pids = listener_pids
         self._shutdown_timeout = shutdown_timeout
         self._max_log_bytes = max(1, max_log_bytes)
         self._hostbridge_python = os.environ.get("HOSTBRIDGE_PYTHON") or str(
@@ -437,6 +466,10 @@ class MockSshManager:
                 port, observed_alias = self._wait_for_startup(process, self._drainer)
                 if observed_alias != alias:
                     raise RuntimeError("HostBridge reported an unexpected SSH alias")
+                listener_pid = self._find_owned_listener_pid(port)
+                if listener_pid is not None and listener_pid != process.pid:
+                    self._state["pid"] = listener_pid
+                    self._process = None
                 self._state.update(state="running", port=port, error=None)
                 self._persist_state()
             except Exception as exc:
@@ -461,11 +494,28 @@ class MockSshManager:
             pid = self._state.get("pid")
             if (
                 pid is not None
+                and self._process is not None
+                and getattr(self._process, "pid", None) == pid
+                and self._process.poll() is not None
+            ):
+                self._join_drainer(timeout=0.05)
+                self._process = None
+            if (
+                pid is not None
                 and self._process is None
                 and self._probe_pid_exists(int(pid)) is False
             ):
-                self._clear_process_ownership()
-                pid = None
+                port = self._state.get("port")
+                listener_pid = (
+                    self._find_owned_listener_pid(int(port)) if port is not None else None
+                )
+                if listener_pid is not None:
+                    pid = listener_pid
+                    self._state["pid"] = listener_pid
+                    self._persist_state()
+                else:
+                    self._clear_process_ownership()
+                    pid = None
             if pid is not None:
                 if not self._is_owned_live_process(require_identity=True):
                     self._state.update(
@@ -614,6 +664,25 @@ class MockSshManager:
             _matches_expected_argv(identity.get("argv"), expected_argv)
             and identity.get("owner_token") == self._state.get("owner_token")
         )
+
+    def _find_owned_listener_pid(self, port: int) -> int | None:
+        expected_argv = self._state.get("expected_argv")
+        owner_token = self._state.get("owner_token")
+        if not expected_argv or not owner_token:
+            return None
+        try:
+            candidates = self._listener_pids(port)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return None
+        for pid in candidates:
+            identity = self._pid_identity(pid)
+            if (
+                identity
+                and _matches_expected_argv(identity.get("argv"), expected_argv)
+                and identity.get("owner_token") == owner_token
+            ):
+                return pid
+        return None
 
     def _terminate_retained_process(
         self, process: Any, *, verify: bool = True
