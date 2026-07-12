@@ -96,6 +96,8 @@ def test_fresh_database_upgrades_to_current_schema(tmp_path):
     assert "script_revisions" in inspector.get_table_names()
     assert "script_import_episodes" in inspector.get_table_names()
     assert "model_invocations" in inspector.get_table_names()
+    for table in ("director_stages", "director_objects", "shot_cameras", "director_revisions", "director_suggestions"):
+        assert table in inspector.get_table_names()
     assert "script_revision_id" in {
         column["name"] for column in inspector.get_columns("script_imports")
     }
@@ -124,6 +126,8 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
     assert "script_revisions" in inspector.get_table_names()
     assert "script_import_episodes" in inspector.get_table_names()
     assert "model_invocations" in inspector.get_table_names()
+    for table in ("director_stages", "director_objects", "shot_cameras", "director_revisions", "director_suggestions"):
+        assert table in inspector.get_table_names()
     assert "active_video_asset_id" in {
         column["name"] for column in inspector.get_columns("shots")
     }
