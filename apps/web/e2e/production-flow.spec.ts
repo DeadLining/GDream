@@ -23,6 +23,7 @@ const providerHealth: ProviderHealth = {
   tts:{status:'ok',model:'Qwen3-TTS-12Hz-1.7B-CustomVoice',host:'192.168.18.94',elapsed_ms:12,check_scope:'audio',error:null},
   video:{status:'ok',model:'MiniMax-Hailuo-02',host:'api.minimaxi.com',elapsed_ms:11,check_scope:'endpoint',error:null},
 };
+const directorStage={id:'stage-1',scene_id:'scene-1',version:2,environment:{background_color:'#263238'},objects:[{id:'object-1',stage_id:'stage-1',kind:'primitive',source_type:'placeholder',source_id:null,label:'线索箱',position:1,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{color:'#4f7b95'},metadata:{},visible:true}],shot_cameras:[{id:'camera-1',stage_id:'stage-1',shot_id:'shot-1',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:50,near:.1,far:1000,shot_size:'wide',camera_motion:'static',framing_guides:{},object_overrides:{},preview_asset_id:null},{id:'camera-2',stage_id:'stage-1',shot_id:'shot-2',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:85,near:.1,far:1000,shot_size:'close_up',camera_motion:'push_in',framing_guides:{},object_overrides:{},preview_asset_id:null}]};
 
 test.beforeEach(async ({page}) => {
   await page.route('**/api/projects', route => route.fulfill({json:[project]}));
@@ -33,6 +34,22 @@ test.beforeEach(async ({page}) => {
   await page.route('**/api/providers/health', route => route.fulfill({json:providerHealth}));
   await page.route('**/api/episodes/episode-1/render', route => route.fulfill({status:202,json:{job_id:'render-1',status:'queued'}}));
   await page.route('**/api/jobs/render-1', route => route.fulfill({json:{id:'render-1',operation:'render_episode',target_type:'episode',target_id:'episode-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/render.mp4',probe:{format:{duration:'60'}}},error:'',retry_count:0,created_at:'',updated_at:''}}));
+});
+
+test('3D director renders, captures preview, and applies selected AI fields',async({page},testInfo)=>{
+  let previewUploads=0;let appliedFields:string[]=[];
+  await page.route('**/api/scenes/scene-1/director-stage',route=>route.fulfill({json:directorStage}));
+  await page.route('**/api/director-cameras/camera-1/preview',async route=>{expect(route.request().headers()['content-type']).toContain('multipart/form-data');previewUploads+=1;await route.fulfill({status:201,json:{id:'preview-1',kind:'director_preview:camera-1',media_url:'/media/preview.png',media_type:'image/png',provider:'director',model:'threejs',generation_attempt:1,review_status:'draft',width:1262,height:900,duration_seconds:null,created_at:''}});});
+  await page.route('**/api/director-stages/stage-1/suggestions',route=>route.fulfill({status:201,json:{id:'suggestion-1',stage_id:'stage-1',shot_id:'shot-1',kind:'shot_composition',status:'ready',request_context:{},suggested_patch:{composition:'低机位雨夜对峙',camera_motion:'pan_left',image_prompt:'cinematic rain',rationale:'强化压迫感'},error_category:'',error:'',created_at:'',applied_at:null}}));
+  await page.route('**/api/director-stages/stage-1/shots/shot-1/apply-to-shot',async route=>{appliedFields=(await route.request().postDataJSON()).fields;await route.fulfill({json:{...episode.scenes[0].shots[0],composition:'低机位雨夜对峙'}});});
+  await page.goto('/');
+  await page.getByRole('tab',{name:testInfo.project.name==='mobile'?'导演':'3D导演',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'3D 导演台'})).toBeVisible();
+  const pixelVariance=()=>page.locator('canvas').evaluate(canvas=>{const copy=document.createElement('canvas');copy.width=160;copy.height=100;const context=copy.getContext('2d',{willReadFrequently:true});if(!context)return 0;context.drawImage(canvas as HTMLCanvasElement,0,0,copy.width,copy.height);const pixels=context.getImageData(0,0,copy.width,copy.height).data;let min=765,max=0;for(let index=0;index<pixels.length;index+=16){const value=pixels[index]+pixels[index+1]+pixels[index+2];min=Math.min(min,value);max=Math.max(max,value);}return max-min;});
+  await expect.poll(pixelVariance,{timeout:10000}).toBeGreaterThan(6);
+  await page.getByRole('button',{name:'保存相机预览'}).click();await expect.poll(()=>previewUploads).toBe(1);
+  await page.getByRole('button',{name:'AI构图建议'}).click();await expect(page.getByRole('dialog',{name:'AI 导演建议'})).toBeVisible();await page.getByLabel('运镜').uncheck();await page.getByRole('button',{name:'应用选中字段'}).click();await expect.poll(()=>appliedFields).toEqual(['composition']);
+  const dimensions=await page.evaluate(()=>({clientWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth}));expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
 });
 
 test('model channels manage Mock SSH through authoritative route-backed status', async ({page}, testInfo) => {
