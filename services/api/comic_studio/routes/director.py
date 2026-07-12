@@ -1,10 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter,Depends,HTTPException,status
+from fastapi import APIRouter,Depends,HTTPException,Request,status
 from sqlalchemy.orm import Session
 
 from comic_studio.db import get_session
 from comic_studio.director import DirectorObjectCreateRequest,DirectorObjectRead,DirectorStageRead,ShotCameraRead,ShotCameraUpdateRequest
+from comic_studio.routes.assets import asset_response
+from comic_studio.services.director_previews import DirectorPreviewError,DirectorPreviewService
 from comic_studio.services.director_stages import DirectorStageService,DirectorVersionConflict
 
 
@@ -43,3 +45,16 @@ def update_shot_camera(stage_id:str,shot_id:str,data:ShotCameraUpdateRequest,ses
     try:return DirectorStageService(session).update_camera(stage_id,shot_id,data.expected_version,data.camera)
     except KeyError as exc:raise HTTPException(status_code=404,detail="Director camera not found") from exc
     except DirectorVersionConflict as exc:raise _conflict(exc) from exc
+
+
+@router.post("/api/director-cameras/{camera_id}/preview",status_code=status.HTTP_201_CREATED)
+async def upload_camera_preview(camera_id:str,request:Request):
+    form=await request.form();upload=form.get("file")
+    if upload is None or not hasattr(upload,"read"):
+        raise HTTPException(status_code=422,detail="file_required")
+    with request.app.state.session_factory() as session:
+        try:
+            asset=DirectorPreviewService(session,request.app.state.settings.data_root).save(camera_id,await upload.read(),getattr(upload,"content_type","") or "")
+            return asset_response(asset)
+        except KeyError as exc:raise HTTPException(status_code=404,detail="Director camera not found") from exc
+        except DirectorPreviewError as exc:raise HTTPException(status_code=413 if str(exc)=="preview_too_large" else 422,detail=str(exc)) from exc

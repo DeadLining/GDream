@@ -52,10 +52,22 @@ class EpisodeDeletionService:
         dialogue = [line for shot in shots for line in shot.dialogue]
         shot_ids = tuple(shot.id for shot in shots)
         dialogue_ids = tuple(line.id for line in dialogue)
+        camera_ids = (
+            tuple(
+                self.session.scalars(
+                    select(models.ShotCamera.id).where(
+                        models.ShotCamera.shot_id.in_(shot_ids)
+                    )
+                )
+            )
+            if shot_ids
+            else ()
+        )
         asset_kinds = {
             *(f"panel:{shot_id}" for shot_id in shot_ids),
             *(f"video:{shot_id}" for shot_id in shot_ids),
             *(f"dialogue:{dialogue_id}" for dialogue_id in dialogue_ids),
+            *(f"director_preview:{camera_id}" for camera_id in camera_ids),
         }
         assets = (
             list(
