@@ -9,6 +9,8 @@ import type {
   ScriptCreate, ScriptDocument, ScriptDocumentSummary, ScriptPatch, ScriptRevision,
   CharacterReference, CharacterReferenceType, ReviewStatus,
   ModelInvocation, ModelRuntimeHealth, ModelRuntimeJob,
+  DirectorApplyField, DirectorObject, DirectorStage, DirectorSuggestion, DirectorSuggestionKind,
+  ShotCamera, Transform,
 } from './types';
 
 export const API_BASE = '';
@@ -158,3 +160,19 @@ export async function uploadCharacterReference(id:string,type:CharacterReference
 export const generateCharacterReference=(id:string,type:CharacterReferenceType,label='')=>apiRequest<CharacterReference>(`/api/characters/${id}/references/generate`,json('POST',{reference_type:type,label}));
 export const updateCharacterReference=(id:string,data:{label?:string;review_status?:ReviewStatus})=>apiRequest<CharacterReference>(`/api/character-references/${id}`,json('PATCH',data));
 export const activateCharacterReference=(characterId:string,referenceId:string)=>apiRequest<CharacterReference>(`/api/characters/${characterId}/references/${referenceId}/active`,json('PUT'));
+
+export const createDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`,json('POST'));
+export const getDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`);
+export const createDirectorObject=(stageId:string,expectedVersion:number,object:{kind:DirectorObject['kind'];source_type:DirectorObject['source_type'];label:string;transform?:Transform;appearance?:Record<string,unknown>;metadata?:Record<string,unknown>;visible?:boolean})=>apiRequest<DirectorObject>(`/api/director-stages/${stageId}/objects`,json('POST',{expected_version:expectedVersion,object}));
+export const updateDirectorObject=(objectId:string,expectedVersion:number,object:Partial<Pick<DirectorObject,'label'|'transform'|'appearance'|'metadata'|'visible'>>)=>apiRequest<DirectorObject>(`/api/director-objects/${objectId}`,json('PATCH',{expected_version:expectedVersion,object}));
+export async function deleteDirectorObject(objectId:string,expectedVersion:number):Promise<void>{await apiRequest(`/api/director-objects/${objectId}`,json('DELETE',{expected_version:expectedVersion}));}
+export const updateDirectorCamera=(stageId:string,shotId:string,expectedVersion:number,camera:Partial<Omit<ShotCamera,'id'|'stage_id'|'shot_id'|'version'|'preview_asset_id'>>)=>apiRequest<ShotCamera>(`/api/director-stages/${stageId}/shots/${shotId}/camera`,json('PUT',{expected_version:expectedVersion,camera}));
+export const createDirectorSuggestion=(stageId:string,shotId:string|null,kind:DirectorSuggestionKind)=>apiRequest<DirectorSuggestion>(`/api/director-stages/${stageId}/suggestions`,json('POST',{shot_id:shotId,kind}));
+export const applyDirectorSuggestionToShot=(stageId:string,shotId:string,suggestionId:string,fields:DirectorApplyField[])=>apiRequest<Shot>(`/api/director-stages/${stageId}/shots/${shotId}/apply-to-shot`,json('POST',{suggestion_id:suggestionId,fields}));
+export async function uploadDirectorPreview(cameraId:string,preview:Blob):Promise<Asset>{
+  const form=new FormData();form.set('file',preview,'preview.png');
+  let response:Response;
+  try{response=await fetch(`${API_BASE}/api/director-cameras/${cameraId}/preview`,{method:'POST',body:form});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
+  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'预览上传失败');throw new ApiError(detail,response.status,detail);}
+  return response.json() as Promise<Asset>;
+}

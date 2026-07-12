@@ -463,10 +463,10 @@ describe('Workspace', () => {
     expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
   });
 
-  it('keeps six mobile work areas in one stable 44px tab row', () => {
+  it('keeps seven mobile work areas in one stable 44px tab row', () => {
     const mobileTabsRule = workspaceStyles.match(/\.workspace-tabs-mobile\s*\{[^}]*grid-template-columns:\s*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)[^}]*\}/);
 
-    expect(mobileTabsRule?.[1]).toBe('6');
+    expect(mobileTabsRule?.[1]).toBe('7');
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*display:\s*grid/);
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*none/);
   });

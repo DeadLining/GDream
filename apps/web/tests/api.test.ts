@@ -7,6 +7,12 @@ import {
   listScripts,
   patchScript,
   restoreScriptRevision,
+  applyDirectorSuggestionToShot,
+  createDirectorStage,
+  createDirectorSuggestion,
+  getDirectorStage,
+  updateDirectorCamera,
+  uploadDirectorPreview,
 } from '../lib/api';
 
 describe('apiRequest', () => {
@@ -90,5 +96,38 @@ describe('script library api', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {status:204})));
 
     await expect(deleteScript('script-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('director api', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('uses scene, stage, camera, suggestion, and apply endpoints', async () => {
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    await createDirectorStage('scene-1');
+    await getDirectorStage('scene-1');
+    await updateDirectorCamera('stage-1','shot-1',2,{focal_length_mm:85});
+    await createDirectorSuggestion('stage-1','shot-1','shot_composition');
+    await applyDirectorSuggestionToShot('stage-1','shot-1','suggestion-1',['composition']);
+    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual([
+      '/api/scenes/scene-1/director-stage',
+      '/api/scenes/scene-1/director-stage',
+      '/api/director-stages/stage-1/shots/shot-1/camera',
+      '/api/director-stages/stage-1/suggestions',
+      '/api/director-stages/stage-1/shots/shot-1/apply-to-shot',
+    ]);
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({method:'PUT',body:JSON.stringify({expected_version:2,camera:{focal_length_mm:85}})});
+  });
+
+  it('uploads previews as multipart without forcing a JSON content type', async () => {
+    const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    const blob=new Blob(['png'],{type:'image/png'});
+    await uploadDirectorPreview('camera-1',blob);
+    const init=fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect(init.headers).toBeUndefined();
   });
 });

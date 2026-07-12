@@ -32,6 +32,7 @@ from comic_studio.routes.script_imports import router as script_imports_router
 from comic_studio.routes.scripts import router as scripts_router
 from comic_studio.routes.character_references import router as character_references_router
 from comic_studio.routes.videos import router as videos_router
+from comic_studio.routes.director import router as director_router
 from comic_studio.routes.mock_ssh import router as mock_ssh_router
 from comic_studio.routes.model_runtime import router as model_runtime_router
 from comic_studio import models
@@ -296,6 +297,7 @@ def create_app(
     app.include_router(scripts_router)
     app.include_router(character_references_router)
     app.include_router(videos_router)
+    app.include_router(director_router)
     app.include_router(mock_ssh_router)
     app.include_router(model_runtime_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
