@@ -15,11 +15,9 @@ async def run_video_job(app, job_id, shot_id, activate):
         jobs = JobStore(session)
         jobs.transition(job_id, "running", progress=5)
         try:
-            asset = await VideoService(
-                session,
-                app.state.settings.data_root,
-                app.state.provider_factory.create_video(),
-            ).generate(shot_id, activate=activate)
+            asset = await app.state.model_runtime.execute_video(
+                shot_id, activate
+            )
             jobs.transition(
                 job_id,
                 "succeeded",

@@ -1,6 +1,7 @@
 import base64
 
 from comic_studio import models
+from comic_studio.providers.base import ProviderError
 
 
 PNG = base64.b64decode(
@@ -131,10 +132,12 @@ def test_generates_primary_and_reference_based_variant(client):
     class Provider:
         model = "gpt-image-test"
         edits = 0
+        prompts = []
 
         async def generate(self, prompt, size="1024x1536", quality="auto"):
             from comic_studio.providers.gpt_image import ImageResult
 
+            self.prompts.append(prompt)
             return ImageResult(PNG)
 
         async def edit(self, prompt, references, size="1024x1536", quality="auto"):
@@ -168,3 +171,53 @@ def test_generates_primary_and_reference_based_variant(client):
     assert variant.status_code == 201
     assert variant.json()["reference_type"] == "side"
     assert provider.edits == 1
+    assert character["name"] not in provider.prompts[0]
+    assert character["appearance_bible"] not in provider.prompts[0]
+    assert "original" in provider.prompts[0].lower()
+
+
+def test_generate_returns_sanitized_provider_failure(client):
+    _, character = _character(client)
+
+    class Provider:
+        model = "gpt-image-test"
+
+        async def generate(self, prompt, size="1024x1536", quality="auto"):
+            raise ProviderError("upstream-secret-details")
+
+    class Factory:
+        def create_image(self):
+            return Provider()
+
+    client.app.state.provider_factory = Factory()
+    response = client.post(
+        f"/api/characters/{character['id']}/references/generate",
+        json={"reference_type": "primary", "label": "AI 主参考"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Image generation failed"
+    assert "upstream-secret-details" not in response.text
+
+
+def test_generate_returns_safe_gpt_image_failure_category(client):
+    _, character = _character(client)
+
+    class Provider:
+        model = "gpt-image-test"
+
+        async def generate(self, prompt, size="1024x1536", quality="auto"):
+            raise ProviderError("GPT Image request failed: ReadTimeout")
+
+    class Factory:
+        def create_image(self):
+            return Provider()
+
+    client.app.state.provider_factory = Factory()
+    response = client.post(
+        f"/api/characters/{character['id']}/references/generate",
+        json={"reference_type": "primary", "label": "AI 主参考"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Image generation failed: ReadTimeout"

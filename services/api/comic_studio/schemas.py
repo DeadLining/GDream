@@ -44,6 +44,7 @@ class MockSshStatusRead(BaseModel):
     alias: str = ""
     port: int | None = Field(default=None, ge=1, le=65535)
     error: str | None = None
+    reused: bool = False
 
 
 class ProviderChannelUpdate(BaseModel):
@@ -147,6 +148,26 @@ class ProviderChannelTestRead(BaseModel):
     error: str | None = None
 
 
+class ProviderHealthStatusRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok", "failed", "disabled"]
+    model: str
+    host: str
+    elapsed_ms: int = Field(ge=0)
+    check_scope: Literal["model", "endpoint", "audio"]
+    error: str | None = None
+
+
+class ProviderHealthRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    llm: ProviderHealthStatusRead
+    image: ProviderHealthStatusRead
+    tts: ProviderHealthStatusRead
+    video: ProviderHealthStatusRead
+
+
 class PatchModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -212,6 +233,24 @@ class EpisodeCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     premise: str = Field(min_length=1)
     target_duration_seconds: int = Field(ge=15, le=1800)
+
+
+class EpisodeDeletionCounts(BaseModel):
+    scenes: int
+    shots: int
+    dialogue_lines: int
+    assets: int
+
+
+class EpisodeDeletionPreview(BaseModel):
+    episode_id: str
+    title: str
+    deleted: EpisodeDeletionCounts
+
+
+class EpisodeDeletionRead(EpisodeDeletionPreview):
+    deleted_episode_id: str
+    cleanup_warnings: list[str]
 
 
 class DialogueRead(BaseModel):

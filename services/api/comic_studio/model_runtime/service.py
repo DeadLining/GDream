@@ -1,0 +1,419 @@
+import asyncio
+from datetime import UTC, datetime
+from time import perf_counter
+from urllib.parse import urlsplit
+
+from sqlalchemy import func, select
+
+from comic_studio import models
+from comic_studio.jobs import JobStore
+from comic_studio.model_runtime.contracts import Capability, TextStreamRequest
+from comic_studio.model_runtime.errors import (
+    ModelRuntimeError,
+    classify_provider_error,
+)
+from comic_studio.model_runtime.repository import InvocationRepository
+from comic_studio.provider_channels import ProviderChannel, ProviderChannels
+from comic_studio.schemas import ProviderChannelUpdate
+from comic_studio.services.provider_channel_testing import (
+    ProviderChannelTestingService,
+    default_client_factory,
+)
+from comic_studio.services.character_references import CharacterReferenceService
+from comic_studio.services.panels import PanelService
+from comic_studio.services.speech import SpeechService
+from comic_studio.services.videos import VideoService
+
+
+provider_testing_client_factory = default_client_factory
+provider_testing_total_timeout_seconds = 8
+provider_testing_tts_timeout_seconds = 60
+sanitize_provider_error = ProviderChannelTestingService._sanitize_error
+
+
+class ModelRuntimeService:
+    _channel_names = {
+        Capability.TEXT: "llm",
+        Capability.IMAGE: "image",
+        Capability.SPEECH: "tts",
+        Capability.VIDEO: "video",
+    }
+
+    def __init__(
+        self,
+        channel_store,
+        session_factory,
+        data_root,
+        adapters,
+        *,
+        mock_ssh_manager=None,
+    ):
+        self.channel_store = channel_store
+        self.session_factory = session_factory
+        self.data_root = data_root
+        self.adapters = adapters
+        self.mock_ssh_manager = mock_ssh_manager
+
+    @staticmethod
+    def _adapter_identity(adapter) -> tuple[str, str]:
+        provider = adapter.__class__.__name__.removesuffix("Provider").casefold()
+        return provider, str(getattr(adapter, "model", ""))
+
+    async def stream_text(self, request: TextStreamRequest):
+        adapter = self.adapters.create(Capability.TEXT)
+        provider, model = self._adapter_identity(adapter)
+        with self.session_factory() as session:
+            invocation = InvocationRepository(session).start(
+                Capability.TEXT, provider, model
+            )
+        started = perf_counter()
+        try:
+            async for chunk in adapter.stream_script(request.context):
+                yield chunk
+            with self.session_factory() as session:
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="succeeded",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                )
+        except Exception as error:
+            runtime_error = classify_provider_error(
+                error, Capability.TEXT, provider
+            )
+            with self.session_factory() as session:
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="failed",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                    error_code=runtime_error.code.value,
+                    retryable=runtime_error.retryable,
+                )
+            raise runtime_error from error
+
+    async def plan_episode(self, context: dict):
+        return await self.adapters.create(Capability.TEXT).plan_episode(context)
+
+    async def parse_script_import(self, context: dict):
+        return await self.adapters.create(Capability.TEXT).parse_script_import(context)
+
+    async def execute_image(
+        self, target_type: str, target_id: str, request_payload: dict
+    ):
+        provider = self.adapters.create(Capability.IMAGE)
+        with self.session_factory() as session:
+            if target_type == "shot":
+                return await PanelService(
+                    session, self.data_root, provider
+                ).generate_panel(
+                    target_id,
+                    activate=bool(request_payload.get("activate", True)),
+                )
+            return await CharacterReferenceService(
+                session, self.data_root
+            ).generate(
+                target_id,
+                str(request_payload.get("reference_type", "primary")),
+                str(request_payload.get("label", "")),
+                provider,
+            )
+
+    async def execute_speech(self, dialogue_id: str):
+        with self.session_factory() as session:
+            return await SpeechService(
+                session,
+                self.data_root,
+                self.adapters.create(Capability.SPEECH),
+            ).synthesize_dialogue(dialogue_id)
+
+    async def execute_video(self, shot_id: str, activate: bool):
+        with self.session_factory() as session:
+            return await VideoService(
+                session,
+                self.data_root,
+                self.adapters.create(Capability.VIDEO),
+            ).generate(shot_id, activate=activate)
+
+    def create_media_job(
+        self,
+        capability: Capability,
+        target_type: str,
+        target_id: str,
+        request_payload: dict,
+    ):
+        self.adapters.create(capability)
+        with self.session_factory() as session:
+            return JobStore(session).create(
+                f"runtime_{capability.value}",
+                target_type,
+                target_id,
+                {"capability": capability.value, **request_payload},
+            )
+
+    @staticmethod
+    def _result_metadata(capability: Capability, result) -> dict:
+        asset = result[1] if isinstance(result, tuple) else result
+        metadata = {
+            "capability": capability.value,
+            "asset_id": asset.id,
+            "media_url": f"/media/{asset.local_path}",
+        }
+        return metadata
+
+    async def run_media_job(self, job_id: str) -> None:
+        with self.session_factory() as session:
+            store = JobStore(session)
+            job = store.transition(job_id, "running", progress=5)
+            capability = Capability(job.request_payload["capability"])
+            adapter = self.adapters.create(capability)
+            provider, model = self._adapter_identity(adapter)
+            invocation = InvocationRepository(session).start(
+                capability,
+                provider,
+                model,
+                job.target_type,
+                job.target_id,
+                job.id,
+            )
+        started = perf_counter()
+        try:
+            if capability is Capability.IMAGE:
+                result = await self.execute_image(
+                    job.target_type, job.target_id, job.request_payload
+                )
+            elif capability is Capability.SPEECH:
+                result = await self.execute_speech(job.target_id)
+            else:
+                result = await self.execute_video(
+                    job.target_id,
+                    bool(job.request_payload.get("activate", True)),
+                )
+            with self.session_factory() as session:
+                JobStore(session).transition(
+                    job.id,
+                    "succeeded",
+                    result_metadata=self._result_metadata(capability, result),
+                )
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="succeeded",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                )
+        except Exception as error:
+            runtime_error = classify_provider_error(error, capability, provider)
+            with self.session_factory() as session:
+                JobStore(session).transition(
+                    job.id,
+                    "failed",
+                    error=runtime_error.message,
+                    result_metadata={
+                        "capability": capability.value,
+                        "error_code": runtime_error.code.value,
+                        "retryable": runtime_error.retryable,
+                    },
+                )
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="failed",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                    error_code=runtime_error.code.value,
+                    retryable=runtime_error.retryable,
+                )
+
+    def list_invocations(self, limit: int = 50) -> list[models.ModelInvocation]:
+        with self.session_factory() as session:
+            return InvocationRepository(session).list_recent(limit)
+
+    @staticmethod
+    def _masked_key(value: str | None) -> str:
+        if not value:
+            return ""
+        return "*" * len(value) if len(value) <= 8 else f"{value[:3]}****{value[-4:]}"
+
+    def _channel_read(self, channel: ProviderChannel) -> dict:
+        api_key = channel.api_key_value
+        return {
+            "name": channel.name,
+            "enabled": channel.enabled,
+            "base_url": channel.base_url,
+            "model": channel.model,
+            "ssh_host": channel.ssh_host or "",
+            "api_key_configured": bool(api_key),
+            "api_key_masked": self._masked_key(api_key),
+        }
+
+    def _read_channel_state(self, state) -> dict:
+        result = {
+            capability.value: self._channel_read(
+                getattr(state.channels, channel_name)
+            )
+            for capability, channel_name in self._channel_names.items()
+        }
+        result["persistence"] = {
+            "status": "saved" if state.persisted else "defaults"
+        }
+        result["reloaded_at"] = state.reloaded_at
+        return result
+
+    def read_channels(self) -> dict:
+        return self._read_channel_state(self.channel_store.state)
+
+    def update_channel(
+        self, capability: Capability, update: ProviderChannelUpdate
+    ) -> dict:
+        channel_name = self._channel_names[capability]
+
+        def merge(snapshot: ProviderChannels) -> ProviderChannels:
+            current = getattr(snapshot, channel_name)
+            replacement_key = update.api_key.get_secret_value()
+            effective_key = (
+                None
+                if update.clear_api_key
+                else replacement_key or current.api_key_value
+            )
+            if capability is not Capability.SPEECH and update.enabled and not effective_key:
+                raise ValueError(f"Enabled {capability.value} channel requires an api_key")
+            if capability is not Capability.SPEECH and update.ssh_host:
+                raise ValueError("ssh_host is only valid for speech")
+            channel = ProviderChannel(
+                name=update.name,
+                enabled=update.enabled,
+                base_url=update.base_url,
+                model=update.model,
+                api_key=effective_key,
+                ssh_host=(update.ssh_host or None)
+                if capability is Capability.SPEECH
+                else None,
+            )
+            return ProviderChannels.model_validate(
+                snapshot.model_copy(
+                    update={channel_name: channel}
+                ).model_dump(mode="python")
+            )
+
+        committed = self.channel_store.update(merge)
+        return self._read_channel_state(committed)
+
+    async def test_channel(
+        self, capability: Capability, update: ProviderChannelUpdate
+    ) -> dict:
+        kind = self._channel_names[capability]
+        service = ProviderChannelTestingService(
+            stored_channel=lambda name: getattr(self.channel_store.snapshot, name),
+            client_factory=provider_testing_client_factory,
+            prefer_ssh_for_host=lambda alias: bool(
+                self.mock_ssh_manager
+                and getattr(self.mock_ssh_manager, "owns_running_alias", lambda _alias: False)(alias)
+            ),
+            total_timeout_seconds=(provider_testing_tts_timeout_seconds if capability is Capability.SPEECH else provider_testing_total_timeout_seconds),
+        )
+        channel = service.resolve_candidate(kind, update)
+        service.validate_channel(kind, channel)
+        result = await service.test(kind, channel)
+        return result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+
+    def _last_invocation_ms(self, capability: Capability) -> int | None:
+        with self.session_factory() as session:
+            statement = (
+                select(models.ModelInvocation.elapsed_ms)
+                .where(
+                    models.ModelInvocation.capability == capability.value,
+                    models.ModelInvocation.status == "succeeded",
+                )
+                .order_by(models.ModelInvocation.created_at.desc())
+                .limit(1)
+            )
+            return session.scalar(statement)
+
+    async def _capability_health(self, capability: Capability, snapshot: ProviderChannels) -> dict:
+        channel_name = self._channel_names[capability]
+        channel = getattr(snapshot, channel_name)
+        base = {
+            "model": channel.model,
+            "host": urlsplit(channel.base_url).hostname or "local",
+            "last_invocation_elapsed_ms": self._last_invocation_ms(capability),
+        }
+        if not channel.enabled:
+            return {**base, "status": "disabled", "elapsed_ms": 0, "error": None}
+        prefer_ssh = False
+        if capability is Capability.SPEECH and channel.ssh_host:
+            lookup = getattr(self.mock_ssh_manager, "owns_running_alias", None)
+            if lookup:
+                try:
+                    prefer_ssh = bool(await asyncio.to_thread(lookup, channel.ssh_host))
+                except Exception:
+                    prefer_ssh = False
+        try:
+            service = ProviderChannelTestingService(
+                stored_channel=lambda name: getattr(snapshot, name),
+                client_factory=provider_testing_client_factory,
+                prefer_ssh_for_host=lambda _alias: prefer_ssh,
+                total_timeout_seconds=(provider_testing_tts_timeout_seconds if capability is Capability.SPEECH else provider_testing_total_timeout_seconds),
+            )
+            result = await service.test(channel_name, channel)
+            return {**base, "status": "healthy" if result.status == "ok" else "unavailable", "elapsed_ms": result.elapsed_ms, "error": result.error}
+        except Exception as error:
+            return {**base, "status": "unavailable", "elapsed_ms": 0, "error": sanitize_provider_error(error)}
+
+    def _infrastructure(self) -> dict:
+        mock_status = self.mock_ssh_manager.status() if self.mock_ssh_manager else None
+        if hasattr(mock_status, "model_dump"):
+            mock_payload = mock_status.model_dump(mode="json")
+        else:
+            mock_payload = {
+                "state": "failed",
+                "error": "Mock SSH manager is unavailable",
+            }
+        with self.session_factory() as session:
+            rows = dict(
+                session.execute(
+                    select(models.Job.status, func.count(models.Job.id))
+                    .where(models.Job.operation.like("runtime_%"))
+                    .group_by(models.Job.status)
+                ).all()
+            )
+        return {
+            "api": {"status": "healthy"},
+            "mock_ssh": mock_payload,
+            "queue": {
+                "queued": int(rows.get("queued", 0)),
+                "running": int(rows.get("running", 0)),
+            },
+            "persistence": self.read_channels()["persistence"],
+        }
+
+    async def health(self) -> dict:
+        capabilities = list(Capability)
+        snapshot = self.channel_store.snapshot
+        results = await asyncio.gather(
+            *(self._capability_health(capability, snapshot) for capability in capabilities)
+        )
+        return {
+            "capabilities": {
+                capability.value: result
+                for capability, result in zip(capabilities, results, strict=True)
+            },
+            "infrastructure": self._infrastructure(),
+            "checked_at": datetime.now(UTC).isoformat(),
+        }
+
+    def get_job(self, job_id: str):
+        with self.session_factory() as session:
+            job = JobStore(session).get(job_id)
+            if job is None:
+                raise KeyError(job_id)
+            session.expunge(job)
+            return job
+
+    def retry_job(self, job_id: str):
+        with self.session_factory() as session:
+            store = JobStore(session)
+            job = store.get(job_id)
+            if job is None:
+                raise KeyError(job_id)
+            retried = store.transition(job.id, "queued")
+            session.expunge(retried)
+            return retried
+
+    def recover_interrupted_jobs(self) -> list[str]:
+        with self.session_factory() as session:
+            return InvocationRepository(session).recover_running_jobs()

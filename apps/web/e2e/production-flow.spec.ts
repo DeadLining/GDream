@@ -1,5 +1,6 @@
 import {expect, test} from '@playwright/test';
 import path from 'node:path';
+import type {MockSshHost, MockSshStatus, ProviderHealth} from '../lib/types';
 
 const project = {id:'project-1',title:'霓虹夜行',logline:'寻找记忆',story_bible:'近未来重庆',visual_style:'Chinese noir',aspect_ratio:'9:16',language:'Chinese',created_at:'',updated_at:''};
 const episodeSummary = {id:'episode-1',project_id:'project-1',title:'失窃的雨夜',premise:'寻找芯片',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''};
@@ -16,22 +17,144 @@ const providerChannels = {
   video:{name:'MiniMax Video',enabled:true,base_url:'https://api.minimaxi.com',model:'MiniMax-Hailuo-02',ssh_host:'',api_key_configured:true,api_key_masked:'sk-•••vid9'},
   persistence:{status:'saved',file_path:'data/provider-channels.json'},reloaded_at:'2026-07-11T10:00:00Z',
 };
+const providerHealth: ProviderHealth = {
+  llm:{status:'ok',model:'MiniMax-M3',host:'api.minimaxi.com',elapsed_ms:7,check_scope:'model',error:null},
+  image:{status:'ok',model:'gpt-image-2',host:'192.168.18.80',elapsed_ms:9,check_scope:'model',error:null},
+  tts:{status:'ok',model:'Qwen3-TTS-12Hz-1.7B-CustomVoice',host:'192.168.18.94',elapsed_ms:12,check_scope:'audio',error:null},
+  video:{status:'ok',model:'MiniMax-Hailuo-02',host:'api.minimaxi.com',elapsed_ms:11,check_scope:'endpoint',error:null},
+};
 
 test.beforeEach(async ({page}) => {
   await page.route('**/api/projects', route => route.fulfill({json:[project]}));
   await page.route('**/api/projects/project-1', route => route.fulfill({json:projectDetail}));
   await page.route('**/api/episodes/episode-1', route => route.fulfill({json:episode}));
+  await page.route('**/api/assets/asset-1', route => route.fulfill({json:{id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'test',model:'test',generation_attempt:1,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''}}));
   await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:{episode_id:'episode-1',ready:true,totals:{shots:2,dialogue:0},ready_counts:{panels:2,approved:2,speech:0},blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}}}));
-  await page.route('**/api/providers/health', route => route.fulfill({json:{minimax:{status:'ok'},gpt_image:{status:'ok'},qwen_tts:{status:'ok'}}}));
+  await page.route('**/api/providers/health', route => route.fulfill({json:providerHealth}));
   await page.route('**/api/episodes/episode-1/render', route => route.fulfill({status:202,json:{job_id:'render-1',status:'queued'}}));
   await page.route('**/api/jobs/render-1', route => route.fulfill({json:{id:'render-1',operation:'render_episode',target_type:'episode',target_id:'episode-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/render.mp4',probe:{format:{duration:'60'}}},error:'',retry_count:0,created_at:'',updated_at:''}}));
 });
 
+test('model channels manage Mock SSH through authoritative route-backed status', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Mock SSH lifecycle is covered once on desktop');
+  const hosts: MockSshHost[] = [{id:'a800_94',name:'A800_94',type:'hostbridge'}];
+  const stopped: MockSshStatus = {desired_running:false,state:'stopped',host_id:null,alias:null,port:null,error:null,reused:false};
+  const running: MockSshStatus = {desired_running:true,state:'running',host_id:'a800_94',alias:'ai-comic-tts',port:2230,error:null,reused:false};
+  let status: MockSshStatus = stopped;
+  let statusReads = 0;
+  let startStatusReadBaseline = 0;
+  let stopStatusReadBaseline = 0;
+  let startRequests = 0;
+  let stopRequests = 0;
+
+  await page.route('**/api/provider-channels', route => route.fulfill({json:providerChannels}));
+  await page.route('**/api/mock-ssh/hosts', route => route.fulfill({json:hosts}));
+  await page.route('**/api/mock-ssh/status', async route => {
+    expect(route.request().method()).toBe('GET');
+    statusReads += 1;
+    await route.fulfill({json:status});
+  });
+  await page.route('**/api/mock-ssh/start', async route => {
+    expect(route.request().method()).toBe('POST');
+    expect(await route.request().postDataJSON()).toEqual({host_id:'a800_94',alias:'ai-comic-tts'});
+    startRequests += 1;
+    startStatusReadBaseline = statusReads;
+    status = running;
+    const mutationResult: MockSshStatus = {...running,port:2229,reused:true};
+    await route.fulfill({json:mutationResult});
+  });
+  await page.route('**/api/mock-ssh/stop', async route => {
+    expect(route.request().method()).toBe('POST');
+    expect(await route.request().postDataJSON()).toEqual({});
+    stopRequests += 1;
+    stopStatusReadBaseline = statusReads;
+    status = stopped;
+    const mutationResult: MockSshStatus = {
+      desired_running:false,state:'failed',host_id:'a800_94',alias:'ai-comic-tts',port:2230,error:'Stale stop response',reused:false,
+    };
+    await route.fulfill({json:mutationResult});
+  });
+
+  await page.goto('/');
+  await page.getByRole('button',{name:'模型中心',exact:true}).click();
+  const bridge = page.getByRole('heading',{name:'Mock SSH 桥接'}).locator('..').locator('..');
+  await expect(bridge.getByText('已停止',{exact:true})).toBeVisible();
+  await bridge.getByRole('button',{name:'启动 Mock SSH'}).click();
+  await expect(bridge.getByText('运行中',{exact:true})).toBeVisible();
+  await expect(bridge.getByText('ai-comic-tts :2230',{exact:true})).toBeVisible();
+  await expect(bridge.getByText('ai-comic-tts :2229',{exact:true})).toHaveCount(0);
+  await expect(bridge.getByText('已复用现有桥接',{exact:true})).toBeVisible();
+  expect(statusReads).toBeGreaterThan(startStatusReadBaseline);
+  await bridge.getByRole('button',{name:'停止 Mock SSH'}).click();
+  await expect(bridge.getByText('已停止',{exact:true})).toBeVisible();
+  await expect(bridge.getByRole('alert')).toHaveCount(0);
+  await expect(bridge.getByLabel('HostBridge 主机')).toHaveValue('a800_94');
+  await expect(bridge.getByLabel('SSH Alias')).toHaveValue('ai-comic-tts');
+  expect(statusReads).toBeGreaterThan(stopStatusReadBaseline);
+
+  expect(startRequests).toBe(1);
+  expect(stopRequests).toBe(1);
+});
+
+test('toolbar reports live health for every enabled provider', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Provider health details are covered once on desktop');
+  let healthRequests = 0;
+  await page.route('**/api/providers/health', async route => {
+    expect(route.request().method()).toBe('GET');
+    healthRequests += 1;
+    await route.fulfill({json:providerHealth});
+  });
+
+  await page.goto('/');
+  await page.getByRole('button',{name:'检测模型服务'}).click();
+  await expect(page.getByRole('button',{name:'检测模型服务'})).toContainText('4/4 正常');
+  const details = page.getByRole('region',{name:'模型服务检测详情'});
+  await expect(details).toBeVisible();
+  await expect(details.locator('.provider-health-row')).toHaveCount(4);
+  const planning = details.locator('.provider-health-row').filter({hasText:'剧本规划'});
+  await expect(planning.getByText('MiniMax-M3',{exact:true})).toBeVisible();
+  await expect(planning.getByText('api.minimaxi.com',{exact:true})).toBeVisible();
+  await expect(planning.getByText('7 ms',{exact:true})).toBeVisible();
+  await expect(details.getByText('画面生成')).toBeVisible();
+  const speech = details.locator('.provider-health-row').filter({hasText:'语音合成'});
+  await expect(speech.getByText('Qwen3-TTS-12Hz-1.7B-CustomVoice',{exact:true})).toBeVisible();
+  await expect(speech.getByText('192.168.18.94',{exact:true})).toBeVisible();
+  await expect(speech.getByText('12 ms',{exact:true})).toBeVisible();
+  await expect(details.getByText('视频生成')).toBeVisible();
+  expect(healthRequests).toBe(1);
+});
+
+test('toolbar health count excludes a failed provider and sanitizes its detail', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Provider health failure is covered once on desktop');
+  await page.route('**/api/providers/health', route => route.fulfill({json:{
+    ...providerHealth,
+    image:{...providerHealth.image,status:'failed',elapsed_ms:18,error:'Provider returned HTTP 503\nrequest-id:\t safe-check'},
+  }}));
+
+  await page.goto('/');
+  await page.getByRole('button',{name:'检测模型服务'}).click();
+  await expect(page.getByRole('button',{name:'检测模型服务'})).toContainText('3/4 正常');
+  const details = page.getByRole('region',{name:'模型服务检测详情'});
+  await expect(details.getByText('Provider returned HTTP 503 request-id: safe-check',{exact:true})).toBeVisible();
+  await expect(details.getByText('异常',{exact:true})).toHaveCount(1);
+});
+
 test('provider channel settings stay operable and bounded across studio viewports', async ({page}, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', 'Mobile Model Center layout is covered by component tests and the 390px browser check');
   let current = structuredClone(providerChannels);
   const writes: Array<Record<string, unknown>> = [];
   let expectedModel = '';
   let probeCount = 0;
+  await page.route('**/api/model-runtime/health', route => route.fulfill({json:{
+    capabilities:{
+      text:{status:'healthy',model:'MiniMax-M3',host:'api.example.com',elapsed_ms:4,last_invocation_elapsed_ms:null,error:null},
+      image:{status:'healthy',model:'gpt-image-2',host:'image.example.com',elapsed_ms:5,last_invocation_elapsed_ms:null,error:null},
+      speech:{status:'disabled',model:'qwen',host:'tts.example.com',elapsed_ms:0,last_invocation_elapsed_ms:null,error:null},
+      video:{status:'disabled',model:'video',host:'video.example.com',elapsed_ms:0,last_invocation_elapsed_ms:null,error:null},
+    },
+    infrastructure:{api:{status:'healthy'},mock_ssh:{state:'stopped'},queue:{queued:0,running:0},persistence:{status:'saved'}},checked_at:'2026-07-12T10:00:00Z',
+  }}));
+  await page.route('**/api/model-runtime/invocations?*', route => route.fulfill({json:[]}));
   await page.route('**/api/provider-channels', route => route.fulfill({json:current}));
   await page.route('**/api/provider-channels/llm/test', async route => {
     expect((await route.request().postDataJSON()).model).toBe(expectedModel);
@@ -55,17 +178,13 @@ test('provider channel settings stay operable and bounded across studio viewport
     expectedModel = `MiniMax-M4-${viewport.width}`;
     await page.setViewportSize(viewport);
     await page.goto('/');
-    const settingsCommand = testInfo.project.name === 'desktop'
-      ? page.getByRole('button',{name:'模型渠道',exact:true})
-      : page.getByRole('tab',{name:'模型渠道'});
+    const settingsCommand = page.getByRole('button',{name:'模型中心',exact:true});
     await settingsCommand.click();
 
-    await expect(page.getByRole('heading',{name:'模型渠道'})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'模型中心'})).toBeVisible();
     await expect(page.getByRole('form')).toHaveCount(4);
     await expect(page.getByLabel('剧本规划 Base URL')).toBeVisible();
-    const tabs = page.getByRole('tablist',{name:'工作区'});
-    const tabButtons = tabs.getByRole('tab');
-    await expect(tabButtons).toHaveCount(7);
+    await expect(page.getByRole('tablist',{name:'工作区'})).toHaveCount(0);
     const controls = [
       page.getByLabel('剧本规划 Base URL'),
       page.getByLabel('替换剧本规划 API Key'),
@@ -75,23 +194,18 @@ test('provider channel settings stay operable and bounded across studio viewport
     ];
     const dimensions = await page.evaluate(() => ({clientWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth}));
     expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
-    for (const locator of [tabs,...controls]) {
+    for (const locator of [page.locator('.model-center'),...controls]) {
       const box = await locator.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
     }
-    const [tabBoxes,keyBox,clearBox,testBox,statusBox] = await Promise.all([
-      tabButtons.evaluateAll(elements => elements.map(element => {
-        const {x,y,width,height} = element.getBoundingClientRect();
-        return {x,y,width,height};
-      })),
+    const [keyBox,clearBox,testBox,statusBox] = await Promise.all([
       page.getByLabel('替换剧本规划 API Key').boundingBox(),
       page.getByRole('button',{name:'清除剧本规划 API Key'}).boundingBox(),
       page.getByRole('button',{name:'测试剧本规划连接'}).boundingBox(),
       page.locator('#provider-llm-status').boundingBox(),
     ]);
-    expect(tabBoxes.every((box,index) => box.x >= 0 && box.x + box.width <= viewport.width + 1 && (index === 0 || box.x >= tabBoxes[index - 1].x + tabBoxes[index - 1].width - 1))).toBe(true);
     expect(keyBox).not.toBeNull(); expect(clearBox).not.toBeNull(); expect(testBox).not.toBeNull(); expect(statusBox).not.toBeNull();
     const separate = (a: NonNullable<typeof keyBox>, b: NonNullable<typeof keyBox>) =>
       a.x + a.width <= b.x + 1 || b.x + b.width <= a.x + 1 || a.y + a.height <= b.y + 1 || b.y + b.height <= a.y + 1;
@@ -158,14 +272,14 @@ test('provider channel settings persist safely and affect the next planning oper
   });
 
   await page.goto('/');
-  await page.getByRole('button', {name: '模型渠道',exact:true}).click();
+  await page.getByRole('button', {name: '模型中心',exact:true}).click();
   await expect(page.getByLabel('剧本规划模型')).toHaveValue(providerChannels.llm.model);
 
   await page.getByLabel('剧本规划模型').fill('MiniMax-Unsaved');
   await expect(page.getByText('有未保存更改')).toBeVisible();
   page.once('dialog', dialog => dialog.accept());
   await page.reload();
-  await page.getByRole('button', {name: '模型渠道',exact:true}).click();
+  await page.getByRole('button', {name: '模型中心',exact:true}).click();
   await expect(page.getByLabel('剧本规划模型')).toHaveValue(providerChannels.llm.model);
   expect(putCount).toBe(0);
 
@@ -199,7 +313,7 @@ test('workspace shows generated panel and shot production controls', async ({pag
   await page.goto('/');
 
   await expect(page.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
-  await expect(page.getByAltText('林默站在雨夜霓虹巷道的漫画分镜')).toBeVisible();
+  await expect(page.getByAltText('林默走入巷道')).toBeVisible();
   await page.getByRole('button', {name: /镜头 2/}).click();
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeVisible();

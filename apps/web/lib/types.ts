@@ -41,6 +41,8 @@ export type Scene = {
 };
 
 export type EpisodeDetail = EpisodeSummary & {scenes: Scene[]};
+export type EpisodeDeletionPreview={episode_id:string;title:string;deleted:{scenes:number;shots:number;dialogue_lines:number;assets:number}};
+export type EpisodeDeletionResult=EpisodeDeletionPreview&{deleted_episode_id:string;cleanup_warnings:string[]};
 
 export type Asset = {
   id: string; kind: string; media_url: string; media_type: string; provider: string;
@@ -54,7 +56,16 @@ export type Job = {
   created_at: string; updated_at: string;
 };
 
-export type ProviderHealth = Record<string, {status: string; model?: string; error?: string}>;
+export type ProviderHealthKind = 'llm' | 'image' | 'tts' | 'video';
+export type ProviderHealthItem = {
+  status: 'ok' | 'failed' | 'disabled';
+  model: string;
+  host: string;
+  elapsed_ms: number;
+  check_scope: 'model' | 'endpoint' | 'audio';
+  error: string | null;
+};
+export type ProviderHealth = Record<ProviderHealthKind, ProviderHealthItem>;
 
 export type ProviderChannelKind = 'llm' | 'image' | 'tts' | 'video';
 export type ProviderChannelRead = {
@@ -88,6 +99,55 @@ export type ProviderChannelTestResult = {
   check_scope: 'model' | 'endpoint' | 'audio';
   error: string | null;
 };
+
+export type ModelCapability = 'text' | 'image' | 'speech' | 'video';
+export type ModelRuntimeCapabilityHealth = {
+  status: 'healthy' | 'unavailable' | 'disabled';
+  model: string;
+  host: string;
+  elapsed_ms: number;
+  last_invocation_elapsed_ms: number | null;
+  error: string | null;
+};
+export type ModelRuntimeHealth = {
+  capabilities: Record<ModelCapability, ModelRuntimeCapabilityHealth>;
+  infrastructure: {
+    api: {status: string};
+    mock_ssh: {state: string; error?: string | null};
+    queue: {queued: number; running: number};
+    persistence: {status: string};
+  };
+  checked_at: string;
+};
+export type ModelInvocation = {
+  id: string;
+  capability: ModelCapability;
+  provider: string;
+  model: string;
+  target_type: string;
+  target_id: string;
+  job_id: string | null;
+  status: 'running' | 'succeeded' | 'failed';
+  elapsed_ms: number;
+  error_code: string;
+  retryable: boolean;
+  created_at: string;
+  updated_at?: string;
+};
+export type ModelRuntimeJob = {job_id: string; capability: ModelCapability; status: JobStatus};
+
+export type MockSshHost = {id: string; name: string; type: string};
+export type MockSshState = 'stopped' | 'starting' | 'running' | 'stopping' | 'failed';
+export type MockSshStatus = {
+  desired_running: boolean;
+  state: MockSshState;
+  host_id: string | null;
+  alias: string | null;
+  port: number | null;
+  error: string | null;
+  reused: boolean;
+};
+export type MockSshStart = {host_id: string; alias: string};
 
 export type ProductionStage = 'panels' | 'speech' | 'videos';
 export type ProductionRunStatus = 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_failures';

@@ -1,6 +1,6 @@
 import type {KeyboardEvent} from 'react';
 
-export type WorkArea = 'overview' | 'import' | 'characters' | 'storyboard' | 'production' | 'review' | 'inspector' | 'settings';
+export type WorkArea = 'overview' | 'import' | 'characters' | 'storyboard' | 'production' | 'review' | 'inspector';
 
 const desktopTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'overview', label: '总览'},
@@ -9,7 +9,6 @@ const desktopTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'storyboard', label: '分镜'},
   {value: 'production', label: '生产'},
   {value: 'review', label: '审核'},
-  {value: 'settings', label: '模型渠道'},
 ];
 
 const mobileTabs: Array<{value: WorkArea; label: string}> = [
@@ -19,7 +18,6 @@ const mobileTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'storyboard', label: '分镜'},
   {value: 'production', label: '生产'},
   {value: 'inspector', label: '检查器'},
-  {value: 'settings', label: '模型渠道'},
 ];
 
 export function WorkspaceTabs({

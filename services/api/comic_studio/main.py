@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import logging
+from typing import Any, Callable
 
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
@@ -14,6 +16,8 @@ from comic_studio.provider_channels import (
     provider_channel_defaults,
 )
 from comic_studio.provider_factory import ProviderFactory
+from comic_studio.model_runtime.adapters import CapabilityAdapterRegistry
+from comic_studio.model_runtime.service import ModelRuntimeService
 from comic_studio.redaction import is_sensitive_key, normalize_field_name, redact
 from comic_studio.routes.episodes import router as episodes_router
 from comic_studio.routes.assets import router as assets_router
@@ -27,12 +31,18 @@ from comic_studio.routes.provider_channels import router as provider_channels_ro
 from comic_studio.routes.script_imports import router as script_imports_router
 from comic_studio.routes.character_references import router as character_references_router
 from comic_studio.routes.videos import router as videos_router
+from comic_studio.routes.mock_ssh import router as mock_ssh_router
+from comic_studio.routes.model_runtime import router as model_runtime_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
 from comic_studio.services.production_coordinator import ProductionCoordinator
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
 from comic_studio.services.videos import VideoService
+from comic_studio.services.mock_ssh import MockSshManager, UnavailableMockSshManager
+
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_validation_field(value: str) -> str:
@@ -95,20 +105,56 @@ def _sanitized_validation_errors(error: RequestValidationError) -> list[dict]:
     return sanitized
 
 
-def create_app() -> FastAPI:
+def _create_mock_ssh_manager(settings) -> MockSshManager:
+    return MockSshManager(
+        state_path=settings.mock_ssh_state_path,
+        log_path=settings.mock_ssh_log_path,
+        executable=settings.hostbridge_executable,
+        daemon_socket=settings.hostbridge_daemon_socket,
+    )
+
+
+def create_app(
+    *,
+    mock_ssh_manager: Any | None = None,
+    mock_ssh_manager_factory: Callable[[Any], Any] | None = None,
+) -> FastAPI:
     settings = get_settings()
+    factory = mock_ssh_manager_factory or _create_mock_ssh_manager
+    injected_mock_ssh_manager = mock_ssh_manager
     session_factory = create_session_factory(settings.database_url)
     provider_channel_store = ProviderChannelStore(
         settings.provider_channels_path,
         provider_channel_defaults(settings),
     )
     provider_channel_store.load()
-    provider_factory = ProviderFactory(provider_channel_store)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI):
+    async def lifespan(app: FastAPI):
         settings.data_root.mkdir(parents=True, exist_ok=True)
+        mock_ssh_diagnostic = None
+        manager = injected_mock_ssh_manager
+        if manager is None:
+            try:
+                manager = factory(settings)
+            except Exception:
+                mock_ssh_diagnostic = "Mock SSH manager initialization failed"
+                manager = UnavailableMockSshManager()
+            app.state.mock_ssh_manager = manager
+        app.state.model_runtime.mock_ssh_manager = app.state.mock_ssh_manager
+        try:
+            if not isinstance(manager, UnavailableMockSshManager):
+                manager.restore()
+        except Exception:
+            mock_ssh_diagnostic = "Mock SSH manager restore failed"
+            app.state.mock_ssh_manager = UnavailableMockSshManager(
+                "Unable to restore mock SSH"
+            )
+            app.state.model_runtime.mock_ssh_manager = app.state.mock_ssh_manager
+        if mock_ssh_diagnostic is not None:
+            logger.warning(mock_ssh_diagnostic)
         run_migrations(settings.database_url)
+        app.state.model_runtime.recover_interrupted_jobs()
         recover_production_runs()
         recover_script_imports()
         yield
@@ -137,7 +183,24 @@ def create_app() -> FastAPI:
     app.state.session_factory = session_factory
     app.state.settings = settings
     app.state.provider_channel_store = provider_channel_store
-    app.state.provider_factory = provider_factory
+    app.state.mock_ssh_manager = (
+        injected_mock_ssh_manager
+        if injected_mock_ssh_manager is not None
+        else UnavailableMockSshManager("Mock SSH has not started")
+    )
+    app.state.provider_factory = ProviderFactory(
+        provider_channel_store,
+        prefer_ssh_for_host=lambda ssh_host: app.state.mock_ssh_manager.owns_running_alias(
+            ssh_host
+        ),
+    )
+    app.state.model_runtime = ModelRuntimeService(
+        provider_channel_store,
+        session_factory,
+        settings.data_root,
+        CapabilityAdapterRegistry(lambda: app.state.provider_factory),
+        mock_ssh_manager=app.state.mock_ssh_manager,
+    )
 
     def recover_production_runs():
         recovered = []
@@ -178,31 +241,24 @@ def create_app() -> FastAPI:
     app.state.recover_script_imports = recover_script_imports
 
     async def produce_panel(item):
-        with session_factory() as session:
-            provider = app.state.provider_factory.create_image()
-            asset = await PanelService(
-                session, settings.data_root, provider
-            ).generate_panel(item.target_id, activate=True)
-            return {
-                "asset_id": asset.id,
-                "media_url": f"/media/{asset.local_path}",
-            }
+        asset = await app.state.model_runtime.execute_image(
+            "shot", item.target_id, {"activate": True}
+        )
+        return {
+            "asset_id": asset.id,
+            "media_url": f"/media/{asset.local_path}",
+        }
 
     async def produce_speech(item):
-        with session_factory() as session:
-            provider = app.state.provider_factory.create_tts()
-            asset = await SpeechService(
-                session, settings.data_root, provider
-            ).synthesize_dialogue(item.target_id)
-            return {
-                "asset_id": asset.id,
-                "media_url": f"/media/{asset.local_path}",
-            }
+        asset = await app.state.model_runtime.execute_speech(item.target_id)
+        return {
+            "asset_id": asset.id,
+            "media_url": f"/media/{asset.local_path}",
+        }
 
     async def produce_video(item):
-        with session_factory() as session:
-            asset = await VideoService(session, settings.data_root, app.state.provider_factory.create_video()).generate(item.target_id, activate=True)
-            return {"asset_id": asset.id, "media_url": f"/media/{asset.local_path}", "provider_task_id": asset.request_metadata.get("provider_task_id")}
+        asset = await app.state.model_runtime.execute_video(item.target_id, True)
+        return {"asset_id": asset.id, "media_url": f"/media/{asset.local_path}", "provider_task_id": asset.request_metadata.get("provider_task_id")}
 
     app.state.production_coordinator = ProductionCoordinator(
         session_factory,
@@ -221,6 +277,8 @@ def create_app() -> FastAPI:
     app.include_router(script_imports_router)
     app.include_router(character_references_router)
     app.include_router(videos_router)
+    app.include_router(mock_ssh_router)
+    app.include_router(model_runtime_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

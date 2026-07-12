@@ -176,9 +176,11 @@ class CharacterReferenceService:
         if character is None:
             raise KeyError(character_id)
         prompt = (
-            f"Create a clean character reference image for {character.name}. "
-            f"Appearance: {character.appearance_bible}. Continuity: {character.continuity_rules}. "
-            f"Reference view: {reference_type}. Plain neutral background, no text."
+            "Create a clean reference image for an original cartoon character "
+            "for a vertical animated comic. Use a new silhouette, face, body "
+            "proportions, costume, and color palette. "
+            f"Narrative role: {character.role}. "
+            f"Reference view: {reference_type}. Full body, plain neutral background, no text."
         )
         parent_asset_id = None
         if reference_type in {"primary", "front"}:

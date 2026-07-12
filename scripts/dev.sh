@@ -21,13 +21,17 @@ trap cleanup EXIT INT TERM
 
 (
   cd "$ROOT/services/api"
-  uv run uvicorn comic_studio.main:app --host 127.0.0.1 --port "$API_PORT" --reload
+  API_ARGS=(comic_studio.main:app --host 127.0.0.1 --port "$API_PORT")
+  if [[ "${AI_COMIC_API_RELOAD:-0}" == "1" ]]; then
+    API_ARGS+=(--reload)
+  fi
+  uv run uvicorn "${API_ARGS[@]}"
 ) &
 API_PID=$!
 
 (
   cd "$ROOT"
-  NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:$API_PORT" \
+  AI_COMIC_API_PROXY_TARGET="http://127.0.0.1:$API_PORT" \
     npm run dev --workspace @comic-studio/web -- --hostname 127.0.0.1 --port "$WEB_PORT"
 ) &
 WEB_PID=$!

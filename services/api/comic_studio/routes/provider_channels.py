@@ -22,6 +22,7 @@ from comic_studio.services.provider_channel_testing import (
     TOTAL_TIMEOUT_SECONDS,
     default_client_factory,
 )
+from comic_studio.model_runtime.contracts import Capability
 
 
 router = APIRouter(prefix="/api/provider-channels", tags=["provider-channels"])
@@ -64,22 +65,21 @@ def display_path(path: Path, data_root: Path) -> str:
 
 def channels_read(
     request: Request,
-    state: ProviderChannelState | None = None,
+    runtime: dict | None = None,
 ) -> ProviderChannelsRead:
     settings = request.app.state.settings
     path = settings.provider_channels_path
-    state = state or request.app.state.provider_channel_store.state
-    snapshot = state.channels
+    runtime = runtime or request.app.state.model_runtime.read_channels()
     return ProviderChannelsRead(
-        llm=channel_read(snapshot.llm),
-        image=channel_read(snapshot.image),
-        tts=channel_read(snapshot.tts),
-        video=channel_read(snapshot.video),
+        llm=ProviderChannelRead.model_validate(runtime["text"]),
+        image=ProviderChannelRead.model_validate(runtime["image"]),
+        tts=ProviderChannelRead.model_validate(runtime["speech"]),
+        video=ProviderChannelRead.model_validate(runtime["video"]),
         persistence={
-            "status": "saved" if state.persisted else "defaults",
+            "status": runtime["persistence"]["status"],
             "file_path": display_path(path, settings.data_root),
         },
-        reloaded_at=state.reloaded_at,
+        reloaded_at=runtime["reloaded_at"],
     )
 
 
@@ -97,36 +97,9 @@ def update_provider_channel(
     if kind != "tts" and update.ssh_host:
         raise HTTPException(status_code=422, detail="ssh_host is only valid for tts")
 
-    def merge(snapshot: ProviderChannels) -> ProviderChannels:
-        current = getattr(snapshot, kind)
-        replacement_key = update.api_key.get_secret_value()
-        effective_key = (
-            None if update.clear_api_key else replacement_key or current.api_key_value
-        )
-        if kind in {"llm", "image", "video"} and update.enabled and not effective_key:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Enabled {kind} channel requires an api_key",
-            )
-        updated_channel = ProviderChannel(
-            name=update.name,
-            enabled=update.enabled,
-            base_url=str(update.base_url),
-            model=update.model,
-            api_key=effective_key,
-            ssh_host=update.ssh_host or None if kind == "tts" else None,
-        )
-        return ProviderChannels.model_validate(
-            snapshot.model_copy(update={kind: updated_channel}).model_dump(
-                mode="python"
-            )
-        )
-
-    store = request.app.state.provider_channel_store
+    capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO}[kind]
     try:
-        committed = store.update(merge)
-    except HTTPException:
-        raise
+        committed = request.app.state.model_runtime.update_channel(capability, update)
     except (TypeError, ValueError, ValidationError) as error:
         raise HTTPException(
             status_code=422,
@@ -140,7 +113,7 @@ def update_provider_channel(
 
     current_read = channels_read(request, committed)
     return ProviderChannelUpdateRead(
-        channel=channel_read(getattr(committed.channels, kind)),
+        channel=getattr(current_read, kind),
         current=current_read,
     )
 
@@ -154,19 +127,9 @@ async def test_provider_channel(
     if kind != "tts" and candidate.ssh_host:
         raise HTTPException(status_code=422, detail="ssh_host is only valid for tts")
 
-    store = request.app.state.provider_channel_store
-    service = ProviderChannelTestingService(
-        stored_channel=lambda channel_kind: getattr(store.snapshot, channel_kind),
-        client_factory=provider_testing_client_factory,
-        total_timeout_seconds=(
-            provider_testing_tts_timeout_seconds
-            if kind == "tts"
-            else provider_testing_total_timeout_seconds
-        ),
-    )
+    capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO}[kind]
     try:
-        channel = service.resolve_candidate(kind, candidate)
-        service.validate_channel(kind, channel)
+        result = await request.app.state.model_runtime.test_channel(capability, candidate)
     except (ProviderTestError, ValidationError) as error:
         detail = (
             str(error)
@@ -174,4 +137,4 @@ async def test_provider_channel(
             else "Invalid provider channel configuration"
         )
         raise HTTPException(status_code=422, detail=detail) from error
-    return await service.test(kind, channel)
+    return ProviderChannelTestRead.model_validate(result)

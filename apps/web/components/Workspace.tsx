@@ -1,22 +1,23 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {createEpisode, createProject, getEpisode, getProductionReadiness, getProject, listProjects, startPlanning} from '../lib/api';
+import {createEpisode,createProject,deleteEpisode,getEpisode,getProductionReadiness,getProject,listProjects,previewEpisodeDeletion,startPlanning} from '../lib/api';
 import {pollJob} from '../lib/jobs';
-import type {EpisodeCreate, EpisodeDetail, Job, ProductionReadiness, Project, ProjectCreate, ProjectDetail, Shot} from '../lib/types';
+import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,Shot} from '../lib/types';
 import {AppToolbar} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
 import {CreateProjectDialog} from './CreateProjectDialog';
 import {EpisodeOverview} from './EpisodeOverview';
 import {Inspector} from './Inspector';
 import {ProductionPanel} from './ProductionPanel';
-import {ProviderSettings} from './ProviderSettings';
+import {ModelCenter} from './ModelCenter';
 import {ProjectNavigator} from './ProjectNavigator';
 import {ReviewPanel} from './ReviewPanel';
 import {Storyboard} from './Storyboard';
 import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
 import {ScriptImportWorkspace} from './ScriptImportWorkspace';
 import {CharacterWorkspace} from './CharacterWorkspace';
+import {DeleteEpisodeDialog} from './DeleteEpisodeDialog';
 
 export function Workspace() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -26,6 +27,7 @@ export function Workspace() {
   const [readinessError, setReadinessError] = useState('');
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [workArea, setWorkArea] = useState<WorkArea>('overview');
+  const [platformPage, setPlatformPage] = useState<'project' | 'models'>('project');
   const [mobile, setMobile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -36,6 +38,12 @@ export function Workspace() {
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [healthRefreshKey, setHealthRefreshKey] = useState(0);
   const navigationRequest = useRef(0);
+  const deletionGeneration=useRef(0);
+  const [deletingEpisode,setDeletingEpisode]=useState<EpisodeSummary|null>(null);
+  const [deletionPreview,setDeletionPreview]=useState<EpisodeDeletionPreview|null>(null);
+  const [deletionBusy,setDeletionBusy]=useState(false);
+  const [deletionError,setDeletionError]=useState('');
+  const [deletionWarnings,setDeletionWarnings]=useState<string[]>([]);
 
   useEffect(() => {
     const query = window.matchMedia?.('(max-width: 899px)');
@@ -108,7 +116,7 @@ export function Workspace() {
       setEpisode(null);
       setReadiness(null);
       setReadinessError('');
-      setWorkArea(current => current === 'settings' ? current : 'overview');
+      setWorkArea('overview');
     }
   };
 
@@ -130,13 +138,23 @@ export function Workspace() {
   const selectShot = (shot: Shot) => selectShotById(shot.id);
   const changeWorkArea = (next: WorkArea) => {
     if (next === workArea) return true;
-    if (workArea === 'settings' && settingsDirty && !window.confirm('模型渠道有未保存更改，确定离开吗？')) return false;
     setWorkArea(next);
     return true;
   };
-  const canLeaveSettings = () => workArea !== 'settings' || !settingsDirty || window.confirm('模型渠道有未保存更改，确定离开吗？');
-  const navigateProject = (id: string) => {if (canLeaveSettings()) void loadProject(id);};
+  const canLeaveSettings = () => platformPage !== 'models' || !settingsDirty || window.confirm('模型渠道有未保存更改，确定离开吗？');
+  const toggleModelCenter = () => {
+    if (platformPage === 'models') {
+      if (!canLeaveSettings()) return;
+      setPlatformPage('project');
+      return;
+    }
+    setPlatformPage('models');
+  };
+  const navigateProject=(id:string)=>{if(canLeaveSettings()){deletionGeneration.current+=1;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);void loadProject(id);}};
   const navigateEpisode = (id: string) => {if (canLeaveSettings()) void loadEpisode(id);};
+  const openEpisodeDeletion=async(id:string)=>{const target=project?.episodes.find(item=>item.id===id);if(!target)return;const generation=++deletionGeneration.current;setDeletingEpisode(target);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);try{const preview=await previewEpisodeDeletion(id);if(deletionGeneration.current===generation)setDeletionPreview(preview);}catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'无法读取删除影响');}};
+  const closeEpisodeDeletion=()=>{if(deletionBusy)return;deletionGeneration.current+=1;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);};
+  const confirmEpisodeDeletion=async()=>{if(!deletingEpisode||deletionBusy||!project)return;const target=deletingEpisode;const navigationAtStart=navigationRequest.current;const generation=++deletionGeneration.current;const selectedId=episode?.id??null;const index=project.episodes.findIndex(item=>item.id===target.id);const adjacent=project.episodes[index+1]??project.episodes[index-1]??null;setDeletionBusy(true);setDeletionError('');try{const result=await deleteEpisode(target.id);if(deletionGeneration.current!==generation||navigationRequest.current!==navigationAtStart)return;const preferred=selectedId===target.id?adjacent?.id??null:selectedId;if(preferred)localStorage.setItem('ai-comic-episode',preferred);else localStorage.removeItem('ai-comic-episode');await loadProject(target.project_id);if(deletionGeneration.current!==generation)return;if(result.cleanup_warnings.length){setDeletionWarnings(result.cleanup_warnings);setDeletionPreview(null);}else{setDeletingEpisode(null);setDeletionPreview(null);}}catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'删除失败');}finally{if(deletionGeneration.current===generation)setDeletionBusy(false);}};
   const openReview = () => {
     if (!mobile) {
       changeWorkArea('review');
@@ -169,14 +187,14 @@ export function Workspace() {
     }
   };
 
-  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => changeWorkArea('production')} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey}/>;
+  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => {if (canLeaveSettings()) {setPlatformPage('project'); changeWorkArea('production');}}} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey} onModelCenter={toggleModelCenter} modelCenterOpen={platformPage === 'models'}/>;
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
+  if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/></div>;
 
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
   let center;
-  if (workArea === 'settings') center = <ProviderSettings onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>;
-  else if (workArea === 'import' && project) center = <ScriptImportWorkspace projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
+  if (workArea === 'import' && project) center = <ScriptImportWorkspace projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (workArea === 'characters' && project) center = <CharacterWorkspace characters={project.characters}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
@@ -186,10 +204,10 @@ export function Workspace() {
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   const visibleWorkAreas: WorkArea[] = !projects.length
-    ? ['overview', 'settings']
+    ? ['overview']
     : mobile
-    ? ['overview', 'import', 'characters', 'storyboard', 'production', 'inspector', 'settings']
-    : ['overview', 'import', 'characters', 'storyboard', 'production', 'review', 'settings'];
+    ? ['overview', 'import', 'characters', 'storyboard', 'production', 'inspector']
+    : ['overview', 'import', 'characters', 'storyboard', 'production', 'review'];
 
   return <div className="app-shell">
     {toolbar}
@@ -204,11 +222,11 @@ export function Workspace() {
         episodeId={episode?.id ?? null}
         onProject={navigateProject}
         onEpisode={navigateEpisode}
+        onDeleteEpisode={id=>void openEpisodeDeletion(id)}
         onNewProject={() => setProjectDialog(true)}
         onNewEpisode={() => setEpisodeDialog(true)}
         onScriptImport={() => changeWorkArea('import')}
         onCharacters={() => changeWorkArea('characters')}
-        onProviderSettings={() => changeWorkArea('settings')}
       />}
       <section
         className="workspace-center"
@@ -225,5 +243,6 @@ export function Workspace() {
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>
+    <DeleteEpisodeDialog episode={deletingEpisode} preview={deletionPreview} busy={deletionBusy} error={deletionError} warnings={deletionWarnings} onCancel={closeEpisodeDeletion} onConfirm={()=>void confirmEpisodeDeletion()}/>
   </div>;
 }

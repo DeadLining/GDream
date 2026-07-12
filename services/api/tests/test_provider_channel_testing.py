@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 import subprocess
 import threading
@@ -223,10 +222,9 @@ async def test_image_endpoint_fallback_rejects_server_errors():
 
 
 @pytest.mark.anyio
-async def test_tts_uses_short_phrase_validates_wav_and_discards_bytes():
-    wav = b"RIFF\x04\x00\x00\x00WAVE"
+async def test_tts_uses_lightweight_health_check_without_generating_audio():
     client = RecordingClient(
-        [FakeResponse(content=wav, headers={"content-type": "audio/wav"})]
+        [FakeResponse(content=json.dumps({"status": "ok"}).encode())]
     )
     service = ProviderChannelTestingService(
         stored_channel=lambda kind: candidate(kind),
@@ -240,15 +238,8 @@ async def test_tts_uses_short_phrase_validates_wav_and_discards_bytes():
     assert result.check_scope == "audio"
     assert not hasattr(result, "content")
     _, path, request = client.requests[0]
-    assert path == "/v1/audio/speech"
-    assert request["json"] == {
-        "model": "unsaved-model",
-        "text": "测试",
-        "speaker": "Dylan",
-        "language": "Chinese",
-        "instruct": "",
-        "response_format": "wav",
-    }
+    assert path == "/health"
+    assert request == {}
 
 
 @pytest.mark.anyio
@@ -278,12 +269,86 @@ async def test_tts_test_uses_candidate_api_key():
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("ssh_host", "predicate", "expected"),
+    [
+        ("tts-candidate", lambda alias: alias == "tts-candidate", True),
+        ("tts-candidate", lambda alias: alias == "different-alias", False),
+        (None, lambda alias: True, False),
+    ],
+)
+async def test_tts_prefers_ssh_only_for_owned_active_alias(
+    ssh_host,
+    predicate,
+    expected,
+):
+    captured = []
+
+    def tts_provider_factory(channel, client, ssh_executor, *, prefer_ssh=False):
+        captured.append(prefer_ssh)
+        return type(
+            "Provider",
+            (),
+            {
+                "synthesize": lambda self, *args: asyncio.sleep(
+                    0, result=b"RIFF\x04\x00\x00\x00WAVE"
+                )
+            },
+        )()
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        client_factory=ClientFactory(RecordingClient([])),
+        tts_provider_factory=tts_provider_factory,
+        prefer_ssh_for_host=predicate,
+    )
+
+    result = await service.test(
+        "tts", candidate("tts", api_key=None, ssh_host=ssh_host)
+    )
+
+    assert result.status == "ok"
+    assert captured == [expected]
+
+
+@pytest.mark.anyio
+async def test_tts_owned_alias_predicate_errors_fail_closed():
+    captured = []
+
+    def raises(_alias):
+        raise RuntimeError("manager unavailable")
+
+    def tts_provider_factory(channel, client, ssh_executor, *, prefer_ssh=False):
+        captured.append(prefer_ssh)
+        return type(
+            "Provider",
+            (),
+            {
+                "synthesize": lambda self, *args: asyncio.sleep(
+                    0, result=b"RIFF\x04\x00\x00\x00WAVE"
+                )
+            },
+        )()
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind),
+        client_factory=ClientFactory(RecordingClient([])),
+        tts_provider_factory=tts_provider_factory,
+        prefer_ssh_for_host=raises,
+    )
+
+    result = await service.test("tts", candidate("tts", api_key=None))
+
+    assert result.status == "ok"
+    assert captured == [False]
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("failure", ["transport", "502"])
-async def test_tts_uses_configured_ssh_fallback_and_discards_wav(failure):
-    wav = b"RIFF\x04\x00\x00\x00WAVE"
+async def test_tts_uses_configured_ssh_fallback_for_health(failure):
 
     class TransportFailureClient:
-        async def post(self, path, **kwargs):
+        async def get(self, path, **kwargs):
             request = httpx.Request("POST", f"https://tts.example{path}")
             if failure == "transport":
                 raise httpx.ConnectError("direct unavailable", request=request)
@@ -293,7 +358,7 @@ async def test_tts_uses_configured_ssh_fallback_and_discards_wav(failure):
 
     def ssh_executor(command, payload):
         ssh_calls.append((command, payload))
-        return base64.b64encode(wav)
+        return json.dumps({"status": "ok"}).encode()
 
     service = ProviderChannelTestingService(
         stored_channel=lambda kind: candidate(kind),
@@ -312,7 +377,7 @@ async def test_tts_uses_configured_ssh_fallback_and_discards_wav(failure):
 @pytest.mark.anyio
 async def test_tts_ssh_timeouts_finish_workers_without_accumulating():
     class TransportFailureClient:
-        async def post(self, path, **kwargs):
+        async def get(self, path, **kwargs):
             request = httpx.Request("POST", f"https://tts.example{path}")
             raise httpx.ConnectError("direct unavailable", request=request)
 
@@ -367,12 +432,12 @@ async def test_tts_ssh_timeouts_finish_workers_without_accumulating():
         b"RIFF\x04\x00\x00\x00NOPE",
     ],
 )
-async def test_tts_rejects_truncated_or_non_wave_riff(invalid_wav):
+async def test_tts_rejects_invalid_health_payload(invalid_wav):
     client = RecordingClient(
         [
             FakeResponse(
                 content=invalid_wav,
-                headers={"content-type": "audio/wav"},
+                headers={"content-type": "application/json"},
             )
         ]
     )
@@ -384,7 +449,7 @@ async def test_tts_rejects_truncated_or_non_wave_riff(invalid_wav):
     result = await service.test("tts", candidate("tts", api_key=None))
 
     assert result.status == "failed"
-    assert result.error == "TTS returned invalid WAV data"
+    assert result.error == "Provider test failed (ProviderError)"
 
 
 @pytest.mark.anyio
@@ -496,11 +561,11 @@ def test_tts_endpoint_uses_extended_test_timeout(client, monkeypatch):
             }
 
     monkeypatch.setattr(
-        "comic_studio.routes.provider_channels.ProviderChannelTestingService",
+        "comic_studio.model_runtime.service.ProviderChannelTestingService",
         RecordingService,
     )
     monkeypatch.setattr(
-        "comic_studio.routes.provider_channels.provider_testing_total_timeout_seconds",
+        "comic_studio.model_runtime.service.provider_testing_total_timeout_seconds",
         8,
     )
 
@@ -544,7 +609,7 @@ def test_endpoint_returns_failed_transport_as_redacted_200_without_persistence(c
         yield FailingClient()
 
     monkeypatch.setattr(
-        "comic_studio.routes.provider_channels.provider_testing_client_factory",
+        "comic_studio.model_runtime.service.provider_testing_client_factory",
         failing_client_factory,
     )
 
@@ -585,11 +650,11 @@ def test_endpoint_returns_sanitized_timeout_as_200(client, monkeypatch):
         yield SlowClient()
 
     monkeypatch.setattr(
-        "comic_studio.routes.provider_channels.provider_testing_client_factory",
+        "comic_studio.model_runtime.service.provider_testing_client_factory",
         slow_client_factory,
     )
     monkeypatch.setattr(
-        "comic_studio.routes.provider_channels.provider_testing_total_timeout_seconds",
+        "comic_studio.model_runtime.service.provider_testing_total_timeout_seconds",
         0.01,
     )
 

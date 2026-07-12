@@ -12,9 +12,23 @@ import {PanelVersions} from './PanelVersions';
 export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; characters?: Character[]; onShotUpdated?: (shot: Shot) => void}) {
   const [form, setForm] = useState(shot); const [assets, setAssets] = useState<Asset[]>([]); const [job, setJob] = useState<Job | null>(null); const [error, setError] = useState('');
   const [videos,setVideos]=useState<Asset[]>([]);
-  useEffect(() => {setForm(shot); setError(''); listPanelVersions(shot.id).then(setAssets).catch(() => setAssets([])); listVideoVersions(shot.id).then(setVideos).catch(()=>setVideos([]));}, [shot]);
+  const [generatingPanel,setGeneratingPanel]=useState(false);
+  useEffect(() => {
+    let current = true;
+    setForm(shot);
+    setError('');
+    setAssets([]);
+    setVideos([]);
+    listPanelVersions(shot.id)
+      .then(nextAssets => {if (current) setAssets(nextAssets);})
+      .catch(() => {if (current) setAssets([]);});
+    listVideoVersions(shot.id)
+      .then(nextVideos => {if (current) setVideos(nextVideos);})
+      .catch(() => {if (current) setVideos([]);});
+    return () => {current = false;};
+  }, [shot]);
   const save = async () => {try {const updated = await updateShot(shot.id, {duration_seconds: Number(form.duration_seconds), composition: form.composition, camera_motion: form.camera_motion, image_prompt: form.image_prompt, negative_prompt: form.negative_prompt, video_prompt: form.video_prompt??'', negative_video_prompt: form.negative_video_prompt??'', review_status: form.review_status}); onShotUpdated?.(updated); setError('');} catch (cause) {setError(cause instanceof Error ? cause.message : '保存失败');}};
-  const generate = async () => {const started = await startPanelGeneration(shot.id, true); const finished = await pollJob(started.job_id); setJob(finished); if (finished.status === 'succeeded') {setAssets(await listPanelVersions(shot.id)); onShotUpdated?.({...shot, active_panel_asset_id: String(finished.result_metadata.asset_id ?? shot.active_panel_asset_id)});}};
+  const generate = async () => {if(generatingPanel)return;setGeneratingPanel(true);setError('');setJob(null);try{const started = await startPanelGeneration(shot.id, true); const finished = await pollJob(started.job_id); setJob(finished); if (finished.status === 'succeeded') {setAssets(await listPanelVersions(shot.id)); onShotUpdated?.({...shot, active_panel_asset_id: String(finished.result_metadata.asset_id ?? shot.active_panel_asset_id)});}}catch(cause){setError(cause instanceof Error?cause.message:'画面生成失败');}finally{setGeneratingPanel(false);}};
   const activate = async (assetId: string) => {const updated = await activatePanel(shot.id, assetId); onShotUpdated?.(updated); setForm(updated);};
   const generateVideo = async()=>{const started=await startVideoGeneration(shot.id,true);const finished=await pollJob(started.job_id);setJob(finished);if(finished.status==='succeeded'){setVideos(await listVideoVersions(shot.id));onShotUpdated?.({...shot,active_video_asset_id:String(finished.result_metadata.asset_id??shot.active_video_asset_id)});}};
   const selectVideo=async(assetId:string)=>{const updated=await activateVideo(shot.id,assetId);onShotUpdated?.(updated);setForm(updated);};
@@ -35,7 +49,7 @@ export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; c
       <label htmlFor="shot-prompt">生成提示词</label><textarea id="shot-prompt" value={form.image_prompt} onChange={event => setForm({...form, image_prompt: event.target.value})} rows={5} className="prompt-field"/>
       <label className="field-spacer" htmlFor="shot-negative-prompt">负面提示词</label><textarea id="shot-negative-prompt" value={form.negative_prompt} onChange={event => setForm({...form, negative_prompt: event.target.value})} rows={2} className="prompt-field"/>
       {error && <p className="form-error">{error}</p>}
-      <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate}><ImagePlus size={18}/>生成画面</button></div>
+      <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate} disabled={generatingPanel}><ImagePlus size={18}/>{generatingPanel?'生成中':'生成画面'}</button></div>
       <JobStatus job={job}/>
     </section>
     <PanelVersions assets={assets} activeId={form.active_panel_asset_id} onActivate={activate}/>

@@ -25,6 +25,12 @@ const succeeded: Job = {id:'job-1',operation:'generate_panel',target_type:'shot'
 const asset: Asset = {id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'openai',model:'gpt-image-2',generation_attempt:2,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''};
 const character: Character = {id:'character-1',project_id:'project-1',name:'林默',role:'protagonist',appearance_bible:'black coat',personality:'quiet',continuity_rules:'',negative_constraints:'',voice_speaker:'Dylan',voice_instruction:'',created_at:'',updated_at:''};
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(next => {resolve = next;});
+  return {promise, resolve};
+}
+
 describe('Inspector', () => {
   afterEach(cleanup);
   beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);});
@@ -38,6 +44,23 @@ describe('Inspector', () => {
     expect(await screen.findByRole('heading',{name:'画面版本'})).toBeVisible();
     expect(screen.getByRole('heading',{name:'对白与配音'})).toBeVisible();
     expect(screen.getByRole('button',{name:/画面版本 2.*当前版本/})).toHaveAttribute('aria-pressed','true');
+  });
+
+  it('ignores panel versions returned for a previously selected shot', async () => {
+    const firstRequest = deferred<Asset[]>();
+    const secondAsset = {...asset,id:'asset-2',media_url:'/media/current-shot.png',generation_attempt:3};
+    mocks.listPanelVersions
+      .mockReturnValueOnce(firstRequest.promise)
+      .mockResolvedValueOnce([secondAsset]);
+    const {rerender} = render(<Inspector shot={shot}/>);
+
+    rerender(<Inspector shot={{...shot,id:'shot-2',position:2,active_panel_asset_id:'asset-2'}}/>);
+    expect(await screen.findByRole('button',{name:/画面版本 3.*当前版本/})).toBeVisible();
+
+    firstRequest.resolve([asset]);
+
+    await waitFor(() => expect(screen.queryByRole('button',{name:/画面版本 2/})).not.toBeInTheDocument());
+    expect(screen.getByRole('button',{name:/画面版本 3.*当前版本/})).toBeVisible();
   });
 
   it('saves edited shot fields explicitly', async () => {
@@ -61,6 +84,16 @@ describe('Inspector', () => {
     await waitFor(()=>expect(mocks.listPanelVersions).toHaveBeenCalledTimes(2));
     await userEvent.click(screen.getByRole('button',{name:'生成配音'}));
     expect(await screen.findByLabelText('对白音频')).toBeVisible();
+  });
+
+  it('shows panel generation request failures and releases the action', async () => {
+    mocks.startPanelGeneration.mockRejectedValue(new Error('本地 API 暂时不可用，请稍后重试'));
+    render(<Inspector shot={shot}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'生成画面'}));
+
+    expect(await screen.findByText('本地 API 暂时不可用，请稍后重试')).toBeVisible();
+    expect(screen.getByRole('button',{name:'生成画面'})).toBeEnabled();
   });
 
   it('activates panel versions and saves edited dialogue', async () => {

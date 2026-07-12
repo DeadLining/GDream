@@ -1,4 +1,6 @@
+import {useEffect, useState} from 'react';
 import {AlertCircle, Check, Clock3, ImageOff, MessageSquareText} from 'lucide-react';
+import {getAsset, mediaUrl} from '../lib/api';
 import type {Shot} from '../lib/types';
 
 const SHOT_TYPES: Record<string, string> = {
@@ -8,6 +10,16 @@ const SHOT_TYPES: Record<string, string> = {
 
 export function ShotCard({shot, selected, onSelect}: {shot: Shot; selected: boolean; onSelect: () => void}) {
   const hasPanel = Boolean(shot.active_panel_asset_id);
+  const [panelUrl,setPanelUrl]=useState<string|null>(null);
+  useEffect(()=>{
+    let current=true;
+    setPanelUrl(null);
+    if(!shot.active_panel_asset_id)return()=>{current=false;};
+    getAsset(shot.active_panel_asset_id)
+      .then(asset=>{if(current)setPanelUrl(mediaUrl(asset.media_url));})
+      .catch(()=>{if(current)setPanelUrl(null);});
+    return()=>{current=false;};
+  },[shot.active_panel_asset_id]);
   const failed = shot.render_status === 'failed';
   const shotType = SHOT_TYPES[shot.shot_type] ?? shot.shot_type.replaceAll('_', ' ');
   const reviewLabel = shot.review_status === 'approved' ? '已通过' : shot.review_status === 'needs_changes' ? '需修改' : '待审核';
@@ -17,7 +29,7 @@ export function ShotCard({shot, selected, onSelect}: {shot: Shot; selected: bool
   return (
     <button className={`shot-card${selected ? ' selected' : ''}${failed ? ' failed' : ''}`} onClick={onSelect} aria-label={accessibleName} aria-pressed={selected}>
       <div className="shot-media">
-        {hasPanel ? <img src="/demo-panel.png" alt="林默站在雨夜霓虹巷道的漫画分镜" /> : <div className="empty-panel"><ImageOff size={28}/><span>{failed ? '生成失败' : '等待生成'}</span></div>}
+        {panelUrl ? <img src={panelUrl} alt={shot.composition} /> : <div className="empty-panel"><ImageOff size={28}/><span>{failed ? '生成失败' : hasPanel ? '加载画面' : '等待生成'}</span></div>}
         <span className="shot-number">{String(shot.position).padStart(2, '0')}</span>
       </div>
       <div className="shot-meta">

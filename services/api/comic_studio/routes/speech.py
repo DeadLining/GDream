@@ -12,12 +12,8 @@ async def run_speech_job(app, job_id: str, dialogue_id: str) -> None:
     with app.state.session_factory() as session:
         jobs = JobStore(session)
         jobs.transition(job_id, "running", progress=5)
-        settings = app.state.settings
         try:
-            provider = app.state.provider_factory.create_tts()
-            asset = await SpeechService(
-                session, settings.data_root, provider
-            ).synthesize_dialogue(dialogue_id)
+            asset = await app.state.model_runtime.execute_speech(dialogue_id)
             jobs.transition(
                 job_id,
                 "succeeded",

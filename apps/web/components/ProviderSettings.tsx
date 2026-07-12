@@ -4,6 +4,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {getProviderChannels, testProviderChannel, updateProviderChannel} from '../lib/api';
 import type {ProviderChannelKind, ProviderChannelRead, ProviderChannelTestResult, ProviderChannelsRead, ProviderChannelUpdate, ProviderChannelUpdateRead} from '../lib/types';
 import {ProviderChannelSection, type ProviderChannelDraft} from './ProviderChannelSection';
+import {MockSshControl} from './MockSshControl';
 
 const kinds: ProviderChannelKind[] = ['llm', 'image', 'tts', 'video'];
 const labels: Record<ProviderChannelKind, string> = {llm: '剧本规划', image: '画面生成', tts: '语音合成', video: '视频生成'};
@@ -33,7 +34,7 @@ function validate(kind: ProviderChannelKind, draft: ProviderChannelDraft) {
   return '';
 }
 
-export function ProviderSettings({onDirtyChange, onSaved}: {onDirtyChange?: (dirty: boolean) => void; onSaved?: () => void} = {}) {
+export function ProviderSettings({onDirtyChange, onSaved, embedded = false}: {onDirtyChange?: (dirty: boolean) => void; onSaved?: () => void; embedded?: boolean} = {}) {
   const [baseline, setBaseline] = useState<Drafts | null>(null);
   const [drafts, setDrafts] = useState<Drafts | null>(null);
   const [loadingError, setLoadingError] = useState('');
@@ -173,15 +174,16 @@ export function ProviderSettings({onDirtyChange, onSaved}: {onDirtyChange?: (dir
     }
   };
 
-  if (loadingError && !drafts) return <main className="provider-settings center-state"><h1>模型渠道</h1><p role="alert">{loadingError}</p><button onClick={() => void load()}>重新加载</button></main>;
-  if (!drafts) return <main className="provider-settings center-state"><h1>模型渠道</h1><p>正在加载渠道配置</p></main>;
+  if (loadingError && !drafts) return <section className={`provider-settings center-state${embedded ? ' provider-settings-embedded' : ''}`}>{!embedded && <h1>模型渠道</h1>}<p role="alert">{loadingError}</p><button onClick={() => void load()}>重新加载</button></section>;
+  if (!drafts) return <section className={`provider-settings center-state${embedded ? ' provider-settings-embedded' : ''}`}>{!embedded && <h1>模型渠道</h1>}<p>正在加载渠道配置</p></section>;
   return (
-    <main className="provider-settings">
-      <header className="provider-settings-header"><div><h1>模型渠道</h1><p>{dirty ? '有未保存更改' : saved ? '所有更改已保存' : '配置剧本、画面、语音和视频服务'}</p></div><button className="command-button" onClick={() => void save()} disabled={!dirty || saving}>{saving ? '正在保存' : '保存全部更改'}</button></header>
+    <section className={`provider-settings${embedded ? ' provider-settings-embedded' : ''}`}>
+      <header className="provider-settings-header"><div>{!embedded && <h1>模型渠道</h1>}<p>{dirty ? '有未保存更改' : saved ? '所有更改已保存' : '配置剧本、画面、语音和视频服务'}</p></div><button className="command-button" onClick={() => void save()} disabled={!dirty || saving}>{saving ? '正在保存' : '保存全部更改'}</button></header>
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
       <div className="provider-settings-sections">
         {kinds.map(kind => <ProviderChannelSection key={kind} kind={kind} label={labels[kind]} draft={drafts[kind]} testing={Boolean(pendingTests[kind])} disabled={saving} testResult={testResults[kind] ?? null} testError={testErrors[kind] ?? ''} validationError={validationErrors[kind] ?? ''} onChange={draft => change(kind, draft)} onTest={() => void test(kind)}/>)}
       </div>
-    </main>
+      <MockSshControl/>
+    </section>
   );
 }

@@ -104,6 +104,11 @@ def test_panel_api_lists_newest_first_and_activates_selected_version(client):
     assert "local_path" not in versions[0]
     assert "request_metadata" not in versions[0]
 
+    active_asset = client.get(f"/api/assets/{first.id}")
+    assert active_asset.status_code == 200
+    assert active_asset.json()["id"] == first.id
+    assert active_asset.json()["media_url"].startswith("/media/projects/")
+
     selected = client.put(f"/api/shots/{shot_id}/panels/{first.id}/active")
 
     assert selected.status_code == 200

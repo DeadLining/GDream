@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from comic_studio import models, schemas
+from comic_studio.providers.base import ProviderError
 from comic_studio.routes.assets import asset_response
 from comic_studio.services.character_references import (
     CharacterReferenceError,
@@ -9,6 +10,23 @@ from comic_studio.services.character_references import (
 
 
 router = APIRouter(tags=["character-references"])
+
+
+def _safe_image_error(exc: ProviderError) -> str:
+    message = str(exc)
+    request_prefix = "GPT Image request failed: "
+    if message.startswith(request_prefix):
+        category = message.removeprefix(request_prefix)
+        if category in {"ConnectError", "ConnectTimeout", "ReadTimeout", "RemoteProtocolError", "HTTPStatusError"}:
+            return f"Image generation failed: {category}"
+    if message == "GPT Image returned no image data":
+        return "Image generation failed: empty response"
+    if message == "reference_edit_unsupported":
+        return "Image generation failed: reference edit unsupported"
+    edit_prefix = "GPT Image edit failed: HTTP "
+    if message.startswith(edit_prefix) and message.removeprefix(edit_prefix).isdigit():
+        return f"Image generation failed: HTTP {message.removeprefix(edit_prefix)}"
+    return "Image generation failed"
 
 
 def response_for(reference, asset):
@@ -88,10 +106,11 @@ async def generate_reference(
 ):
     with request.app.state.session_factory() as session:
         try:
-            provider = request.app.state.provider_factory.create_image()
-            ref, asset = await CharacterReferenceService(
-                session, request.app.state.settings.data_root
-            ).generate(character_id, data.reference_type, data.label, provider)
+            ref, asset = await request.app.state.model_runtime.execute_image(
+                "character",
+                character_id,
+                {"reference_type": data.reference_type, "label": data.label},
+            )
             return response_for(ref, asset)
         except KeyError as exc:
             raise HTTPException(404, "Character not found") from exc
@@ -100,6 +119,8 @@ async def generate_reference(
                 409 if str(exc) == "approved_primary_reference_required" else 422,
                 str(exc),
             ) from exc
+        except ProviderError as exc:
+            raise HTTPException(502, _safe_image_error(exc)) from exc
 
 
 @router.patch(

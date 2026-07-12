@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   getProviderChannels: vi.fn(),
   updateProviderChannel: vi.fn(),
   testProviderChannel: vi.fn(),
+  getMockSshHosts: vi.fn(),
+  getMockSshStatus: vi.fn(),
+  startMockSsh: vi.fn(),
+  stopMockSsh: vi.fn(),
 }));
 
 vi.mock('../lib/api', async importOriginal => ({
@@ -17,6 +21,10 @@ vi.mock('../lib/api', async importOriginal => ({
   getProviderChannels: mocks.getProviderChannels,
   updateProviderChannel: mocks.updateProviderChannel,
   testProviderChannel: mocks.testProviderChannel,
+  getMockSshHosts: mocks.getMockSshHosts,
+  getMockSshStatus: mocks.getMockSshStatus,
+  startMockSsh: mocks.startMockSsh,
+  stopMockSsh: mocks.stopMockSsh,
 }));
 
 const snapshot: ProviderChannelsRead = {
@@ -70,9 +78,9 @@ describe('provider channel API client', () => {
     await testProviderChannel('llm', candidate);
 
     expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
-      'http://127.0.0.1:8000/api/provider-channels',
-      'http://127.0.0.1:8000/api/provider-channels/llm',
-      'http://127.0.0.1:8000/api/provider-channels/llm/test',
+      '/api/provider-channels',
+      '/api/provider-channels/llm',
+      '/api/provider-channels/llm/test',
     ]);
     expect(fetch.mock.calls[1][1]).toMatchObject({method: 'PUT', body: JSON.stringify(candidate)});
     expect(fetch.mock.calls[2][1]).toMatchObject({method: 'POST', body: JSON.stringify(candidate)});
@@ -87,6 +95,8 @@ describe('ProviderSettings', () => {
     mocks.getProviderChannels.mockResolvedValue(structuredClone(snapshot));
     mocks.updateProviderChannel.mockResolvedValue({channel: snapshot.llm, current: snapshot});
     mocks.testProviderChannel.mockResolvedValue({status: 'ok', model: 'MiniMax-M3', host: 'api.minimaxi.com', elapsed_ms: 12, check_scope: 'model', error: null});
+    mocks.getMockSshHosts.mockResolvedValue([{id: 'a800_94', name: 'A800 94', type: 'ssh'}]);
+    mocks.getMockSshStatus.mockResolvedValue({desired_running: false, state: 'stopped', host_id: null, alias: null, port: null, error: null, reused: false});
   });
   afterEach(cleanup);
 
@@ -302,6 +312,8 @@ describe('ProviderSettings', () => {
 
   it('provides a scrollable responsive settings surface with reachable channel sections', () => {
     expect(settingsStyles).toMatch(/\.provider-settings\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/);
+    expect(settingsStyles).toMatch(/\.provider-settings-header\s*\{[^}]*min-height:\s*0[^}]*padding:\s*0 0 8px/);
+    expect(settingsStyles).toMatch(/\.provider-settings-sections\s*\{[^}]*padding-top:\s*8px/);
     expect(settingsStyles).toMatch(/\.provider-settings-sections\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
     expect(settingsStyles).toMatch(/@media \(max-width:\s*1100px\)[\s\S]*\.provider-settings-sections\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     expect(settingsStyles).toMatch(/\.provider-channel-section input\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*height:\s*36px/);

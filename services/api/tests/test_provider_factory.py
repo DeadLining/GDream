@@ -115,6 +115,47 @@ def test_factory_maps_all_channel_values_to_provider_constructors(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    ("predicate", "expected"),
+    [
+        (lambda alias: alias == "tts-host", True),
+        (lambda alias: alias == "different-host", False),
+    ],
+)
+def test_factory_enables_ssh_first_only_for_owned_active_tts_alias(
+    tmp_path,
+    predicate,
+    expected,
+):
+    store = ProviderChannelStore(tmp_path / "channels.json", channels())
+    store.load()
+    factory = ProviderFactory(
+        store,
+        tts_provider_class=CapturingProvider,
+        prefer_ssh_for_host=predicate,
+    )
+
+    provider = factory.create_tts()
+
+    assert provider.prefer_ssh is expected
+
+
+def test_factory_owned_alias_predicate_errors_fail_closed(tmp_path):
+    store = ProviderChannelStore(tmp_path / "channels.json", channels())
+    store.load()
+
+    def raises(_alias):
+        raise RuntimeError("manager unavailable")
+
+    factory = ProviderFactory(
+        store,
+        tts_provider_class=CapturingProvider,
+        prefer_ssh_for_host=raises,
+    )
+
+    assert factory.create_tts().prefer_ssh is False
+
+
 @pytest.mark.parametrize("kind", ["llm", "image", "tts"])
 def test_disabled_channel_raises_stable_sanitized_error(tmp_path, kind):
     snapshot = channels()
@@ -199,82 +240,88 @@ class FakeJobs:
         return None
 
 
+class RecordingRuntime:
+    def __init__(self):
+        self.calls = []
+
+    async def plan_episode(self, target_id):
+        self.calls.append(("plan_episode", target_id))
+
+    async def execute_image(self, target_type, target_id, options):
+        self.calls.append(("execute_image", target_type, target_id, options))
+        return SimpleNamespace(id="panel-asset", local_path="panel.png")
+
+    async def execute_speech(self, target_id):
+        self.calls.append(("execute_speech", target_id))
+        return SimpleNamespace(id="speech-asset", local_path="speech.wav")
+
+
 @pytest.mark.parametrize(
-    ("module", "runner_name", "service_name", "factory_call", "runner_args"),
+    ("module", "runner_name", "expected_call", "runner_args"),
     [
-        (episodes, "run_planning_job", "PlanningService", "llm", ("episode-1",)),
-        (assets, "run_panel_job", "PanelService", "image", ("shot-1", True)),
-        (speech, "run_speech_job", "SpeechService", "tts", ("line-1",)),
+        (
+            episodes,
+            "run_planning_job",
+            ("plan_episode", "episode-1"),
+            ("episode-1",),
+        ),
+        (
+            assets,
+            "run_panel_job",
+            ("execute_image", "shot", "shot-1", {"activate": True}),
+            ("shot-1", True),
+        ),
+        (
+            speech,
+            "run_speech_job",
+            ("execute_speech", "line-1"),
+            ("line-1",),
+        ),
     ],
 )
-def test_background_operation_uses_provider_factory_once(
+def test_background_operation_uses_model_runtime_once(
     monkeypatch,
     tmp_path,
     module,
     runner_name,
-    service_name,
-    factory_call,
+    expected_call,
     runner_args,
 ):
-    factory = RecordingFactory()
-    captured = []
-
-    class FakeService:
-        def __init__(self, *args):
-            captured.append(args[-1])
-
-        async def plan_episode(self, target_id):
-            return None
-
-        async def generate_panel(self, target_id, activate):
-            return SimpleNamespace(id="asset-1", local_path="panel.png")
-
-        async def synthesize_dialogue(self, target_id):
-            return SimpleNamespace(id="asset-1", local_path="speech.wav")
+    runtime = RecordingRuntime()
 
     monkeypatch.setattr(module, "JobStore", FakeJobs)
-    monkeypatch.setattr(module, service_name, FakeService)
+    if module is episodes:
+        class FakePlanningService:
+            def __init__(self, session, planner):
+                assert planner is runtime
+                self.planner = planner
+
+            async def plan_episode(self, target_id):
+                await self.planner.plan_episode(target_id)
+
+        monkeypatch.setattr(module, "PlanningService", FakePlanningService)
     app = SimpleNamespace(
         state=SimpleNamespace(
             session_factory=lambda: nullcontext(object()),
             settings=SimpleNamespace(data_root=tmp_path),
-            provider_factory=factory,
+            model_runtime=runtime,
         )
     )
 
     asyncio.run(getattr(module, runner_name)(app, "job-1", *runner_args))
 
-    assert factory.calls == [factory_call]
-    assert len(captured) == 1
+    assert runtime.calls == [expected_call]
 
 
-def test_production_workers_use_provider_factory(client, monkeypatch):
-    from comic_studio import main
-
-    factory = RecordingFactory()
-    captured = []
-
-    class FakePanelService:
-        def __init__(self, session, data_root, provider):
-            captured.append(provider)
-
-        async def generate_panel(self, target_id, activate):
-            return SimpleNamespace(id="panel-asset", local_path="panel.png")
-
-    class FakeSpeechService:
-        def __init__(self, session, data_root, provider):
-            captured.append(provider)
-
-        async def synthesize_dialogue(self, target_id):
-            return SimpleNamespace(id="speech-asset", local_path="speech.wav")
-
-    monkeypatch.setattr(main, "PanelService", FakePanelService)
-    monkeypatch.setattr(main, "SpeechService", FakeSpeechService)
-    client.app.state.provider_factory = factory
+def test_production_workers_use_model_runtime(client):
+    runtime = RecordingRuntime()
+    client.app.state.model_runtime = runtime
     workers = client.app.state.production_coordinator.workers
 
     asyncio.run(workers["panel"](SimpleNamespace(target_id="shot-1")))
     asyncio.run(workers["speech"](SimpleNamespace(target_id="line-1")))
 
-    assert factory.calls == ["image", "tts"]
-    assert len(captured) == 2
+    assert runtime.calls == [
+        ("execute_image", "shot", "shot-1", {"activate": True}),
+        ("execute_speech", "line-1"),
+    ]

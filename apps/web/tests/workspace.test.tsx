@@ -10,16 +10,20 @@ import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} fr
 
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
+  getAsset: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
   listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
   getProductionRun: vi.fn(), createProductionRun: vi.fn(), continueProductionRun: vi.fn(), pauseProductionRun: vi.fn(),
   listProductionItems: vi.fn(), retryProductionRun: vi.fn(),
   getProviderChannels: vi.fn(), updateProviderChannel: vi.fn(), testProviderChannel: vi.fn(),
+  getModelRuntimeHealth: vi.fn(), getModelRuntimeInvocations: vi.fn(), retryModelRuntimeJob: vi.fn(),
+  getMockSshHosts: vi.fn(), getMockSshStatus: vi.fn(), startMockSsh: vi.fn(), stopMockSsh: vi.fn(),
   listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
   listProjects: mocks.listProjects, getProject: mocks.getProject,
+  getAsset: mocks.getAsset,
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
   listPanelVersions: mocks.listPanelVersions,
@@ -30,6 +34,10 @@ vi.mock('../lib/api', () => ({
   listProductionItems: mocks.listProductionItems, retryProductionRun: mocks.retryProductionRun,
   getProviderChannels: mocks.getProviderChannels, updateProviderChannel: mocks.updateProviderChannel,
   testProviderChannel: mocks.testProviderChannel,
+  getModelRuntimeHealth: mocks.getModelRuntimeHealth, getModelRuntimeInvocations: mocks.getModelRuntimeInvocations,
+  retryModelRuntimeJob: mocks.retryModelRuntimeJob,
+  getMockSshHosts: mocks.getMockSshHosts, getMockSshStatus: mocks.getMockSshStatus,
+  startMockSsh: mocks.startMockSsh, stopMockSsh: mocks.stopMockSsh,
   listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
   mediaUrl: (path: string) => path,
 }));
@@ -120,7 +128,7 @@ function TabsHarness() {
 }
 
 function RejectedTabsHarness() {
-  return <WorkspaceTabs value="settings" onChange={() => false}/>;
+  return <WorkspaceTabs value="review" onChange={() => false}/>;
 }
 
 describe('Workspace', () => {
@@ -133,9 +141,19 @@ describe('Workspace', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.listPanelVersions.mockResolvedValue([]);
+    mocks.getAsset.mockResolvedValue({id: 'asset-2', kind: 'panel', media_url: '/media/panel.png', media_type: 'image/png', provider: 'test', model: 'test', generation_attempt: 1, review_status: 'approved', width: 1024, height: 1536, duration_seconds: null, created_at: ''});
     mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
     mocks.listProductionItems.mockResolvedValue([]);
+    mocks.getMockSshHosts.mockResolvedValue([{id: 'a800_94', name: 'A800 94', type: 'ssh'}]);
+    mocks.getMockSshStatus.mockResolvedValue({desired_running: false, state: 'stopped', host_id: null, alias: null, port: null, error: null, reused: false});
+    mocks.getModelRuntimeHealth.mockResolvedValue({capabilities: {
+      text: {status: 'healthy', model: 'M3', host: 'api.example.com', elapsed_ms: 3, last_invocation_elapsed_ms: null, error: null},
+      image: {status: 'healthy', model: 'gpt-image-2', host: 'image.example.com', elapsed_ms: 4, last_invocation_elapsed_ms: null, error: null},
+      speech: {status: 'disabled', model: 'qwen', host: 'tts.example.com', elapsed_ms: 0, last_invocation_elapsed_ms: null, error: null},
+      video: {status: 'disabled', model: '', host: 'local', elapsed_ms: 0, last_invocation_elapsed_ms: null, error: null},
+    }, infrastructure: {api: {status: 'healthy'}, mock_ssh: {state: 'stopped'}, queue: {queued: 0, running: 0}, persistence: {status: 'saved'}}, checked_at: '2026-07-12T10:00:00Z'});
+    mocks.getModelRuntimeInvocations.mockResolvedValue([]);
   });
 
   it('opens provider settings without a project and returns to the create-project empty state', async () => {
@@ -151,22 +169,21 @@ describe('Workspace', () => {
 
     expect(await screen.findByRole('heading', {name: '新建第一个项目'})).toBeVisible();
     expect(screen.getByRole('button', {name: '创建项目'})).toBeEnabled();
-    await userEvent.click(screen.getByRole('tab', {name: '模型渠道'}));
+    await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
 
-    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
+    expect(await screen.findByRole('heading', {name: '模型中心'})).toBeVisible();
     expect(mocks.getProviderChannels).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('aria-selected', 'true');
-    expect(document.getElementById('workspace-panel-settings')).toHaveAttribute('role', 'tabpanel');
+    expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
 
     const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     vi.stubGlobal('confirm', confirm);
     await userEvent.clear(screen.getByLabelText('剧本规划模型'));
     await userEvent.type(screen.getByLabelText('剧本规划模型'), 'M4');
-    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
     expect(confirm).toHaveBeenCalledWith('模型渠道有未保存更改，确定离开吗？');
-    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
+    expect(screen.getByRole('heading', {name: '模型中心'})).toBeVisible();
 
-    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
     expect(screen.getByRole('heading', {name: '新建第一个项目'})).toBeVisible();
     expect(screen.getByRole('button', {name: '创建项目'})).toBeEnabled();
   });
@@ -186,11 +203,10 @@ describe('Workspace', () => {
 
     render(<Workspace/>);
 
-    await userEvent.click(await screen.findByRole('tab', {name: '模型渠道'}));
-    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
-    expect(document.querySelector('.workspace-tabs-mobile')).toHaveClass('workspace-tabs-full');
-    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-settings', 'workspace-grid-empty');
-    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\.workspace-tabs-full\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    await userEvent.click(await screen.findByRole('button', {name: '模型中心'}));
+    expect(await screen.findByRole('heading', {name: '模型中心'})).toBeVisible();
+    expect(document.querySelector('.model-center')).toBeVisible();
+    expect(screen.queryByRole('tablist', {name: '工作区'})).not.toBeInTheDocument();
   });
 
   it('returns to overview when refresh removes the active project', async () => {
@@ -223,14 +239,13 @@ describe('Workspace', () => {
 
     render(<Workspace/>);
 
-    await userEvent.click(await screen.findByRole('tab', {name: '模型渠道'}));
-    expect(await screen.findByRole('heading', {name: '模型渠道'})).toBeVisible();
+    await userEvent.click(await screen.findByRole('button', {name: '模型中心'}));
+    expect(await screen.findByRole('heading', {name: '模型中心'})).toBeVisible();
     await userEvent.click(screen.getByRole('button', {name: '刷新项目'}));
 
     await waitFor(() => expect(mocks.listProjects).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('tabindex', '0');
-    expect(document.getElementById('workspace-panel-settings')).toHaveAttribute('role', 'tabpanel');
+    expect(screen.getByRole('heading', {name: '模型中心'})).toBeVisible();
+    expect(screen.queryByRole('tablist', {name: '工作区'})).not.toBeInTheDocument();
   });
 
   it('loads persisted projects and plans an empty episode', async () => {
@@ -288,9 +303,10 @@ describe('Workspace', () => {
     mocks.getProject.mockResolvedValue(projectDetail);
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
     mocks.getProviderHealth.mockResolvedValue({
-      planning: {status: 'configured'},
-      image: {status: 'configured'},
-      speech: {status: 'disabled'},
+      llm: {status: 'ok', model: 'M3', host: 'llm.example.com', elapsed_ms: 3, check_scope: 'model', error: null},
+      image: {status: 'ok', model: 'image', host: 'image.example.com', elapsed_ms: 4, check_scope: 'endpoint', error: null},
+      tts: {status: 'disabled', model: 'tts', host: 'tts.example.com', elapsed_ms: 0, check_scope: 'audio', error: null},
+      video: {status: 'failed', model: 'video', host: 'video.example.com', elapsed_ms: 6, check_scope: 'endpoint', error: 'offline'},
     });
 
     render(<Workspace />);
@@ -300,9 +316,11 @@ describe('Workspace', () => {
     expect(screen.getByRole('button', {name: '批量生产'})).toHaveAttribute('title', '批量生产');
     expect(screen.queryByRole('button', {name: '设置'})).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: '渲染本集'})).toHaveAttribute('title', '素材未就绪');
+    expect(screen.getByRole('button', {name: '检测模型服务'})).toHaveAttribute('title', '检测模型服务');
+    expect(mocks.getProviderHealth).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole('button', {name: '模型渠道配置状态'}));
-    expect(await screen.findByText('2/3 已配置')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: '检测模型服务'}));
+    expect(await screen.findByText('2/3 正常')).toBeVisible();
   });
 
   it('groups episodes and project resources while marking the active episode', async () => {
@@ -316,10 +334,10 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', {name: '项目资料'})).toBeVisible();
     expect(screen.getByRole('button', {name: '故事圣经'})).toBeVisible();
     expect(screen.getByRole('button', {name: '角色设定'})).toBeVisible();
-    expect(screen.getByRole('button', {name: /失窃的雨夜/})).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', {name: /^01.*失窃的雨夜/})).toHaveAttribute('aria-current', 'page');
   });
 
-  it('opens the real provider settings workspace and confirms leaving dirty changes', async () => {
+  it('opens the real model center and confirms leaving dirty channel changes', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
@@ -333,17 +351,17 @@ describe('Workspace', () => {
     vi.stubGlobal('confirm', confirm);
     render(<Workspace/>);
 
-    await userEvent.click(await screen.findByRole('button', {name: '模型渠道'}));
-    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
-    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(await screen.findByRole('button', {name: '模型中心'}));
+    expect(screen.getByRole('heading', {name: '模型中心'})).toBeVisible();
+    expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText('剧本规划模型'));
     await userEvent.type(screen.getByLabelText('剧本规划模型'), 'M4');
 
-    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
     expect(confirm).toHaveBeenCalledWith('模型渠道有未保存更改，确定离开吗？');
-    expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
+    expect(screen.getByRole('heading', {name: '模型中心'})).toBeVisible();
 
-    await userEvent.click(screen.getByRole('tab', {name: '总览'}));
+    await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
     expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
   });
@@ -442,15 +460,13 @@ describe('Workspace', () => {
     expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-inspector');
     expect(workspaceStyles).toMatch(/\.mobile-inspector \.workspace-center\s*\{\s*display:\s*none/);
 
-    await userEvent.click(screen.getByRole('tab', {name: '模型渠道'}));
-    expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-settings');
-    expect(workspaceStyles).toMatch(/\.mobile-settings \.workspace-inspector[^}]*display:\s*none/);
+    expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
   });
 
-  it('keeps seven mobile work areas in one stable 44px tab row', () => {
+  it('keeps six mobile work areas in one stable 44px tab row', () => {
     const mobileTabsRule = workspaceStyles.match(/\.workspace-tabs-mobile\s*\{[^}]*grid-template-columns:\s*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)[^}]*\}/);
 
-    expect(mobileTabsRule?.[1]).toBe('7');
+    expect(mobileTabsRule?.[1]).toBe('6');
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*display:\s*grid/);
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*none/);
   });
@@ -643,14 +659,14 @@ describe('Workspace', () => {
     expect(storyboard).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', {name: '模型渠道'})).toHaveFocus();
+    expect(screen.getByRole('tab', {name: '审核'})).toHaveFocus();
     await userEvent.keyboard('{Home}');
     expect(overview).toHaveFocus();
   });
 
   it('keeps selected tab focus when guarded click or keyboard navigation is rejected', async () => {
     render(<RejectedTabsHarness/>);
-    const settings = screen.getByRole('tab', {name: '模型渠道'});
+    const settings = screen.getByRole('tab', {name: '审核'});
     const overview = screen.getByRole('tab', {name: '总览'});
     settings.focus();
 

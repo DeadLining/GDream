@@ -26,16 +26,23 @@ def asset_response(asset: models.Asset) -> schemas.AssetRead:
     )
 
 
+@router.get("/api/assets/{asset_id}", response_model=schemas.AssetRead)
+def get_asset(asset_id: str, request: Request):
+    with request.app.state.session_factory() as session:
+        asset = session.get(models.Asset, asset_id)
+        if asset is None:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        return asset_response(asset)
+
+
 async def run_panel_job(app, job_id: str, shot_id: str, activate: bool) -> None:
     with app.state.session_factory() as session:
         jobs = JobStore(session)
         jobs.transition(job_id, "running", progress=5)
-        settings = app.state.settings
         try:
-            provider = app.state.provider_factory.create_image()
-            asset = await PanelService(
-                session, settings.data_root, provider
-            ).generate_panel(shot_id, activate=activate)
+            asset = await app.state.model_runtime.execute_image(
+                "shot", shot_id, {"activate": activate}
+            )
             jobs.transition(
                 job_id,
                 "succeeded",

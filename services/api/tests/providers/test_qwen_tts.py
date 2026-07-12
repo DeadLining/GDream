@@ -12,6 +12,51 @@ WAV_BYTES = b"RIFF" + b"\x00" * 40
 
 
 @pytest.mark.anyio
+async def test_qwen_tts_healthcheck_uses_lightweight_endpoint():
+    captured = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(200, json={"status": "ok"})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        await QwenTTSProvider(client=client).check_health()
+
+    assert captured[0].method == "GET"
+    assert captured[0].url.path == "/health"
+
+
+@pytest.mark.anyio
+async def test_qwen_tts_prefer_ssh_skips_direct_client_and_keeps_secret_off_argv():
+    secret = "tts-secret-never-in-argv"
+    captured = {}
+
+    class UnusedClient:
+        async def post(self, *args, **kwargs):
+            raise AssertionError("SSH-first synthesis must not use the HTTP client")
+
+    def ssh_executor(command, payload):
+        captured["command"] = command
+        captured["payload"] = payload
+        return base64.b64encode(WAV_BYTES)
+
+    audio = await QwenTTSProvider(
+        client=UnusedClient(),
+        api_key=secret,
+        ssh_host="ai-comic-tts",
+        ssh_executor=ssh_executor,
+        prefer_ssh=True,
+    ).synthesize("测试", "Dylan")
+
+    assert audio == WAV_BYTES
+    assert captured["command"][0:2] == ["ssh", "ai-comic-tts"]
+    assert secret not in " ".join(captured["command"])
+    assert f'header = "Authorization: Bearer {secret}"'.encode() in captured["payload"]
+
+
+@pytest.mark.anyio
 async def test_qwen_tts_sends_character_performance_contract():
     captured = {}
 

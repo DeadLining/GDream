@@ -74,3 +74,17 @@ class JobStore:
         self.session.commit()
         self.session.refresh(job)
         return job
+
+    def interrupt_running(self, job_id: str) -> Job:
+        job = self.get(job_id)
+        if job is None or job.status != "running":
+            raise InvalidJobTransition("Only running jobs can be interrupted")
+        job.status = "failed"
+        job.error = "Model runtime was interrupted"
+        job.result_metadata = {
+            "error_code": "runtime_interrupted",
+            "retryable": True,
+        }
+        self.session.commit()
+        self.session.refresh(job)
+        return job

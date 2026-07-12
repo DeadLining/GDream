@@ -1,0 +1,88 @@
+#!/bin/sh
+
+set -eu
+
+runtime_root=${CS_BRIDGE_HOSTBRIDGE_ROOT:-/Applications/CS Bridge.app/Contents/Resources/vendor/hostbridge}
+entrypoint="$runtime_root/server_control_mcp/server.py"
+
+fail() {
+    printf 'hostbridge-cs-bridge: %s\n' "$1" >&2
+    exit 64
+}
+
+if [ ! -f "$entrypoint" ]; then
+    printf 'hostbridge-cs-bridge: HostBridge entrypoint not found under configured runtime root\n' >&2
+    exit 66
+fi
+
+if [ -n "${HOSTBRIDGE_PYTHON:-}" ]; then
+    python=$HOSTBRIDGE_PYTHON
+elif command -v python3.12 >/dev/null 2>&1; then
+    python=$(command -v python3.12)
+elif command -v python3 >/dev/null 2>&1; then
+    python=$(command -v python3)
+else
+    printf 'hostbridge-cs-bridge: compatible Python executable not found\n' >&2
+    exit 69
+fi
+
+case "$python" in
+    */*) [ -x "$python" ] || fail "configured Python is not executable" ;;
+    *) command -v "$python" >/dev/null 2>&1 || fail "configured Python is not executable" ;;
+esac
+
+export PYTHONPATH=$runtime_root
+export PYTHONDONTWRITEBYTECODE=1
+
+if [ "$#" -eq 2 ] && [ "$1" = "hosts" ] && [ "$2" = "list" ]; then
+    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/hostbridge-cs-bridge.XXXXXX") || {
+        printf 'hostbridge-cs-bridge: unable to prepare host list normalization\n' >&2
+        exit 70
+    }
+    trap 'rm -rf "$temp_dir"' EXIT HUP INT TERM
+    legacy_output="$temp_dir/hosts.tsv"
+    if "$python" -m server_control_mcp.server list >"$legacy_output"; then
+        :
+    else
+        status=$?
+        exit "$status"
+    fi
+    if "$python" -c '
+import csv
+import json
+import sys
+
+try:
+    hosts = []
+    with open(sys.argv[1], encoding="utf-8", newline="") as source:
+        for row in csv.reader(source, delimiter="\t", strict=True):
+            if not row or all(not field for field in row):
+                continue
+            if len(row) not in (3, 4) or any(not field for field in row[:3]):
+                raise ValueError("malformed host row")
+            host_id, label, connection_type = row[:3]
+            hosts.append({
+                "id": host_id,
+                "label": label,
+                "connection_type": connection_type,
+            })
+    json.dump(hosts, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
+except (OSError, UnicodeError, csv.Error, ValueError):
+    print("hostbridge-cs-bridge: unable to normalize host list", file=sys.stderr)
+    raise SystemExit(65)
+' "$legacy_output"; then
+        :
+    else
+        status=$?
+        exit "$status"
+    fi
+    exit 0
+fi
+
+if [ "$#" -ge 3 ] && [ "$1" = "mock-ssh" ] && [ "$2" = "start" ]; then
+    shift 2
+    exec "$python" -m server_control_mcp.server mock-ssh "$@"
+fi
+
+fail "unsupported command"

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 
 from comic_studio import models
+from comic_studio.model_runtime.contracts import TextStreamRequest
 from comic_studio.script_imports import (
     ScriptImportConfirm,
     ScriptImportCreate,
@@ -65,11 +66,14 @@ def stream_script_generation(
             "brief": payload.brief.strip(),
             "existing_draft": payload.existing_draft,
         }
-    provider = request.app.state.provider_factory.create_llm()
-
     async def events():
         try:
-            async for chunk in provider.stream_script(context):
+            runtime_request = TextStreamRequest(
+                purpose="script_generation", context=context
+            )
+            async for chunk in request.app.state.model_runtime.stream_text(
+                runtime_request
+            ):
                 yield _sse("chunk", {"text": chunk})
             yield _sse("done", {"finish_reason": "stop"})
         except Exception:
@@ -145,8 +149,9 @@ def get_script_import(import_id: str, request: Request):
 async def _parse_import(import_id: str, request: Request):
     with request.app.state.session_factory() as session:
         try:
-            planner = request.app.state.provider_factory.create_llm()
-            return await ScriptImportParserService(session, planner).parse(import_id)
+            return await ScriptImportParserService(
+                session, request.app.state.model_runtime
+            ).parse(import_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Script import not found") from exc
         except RuntimeError as exc:

@@ -21,12 +21,14 @@ class ProviderFactory:
         image_provider_class: Callable[..., Any] = GPTImageProvider,
         tts_provider_class: Callable[..., Any] = QwenTTSProvider,
         video_provider_class: Callable[..., Any] = MiniMaxVideoProvider,
+        prefer_ssh_for_host: Callable[[str], bool] | None = None,
     ):
         self._store = store
         self._llm_provider_class = llm_provider_class
         self._image_provider_class = image_provider_class
         self._tts_provider_class = tts_provider_class
         self._video_provider_class = video_provider_class
+        self._prefer_ssh_for_host = prefer_ssh_for_host
 
     def create_llm(self) -> MiniMaxProvider:
         channel = self._store.snapshot.llm
@@ -62,6 +64,7 @@ class ProviderFactory:
             model=channel.model,
             base_url=channel.base_url,
             ssh_host=channel.ssh_host,
+            prefer_ssh=self._should_prefer_ssh(channel.ssh_host),
         )
 
     def create_video(self) -> MiniMaxVideoProvider:
@@ -89,3 +92,11 @@ class ProviderFactory:
             raise ProviderConfigurationError(
                 f"{kind} provider channel is not configured"
             )
+
+    def _should_prefer_ssh(self, ssh_host: str | None) -> bool:
+        if not ssh_host or self._prefer_ssh_for_host is None:
+            return False
+        try:
+            return bool(self._prefer_ssh_for_host(ssh_host))
+        except Exception:
+            return False

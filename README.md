@@ -19,6 +19,8 @@ Desktop work includes these primary areas:
 
 The shot inspector remains visible beside the desktop work area. Selection is shared across overview, storyboard, production, and review, so switching areas does not lose the active shot. Use the inspector to edit shot details, generate or activate panel versions, update review state, and manage dialogue and speech.
 
+Use the global toolbar `模型中心` command to manage all text, image, speech, and video capabilities. This platform page is independent of the active project and combines live capability health, infrastructure state, recent invocation history, retryable failures, provider configuration, and Mock SSH controls.
+
 On mobile, the same workflow is exposed as four equal navigation areas: `总览`, `分镜`, `生产`, and `检查器`. Selecting a shot opens its inspector while preserving selection when moving between tabs.
 
 ## Model Stack
@@ -33,7 +35,9 @@ No API key is stored in source code, SQLite, browser storage, or generated metad
 
 ## Provider Channel Configuration
 
-Open `模型渠道` in the Studio to manage planning, image, speech, and video providers at runtime. The backend owns this configuration; the browser receives only redacted key status and never stores provider keys.
+Open `模型中心` from the top toolbar to manage planning, image, speech, and video providers at runtime. The backend owns this configuration; the browser receives only redacted key status and never stores provider keys.
+
+All model configuration, health checks, and invocations pass through the internal Model Runtime. Existing provider and production endpoints remain compatible, but delegate to the same typed text, image, speech, and video capability boundary. Text streams synchronously; image, speech, and video work is persisted as background jobs with sanitized invocation history and retry metadata.
 
 On the first startup without `data/provider-channels.json`, provider values are bootstrapped from `.env`. Once the JSON file exists, it is authoritative across API restarts even if `.env` changes. The file is written atomically with owner-only `0600` permissions and is ignored by Git. Do not copy it into logs, screenshots, bug reports, or source control.
 
@@ -57,12 +61,17 @@ cd ../.. && npm install
 
 Set `MINIMAX_API_KEY`, `GPT_IMAGE_KEY`, and `MINIMAX_VIDEO_API_KEY` in `.env`. Confirm the trusted LAN can reach `QWEN_TTS_BASE_URL`.
 
-When the Mac cannot route directly to A800_94, start the HostBridge SSH endpoint before the API:
+### Managed Mock SSH bridge
 
-```bash
-hostbridge mock-ssh a800_94 --port 2244 --ssh-host-alias ai-comic-tts \
-  --connect-timeout 120 --command-timeout 300
-```
+Mock SSH requires HostBridge CLI `2.0.0` to be installed and configured with the target host before the Studio starts. Install and pin that prerequisite yourself: the application does not verify the installed version and never installs or upgrades HostBridge silently. It uses `hostbridge` from `PATH` by default; set `AI_COMIC_HOSTBRIDGE_EXECUTABLE` to an explicit executable path when the API service has a different `PATH`. To share the daemon and host configuration from CS Bridge, set it to the absolute `<repo>/scripts/hostbridge-cs-bridge` path instead. That compatibility launcher uses `/Applications/CS Bridge.app/Contents/Resources/vendor/hostbridge` by default; set `CS_BRIDGE_HOSTBRIDGE_ROOT` only if the vendored runtime is elsewhere.
+
+`AI_COMIC_HOSTBRIDGE_DAEMON_SOCKET` must identify the HostBridge daemon that owns the configured hosts. On macOS the standard HostBridge runtime uses `/private/tmp/hostbridge-<user>/daemon.sock`; replace `USER` in `.env` with the current account name. The API expands `~`, resolves the path to an absolute location, and passes that value to the managed HostBridge child as `HOSTBRIDGE_DAEMON_SOCKET`.
+
+Open `模型中心` and use `Mock SSH 桥接` when the Mac cannot route directly to the TTS service. The manager stores desired lifecycle state in `mock-ssh.json` and bounded sanitized output in `mock-ssh.log` under `AI_COMIC_DATA_ROOT`. A successful start persists `desired_running=true`; on API startup the manager reuses the exact owned process or restores the requested bridge. An explicit `停止 Mock SSH` persists `desired_running=false`, prevents automatic restart, and stops only a process whose command identity and private owner token both match. Existing SSH configuration is preserved; the application does not rewrite unrelated aliases or terminate unowned HostBridge processes.
+
+The toolbar `检测模型服务` command performs live provider checks. This is separate from whether a channel configuration was saved successfully: an enabled and valid configuration can still fail a live check. Checks use minimal bounded provider work; the TTS connection test calls the service `/health` endpoint and does not trigger audio generation. When the manager owns the active TTS SSH alias, TTS uses that bridge immediately and skips the failed LAN-direct attempt and repeated connection path.
+
+After an API restart, check the Mock SSH status in `模型中心`: desired-running bridges are recovered, while explicitly stopped bridges remain stopped. If recovery fails, verify `hostbridge --version` reports `2.0.0`, the configured executable is runnable by the API user, the target appears in `hostbridge hosts list`, the SSH alias matches the speech channel, and `hostbridge daemon status` is checking the same socket configured for the Studio. A wrong daemon socket can still allow the listener to start and simple commands to appear normal while daemon-backed requests or stdin forwarding time out. Check the socket path and daemon ownership carefully, then inspect `mock-ssh.log` under the data root; do not expose provider keys, private host credentials, or other secrets in configuration, command output, logs, or bug reports.
 
 ## Run
 
@@ -71,6 +80,8 @@ hostbridge mock-ssh a800_94 --port 2244 --ssh-host-alias ai-comic-tts \
 ```
 
 The script prints the selected workspace and API URLs. It starts from ports `3000` and `8000` and automatically selects the next free ports when either is already in use.
+
+The API runs without code reload by default so background model jobs are not interrupted. Set `AI_COMIC_API_RELOAD=1 ./scripts/dev.sh` only during API development.
 
 ## Verification
 

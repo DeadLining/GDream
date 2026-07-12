@@ -8,10 +8,15 @@ from comic_studio.db import get_session
 from comic_studio.jobs import JobStore
 from comic_studio.repositories import EpisodeRepository
 from comic_studio.services.planning import PlanningService
+from comic_studio.services.episode_deletion import EpisodeDeletionImpact,EpisodeDeletionService
 
 
 router = APIRouter(tags=["episodes"])
 SessionDependency = Annotated[Session, Depends(get_session)]
+
+
+def _deletion_preview(impact:EpisodeDeletionImpact)->schemas.EpisodeDeletionPreview:
+    return schemas.EpisodeDeletionPreview(episode_id=impact.episode_id,title=impact.title,deleted=schemas.EpisodeDeletionCounts(scenes=impact.scenes,shots=impact.shots,dialogue_lines=impact.dialogue_lines,assets=impact.assets))
 
 
 @router.post(
@@ -34,6 +39,20 @@ def get_episode(episode_id: str, session: SessionDependency):
     if episode is None:
         raise HTTPException(status_code=404, detail="Episode not found")
     return episode
+
+
+@router.get("/api/episodes/{episode_id}/deletion-preview",response_model=schemas.EpisodeDeletionPreview)
+def preview_episode_deletion(episode_id:str,request:Request,session:SessionDependency):
+    impact=EpisodeDeletionService(session,request.app.state.settings.data_root).preview(episode_id)
+    if impact is None: raise HTTPException(status_code=404,detail="Episode not found")
+    return _deletion_preview(impact)
+
+
+@router.delete("/api/episodes/{episode_id}",response_model=schemas.EpisodeDeletionRead)
+def delete_episode_route(episode_id:str,request:Request,session:SessionDependency):
+    result=EpisodeDeletionService(session,request.app.state.settings.data_root).delete(episode_id)
+    if result is None: raise HTTPException(status_code=404,detail="Episode not found")
+    return schemas.EpisodeDeletionRead(**_deletion_preview(result.impact).model_dump(),deleted_episode_id=episode_id,cleanup_warnings=list(result.cleanup_warnings))
 
 
 @router.patch("/api/episodes/{episode_id}", response_model=schemas.EpisodeRead)
@@ -78,8 +97,9 @@ async def run_planning_job(app, job_id: str, episode_id: str) -> None:
         jobs = JobStore(session)
         jobs.transition(job_id, "running", progress=5)
         try:
-            provider = app.state.provider_factory.create_llm()
-            await PlanningService(session, provider).plan_episode(episode_id)
+            await PlanningService(
+                session, app.state.model_runtime
+            ).plan_episode(episode_id)
             jobs.transition(job_id, "succeeded", result_metadata={"episode_id": episode_id})
         except Exception as exc:
             jobs.transition(job_id, "failed", error=f"{type(exc).__name__}: {exc}")

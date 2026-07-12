@@ -71,20 +71,31 @@ describe('AppToolbar episode render state', () => {
     expect(screen.getByRole('button', {name: '渲染本集'})).toBeEnabled();
   });
 
+  it('opens the global model center from the platform toolbar', async () => {
+    const onModelCenter = vi.fn();
+    render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" onModelCenter={onModelCenter}/>);
+
+    await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
+
+    expect(onModelCenter).toHaveBeenCalledOnce();
+  });
+
   it('shows a retryable status instead of throwing when the local API is unavailable', async () => {
     mocks.getProviderHealth.mockRejectedValueOnce(new Error('connectivity_failure'));
     mocks.getProviderHealth.mockResolvedValueOnce({
-      llm: {status: 'configured'},
-      image: {status: 'configured'},
-      tts: {status: 'configured'},
+      llm: {status: 'ok', model: 'M3', host: 'llm.example.com', elapsed_ms: 3, check_scope: 'model', error: null},
+      image: {status: 'ok', model: 'image', host: 'image.example.com', elapsed_ms: 4, check_scope: 'endpoint', error: null},
+      tts: {status: 'ok', model: 'tts', host: 'tts.example.com', elapsed_ms: 5, check_scope: 'audio', error: null},
+      video: {status: 'ok', model: 'video', host: 'video.example.com', elapsed_ms: 6, check_scope: 'endpoint', error: null},
     });
     render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" />);
 
-    const health = screen.getByRole('button', {name: '模型渠道配置状态'});
+    const health = screen.getByRole('button', {name: '检测模型服务'});
     await userEvent.click(health);
-    expect(await screen.findByText('API 未连接')).toBeVisible();
+    expect(await screen.findByText('检测失败')).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent('服务检测失败，请重试');
 
     await userEvent.click(health);
-    expect(await screen.findByText('3/3 已配置')).toBeVisible();
+    expect(await screen.findByText('4/4 正常')).toBeVisible();
   });
 });

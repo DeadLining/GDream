@@ -1,10 +1,11 @@
 'use client';
 
 import {useEffect, useRef, useState} from 'react';
-import {Activity, Boxes, Download, Film, Play, RefreshCw} from 'lucide-react';
-import {getProviderHealth, mediaUrl, startRender} from '../lib/api';
+import {Boxes, BrainCircuit, Download, Film, Play, RefreshCw} from 'lucide-react';
+import {mediaUrl, startRender} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import type {Job} from '../lib/types';
+import {ProviderHealthStatus} from './ProviderHealthStatus';
 
 type AppToolbarProps = {
   projectLabel: string | null;
@@ -14,6 +15,8 @@ type AppToolbarProps = {
   onProduction?: () => void;
   renderReady?: boolean;
   healthRefreshKey?: number;
+  onModelCenter?: () => void;
+  modelCenterOpen?: boolean;
 };
 
 export function AppToolbar({
@@ -24,9 +27,9 @@ export function AppToolbar({
   onProduction,
   renderReady = true,
   healthRefreshKey = 0,
+  onModelCenter,
+  modelCenterOpen = false,
 }: AppToolbarProps) {
-  const [healthCount, setHealthCount] = useState<number | null>(null);
-  const [healthStatus, setHealthStatus] = useState<'idle' | 'checking' | 'ok' | 'error'>('idle');
   const [job, setJob] = useState<Job | null>(null);
   const [renderUrl, setRenderUrl] = useState('');
   const renderGeneration = useRef(0);
@@ -39,18 +42,6 @@ export function AppToolbar({
     setRenderUrl('');
   }, [episodeId]);
 
-  const checkHealth = async () => {
-    setHealthStatus('checking');
-    try {
-      const health = await getProviderHealth();
-      setHealthCount(Object.values(health).filter(item => item.status === 'configured').length);
-      setHealthStatus('ok');
-    } catch {
-      setHealthCount(null);
-      setHealthStatus('error');
-    }
-  };
-  useEffect(() => {if (healthRefreshKey > 0) void checkHealth();}, [healthRefreshKey]);
   const render = async () => {
     if (!episodeId || rendering) return;
     const generation = renderGeneration.current;
@@ -72,10 +63,8 @@ export function AppToolbar({
         {breadcrumb && <span className="workspace-breadcrumb" title={breadcrumb}>{breadcrumb}</span>}
       </div>
       <div className="toolbar-actions">
-        <button className="health-button" title="模型渠道配置状态" aria-label="模型渠道配置状态" onClick={checkHealth} disabled={healthStatus === 'checking'}>
-          <Activity aria-hidden="true" size={17}/>
-          <span>{healthStatus === 'checking' ? '检查中' : healthStatus === 'error' ? 'API 未连接' : healthCount === null ? '检查配置' : `${healthCount}/3 已配置`}</span>
-        </button>
+        <ProviderHealthStatus healthRefreshKey={healthRefreshKey}/>
+        <button className={`icon-button${modelCenterOpen ? ' active' : ''}`} title={modelCenterOpen ? '返回项目工作台' : '模型中心'} aria-label="模型中心" onClick={onModelCenter}><BrainCircuit aria-hidden="true" size={17}/></button>
         <button className="icon-button" title="刷新项目" aria-label="刷新项目" onClick={onRefresh}><RefreshCw aria-hidden="true" size={17}/></button>
         <button className="icon-button" title="批量生产" aria-label="批量生产" onClick={onProduction} disabled={!episodeId}><Boxes aria-hidden="true" size={17}/></button>
         {renderUrl ? (

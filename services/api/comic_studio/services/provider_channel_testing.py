@@ -46,6 +46,8 @@ def default_tts_provider_factory(
     channel: ProviderChannel,
     client: httpx.AsyncClient,
     ssh_executor: Callable[[list[str], bytes], bytes] | None,
+    *,
+    prefer_ssh: bool = False,
 ) -> QwenTTSProvider:
     return QwenTTSProvider(
         api_key=channel.api_key_value or "",
@@ -54,6 +56,7 @@ def default_tts_provider_factory(
         client=client,
         ssh_host=channel.ssh_host,
         ssh_executor=ssh_executor,
+        prefer_ssh=prefer_ssh,
     )
 
 
@@ -72,6 +75,7 @@ class ProviderChannelTestingService:
         subprocess_runner: Callable[..., Any] = subprocess.run,
         ssh_timeout_margin_seconds: float = SSH_TIMEOUT_MARGIN_SECONDS,
         total_timeout_seconds: float = TOTAL_TIMEOUT_SECONDS,
+        prefer_ssh_for_host: Callable[[str], bool] | None = None,
     ):
         self._stored_channel = stored_channel
         self._clock = clock
@@ -82,6 +86,7 @@ class ProviderChannelTestingService:
         self._subprocess_runner = subprocess_runner
         self._ssh_timeout_margin_seconds = ssh_timeout_margin_seconds
         self._total_timeout_seconds = total_timeout_seconds
+        self._prefer_ssh_for_host = prefer_ssh_for_host
 
     async def test(
         self,
@@ -120,12 +125,20 @@ class ProviderChannelTestingService:
                         provider = self._provider_factory(kind, channel, client)
                         scope = await self._test_video(provider, channel)
                     else:
-                        provider = self._tts_provider_factory(
+                        provider_args = (
                             channel,
                             client,
                             self._ssh_executor
                             or self._make_bounded_ssh_executor(deadline),
                         )
+                        prefer_ssh = self._should_prefer_ssh(channel.ssh_host)
+                        if prefer_ssh:
+                            provider = self._tts_provider_factory(
+                                *provider_args,
+                                prefer_ssh=True,
+                            )
+                        else:
+                            provider = self._tts_provider_factory(*provider_args)
                         await self._test_tts(provider)
         except Exception as exc:
             status = "failed"
@@ -220,6 +233,10 @@ class ProviderChannelTestingService:
 
     @staticmethod
     async def _test_tts(provider: Any) -> None:
+        check_health = getattr(provider, "check_health", None)
+        if check_health is not None:
+            await check_health()
+            return
         content = await provider.synthesize(
             "测试",
             "Dylan",
@@ -280,6 +297,14 @@ class ProviderChannelTestingService:
             return result.stdout
 
         return execute
+
+    def _should_prefer_ssh(self, ssh_host: str | None) -> bool:
+        if not ssh_host or self._prefer_ssh_for_host is None:
+            return False
+        try:
+            return bool(self._prefer_ssh_for_host(ssh_host))
+        except Exception:
+            return False
 
     @staticmethod
     def _elapsed_ms(started_at: Any, finished_at: Any) -> int:

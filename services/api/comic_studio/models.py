@@ -205,6 +205,26 @@ class Job(Base):
     )
 
 
+class ModelInvocation(Base):
+    __tablename__ = "model_invocations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    capability: Mapped[str] = mapped_column(String(24), index=True)
+    provider: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(120))
+    target_type: Mapped[str] = mapped_column(String(40), default="")
+    target_id: Mapped[str] = mapped_column(String(36), default="", index=True)
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(24), index=True)
+    elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
+    error_code: Mapped[str] = mapped_column(String(64), default="")
+    retryable: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class ScriptImport(Base):
     __tablename__ = "script_imports"
 

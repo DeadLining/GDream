@@ -1,4 +1,5 @@
 from functools import lru_cache
+import getpass
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, model_validator
@@ -12,6 +13,38 @@ class Settings(BaseSettings):
     service_name: str = "ai-comic-studio"
     database_url: str = "sqlite:///./data/studio.db"
     data_root: Path = Path("./data")
+    mock_ssh_state_path: Path = Field(
+        default=Path("mock-ssh.json"),
+        validation_alias=AliasChoices(
+            "mock_ssh_state_path",
+            "MOCK_SSH_STATE_PATH",
+            "AI_COMIC_MOCK_SSH_STATE_PATH",
+        ),
+    )
+    mock_ssh_log_path: Path = Field(
+        default=Path("mock-ssh.log"),
+        validation_alias=AliasChoices(
+            "mock_ssh_log_path", "MOCK_SSH_LOG_PATH", "AI_COMIC_MOCK_SSH_LOG_PATH"
+        ),
+    )
+    hostbridge_executable: str = Field(
+        default="hostbridge",
+        validation_alias=AliasChoices(
+            "hostbridge_executable",
+            "HOSTBRIDGE_EXECUTABLE",
+            "AI_COMIC_HOSTBRIDGE_EXECUTABLE",
+        ),
+    )
+    hostbridge_daemon_socket: Path = Field(
+        default_factory=lambda: Path(
+            f"/private/tmp/hostbridge-{getpass.getuser()}/daemon.sock"
+        ),
+        validation_alias=AliasChoices(
+            "hostbridge_daemon_socket",
+            "HOSTBRIDGE_DAEMON_SOCKET",
+            "AI_COMIC_HOSTBRIDGE_DAEMON_SOCKET",
+        ),
+    )
     provider_channels_path: Path = Field(
         default=Path("data/provider-channels.json"),
         validation_alias=AliasChoices(
@@ -94,6 +127,15 @@ class Settings(BaseSettings):
         repository_root = ROOT_ENV_FILE.parent
         if not self.data_root.is_absolute():
             self.data_root = (repository_root / self.data_root).resolve()
+        if not self.mock_ssh_state_path.is_absolute():
+            self.mock_ssh_state_path = (
+                self.data_root / self.mock_ssh_state_path
+            ).resolve()
+        if not self.mock_ssh_log_path.is_absolute():
+            self.mock_ssh_log_path = (self.data_root / self.mock_ssh_log_path).resolve()
+        self.hostbridge_daemon_socket = (
+            self.hostbridge_daemon_socket.expanduser().resolve()
+        )
         if not self.provider_channels_path.is_absolute():
             self.provider_channels_path = (
                 repository_root / self.provider_channels_path
