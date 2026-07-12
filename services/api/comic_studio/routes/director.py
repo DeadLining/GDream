@@ -3,11 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter,Depends,HTTPException,Request,status
 from sqlalchemy.orm import Session
 
+from comic_studio import models,schemas
 from comic_studio.db import get_session
-from comic_studio.director import DirectorObjectCreateRequest,DirectorObjectRead,DirectorStageRead,ShotCameraRead,ShotCameraUpdateRequest
+from comic_studio.director import DirectorObjectCreateRequest,DirectorObjectRead,DirectorStageRead,DirectorSuggestionApplyRequest,DirectorSuggestionCreateRequest,DirectorSuggestionRead,ShotCameraRead,ShotCameraUpdateRequest
+from comic_studio.providers.base import ProviderError
 from comic_studio.routes.assets import asset_response
 from comic_studio.services.director_previews import DirectorPreviewError,DirectorPreviewService
 from comic_studio.services.director_stages import DirectorStageService,DirectorVersionConflict
+from comic_studio.services.director_suggestions import DirectorSuggestionService
 
 
 router=APIRouter(tags=["director"])
@@ -58,3 +61,24 @@ async def upload_camera_preview(camera_id:str,request:Request):
             return asset_response(asset)
         except KeyError as exc:raise HTTPException(status_code=404,detail="Director camera not found") from exc
         except DirectorPreviewError as exc:raise HTTPException(status_code=413 if str(exc)=="preview_too_large" else 422,detail=str(exc)) from exc
+
+
+@router.post("/api/director-stages/{stage_id}/suggestions",response_model=DirectorSuggestionRead,status_code=status.HTTP_201_CREATED)
+async def create_director_suggestion(stage_id:str,data:DirectorSuggestionCreateRequest,request:Request):
+    with request.app.state.session_factory() as session:
+        try:
+            provider=request.app.state.provider_factory.create_llm()
+            return await DirectorSuggestionService(session,provider).create(stage_id,data.shot_id,data.kind)
+        except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage or shot not found") from exc
+        except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
+        except ProviderError as exc:raise HTTPException(status_code=502,detail="Director suggestion failed") from exc
+
+
+@router.post("/api/director-stages/{stage_id}/shots/{shot_id}/apply-to-shot",response_model=schemas.ShotRead)
+def apply_director_suggestion_to_shot(stage_id:str,shot_id:str,data:DirectorSuggestionApplyRequest,session:SessionDependency):
+    suggestion=session.get(models.DirectorSuggestion,data.suggestion_id)
+    if suggestion is None or suggestion.stage_id!=stage_id or suggestion.shot_id!=shot_id:
+        raise HTTPException(status_code=404,detail="Director suggestion not found")
+    try:return DirectorSuggestionService(session,None).apply_to_shot(data.suggestion_id,set(data.fields))
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director suggestion not found") from exc
+    except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
