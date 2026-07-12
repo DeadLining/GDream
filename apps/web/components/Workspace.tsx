@@ -204,7 +204,7 @@ export function Workspace() {
   else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
-  else if (workArea === 'director' && selectedScene && selectedShotId) center = <DirectorWorkspace scene={selectedScene} selectedShotId={selectedShotId} mobile={mobile} onSelectShot={setSelectedShotId}/>;
+  else if (workArea === 'director' && selectedScene && selectedShotId) center = <DirectorWorkspace scene={selectedScene} selectedShotId={selectedShotId} mobile={mobile} onSelectShot={setSelectedShotId} onShotUpdated={updateShotInEpisode}/>;
   else if (workArea === 'director') center = <main className="center-state"><h1>3D 导演台</h1><p>请先生成并选择一个分镜。</p></main>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   const visibleWorkAreas: WorkArea[] = !projects.length

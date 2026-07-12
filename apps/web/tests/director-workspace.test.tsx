@@ -5,7 +5,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {DirectorWorkspace} from '../components/director/DirectorWorkspace';
 import type {DirectorStage,Scene} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),createDirectorObject:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn()}));
+const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),createDirectorObject:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
 vi.mock('../lib/api',()=>mocks);
 vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable}:{editable:boolean})=><div data-testid="director-canvas" data-editable={String(editable)}/> }));
 
@@ -25,5 +25,17 @@ describe('DirectorWorkspace',()=>{
     mocks.getDirectorStage.mockResolvedValue(stage);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile onSelectShot={vi.fn()}/>);
     expect(await screen.findByTestId('director-canvas')).toHaveAttribute('data-editable','false');
+  });
+  it('reviews an AI suggestion and applies only selected shot fields',async()=>{
+    const updated={...scene.shots[0],composition:'低机位对峙',camera_motion:'push_in'};const onShotUpdated=vi.fn();
+    mocks.getDirectorStage.mockResolvedValue(stage);mocks.createDirectorSuggestion.mockResolvedValue({id:'suggestion-1',stage_id:'stage-1',shot_id:'shot-1',kind:'shot_composition',status:'ready',request_context:{},suggested_patch:{composition:'低机位对峙',camera_motion:'push_in',image_prompt:'cinematic rain'},error_category:'',error:'',created_at:'',applied_at:null});mocks.applyDirectorSuggestionToShot.mockResolvedValue(updated);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()} onShotUpdated={onShotUpdated}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'AI构图建议'}));
+    expect(await screen.findByRole('dialog',{name:'AI 导演建议'})).toBeVisible();
+    expect(screen.getByLabelText('构图')).toBeChecked();expect(screen.getByLabelText('运镜')).toBeChecked();expect(screen.getByLabelText('图像提示词')).not.toBeChecked();
+    await userEvent.click(screen.getByLabelText('运镜'));
+    await userEvent.click(screen.getByRole('button',{name:'应用选中字段'}));
+    await waitFor(()=>expect(mocks.applyDirectorSuggestionToShot).toHaveBeenCalledWith('stage-1','shot-1','suggestion-1',['composition']));
+    expect(onShotUpdated).toHaveBeenCalledWith(updated);
   });
 });
