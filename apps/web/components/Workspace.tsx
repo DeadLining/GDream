@@ -18,6 +18,7 @@ import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
 import {ScriptLibrary} from './ScriptLibrary';
 import {CharacterWorkspace} from './CharacterWorkspace';
 import {DeleteEpisodeDialog} from './DeleteEpisodeDialog';
+import {DirectorWorkspace} from './director/DirectorWorkspace';
 
 export function Workspace() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -128,6 +129,7 @@ export function Workspace() {
 
   const shots = useMemo(() => episode?.scenes.flatMap(scene => scene.shots) ?? [], [episode]);
   const selectedShot = shots.find(shot => shot.id === selectedShotId) ?? null;
+  const selectedScene = episode?.scenes.find(scene => scene.shots.some(shot => shot.id === selectedShotId)) ?? episode?.scenes[0] ?? null;
   const selectShotById = (id: string) => {
     if (!shots.some(shot => shot.id === id || shot.dialogue.some(line => line.id === id))) return;
     const target = shots.find(shot => shot.id === id || shot.dialogue.some(line => line.id === id));
@@ -202,12 +204,14 @@ export function Workspace() {
   else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
   else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
+  else if (workArea === 'director' && selectedScene && selectedShotId) center = <DirectorWorkspace scene={selectedScene} selectedShotId={selectedShotId} mobile={mobile} onSelectShot={setSelectedShotId}/>;
+  else if (workArea === 'director') center = <main className="center-state"><h1>3D 导演台</h1><p>请先生成并选择一个分镜。</p></main>;
   else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   const visibleWorkAreas: WorkArea[] = !projects.length
     ? ['overview']
     : mobile
-    ? ['overview', 'import', 'characters', 'storyboard', 'production', 'inspector']
-    : ['overview', 'import', 'characters', 'storyboard', 'production', 'review'];
+    ? ['overview', 'import', 'characters', 'storyboard', 'director', 'production', 'inspector']
+    : ['overview', 'import', 'characters', 'storyboard', 'director', 'production', 'review'];
 
   return <div className="app-shell">
     {toolbar}
@@ -234,7 +238,7 @@ export function Workspace() {
         role={workArea === 'inspector' ? undefined : 'tabpanel'}
         aria-labelledby={workArea === 'inspector' ? undefined : `workspace-tab-${workArea}`}
       >{center}</section>
-      {projects.length > 0 && <section
+      {projects.length > 0 && workArea !== 'director' && <section
         className="workspace-inspector"
         id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
         role={workArea === 'inspector' ? 'tabpanel' : undefined}
