@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictDirectorModel(BaseModel):
@@ -53,3 +53,30 @@ class ShotCameraPatch(StrictDirectorModel):
     def clip_range(self):
         if self.near is not None and self.far is not None and self.far<=self.near:raise ValueError("far_must_exceed_near")
         return self
+
+
+class DirectorObjectRead(BaseModel):
+    model_config=ConfigDict(from_attributes=True,populate_by_name=True)
+    id:str;stage_id:str;kind:str;source_type:str;source_id:str|None;label:str;position:int;transform:dict;appearance:dict
+    metadata:dict=Field(validation_alias=AliasChoices("object_metadata","metadata"))
+    visible:bool
+
+
+class ShotCameraRead(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:str;stage_id:str;shot_id:str;version:int;position:list[float];target:list[float];rotation:list[float];focal_length_mm:float;near:float;far:float;shot_size:str;camera_motion:str;framing_guides:dict;object_overrides:dict;preview_asset_id:str|None
+
+
+class DirectorStageRead(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
+    id:str;scene_id:str;version:int;environment:dict;objects:list[DirectorObjectRead];shot_cameras:list[ShotCameraRead]
+
+
+class DirectorObjectCreateRequest(StrictDirectorModel):
+    expected_version:int=Field(ge=1)
+    object:DirectorObjectCreate
+
+
+class ShotCameraUpdateRequest(StrictDirectorModel):
+    expected_version:int=Field(ge=1)
+    camera:ShotCameraPatch
