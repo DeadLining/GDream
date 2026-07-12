@@ -101,6 +101,9 @@ class ScriptDocumentService:
             ).all()
         )
 
+    def get(self, document_id: str) -> models.ScriptDocument:
+        return self._load(document_id)
+
     def rename(self, document_id: str, title: str) -> models.ScriptDocument:
         document = self._load(document_id)
         normalized = title.strip()

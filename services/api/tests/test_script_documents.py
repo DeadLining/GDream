@@ -24,6 +24,19 @@ def _project(session) -> models.Project:
     return project
 
 
+def _project_via_api(client) -> dict:
+    return client.post(
+        "/api/projects",
+        json={
+            "title": "雨夜追踪",
+            "logline": "追查失窃芯片",
+            "story_bible": "主角必须在黎明前找到芯片。",
+            "visual_style": "现代都市动态漫画",
+            "aspect_ratio": "9:16",
+        },
+    ).json()
+
+
 def test_script_document_owns_numbered_revisions(db_session):
     project = _project(db_session)
     document = models.ScriptDocument(
@@ -260,3 +273,88 @@ def test_script_document_service_deletes_unreferenced_document_and_upload(
 
     assert db_session.get(models.ScriptDocument, document.id) is None
     assert not (tmp_path / saved.relative_path).exists()
+
+
+def test_script_document_routes_create_list_save_restore_and_delete(client):
+    project = _project_via_api(client)
+    created_response = client.post(
+        f"/api/projects/{project['id']}/scripts",
+        json={
+            "title": "雨夜",
+            "source_type": "paste",
+            "content": "第一集",
+        },
+    )
+    assert created_response.status_code == 201
+    created = created_response.json()
+    script_id = created["id"]
+    original_revision = created["current_revision"]
+
+    listed = client.get(f"/api/projects/{project['id']}/scripts")
+    assert listed.status_code == 200
+    assert listed.json()[0]["id"] == script_id
+    assert listed.json()[0]["revision_count"] == 1
+
+    first_finalized = client.post(f"/api/scripts/{script_id}/finalize")
+    assert first_finalized.status_code == 200
+
+    saved = client.patch(
+        f"/api/scripts/{script_id}",
+        json={
+            "title": "雨夜新版",
+            "content": "第一集\n场景一",
+            "expected_checksum": original_revision["checksum"],
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["title"] == "雨夜新版"
+    assert saved.json()["current_revision"]["content"] == "第一集\n场景一"
+
+    second_finalized = client.post(f"/api/scripts/{script_id}/finalize")
+    assert second_finalized.status_code == 200
+    restored = client.post(
+        f"/api/scripts/{script_id}/revisions/{original_revision['id']}/restore"
+    )
+    assert restored.status_code == 200
+    assert restored.json()["current_revision"]["revision_number"] == 3
+    assert restored.json()["current_revision"]["content"] == "第一集"
+
+    history = client.get(f"/api/scripts/{script_id}/revisions")
+    assert history.status_code == 200
+    assert [item["revision_number"] for item in history.json()] == [3, 2, 1]
+
+    deleted = client.delete(f"/api/scripts/{script_id}")
+    assert deleted.status_code == 204
+    assert client.get(f"/api/scripts/{script_id}").status_code == 404
+
+
+def test_script_document_route_returns_revision_conflict(client):
+    project = _project_via_api(client)
+    created = client.post(
+        f"/api/projects/{project['id']}/scripts",
+        json={"title": "冲突", "source_type": "paste", "content": "初稿"},
+    ).json()
+
+    response = client.patch(
+        f"/api/scripts/{created['id']}",
+        json={"content": "过期内容", "expected_checksum": "stale"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "revision_conflict"
+    assert response.json()["detail"]["latest_checksum"] == created["current_revision"]["checksum"]
+
+
+def test_script_upload_route_retains_original_file(client):
+    project = _project_via_api(client)
+
+    response = client.post(
+        f"/api/projects/{project['id']}/scripts/upload",
+        data={"title": "上传剧本"},
+        files={"file": ("story.txt", "第一集：雨夜".encode(), "text/plain")},
+    )
+
+    assert response.status_code == 201
+    revision = response.json()["current_revision"]
+    assert revision["original_filename"] == "story.txt"
+    assert revision["source_file_path"].endswith(".txt")

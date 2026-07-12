@@ -25,6 +25,7 @@ from comic_studio.routes.projects import character_router, router as projects_ro
 from comic_studio.routes.production import router as production_router
 from comic_studio.routes.provider_channels import router as provider_channels_router
 from comic_studio.routes.script_imports import router as script_imports_router
+from comic_studio.routes.scripts import router as scripts_router
 from comic_studio.routes.character_references import router as character_references_router
 from comic_studio.routes.videos import router as videos_router
 from comic_studio import models
@@ -219,6 +220,7 @@ def create_app() -> FastAPI:
     app.include_router(production_router)
     app.include_router(provider_channels_router)
     app.include_router(script_imports_router)
+    app.include_router(scripts_router)
     app.include_router(character_references_router)
     app.include_router(videos_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
