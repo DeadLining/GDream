@@ -297,8 +297,12 @@ class ScriptImport(Base):
     project: Mapped[Project] = relationship(back_populates="script_imports")
     script_revision: Mapped[ScriptRevision | None] = relationship(back_populates="imports")
     generated_episodes: Mapped[list[ScriptImportEpisode]] = relationship(
-        back_populates="script_import", cascade="all, delete-orphan"
+        back_populates="script_import", cascade="all, delete-orphan", lazy="selectin"
     )
+
+    @property
+    def generated_episode_ids(self) -> list[str]:
+        return [item.episode_id for item in self.generated_episodes]
 
 
 class ScriptImportEpisode(Base):

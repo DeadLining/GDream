@@ -19,6 +19,7 @@ from comic_studio.script_library import (
     ScriptPatch,
     ScriptRevisionRead,
 )
+from comic_studio.script_imports import ScriptImportRead
 from comic_studio.services.script_documents import (
     ScriptDocumentHasEpisodes,
     ScriptDocumentService,
@@ -27,6 +28,7 @@ from comic_studio.services.script_documents import (
 from comic_studio.services.script_extraction import ScriptSourceError, extract_uploaded_script
 from comic_studio.services.script_files import ScriptFilePathError, ScriptFileStore
 from comic_studio.services.script_imports import (
+    ScriptImportParserService,
     build_script_project_context,
     script_project_load_options,
 )
@@ -70,9 +72,20 @@ def _summary(document: models.ScriptDocument) -> ScriptDocumentSummary:
 
 
 def _read(document: models.ScriptDocument) -> ScriptDocumentRead:
+    imports = [
+        script_import
+        for revision in document.revisions
+        for script_import in revision.imports
+    ]
+    latest_import = max(imports, key=lambda item: item.created_at, default=None)
     return ScriptDocumentRead(
         **_summary(document).model_dump(),
         current_revision=ScriptRevisionRead.model_validate(_current(document)),
+        latest_import_id=latest_import.id if latest_import is not None else None,
+        parse_is_stale=(
+            latest_import is not None
+            and latest_import.script_revision_id != document.current_revision_id
+        ),
     )
 
 
@@ -314,3 +327,32 @@ def stream_script_generation(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/api/scripts/{script_id}/parse", response_model=ScriptImportRead)
+async def parse_script(script_id: str, request: Request):
+    with request.app.state.session_factory() as session:
+        service = ScriptDocumentService(session)
+        try:
+            service.finalize(script_id)
+            document = service.get(script_id)
+        except KeyError as exc:
+            raise _not_found(exc) from exc
+        revision = _current(document)
+        script_import = models.ScriptImport(
+            project_id=document.project_id,
+            script_revision_id=revision.id,
+            status="uploaded",
+            mode="auto",
+            source_format=document.source_type,
+            original_filename=revision.original_filename,
+            checksum=revision.checksum,
+            extracted_text=revision.content,
+        )
+        session.add(script_import)
+        session.commit()
+        session.refresh(script_import)
+        planner = request.app.state.provider_factory.create_llm()
+        return await ScriptImportParserService(session, planner).parse(
+            script_import.id
+        )

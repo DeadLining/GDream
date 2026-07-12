@@ -60,4 +60,5 @@ class ScriptDocumentSummary(BaseModel):
 
 class ScriptDocumentRead(ScriptDocumentSummary):
     current_revision: ScriptRevisionRead
-
+    latest_import_id: str | None = None
+    parse_is_stale: bool = False

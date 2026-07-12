@@ -226,3 +226,49 @@ def test_parser_marks_provider_failure_without_replacing_previous_draft(db_sessi
     assert script_import.error_category == "provider_failure"
     assert script_import.structured_draft == {"previous": True}
     assert "secret-token" not in script_import.error
+
+
+def test_script_parse_route_links_finalized_revision_without_mutating_source(client):
+    class Provider:
+        async def parse_script_import(self, context):
+            return valid_draft()
+
+    class Factory:
+        def create_llm(self):
+            return Provider()
+
+    client.app.state.provider_factory = Factory()
+    project = client.post(
+        "/api/projects",
+        json={
+            "title": "雨夜",
+            "logline": "追查芯片",
+            "story_bible": "近未来重庆",
+            "visual_style": "Chinese noir",
+            "aspect_ratio": "9:16",
+        },
+    ).json()
+    script = client.post(
+        f"/api/projects/{project['id']}/scripts",
+        json={"title": "正文", "source_type": "paste", "content": "第一集：雨夜"},
+    ).json()
+
+    response = client.post(f"/api/scripts/{script['id']}/parse")
+
+    assert response.status_code == 200
+    parsed = response.json()
+    assert parsed["script_revision_id"] == script["current_revision"]["id"]
+    assert parsed["extracted_text"] == "第一集：雨夜"
+    detail = client.get(f"/api/scripts/{script['id']}").json()
+    assert detail["current_revision"]["content"] == "第一集：雨夜"
+    assert detail["current_revision"]["status"] == "finalized"
+
+    edited = client.patch(
+        f"/api/scripts/{script['id']}",
+        json={
+            "content": "第二版内容",
+            "expected_checksum": detail["current_revision"]["checksum"],
+        },
+    ).json()
+    assert edited["latest_import_id"] == parsed["id"]
+    assert edited["parse_is_stale"] is True

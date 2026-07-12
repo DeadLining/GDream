@@ -126,6 +126,7 @@ class ScriptImportRead(BaseModel):
 
     id: str
     project_id: str
+    script_revision_id: str | None
     status: str
     mode: str
     source_format: str
@@ -138,6 +139,7 @@ class ScriptImportRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     applied_at: datetime | None
+    generated_episode_ids: list[str] = []
 
 
 class ScriptImportModeForm(StrictDraftModel):
