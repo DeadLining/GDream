@@ -15,7 +15,7 @@ function Placeholder({object}:{object:DirectorObjectDto}){
 export function DirectorObject({object,selected,editable,onTransform}:{object:DirectorObjectDto;selected:boolean;editable:boolean;onTransform:(transform:Transform)=>void}){
   const ref=useRef<Group>(null);
   if(!object.visible)return null;
-  const group=<group ref={ref} data-testid={`director-object-${object.id}`} data-placeholder={object.kind} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale}><Placeholder object={object}/></group>;
+  const group=<group ref={ref} name={`director-object-${object.id}`} userData={{placeholder:object.kind}} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale}><Placeholder object={object}/></group>;
   if(!selected||!editable)return group;
   return <TransformControls mode="translate" onObjectChange={()=>{const current=ref.current;if(!current)return;onTransform({position:[current.position.x,current.position.y,current.position.z],rotation:[current.rotation.x,current.rotation.y,current.rotation.z],scale:[current.scale.x,current.scale.y,current.scale.z]});}}>{group}</TransformControls>;
 }

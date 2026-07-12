@@ -23,8 +23,8 @@ describe('DirectorCanvas',()=>{
     const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" onTransform={vi.fn()}/>);
     const ui=within(view.container);
     expect(ui.getByTestId('r3f-canvas')).toBeInTheDocument();
-    expect(ui.getByTestId('director-object-character-1')).toHaveAttribute('data-placeholder','character');
-    expect(ui.getByTestId('director-object-prop-1')).toHaveAttribute('data-placeholder','prop');
+    expect(view.container.querySelector('[name="director-object-character-1"]')).toBeInTheDocument();
+    expect(view.container.querySelector('[name="director-object-prop-1"]')).toBeInTheDocument();
     expect(ui.getByTestId('transform-controls')).toBeInTheDocument();
     expect(ui.getByTestId('orbit')).toHaveAttribute('data-enabled','true');
   });
