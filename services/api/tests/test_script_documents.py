@@ -4,6 +4,12 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from comic_studio import models
+from comic_studio.services.script_documents import (
+    ScriptDocumentHasEpisodes,
+    ScriptDocumentService,
+    ScriptRevisionConflict,
+)
+from comic_studio.services.script_files import ScriptFileStore
 
 
 def _project(session) -> models.Project:
@@ -129,3 +135,128 @@ def test_script_import_episode_links_confirmed_episode_to_revision(db_session):
     assert script_import.generated_episodes == [link]
     assert link.episode == episode
 
+
+def test_script_document_service_creates_and_lists_latest_first(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+
+    first = service.create(project.id, "第一份", "paste", "第一集", "paste")
+    second = service.create(project.id, "第二份", "ai", "第二集", "ai")
+
+    assert [item.id for item in service.list_for_project(project.id)] == [
+        second.id,
+        first.id,
+    ]
+    assert second.current_revision_id is not None
+    assert second.revisions[0].status == "working"
+
+
+def test_script_document_service_saves_with_optimistic_checksum(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "剧本", "paste", "第一集", "paste")
+    revision = document.revisions[0]
+    original_checksum = revision.checksum
+
+    saved = service.save(document.id, "第一集\n场景一", original_checksum)
+
+    assert saved.content == "第一集\n场景一"
+    assert saved.checksum == sha256(saved.content.encode()).hexdigest()
+    with pytest.raises(ScriptRevisionConflict) as error:
+        service.save(document.id, "过期写入", original_checksum)
+    assert error.value.latest_checksum == saved.checksum
+
+
+def test_script_document_service_finalizes_then_starts_next_revision(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "剧本", "paste", "第一集", "paste")
+
+    finalized = service.finalize(document.id)
+    next_revision = service.save(document.id, "第二版", finalized.checksum)
+
+    assert finalized.status == "finalized"
+    assert next_revision.status == "working"
+    assert next_revision.revision_number == 2
+    assert document.current_revision_id == next_revision.id
+
+
+def test_script_document_service_restores_as_new_finalized_revision(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "剧本", "paste", "第一版", "paste")
+    first = service.finalize(document.id)
+    working = service.save(document.id, "第二版", first.checksum)
+    service.finalize(document.id)
+
+    restored = service.restore(document.id, first.id)
+
+    assert restored.content == "第一版"
+    assert restored.status == "finalized"
+    assert restored.creation_method == "restore"
+    assert restored.revision_number == working.revision_number + 1
+    assert document.current_revision_id == restored.id
+
+
+def test_script_document_service_renames_document(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "旧标题", "paste", "正文", "paste")
+
+    renamed = service.rename(document.id, " 新标题 ")
+
+    assert renamed.title == "新标题"
+
+
+def test_script_document_service_blocks_delete_when_episode_uses_script(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "来源", "paste", "正文", "paste")
+    revision = service.finalize(document.id)
+    script_import = models.ScriptImport(
+        project_id=project.id,
+        script_revision_id=revision.id,
+        status="applied",
+        mode="auto",
+        source_format="paste",
+        checksum=revision.checksum,
+        extracted_text=revision.content,
+    )
+    episode = models.Episode(
+        project_id=project.id,
+        title="第一集",
+        premise="来源测试",
+        target_duration_seconds=60,
+    )
+    db_session.add_all([script_import, episode])
+    db_session.flush()
+    db_session.add(models.ScriptImportEpisode(
+        script_import_id=script_import.id,
+        episode_id=episode.id,
+        draft_episode_id="episode-1",
+    ))
+    db_session.commit()
+
+    with pytest.raises(ScriptDocumentHasEpisodes) as error:
+        service.delete(document.id)
+
+    assert error.value.episodes == [(episode.id, "第一集")]
+    assert db_session.get(models.ScriptDocument, document.id) is not None
+
+
+def test_script_document_service_deletes_unreferenced_document_and_upload(
+    db_session, tmp_path
+):
+    project = _project(db_session)
+    file_store = ScriptFileStore(tmp_path)
+    service = ScriptDocumentService(db_session, file_store)
+    document = service.create(project.id, "上传", "upload", "正文", "upload")
+    saved = file_store.persist_upload(project.id, document.id, "story.txt", b"story")
+    revision = document.revisions[0]
+    revision.source_file_path = saved.relative_path
+    db_session.commit()
+
+    service.delete(document.id)
+
+    assert db_session.get(models.ScriptDocument, document.id) is None
+    assert not (tmp_path / saved.relative_path).exists()
