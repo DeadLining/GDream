@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from comic_studio.db import Base
@@ -40,6 +40,9 @@ class Project(Base):
     )
     script_imports: Mapped[list[ScriptImport]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="ScriptImport.created_at"
+    )
+    scripts: Mapped[list[ScriptDocument]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="ScriptDocument.updated_at"
     )
 
 
@@ -88,6 +91,9 @@ class Episode(Base):
     project: Mapped[Project] = relationship(back_populates="episodes")
     scenes: Mapped[list[Scene]] = relationship(
         back_populates="episode", cascade="all, delete-orphan", order_by="Scene.position"
+    )
+    script_source: Mapped[ScriptImportEpisode | None] = relationship(
+        back_populates="episode", cascade="all, delete-orphan", uselist=False
     )
 
 
@@ -225,12 +231,73 @@ class ModelInvocation(Base):
     )
 
 
+class ScriptDocument(Base):
+    __tablename__ = "script_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    source_type: Mapped[str] = mapped_column(String(24), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
+    current_revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    project: Mapped[Project] = relationship(back_populates="scripts")
+    revisions: Mapped[list[ScriptRevision]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="ScriptRevision.revision_number",
+    )
+
+
+class ScriptRevision(Base):
+    __tablename__ = "script_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id", "revision_number", name="uq_script_revision_number"
+        ),
+        Index(
+            "uq_script_revision_working",
+            "document_id",
+            unique=True,
+            sqlite_where=text("status = 'working'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("script_documents.id", ondelete="CASCADE"), index=True
+    )
+    revision_number: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24), default="working", index=True)
+    content: Mapped[str] = mapped_column(Text)
+    checksum: Mapped[str] = mapped_column(String(64))
+    creation_method: Mapped[str] = mapped_column(String(24))
+    original_filename: Mapped[str] = mapped_column(String(255), default="")
+    source_file_path: Mapped[str] = mapped_column(Text, default="")
+    source_media_type: Mapped[str] = mapped_column(String(120), default="")
+    generation_brief: Mapped[str] = mapped_column(Text, default="")
+    generation_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    document: Mapped[ScriptDocument] = relationship(back_populates="revisions")
+    imports: Mapped[list[ScriptImport]] = relationship(back_populates="script_revision")
+
+
 class ScriptImport(Base):
     __tablename__ = "script_imports"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    script_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("script_revisions.id", ondelete="CASCADE"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(String(24), default="uploaded", index=True)
     mode: Mapped[str] = mapped_column(String(24), default="auto")
@@ -248,6 +315,37 @@ class ScriptImport(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     project: Mapped[Project] = relationship(back_populates="script_imports")
+    script_revision: Mapped[ScriptRevision | None] = relationship(back_populates="imports")
+    generated_episodes: Mapped[list[ScriptImportEpisode]] = relationship(
+        back_populates="script_import", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    @property
+    def generated_episode_ids(self) -> list[str]:
+        return [item.episode_id for item in self.generated_episodes]
+
+
+class ScriptImportEpisode(Base):
+    __tablename__ = "script_import_episodes"
+    __table_args__ = (
+        UniqueConstraint(
+            "script_import_id", "episode_id", name="uq_script_import_episode"
+        ),
+        UniqueConstraint("episode_id", name="uq_episode_script_source"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    script_import_id: Mapped[str] = mapped_column(
+        ForeignKey("script_imports.id", ondelete="CASCADE"), index=True
+    )
+    episode_id: Mapped[str] = mapped_column(
+        ForeignKey("episodes.id", ondelete="CASCADE"), index=True
+    )
+    draft_episode_id: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    script_import: Mapped[ScriptImport] = relationship(back_populates="generated_episodes")
+    episode: Mapped[Episode] = relationship(back_populates="script_source")
 
 
 class CharacterReference(Base):

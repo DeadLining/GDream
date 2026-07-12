@@ -200,3 +200,19 @@ def test_invalid_mapping_rolls_back_entire_confirmation(client):
     assert detail["characters"] == []
     assert detail["episodes"] == []
     assert client.get(f"/api/script-imports/{import_id}").json()["status"] == "ready"
+
+
+def test_confirmation_records_episode_provenance(client):
+    project, import_id = _ready_import(client)
+
+    response = client.post(f"/api/script-imports/{import_id}/confirm", json={})
+
+    assert response.status_code == 200
+    episode_ids = response.json()["generated_episode_ids"]
+    assert len(episode_ids) == 1
+    with client.app.state.session_factory() as session:
+        link = session.query(models.ScriptImportEpisode).filter_by(
+            script_import_id=import_id
+        ).one()
+        assert link.episode_id == episode_ids[0]
+        assert link.draft_episode_id == "ep-1"

@@ -371,6 +371,34 @@ test('AI script creation streams before completion and waits for manual parsing'
   await expect.poll(()=>parseRequests).toBe(1);
 });
 
+test('deletes an episode and selects the adjacent episode',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='desktop','Episode deletion is covered once on desktop');
+  const second={...episodeSummary,id:'episode-2',title:'第二集',premise:'继续追查'};
+  let currentProject={...projectDetail,episodes:[episodeSummary,second]};
+  let deleteRequests=0;
+  await page.route('**/api/projects/project-1',route=>route.fulfill({json:currentProject}));
+  await page.route('**/api/episodes/episode-2',route=>route.fulfill({json:{...episode,id:'episode-2',title:'第二集',premise:'继续追查'}}));
+  await page.route('**/api/episodes/episode-2/production-readiness',route=>route.fulfill({json:{episode_id:'episode-2',ready:false,totals:{shots:2,dialogue:0},ready_counts:{panels:1,approved:1,speech:0},blockers:{missing_panels:['shot-1'],unapproved_shots:['shot-1'],missing_speech:[]}}}));
+  await page.route('**/api/episodes/episode-1/deletion-preview',route=>route.fulfill({json:{episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:3}}}));
+  await page.route('**/api/episodes/episode-1',async route=>{
+    if(route.request().method()!=='DELETE')return route.fallback();
+    deleteRequests+=1;
+    currentProject={...currentProject,episodes:[second]};
+    await route.fulfill({json:{episode_id:'episode-1',deleted_episode_id:'episode-1',title:'失窃的雨夜',deleted:{scenes:1,shots:2,dialogue_lines:0,assets:3},cleanup_warnings:[]}});
+  });
+
+  await page.goto('/');
+  await page.getByRole('button',{name:'删除剧集：失窃的雨夜'}).click();
+  await expect(page.getByRole('dialog',{name:'永久删除剧集'})).toContainText('3 个媒体素材');
+  await page.getByRole('button',{name:'取消'}).click();
+  expect(deleteRequests).toBe(0);
+  await page.getByRole('button',{name:'删除剧集：失窃的雨夜'}).click();
+  await page.getByRole('button',{name:'永久删除'}).click();
+  await expect(page.locator('.episode-item[aria-current="page"]')).toContainText('第二集');
+  await expect(page.getByRole('button',{name:'删除剧集：失窃的雨夜'})).toHaveCount(0);
+  expect(deleteRequests).toBe(1);
+});
+
 test('desktop shot selection keeps the storyboard work area active', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'Desktop-specific behavior');
   await page.goto('/');

@@ -37,20 +37,52 @@ class EpisodeDeletionService:
 
     def preview(self, episode_id: str) -> EpisodeDeletionImpact | None:
         episode = self.session.scalar(
-            select(models.Episode).options(selectinload(models.Episode.scenes).selectinload(models.Scene.shots).selectinload(models.Shot.dialogue)).where(models.Episode.id == episode_id)
+            select(models.Episode)
+            .options(
+                selectinload(models.Episode.scenes)
+                .selectinload(models.Scene.shots)
+                .selectinload(models.Shot.dialogue)
+            )
+            .where(models.Episode.id == episode_id)
         )
         if episode is None:
             return None
+
         shots = [shot for scene in episode.scenes for shot in scene.shots]
         dialogue = [line for shot in shots for line in shot.dialogue]
         shot_ids = tuple(shot.id for shot in shots)
         dialogue_ids = tuple(line.id for line in dialogue)
-        asset_kinds = {*(f"panel:{value}" for value in shot_ids), *(f"video:{value}" for value in shot_ids), *(f"dialogue:{value}" for value in dialogue_ids)}
-        assets = list(self.session.scalars(select(models.Asset).where(models.Asset.kind.in_(asset_kinds)))) if asset_kinds else []
+        asset_kinds = {
+            *(f"panel:{shot_id}" for shot_id in shot_ids),
+            *(f"video:{shot_id}" for shot_id in shot_ids),
+            *(f"dialogue:{dialogue_id}" for dialogue_id in dialogue_ids),
+        }
+        assets = (
+            list(
+                self.session.scalars(
+                    select(models.Asset).where(models.Asset.kind.in_(asset_kinds))
+                )
+            )
+            if asset_kinds
+            else []
+        )
         render_paths: list[str] = []
         cleanup_warnings: list[str] = []
-        expected_prefix = ("projects", episode.project_id, "episodes", episode.id, "renders")
-        for job in self.session.scalars(select(models.Job).where(models.Job.operation == "render_episode", models.Job.target_type == "episode", models.Job.target_id == episode.id)):
+        render_jobs = self.session.scalars(
+            select(models.Job).where(
+                models.Job.operation == "render_episode",
+                models.Job.target_type == "episode",
+                models.Job.target_id == episode.id,
+            )
+        )
+        expected_prefix = (
+            "projects",
+            episode.project_id,
+            "episodes",
+            episode.id,
+            "renders",
+        )
+        for job in render_jobs:
             output_path = job.result_metadata.get("output_path")
             if not isinstance(output_path, str):
                 continue
@@ -59,8 +91,25 @@ class EpisodeDeletionService:
                 if "Skipped unsafe media path" not in cleanup_warnings:
                     cleanup_warnings.append("Skipped unsafe media path")
                 continue
-            render_paths.extend([str(relative), str(relative.with_suffix(".manifest.json"))])
-        return EpisodeDeletionImpact(episode.id, episode.title, len(episode.scenes), len(shots), len(dialogue), len(assets) + len(render_paths) // 2, shot_ids, dialogue_ids, tuple(asset.id for asset in assets), (*(asset.local_path for asset in assets if asset.local_path), *render_paths), tuple(cleanup_warnings))
+            render_paths.extend(
+                [str(relative), str(relative.with_suffix(".manifest.json"))]
+            )
+        return EpisodeDeletionImpact(
+            episode_id=episode.id,
+            title=episode.title,
+            scenes=len(episode.scenes),
+            shots=len(shots),
+            dialogue_lines=len(dialogue),
+            assets=len(assets) + len(render_paths) // 2,
+            shot_ids=shot_ids,
+            dialogue_ids=dialogue_ids,
+            asset_ids=tuple(asset.id for asset in assets),
+            local_paths=(
+                *(asset.local_path for asset in assets if asset.local_path),
+                *render_paths,
+            ),
+            cleanup_warnings=tuple(cleanup_warnings),
+        )
 
     def delete(self, episode_id: str) -> EpisodeDeletionResult | None:
         impact = self.preview(episode_id)
@@ -69,25 +118,65 @@ class EpisodeDeletionService:
         episode = self.session.get(models.Episode, episode_id)
         if episode is None:
             return None
-        run_ids = tuple(self.session.scalars(select(models.ProductionRun.id).where(models.ProductionRun.episode_id == episode_id)))
+
+        run_ids = tuple(
+            self.session.scalars(
+                select(models.ProductionRun.id).where(
+                    models.ProductionRun.episode_id == episode_id
+                )
+            )
+        )
         try:
             if impact.asset_ids:
-                self.session.execute(delete(models.Asset).where(models.Asset.id.in_(impact.asset_ids)))
-            targets = [and_(models.Job.target_type == "episode", models.Job.target_id == episode_id)]
+                self.session.execute(
+                    delete(models.Asset).where(models.Asset.id.in_(impact.asset_ids))
+                )
+            job_targets = [
+                and_(
+                    models.Job.target_type == "episode",
+                    models.Job.target_id == episode_id,
+                )
+            ]
             if impact.shot_ids:
-                targets.append(and_(models.Job.target_type == "shot", models.Job.target_id.in_(impact.shot_ids)))
+                job_targets.append(
+                    and_(
+                        models.Job.target_type == "shot",
+                        models.Job.target_id.in_(impact.shot_ids),
+                    )
+                )
             if impact.dialogue_ids:
-                targets.append(and_(models.Job.target_type == "dialogue", models.Job.target_id.in_(impact.dialogue_ids)))
-            self.session.execute(delete(models.Job).where(or_(*targets)))
+                job_targets.append(
+                    and_(
+                        models.Job.target_type == "dialogue",
+                        models.Job.target_id.in_(impact.dialogue_ids),
+                    )
+                )
+            self.session.execute(delete(models.Job).where(or_(*job_targets)))
             if run_ids:
-                self.session.execute(delete(models.ProductionItem).where(models.ProductionItem.run_id.in_(run_ids)))
-                self.session.execute(delete(models.ProductionRun).where(models.ProductionRun.id.in_(run_ids)))
+                self.session.execute(
+                    delete(models.ProductionItem).where(
+                        models.ProductionItem.run_id.in_(run_ids)
+                    )
+                )
+                self.session.execute(
+                    delete(models.ProductionRun).where(
+                        models.ProductionRun.id.in_(run_ids)
+                    )
+                )
             self.session.delete(episode)
             self.session.commit()
         except Exception:
             self.session.rollback()
             raise
-        return EpisodeDeletionResult(impact, tuple(dict.fromkeys((*impact.cleanup_warnings, *self._cleanup_files(impact.local_paths)))))
+
+        return EpisodeDeletionResult(
+            impact=impact,
+            cleanup_warnings=tuple(
+                dict.fromkeys(
+                    (*impact.cleanup_warnings, *self._cleanup_files(impact.local_paths))
+                )
+            ),
+        )
 
     def _cleanup_files(self, local_paths: tuple[str, ...]) -> tuple[str, ...]:
         warnings: list[str] = []
@@ -103,11 +192,14 @@ class EpisodeDeletionService:
                 if "Could not remove one local media file" not in warnings:
                     warnings.append("Could not remove one local media file")
                 continue
-            current = candidate.parent
-            while current != self.data_root and self.data_root in current.parents:
-                try:
-                    current.rmdir()
-                except OSError:
-                    break
-                current = current.parent
+            self._remove_empty_parents(candidate.parent)
         return tuple(warnings)
+
+    def _remove_empty_parents(self, directory: Path) -> None:
+        current = directory
+        while current != self.data_root and self.data_root in current.parents:
+            try:
+                current.rmdir()
+            except OSError:
+                return
+            current = current.parent

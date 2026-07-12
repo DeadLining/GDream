@@ -15,7 +15,7 @@ import {ProjectNavigator} from './ProjectNavigator';
 import {ReviewPanel} from './ReviewPanel';
 import {Storyboard} from './Storyboard';
 import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
-import {ScriptImportWorkspace} from './ScriptImportWorkspace';
+import {ScriptLibrary} from './ScriptLibrary';
 import {CharacterWorkspace} from './CharacterWorkspace';
 import {DeleteEpisodeDialog} from './DeleteEpisodeDialog';
 
@@ -194,7 +194,7 @@ export function Workspace() {
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
   let center;
-  if (workArea === 'import' && project) center = <ScriptImportWorkspace projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
+  if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (workArea === 'characters' && project) center = <CharacterWorkspace characters={project.characters}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;

@@ -218,6 +218,12 @@ class ScriptImportConfirmationService:
                 )
                 self.session.add(episode)
                 self.session.flush()
+                script_import.generated_episodes.append(
+                    models.ScriptImportEpisode(
+                        episode_id=episode.id,
+                        draft_episode_id=planned_episode.draft_id,
+                    )
+                )
                 for scene_position, planned_scene in enumerate(
                     planned_episode.scenes, start=1
                 ):

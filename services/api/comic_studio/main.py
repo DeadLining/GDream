@@ -29,6 +29,7 @@ from comic_studio.routes.projects import character_router, router as projects_ro
 from comic_studio.routes.production import router as production_router
 from comic_studio.routes.provider_channels import router as provider_channels_router
 from comic_studio.routes.script_imports import router as script_imports_router
+from comic_studio.routes.scripts import router as scripts_router
 from comic_studio.routes.character_references import router as character_references_router
 from comic_studio.routes.videos import router as videos_router
 from comic_studio.routes.mock_ssh import router as mock_ssh_router
@@ -157,6 +158,7 @@ def create_app(
         app.state.model_runtime.recover_interrupted_jobs()
         recover_production_runs()
         recover_script_imports()
+        recover_script_generations()
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
@@ -240,6 +242,22 @@ def create_app(
 
     app.state.recover_script_imports = recover_script_imports
 
+    def recover_script_generations():
+        recovered = []
+        with session_factory() as session:
+            documents = list(
+                session.query(models.ScriptDocument).filter(
+                    models.ScriptDocument.status == "generating"
+                )
+            )
+            for document in documents:
+                document.status = "generation_failed"
+                recovered.append(document.id)
+            session.commit()
+        return recovered
+
+    app.state.recover_script_generations = recover_script_generations
+
     async def produce_panel(item):
         asset = await app.state.model_runtime.execute_image(
             "shot", item.target_id, {"activate": True}
@@ -275,6 +293,7 @@ def create_app(
     app.include_router(production_router)
     app.include_router(provider_channels_router)
     app.include_router(script_imports_router)
+    app.include_router(scripts_router)
     app.include_router(character_references_router)
     app.include_router(videos_router)
     app.include_router(mock_ssh_router)
