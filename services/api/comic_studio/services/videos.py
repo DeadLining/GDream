@@ -11,6 +11,10 @@ from comic_studio.assets import AssetStore
 from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
+VIDEO_TASK_POLL_INTERVAL_SECONDS = 2
+VIDEO_TASK_MAX_POLLS = 1800
+
+
 class VideoService:
     def __init__(self, session: Session, data_root: Path, provider):
         self.session = session
@@ -62,11 +66,11 @@ class VideoService:
             prompt, path.read_bytes(), panel.media_type, duration
         )
         task = None
-        for _ in range(300):
+        for _ in range(VIDEO_TASK_MAX_POLLS):
             task = await self.provider.get_task(task_id)
             if task.status in {"succeeded", "failed"}:
                 break
-            await asyncio.sleep(2)
+            await asyncio.sleep(VIDEO_TASK_POLL_INTERVAL_SECONDS)
         if task is None or task.status != "succeeded":
             raise ValueError(task.error if task else "video_task_timeout")
         result = await self.provider.download_result(task)
