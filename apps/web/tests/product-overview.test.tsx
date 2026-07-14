@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ProductOverview} from '../components/ProductOverview';
 import type {EpisodeDetail, ProductionReadiness, ProjectDetail, Storyline, Volume} from '../lib/types';
+import {readAllStyles} from './_styles';
 
 const project: ProjectDetail = {
   id: 'project-1', title: '时空漫游', logline: '寻找失落的时间线', story_bible: '跨越三卷的成长故事', visual_style: 'cinematic anime', aspect_ratio: '16:9', language: 'Chinese', created_at: '', updated_at: '',
@@ -117,5 +118,11 @@ describe('ProductOverview', () => {
     await userEvent.click(screen.getByRole('button',{name:'关闭卷表单'}));
     await userEvent.click(screen.getByRole('button',{name:'删除卷 迷雾深处'}));
     expect(onDeleteVolume).toHaveBeenCalledWith('volume-2');
+  });
+
+  it('contains wide episode tables inside the overview column', () => {
+    const styles=readAllStyles();
+    expect(styles).toMatch(/\.episode-operations[^}]*overflow:\s*hidden/);
+    expect(styles).toMatch(/\.episode-table\s*\{[^}]*overflow-x:\s*auto/);
   });
 });
