@@ -7,12 +7,17 @@ import {readAllStyles} from './_styles';
 const mocks=vi.hoisted(()=>({
   list:vi.fn(),upload:vi.fn(),generateSet:vi.fn(),update:vi.fn(),activate:vi.fn(),
   retry:vi.fn(),pollJob:vi.fn(),variants:vi.fn(),
+  libraryAssets:vi.fn(),createLibraryAsset:vi.fn(),updateLibraryAsset:vi.fn(),deleteLibraryAsset:vi.fn(),
   suggestVariant:vi.fn(),
   createVariant:vi.fn(),createState:vi.fn(),updateVariant:vi.fn(),updateState:vi.fn(),deleteVariant:vi.fn(),deleteState:vi.fn(),
 }));
 vi.mock('../lib/api',()=>({
   listCharacterReferences:mocks.list,
   listAssetVariants:mocks.variants,
+  listLibraryAssets:mocks.libraryAssets,
+  createLibraryAsset:mocks.createLibraryAsset,
+  updateLibraryAsset:mocks.updateLibraryAsset,
+  deleteLibraryAsset:mocks.deleteLibraryAsset,
   uploadCharacterReference:mocks.upload,
   generateCharacterReferenceSet:mocks.generateSet,
   updateCharacterReference:mocks.update,
@@ -44,6 +49,7 @@ beforeEach(()=>{
   vi.clearAllMocks();
   mocks.list.mockResolvedValue(allReferences);
   mocks.variants.mockResolvedValue(variants);
+  mocks.libraryAssets.mockResolvedValue([]);
   mocks.update.mockResolvedValue({...reference,review_status:'approved'});
   mocks.activate.mockResolvedValue({...reference,review_status:'approved',is_active:true});
   mocks.generateSet.mockResolvedValue({job_id:'job-1',capability:'image',status:'queued'});
@@ -56,6 +62,24 @@ beforeEach(()=>{
   });
 });
 afterEach(cleanup);
+
+it('manages project asset catalogs even before the project has characters',async()=>{
+  mocks.libraryAssets.mockResolvedValueOnce([{id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},created_at:'',updated_at:''}]).mockResolvedValue([]);
+  mocks.createLibraryAsset.mockResolvedValue({id:'la2',project_id:'p1',kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{},created_at:'',updated_at:''});
+  const user=userEvent.setup();
+  render(<CharacterWorkspace projectId="p1" characters={[]}/>);
+
+  await waitFor(()=>expect(mocks.libraryAssets).toHaveBeenCalledWith('p1'));
+  await user.click(await screen.findByRole('button',{name:'场景 1'}));
+  expect(screen.getByRole('button',{name:/雨夜天台/})).toBeVisible();
+
+  await user.click(screen.getByRole('button',{name:'新建场景'}));
+  await user.type(screen.getByRole('textbox',{name:'资产名称'}),'地下车库');
+  await user.type(screen.getByRole('textbox',{name:'资产描述'}),'追逐场景');
+  await user.type(screen.getByRole('textbox',{name:'资产标签'}),'室内');
+  await user.click(screen.getByRole('button',{name:'保存资产'}));
+  expect(mocks.createLibraryAsset).toHaveBeenCalledWith('p1',{kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{}});
+});
 
 it('keeps the AI variant workspace inside one viewport without a canvas scrollbar',()=>{
   const css=readAllStyles();
