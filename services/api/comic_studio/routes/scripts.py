@@ -21,6 +21,7 @@ from comic_studio.script_library import (
 )
 from comic_studio.script_imports import ScriptImportRead
 from comic_studio.services.script_documents import (
+    ScriptAlreadyExists,
     ScriptDocumentHasEpisodes,
     ScriptDocumentService,
     ScriptRevisionConflict,
@@ -115,6 +116,10 @@ def create_script(project_id: str, data: ScriptCreate, session: SessionDependenc
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Project not found") from exc
+    except ScriptAlreadyExists as exc:
+        raise HTTPException(
+            status_code=409, detail="Project already has a script"
+        ) from exc
     return _read(document)
 
 
@@ -140,17 +145,35 @@ async def upload_script(project_id: str, request: Request):
             session, ScriptFileStore(request.app.state.settings.data_root)
         )
         try:
-            document = service.create(
-                project_id, title, "upload", extracted.text, "upload"
-            )
+            document = service.get_for_project(project_id)
+            created_new = document is None
+            if created_new:
+                document = service.create(
+                    project_id,
+                    title,
+                    "upload",
+                    extracted.text,
+                    "upload",
+                    revision_status="finalized",
+                )
             saved = service.file_store.persist_upload(
                 project_id, document.id, extracted.filename, content
             )
-            revision = _current(document)
-            revision.original_filename = extracted.filename
-            revision.source_file_path = saved.relative_path
-            revision.source_media_type = getattr(upload, "content_type", "") or ""
-            session.commit()
+            if created_new:
+                revision = _current(document)
+                revision.original_filename = extracted.filename
+                revision.source_file_path = saved.relative_path
+                revision.source_media_type = getattr(upload, "content_type", "") or ""
+                session.commit()
+            else:
+                service.create_revision(
+                    document.id,
+                    extracted.text,
+                    "upload",
+                    original_filename=extracted.filename,
+                    source_file_path=saved.relative_path,
+                    source_media_type=getattr(upload, "content_type", "") or "",
+                )
             return _read(service.get(document.id))
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Project not found") from exc
@@ -258,12 +281,13 @@ def stream_script_generation(
             document = service.get(script_id)
         except KeyError as exc:
             raise _not_found(exc) from exc
-        current = _current(document)
-        if current.id != payload.expected_revision_id:
-            raise HTTPException(status_code=409, detail="revision_conflict")
-        if current.status == "finalized":
-            current = service.save(document.id, current.content, current.checksum)
-            document = service.get(document.id)
+        try:
+            current = service.prepare_generation(
+                document.id, payload.expected_revision_id, payload.brief
+            )
+        except ScriptRevisionConflict as exc:
+            raise HTTPException(status_code=409, detail="revision_conflict") from exc
+        document = service.get(document.id)
         project = session.scalar(
             select(models.Project)
             .options(*script_project_load_options())
@@ -271,7 +295,6 @@ def stream_script_generation(
         )
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        current.generation_brief = payload.brief.strip()
         document.status = "generating"
         session.commit()
         revision_id = current.id

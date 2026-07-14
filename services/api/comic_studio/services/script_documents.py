@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from hashlib import sha256
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
@@ -13,6 +14,10 @@ class ScriptRevisionConflict(RuntimeError):
     def __init__(self, latest_checksum: str):
         super().__init__("revision_conflict")
         self.latest_checksum = latest_checksum
+
+
+class ScriptAlreadyExists(RuntimeError):
+    pass
 
 
 class ScriptDocumentHasEpisodes(RuntimeError):
@@ -64,9 +69,16 @@ class ScriptDocumentService:
         source_type: str,
         content: str,
         creation_method: str,
+        *,
+        revision_status: str = "working",
+        original_filename: str = "",
+        source_file_path: str = "",
+        source_media_type: str = "",
     ) -> models.ScriptDocument:
         if self.session.get(models.Project, project_id) is None:
             raise KeyError(project_id)
+        if self.get_for_project(project_id) is not None:
+            raise ScriptAlreadyExists(project_id)
         document = models.ScriptDocument(
             project_id=project_id,
             title=title.strip() or "未命名剧本",
@@ -77,10 +89,13 @@ class ScriptDocumentService:
         revision = models.ScriptRevision(
             document_id=document.id,
             revision_number=1,
-            status="working",
+            status=revision_status,
             content=content,
             checksum=_checksum(content),
             creation_method=creation_method,
+            original_filename=original_filename,
+            source_file_path=source_file_path,
+            source_media_type=source_media_type,
         )
         self.session.add(revision)
         self.session.flush()
@@ -98,7 +113,14 @@ class ScriptDocumentService:
             # Chapter extraction is best-effort on import; the route layer
             # exposes explicit re-extraction for retry.
             pass
-        self.session.commit()
+        document.status = "ready" if revision_status == "finalized" else "draft"
+        try:
+            self.session.commit()
+        except IntegrityError as exc:
+            self.session.rollback()
+            if self.get_for_project(project_id) is not None:
+                raise ScriptAlreadyExists(project_id) from exc
+            raise
         return self._load(document.id)
 
     def list_for_project(self, project_id: str) -> list[models.ScriptDocument]:
@@ -112,6 +134,13 @@ class ScriptDocumentService:
                     models.ScriptDocument.created_at.desc(),
                 )
             ).all()
+        )
+
+    def get_for_project(self, project_id: str) -> models.ScriptDocument | None:
+        return self.session.scalar(
+            select(models.ScriptDocument)
+            .options(selectinload(models.ScriptDocument.revisions))
+            .where(models.ScriptDocument.project_id == project_id)
         )
 
     def get(self, document_id: str) -> models.ScriptDocument:
@@ -152,6 +181,85 @@ class ScriptDocumentService:
         else:
             current.content = content
             current.checksum = _checksum(content)
+        self.session.commit()
+        self.session.refresh(current)
+        return current
+
+    def create_revision(
+        self,
+        document_id: str,
+        content: str,
+        creation_method: str,
+        *,
+        status: str = "finalized",
+        original_filename: str = "",
+        source_file_path: str = "",
+        source_media_type: str = "",
+        generation_brief: str = "",
+    ) -> models.ScriptRevision:
+        document = self._load(document_id)
+        current = self._current(document)
+        if current.status == "working":
+            current.status = "finalized"
+        revision = models.ScriptRevision(
+            document_id=document.id,
+            revision_number=(
+                self.session.scalar(
+                    select(func.max(models.ScriptRevision.revision_number)).where(
+                        models.ScriptRevision.document_id == document.id
+                    )
+                )
+                or 0
+            )
+            + 1,
+            status=status,
+            content=content,
+            checksum=_checksum(content),
+            creation_method=creation_method,
+            original_filename=original_filename,
+            source_file_path=source_file_path,
+            source_media_type=source_media_type,
+            generation_brief=generation_brief,
+        )
+        self.session.add(revision)
+        self.session.flush()
+        document.current_revision_id = revision.id
+        document.source_type = "ai" if creation_method == "ai" else (
+            "upload" if creation_method == "upload" else document.source_type
+        )
+        document.status = "ready" if status == "finalized" else "draft"
+        if content:
+            try:
+                from comic_studio.services.chapter_events import ChapterEventService
+
+                ChapterEventService(self.session).populate_chapters(
+                    document.id, content, replace=True
+                )
+            except Exception:
+                pass
+        self.session.commit()
+        self.session.refresh(revision)
+        return revision
+
+    def prepare_generation(
+        self, document_id: str, expected_revision_id: str, brief: str
+    ) -> models.ScriptRevision:
+        document = self._load(document_id)
+        current = self._current(document)
+        if current.id != expected_revision_id:
+            raise ScriptRevisionConflict(current.checksum)
+        if current.status == "finalized" or current.content:
+            return self.create_revision(
+                document.id,
+                "",
+                "ai",
+                status="working",
+                generation_brief=brief.strip(),
+            )
+        current.creation_method = "ai"
+        current.generation_brief = brief.strip()
+        document.source_type = "ai"
+        document.status = "draft"
         self.session.commit()
         self.session.refresh(current)
         return current

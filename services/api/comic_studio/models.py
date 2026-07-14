@@ -624,6 +624,9 @@ class ModelInvocation(Base):
 
 class ScriptDocument(Base):
     __tablename__ = "script_documents"
+    __table_args__ = (
+        UniqueConstraint("project_id", name="uq_script_document_project"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     project_id: Mapped[str] = mapped_column(
@@ -997,4 +1000,3 @@ class ImageProxyCache(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
