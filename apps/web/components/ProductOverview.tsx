@@ -27,6 +27,10 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
   const [volumeError,setVolumeError]=useState('');
   const totalScenes = episode?.scenes.length ?? 0;
   const totalShots = readiness?.totals.shots ?? episode?.scenes.reduce((total, scene) => total + scene.shots.length, 0) ?? 0;
+  const assignedEpisodes = volumes.flatMap(volume => volume.episodes);
+  const assignedEpisodeIds = new Set(assignedEpisodes.map(item => item.id));
+  const orderedEpisodes = [...assignedEpisodes, ...project.episodes.filter(item => !assignedEpisodeIds.has(item.id))];
+  const primaryEpisodeId = episode?.id ?? orderedEpisodes[0]?.id ?? null;
   const currentProgress = readiness && readiness.totals.shots
     ? Math.round((readiness.ready_counts.panels + readiness.ready_counts.approved) / (readiness.totals.shots * 2) * 100)
     : 0;
@@ -41,7 +45,7 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
       <div className="project-cover"><Clapperboard size={24}/></div>
       <div className="product-overview-title"><span>当前作品</span><h1>{project.title}</h1><p>{project.logline}</p></div>
       <div className="project-summary-metrics"><span><BookOpenText size={14}/><strong>{volumes.length}</strong> 卷</span><span><Clapperboard size={14}/><strong>{project.episodes.length}</strong> 集</span><span><Boxes size={14}/><strong>{totalScenes}</strong> 场</span><span><Users size={14}/><strong>{project.characters.length}</strong> 角色</span></div>
-      <button className="primary-action" type="button" onClick={() => project.episodes[0] && onOpenEpisode(project.episodes[0].id)}>进入制作<ArrowRight size={15}/></button>
+      <button className="primary-action" type="button" disabled={!primaryEpisodeId} onClick={() => primaryEpisodeId && onOpenEpisode(primaryEpisodeId)}>进入制作<ArrowRight size={15}/></button>
     </header>
 
     <section className="project-stage-rail" aria-label="作品制作阶段">
@@ -54,7 +58,7 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
         {volumeForm&&<form className="narrative-inline-form volume-create-form" onSubmit={event=>{event.preventDefault();void saveVolume();}}><header><strong>{editingVolumeId?'编辑卷 / 篇章':'新建卷 / 篇章'}</strong><button type="button" aria-label="关闭卷表单" onClick={closeVolumeForm}><X size={14}/></button></header><label>卷标题<input aria-label="卷标题" value={volumeTitle} onChange={event=>setVolumeTitle(event.target.value)} autoFocus/></label><label>卷简介<textarea aria-label="卷简介" value={volumeSummary} onChange={event=>setVolumeSummary(event.target.value)}/></label>{editingVolumeId&&<label>卷排序<input aria-label="卷排序" type="number" min="1" value={volumePosition} onChange={event=>setVolumePosition(event.target.value)}/></label>}{volumeError&&<p role="alert">{volumeError}</p>}<button className="primary-action" type="submit" disabled={!volumeTitle.trim()||!Number.isInteger(Number(volumePosition))||Number(volumePosition)<1||volumeBusy}>{volumeBusy?'正在保存':'保存卷'}</button></form>}
         <div className="episode-table" role="table" aria-label="剧集制作状态">
           <div role="row" className="episode-table-head"><span>集数</span><span>剧集</span><span>阶段</span><span>进度</span><span>风险</span><span/></div>
-          {(volumes.length ? volumes.flatMap(volume => volume.episodes) : project.episodes).map((item, index) => {
+          {orderedEpisodes.map((item, index) => {
             const active = item.id === episode?.id;
             const progress = active ? currentProgress : item.status === 'completed' ? 100 : item.status === 'planned' ? 18 : 0;
             return <div role="row" className={active ? 'active' : ''} key={item.id}>

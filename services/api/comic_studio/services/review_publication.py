@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -20,8 +22,68 @@ class ReleaseConflictError(RuntimeError):
 
 
 class ReviewPublicationService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, data_root: Path | None = None):
         self.session = session
+        self.data_root = data_root.resolve() if data_root is not None else None
+
+    def _render_review_for_candidate(
+        self, episode: models.Episode, render_path: str
+    ) -> models.RenderReviewRecord:
+        if self.data_root is None:
+            raise ReviewPublicationReferenceError("Render data root is unavailable")
+        relative_path = Path(render_path)
+        expected_root = Path("projects") / episode.project_id / "episodes" / episode.id / "renders"
+        try:
+            relative_path.relative_to(expected_root)
+        except ValueError as exc:
+            raise ReviewPublicationReferenceError(
+                "Render path must belong to the release episode"
+            ) from exc
+        output_path = (self.data_root / relative_path).resolve()
+        if not output_path.is_file():
+            raise ReviewPublicationReferenceError("Render file does not exist")
+        jobs = self.session.scalars(
+            select(models.Job)
+            .where(
+                models.Job.operation == "render_episode",
+                models.Job.target_type == "episode",
+                models.Job.target_id == episode.id,
+                models.Job.status == "succeeded",
+            )
+            .order_by(models.Job.created_at.desc())
+        )
+        job = next(
+            (
+                item
+                for item in jobs
+                if item.result_metadata.get("output_path") == render_path
+            ),
+            None,
+        )
+        if job is None:
+            raise ReviewPublicationReferenceError(
+                "Render path must come from a successful episode render"
+            )
+        review = self.session.scalar(
+            select(models.RenderReviewRecord)
+            .where(
+                models.RenderReviewRecord.episode_id == episode.id,
+                models.RenderReviewRecord.job_id == job.id,
+            )
+            .order_by(models.RenderReviewRecord.created_at.desc())
+        )
+        if review is None:
+            raise ReviewPublicationReferenceError(
+                "Successful render must have a completed quality review"
+            )
+        stored_path = Path(review.render_path)
+        if not stored_path.is_absolute():
+            stored_path = self.data_root / stored_path
+        if stored_path.resolve() != output_path:
+            raise ReviewPublicationReferenceError(
+                "Quality review does not match the rendered file"
+            )
+        return review
 
     def create_review_thread(
         self, episode_id: str, data: schemas.ReviewThreadCreate
@@ -79,10 +141,18 @@ class ReviewPublicationService:
     def create_release_candidate(
         self, episode_id: str, data: schemas.ReleaseCandidateCreate
     ):
-        if self.session.get(models.Episode, episode_id) is None:
+        episode = self.session.get(models.Episode, episode_id)
+        if episode is None:
             return None
+        from comic_studio.services.render_review import review_to_payload
+
+        review = self._render_review_for_candidate(episode, data.render_path)
         candidate = models.ReleaseCandidate(
-            episode_id=episode_id, status="draft", **data.model_dump()
+            episode_id=episode_id,
+            status="draft",
+            version=data.version,
+            render_path=data.render_path,
+            qc_snapshot=review_to_payload(review),
         )
         self.session.add(candidate)
         try:
@@ -114,9 +184,10 @@ class ReviewPublicationService:
             models.ReviewThread.status == "open",
         )
         open_critical = list(self.session.scalars(statement))
-        production_ready = bool(readiness and readiness["ready"])
+        production_ready = bool(readiness and readiness["video_ready"])
+        qc_pass = candidate.qc_snapshot.get("overall_pass") is True
         return schemas.ReleaseGateRead(
-            ready=production_ready and not open_critical,
+            ready=production_ready and qc_pass and not open_critical,
             production_ready=production_ready,
             production_blockers=(readiness or {}).get("blockers", {}),
             open_critical_threads=open_critical,

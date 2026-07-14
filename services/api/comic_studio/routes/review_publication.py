@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from comic_studio import schemas
@@ -47,8 +47,9 @@ def add_review_message(thread_id:str,data:schemas.ReviewMessageCreate,session:Se
 
 
 @router.post("/api/episodes/{episode_id}/release-candidates",response_model=schemas.ReleaseCandidateRead,status_code=status.HTTP_201_CREATED)
-def create_release_candidate(episode_id:str,data:schemas.ReleaseCandidateCreate,session:SessionDependency):
-    try: candidate=ReviewPublicationService(session).create_release_candidate(episode_id,data)
+def create_release_candidate(episode_id:str,data:schemas.ReleaseCandidateCreate,request:Request,session:SessionDependency):
+    try: candidate=ReviewPublicationService(session,request.app.state.settings.data_root).create_release_candidate(episode_id,data)
+    except ReviewPublicationReferenceError as exc: raise HTTPException(422,str(exc)) from exc
     except ReleaseConflictError as exc: raise HTTPException(409,"Release version already exists") from exc
     if candidate is None: raise HTTPException(404,"Episode not found")
     return candidate

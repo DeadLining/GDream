@@ -186,9 +186,9 @@ export function ProductionPanel({
       const created = await createProductionRun(episodeId, {
         stages,
         concurrency,
-        regenerate_panels: false,
-        regenerate_speech: false,
-        regenerate_videos: false,
+        regenerate_panels: stages.includes('panels'),
+        regenerate_speech: stages.includes('speech'),
+        regenerate_videos: stages.includes('videos'),
         panel_generation_mode: panelGenerationMode,
         budget_cap_usd: budgetCapUsd || undefined,
         budget_mode: budgetMode,

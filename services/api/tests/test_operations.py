@@ -153,12 +153,19 @@ def test_episode_versions_snapshot_and_restore_create_new_version(client):
 
 def test_delivery_packages_require_approved_release_candidate(client):
     project, episode, _scene_id, _shot_id = _project_episode_shot(client, "交付作品")
-    candidate = client.post(
-        f"/api/episodes/{episode['id']}/release-candidates",
-        json={"version": "V1", "render_path": "projects/p/final.mp4", "qc_snapshot": {}},
-    ).json()
+    with client.app.state.session_factory() as session:
+        row = models.ReleaseCandidate(
+            episode_id=episode["id"],
+            version="V1",
+            render_path=f"projects/{project['id']}/episodes/{episode['id']}/renders/final.mp4",
+            qc_snapshot={"overall_pass": True},
+            status="draft",
+        )
+        session.add(row)
+        session.commit()
+        candidate_id = row.id
     body = {
-        "release_candidate_id": candidate["id"],
+        "release_candidate_id": candidate_id,
         "preset_name": "平台标准包",
         "outputs": [{"kind": "landscape_video", "format": "mp4", "enabled": True}],
     }
@@ -167,7 +174,7 @@ def test_delivery_packages_require_approved_release_candidate(client):
     assert blocked.json()["detail"] == "Delivery package requires an approved release candidate"
 
     with client.app.state.session_factory() as session:
-        row = session.get(models.ReleaseCandidate, candidate["id"])
+        row = session.get(models.ReleaseCandidate, candidate_id)
         row.status = "approved"
         session.commit()
 
