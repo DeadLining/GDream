@@ -1,5 +1,5 @@
 import React from 'react';
-import {cleanup,render,screen,waitFor} from '@testing-library/react';
+import {cleanup,render,screen,waitFor,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {DirectorWorkspace} from '../components/director/DirectorWorkspace';
@@ -25,6 +25,7 @@ describe('DirectorWorkspace',()=>{
     mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile onSelectShot={vi.fn()}/>);
     expect(await screen.findByTestId('director-canvas')).toHaveAttribute('data-editable','false');
+    expect(within(document.querySelector('.director-toolbar') as HTMLElement).getByRole('button',{name:'同步场景资产'})).toBeVisible();
   });
   it('reviews an AI suggestion and applies only selected shot fields',async()=>{
     const updated={...scene.shots[0],composition:'低机位对峙',camera_motion:'push_in'};const onShotUpdated=vi.fn();
