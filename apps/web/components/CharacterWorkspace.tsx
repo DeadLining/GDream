@@ -6,9 +6,11 @@ import {
   activateCharacterReference,
   createAssetVariant,
   createAssetVariantState,
+  createAssetVariantUsage,
   deleteAssetVariant,
   deleteAssetVariantState,
   generateCharacterReferenceSet,
+  getEpisodeProductionGraph,
   listCharacterReferences,
   listAssetVariants,
   mediaUrl,
@@ -124,6 +126,8 @@ export function CharacterWorkspace({characters,episodes=[]}:{characters:Characte
     await load(character.id);
   };
   const addState=async(variantId:string,data:Parameters<typeof createAssetVariantState>[1])=>{await createAssetVariantState(variantId,data);await load(character.id);};
+  const addUsage=async(variantId:string,data:Parameters<typeof createAssetVariantUsage>[1])=>{await createAssetVariantUsage(variantId,data);await load(character.id);};
+  const loadEpisodeShots=async(episodeId:string)=>{const graph=await getEpisodeProductionGraph(episodeId);return graph.shots.map(shot=>({id:shot.id,label:`镜头 ${String(shot.position).padStart(2,'0')} · ${shot.composition}`}));};
   const editVariant=async(id:string,data:Parameters<typeof updateAssetVariant>[1])=>{await updateAssetVariant(id,data);await load(character.id);};
   const removeVariant=async(id:string)=>{await deleteAssetVariant(id);await load(character.id);};
   const editState=async(id:string,data:Parameters<typeof updateAssetVariantState>[1])=>{await updateAssetVariantState(id,data);await load(character.id);};
@@ -153,7 +157,7 @@ export function CharacterWorkspace({characters,episodes=[]}:{characters:Characte
     variants={variants}
     referenceManager={referenceManager}
     variantWorkspace={<AssetVariantEditorView embedded character={character} references={references} variants={variants} episodes={episodes} onOpen={setView} onCreateVariant={addEpisodeVariant} onCreateState={addState}/>}
-    lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState}/>}
+    lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState} onLoadEpisodeShots={loadEpisodeShots} onCreateUsage={addUsage}/>}
     initialTab={view==='variant'?'variant':view==='lineage'?'lineage':'master'}
     onSelect={setSelected}
     onOpen={setView}

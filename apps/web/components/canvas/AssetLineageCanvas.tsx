@@ -42,6 +42,14 @@ type StateDraft = {
   overrides: Record<string, unknown>;
 };
 
+type UsageDraft = {
+  state_id: string | null;
+  shot_id: string;
+  usage_kind: 'panel' | 'video' | 'reference';
+};
+
+type ShotOption = {id: string; label: string};
+
 type Selection =
   | {kind: 'variant'; item: AssetVariant}
   | {kind: 'state'; item: AssetVariantState; variant: AssetVariant}
@@ -58,6 +66,8 @@ export function AssetLineageCanvas({
   onCreateState,
   onUpdateState,
   onDeleteState,
+  onLoadEpisodeShots,
+  onCreateUsage,
 }: {
   character: Character;
   references: CharacterReference[];
@@ -69,6 +79,8 @@ export function AssetLineageCanvas({
   onCreateState?: (variantId: string, data: StateDraft) => Promise<void> | void;
   onUpdateState?: (id: string, data: StateDraft) => Promise<void> | void;
   onDeleteState?: (id: string) => Promise<void> | void;
+  onLoadEpisodeShots?: (episodeId: string) => Promise<ShotOption[]>;
+  onCreateUsage?: (variantId: string, data: UsageDraft) => Promise<void> | void;
 }) {
   const [scope, setScope] = useState<AssetLineageScope>('work');
   const [selectedNodeId, setSelectedNodeId] = useState(() => {
@@ -77,7 +89,7 @@ export function AssetLineageCanvas({
     const first = variants.find((item) => item.kind !== 'master');
     return first ? assetLineageNodeId.variant(first.id) : '';
   });
-  const [editor, setEditor] = useState<'variant-create' | 'variant-edit' | 'state-create' | 'state-edit' | null>(null);
+  const [editor, setEditor] = useState<'variant-create' | 'variant-edit' | 'state-create' | 'state-edit' | 'usage-create' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
@@ -85,6 +97,10 @@ export function AssetLineageCanvas({
   const [stateLabel, setStateLabel] = useState('');
   const [stateKind, setStateKind] = useState<AssetVariantState['kind']>('expression');
   const [episodeId, setEpisodeId] = useState<string | null>(null);
+  const [usageShots, setUsageShots] = useState<ShotOption[]>([]);
+  const [usageShotId, setUsageShotId] = useState('');
+  const [usageKind, setUsageKind] = useState<UsageDraft['usage_kind']>('panel');
+  const [usageLoading, setUsageLoading] = useState(false);
   const [viewport, setViewport] = useState({x: 0, y: 0, zoom: 0.75});
   const [undoNodes, setUndoNodes] = useState<any[] | null>(null);
   const [readOnly, setReadOnly] = useState(false);
@@ -313,6 +329,25 @@ export function AssetLineageCanvas({
     setEditor('state-edit');
   };
 
+  const openCreateUsage = async () => {
+    if (!selectedVariant?.episode_id || !onLoadEpisodeShots) return;
+    setEditor('usage-create');
+    setUsageShots([]);
+    setUsageShotId('');
+    setUsageKind('panel');
+    setFormError('');
+    setUsageLoading(true);
+    try {
+      const shots = await onLoadEpisodeShots(selectedVariant.episode_id);
+      setUsageShots(shots);
+      setUsageShotId(shots[0]?.id ?? '');
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : '加载剧集镜头失败');
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
   const saveVariant = async () => {
     if (!selectedVariant || !variantLabel.trim() || busy) return;
     setBusy(true);
@@ -369,6 +404,24 @@ export function AssetLineageCanvas({
       closeEditor();
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : '保存状态失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveUsage = async () => {
+    if (!selectedVariant || !usageShotId || !onCreateUsage || busy) return;
+    setBusy(true);
+    setFormError('');
+    try {
+      await onCreateUsage(selectedVariant.id, {
+        state_id: selected?.kind === 'state' ? selected.item.id : null,
+        shot_id: usageShotId,
+        usage_kind: usageKind,
+      });
+      closeEditor();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : '保存镜头绑定失败');
     } finally {
       setBusy(false);
     }
@@ -559,6 +612,42 @@ export function AssetLineageCanvas({
                 {busy ? '正在保存' : '保存状态'}
               </button>
             </form>
+          ) : editor === 'usage-create' ? (
+            <form
+              className="lineage-create-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveUsage();
+              }}
+            >
+              <header>
+                <span>{selectedVariant?.label}</span>
+                <h2>绑定到镜头</h2>
+                <button type="button" aria-label="关闭镜头绑定表单" onClick={closeEditor}>
+                  <X size={14} />
+                </button>
+              </header>
+              <label>
+                目标镜头
+                <select aria-label="目标镜头" value={usageShotId} disabled={usageLoading} onChange={(event) => setUsageShotId(event.target.value)}>
+                  {usageShots.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </select>
+              </label>
+              <label>
+                生成用途
+                <select aria-label="生成用途" value={usageKind} onChange={(event) => setUsageKind(event.target.value as UsageDraft['usage_kind'])}>
+                  <option value="panel">画面生成</option>
+                  <option value="video">视频生成</option>
+                  <option value="reference">通用参考</option>
+                </select>
+              </label>
+              {usageLoading && <p role="status">正在加载镜头…</p>}
+              {!usageLoading && !usageShots.length && !formError && <p>当前剧集尚无可绑定镜头。</p>}
+              {formError && <p role="alert">{formError}</p>}
+              <button className="primary-action" type="submit" disabled={!usageShotId || usageLoading || busy}>
+                {busy ? '正在保存' : '保存镜头绑定'}
+              </button>
+            </form>
           ) : detail ? (
             <>
               <header>
@@ -602,6 +691,9 @@ export function AssetLineageCanvas({
                   </button>
                 )}
                 {onCreateState && selectedVariant?.kind === 'episode' && <button onClick={openCreateState}>创建状态</button>}
+                {onCreateUsage && onLoadEpisodeShots && selectedVariant?.kind === 'episode' && selected?.kind !== 'usage' && (
+                  <button onClick={() => void openCreateUsage()}>绑定到镜头</button>
+                )}
                 {onCreateVariant && selectedVariant && (
                   <button className="primary-action" onClick={openCreateVariant}>
                     创建子变体
