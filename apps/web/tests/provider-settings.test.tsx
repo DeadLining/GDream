@@ -137,6 +137,27 @@ describe('ProviderSettings', () => {
     expect(screen.getByText('Provider returned HTTP 503')).toHaveAttribute('role', 'alert');
   });
 
+  it('allows a directly reachable video channel without an API key or SSH host', async () => {
+    const localVideo = structuredClone(snapshot);
+    localVideo.video = {
+      name: 'Wan2.2 Local', enabled: true, base_url: 'http://192.168.18.94:18081',
+      model: 'Wan-AI/Wan2.2-TI2V-5B', ssh_host: '', api_key_configured: false, api_key_masked: '',
+    };
+    mocks.getProviderChannels.mockResolvedValue(localVideo);
+    render(<ProviderSettings/>);
+    const section = await screen.findByRole('form', {name: '视频生成渠道'});
+
+    expect(within(section).queryByLabelText('视频生成 SSH Host')).not.toBeInTheDocument();
+    await userEvent.click(within(section).getByRole('button', {name: '测试视频生成连接'}));
+
+    expect(mocks.testProviderChannel).toHaveBeenCalledWith('video', expect.objectContaining({
+      base_url: 'http://192.168.18.94:18081',
+      model: 'Wan-AI/Wan2.2-TI2V-5B',
+      api_key: '',
+    }));
+    expect(within(section).queryByText('已启用渠道需要 API Key。')).not.toBeInTheDocument();
+  });
+
   it('preserves, replaces, and clears keys with explicit payload semantics', async () => {
     render(<ProviderSettings/>);
     await screen.findByRole('heading', {name: '模型渠道'});

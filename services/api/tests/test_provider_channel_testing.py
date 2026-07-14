@@ -178,6 +178,40 @@ async def test_image_checks_capabilities_without_generating_an_image():
     result = await service.test("image", candidate("image"))
 
     assert result.status == "ok"
+
+
+@pytest.mark.anyio
+async def test_video_without_api_key_checks_openai_models_endpoint():
+    client = RecordingClient(
+        [
+            FakeResponse(
+                payload={
+                    "object": "list",
+                    "data": [{"id": "Wan-AI/Wan2.2-TI2V-5B"}],
+                }
+            )
+        ]
+    )
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind, api_key=None),
+        client_factory=ClientFactory(client),
+    )
+
+    result = await service.test(
+        "video",
+        candidate(
+            "video",
+            api_key=None,
+            base_url="http://192.168.18.94:18081",
+            model="Wan-AI/Wan2.2-TI2V-5B",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert result.check_scope == "model"
+    assert client.requests == [
+        ("GET", "v1/models", {"headers": {}}),
+    ]
     assert result.check_scope == "model"
     assert client.requests == [("GET", "v1/models/unsaved-model", {"headers": {"Authorization": "Bearer candidate-secret"}})]
     assert all("generations" not in path for _, path, _ in client.requests)

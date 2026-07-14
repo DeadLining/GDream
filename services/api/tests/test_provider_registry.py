@@ -182,6 +182,28 @@ def test_factory_uses_registry_when_no_class_override_supplied(tmp_path):
     assert isinstance(llm, MiniMaxProvider)
 
 
+def test_factory_selects_wan_video_provider_for_wan_channel_without_api_key(tmp_path):
+    channels = _channels().model_copy(
+        update={
+            "video": ProviderChannel(
+                name="Wan2.2 Local",
+                enabled=True,
+                base_url="http://192.168.18.94:18081",
+                model="Wan-AI/Wan2.2-TI2V-5B",
+            )
+        }
+    )
+    store = ProviderChannelStore(tmp_path / "channels.json", channels)
+    store.load()
+
+    provider = ProviderFactory(store).create_video()
+
+    from comic_studio.providers.wan_video import WanVideoProvider
+
+    assert isinstance(provider, WanVideoProvider)
+    assert provider.base_url == "http://192.168.18.94:18081"
+
+
 def test_factory_registry_override_used_when_class_override_absent(tmp_path):
     store = ProviderChannelStore(tmp_path / "channels.json", _channels())
     store.load()
