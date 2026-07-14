@@ -33,7 +33,7 @@ function deferred<T>() {
 
 describe('Inspector', () => {
   afterEach(cleanup);
-  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);});
+  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);mocks.updateDialogue.mockImplementation(async (_id,data)=>({...shot.dialogue[0],...data}));});
 
   it('groups controls under the operational section hierarchy', async () => {
     mocks.listPanelVersions.mockResolvedValue([asset]);
