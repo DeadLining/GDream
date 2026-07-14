@@ -74,6 +74,39 @@ def test_requires_approved_shot_and_active_panel(db_session, tmp_path):
         asyncio.run(VideoService(db_session, tmp_path, Provider()).generate(shot.id))
 
 
+def test_video_generation_waits_longer_than_ten_minutes_for_local_models(
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    _, shot, _ = _eligible(db_session, tmp_path)
+
+    class SlowProvider(Provider):
+        polls = 0
+
+        async def get_task(self, task_id):
+            from comic_studio.providers.minimax_video import VideoTask
+
+            self.polls += 1
+            status = "succeeded" if self.polls == 301 else "processing"
+            return VideoTask(
+                task_id,
+                status,
+                "file-1" if status == "succeeded" else None,
+            )
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("comic_studio.services.videos.asyncio.sleep", no_sleep)
+    provider = SlowProvider()
+
+    asset = asyncio.run(VideoService(db_session, tmp_path, provider).generate(shot.id))
+
+    assert provider.polls == 301
+    assert asset.provider == "wan-video"
+
+
 def test_video_generation_compiles_bound_variant_and_state(db_session, tmp_path):
     project, shot, _panel = _eligible(db_session, tmp_path)
     character = models.Character(
