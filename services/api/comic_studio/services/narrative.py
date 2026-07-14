@@ -55,6 +55,72 @@ class NarrativeService:
         self.session.refresh(volume)
         return volume
 
+    def move_episode(self, episode_id: str, volume_id: str | None):
+        episode = self.session.get(models.Episode, episode_id)
+        if episode is None:
+            return None
+        if episode.volume_id == volume_id:
+            return episode
+
+        if volume_id is not None:
+            volume = self.session.get(models.Volume, volume_id)
+            if volume is None or volume.project_id != episode.project_id:
+                raise NarrativeReferenceError(
+                    "Volume must belong to the episode project"
+                )
+
+        source_siblings = list(
+            self.session.scalars(
+                select(models.Episode)
+                .where(
+                    models.Episode.project_id == episode.project_id,
+                    models.Episode.volume_id == episode.volume_id,
+                    models.Episode.id != episode.id,
+                )
+                .order_by(models.Episode.position, models.Episode.created_at)
+            )
+        )
+        target_siblings = list(
+            self.session.scalars(
+                select(models.Episode)
+                .where(
+                    models.Episode.project_id == episode.project_id,
+                    models.Episode.volume_id == volume_id,
+                    models.Episode.id != episode.id,
+                )
+                .order_by(models.Episode.position, models.Episode.created_at)
+            )
+        )
+        for position, sibling in enumerate(source_siblings, start=1):
+            sibling.position = position
+        episode.volume_id = volume_id
+        episode.position = len(target_siblings) + 1
+        self.session.commit()
+        self.session.refresh(episode)
+        return episode
+
+    def delete_volume(self, volume_id: str) -> bool:
+        volume = self.session.get(models.Volume, volume_id)
+        if volume is None:
+            return False
+        next_position = next_unassigned_episode_position(
+            self.session, volume.project_id
+        )
+        episodes = list(
+            self.session.scalars(
+                select(models.Episode)
+                .where(models.Episode.volume_id == volume.id)
+                .order_by(models.Episode.position, models.Episode.created_at)
+            )
+        )
+        for offset, episode in enumerate(episodes):
+            episode.volume_id = None
+            episode.position = next_position + offset
+        self.session.flush()
+        self.session.delete(volume)
+        self.session.commit()
+        return True
+
     def create_volume_episode(
         self, volume_id: str, data: schemas.VolumeEpisodeCreate
     ):

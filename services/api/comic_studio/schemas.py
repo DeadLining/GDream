@@ -774,6 +774,11 @@ class VolumePatch(PatchModel):
     position: int | None = Field(default=None, ge=1, le=10000)
 
 
+class EpisodeVolumeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    volume_id: str | None
+
+
 class VolumeRead(VolumeCreate):
     model_config = ConfigDict(from_attributes=True)
     id: str

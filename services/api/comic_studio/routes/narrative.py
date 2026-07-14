@@ -54,6 +54,26 @@ def update_volume(volume_id: str, data: schemas.VolumePatch, session: SessionDep
     return volume
 
 
+@router.delete("/api/volumes/{volume_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_volume(volume_id: str, session: SessionDependency):
+    if not NarrativeService(session).delete_volume(volume_id):
+        raise HTTPException(404, "Volume not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/api/episodes/{episode_id}/volume", response_model=schemas.EpisodeRead)
+def move_episode(
+    episode_id: str, data: schemas.EpisodeVolumeUpdate, session: SessionDependency
+):
+    try:
+        episode = NarrativeService(session).move_episode(episode_id, data.volume_id)
+    except NarrativeReferenceError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if episode is None:
+        raise HTTPException(404, "Episode not found")
+    return episode
+
+
 @router.post(
     "/api/volumes/{volume_id}/episodes",
     response_model=schemas.EpisodeRead,

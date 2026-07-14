@@ -10,6 +10,12 @@ export const createVolume = (projectId:string,data:{title:string;summary:string;
 export const createStoryline = (projectId:string,data:{title:string;kind:Storyline['kind'];color:string;description:string}) => apiRequest<Storyline>(`/api/projects/${projectId}/storylines`,json('POST',data));
 export const createStorylineEvent = (storylineId:string,data:{episode_id:string;scene_id:string|null;shot_id:string|null;position:number;stage:Storyline['events'][number]['stage'];title:string;description:string;setup_event_id:string|null;payoff_event_id:string|null;metadata:Record<string,unknown>}) => apiRequest<Storyline['events'][number]>(`/api/storylines/${storylineId}/events`,json('POST',data));
 export const updateVolume=(id:string,data:Partial<Pick<Volume,'title'|'summary'|'position'>>)=>apiRequest<Volume>(`/api/volumes/${id}`,json('PATCH',data));
+export const moveEpisodeToVolume=(episodeId:string,volumeId:string|null)=>apiRequest(`/api/episodes/${episodeId}/volume`,json('PUT',{volume_id:volumeId}));
+export async function deleteVolume(id:string):Promise<void>{
+  let response:Response;
+  try{response=await fetch(`${API_BASE}/api/volumes/${id}`,{method:'DELETE'});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
+  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'删除卷失败');throw new ApiError(detail,response.status,detail);}
+}
 export const updateStoryline=(id:string,data:Partial<Pick<Storyline,'title'|'kind'|'color'|'description'>>)=>apiRequest<Storyline>(`/api/storylines/${id}`,json('PATCH',data));
 export const updateStorylineEvent=(id:string,data:Partial<Pick<Storyline['events'][number],'episode_id'|'scene_id'|'shot_id'|'position'|'stage'|'title'|'description'|'setup_event_id'|'payoff_event_id'|'metadata'>>)=>apiRequest<Storyline['events'][number]>(`/api/storyline-events/${id}`,json('PATCH',data));
 export async function deleteStorylineEvent(id:string):Promise<void>{

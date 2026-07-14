@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {createEpisode,createProject,createVolume,deleteEpisode,getEpisode,getProductionReadiness,getProject,listProjects,listStorylines,listVolumes,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
+import {createEpisode,createProject,createVolume,deleteEpisode,deleteVolume,getEpisode,getProductionReadiness,getProject,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
 import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,Shot,Storyline,Volume} from '../lib/types';
@@ -234,7 +234,7 @@ export function Workspace() {
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
   let center;
-  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}}/>;
+  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
   else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (workArea === 'characters' && project) center = <CharacterWorkspace characters={project.characters} episodes={project.episodes}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
