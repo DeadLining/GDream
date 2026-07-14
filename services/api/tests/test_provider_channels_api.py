@@ -310,11 +310,34 @@ def test_validation_redacts_whole_input_for_malformed_json(client):
     assert secret not in response.text
 
 
-@pytest.mark.parametrize("kind", ["video", "LLM", "llm/extra"])
+@pytest.mark.parametrize("kind", ["unknown", "LLM", "llm/extra"])
 def test_put_rejects_invalid_channel_kind(client, kind):
     response = client.put(f"/api/provider-channels/{kind}", json=channel_update())
 
     assert response.status_code == 422
+
+
+def test_put_accepts_direct_wan_video_channel_without_api_key(client):
+    response = client.put(
+        "/api/provider-channels/video",
+        json=channel_update(
+            name="Wan2.2 Local",
+            base_url="http://192.168.18.94:18081",
+            model="Wan-AI/Wan2.2-TI2V-5B",
+            clear_api_key=True,
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["channel"] == {
+        "name": "Wan2.2 Local",
+        "enabled": True,
+        "base_url": "http://192.168.18.94:18081",
+        "model": "Wan-AI/Wan2.2-TI2V-5B",
+        "ssh_host": "",
+        "api_key_configured": False,
+        "api_key_masked": "",
+    }
 
 
 def test_put_rejects_extra_fields(client):

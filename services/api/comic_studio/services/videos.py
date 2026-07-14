@@ -76,7 +76,7 @@ class VideoService:
             shot_id=shot.id,
             source_panel_id=panel.id,
             content=result.content,
-            provider="minimax-video",
+            provider=getattr(self.provider, "provider_id", "video-provider"),
             model=self.provider.model,
             request_metadata={
                 "prompt": prompt,

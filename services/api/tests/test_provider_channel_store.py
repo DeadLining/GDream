@@ -95,6 +95,20 @@ def test_bootstrap_disables_key_required_channels_when_legacy_keys_are_empty(
     assert defaults.tts.enabled is True
 
 
+def test_video_channel_may_be_enabled_without_api_key():
+    channels = make_channels(
+        video=channel_payload(
+            name="Wan2.2 Local",
+            base_url="http://192.168.18.94:18081",
+            model="Wan-AI/Wan2.2-TI2V-5B",
+            api_key=None,
+        )
+    )
+
+    assert channels.video.enabled is True
+    assert channels.video.api_key_value is None
+
+
 def test_existing_json_is_authoritative_over_bootstrap_defaults(tmp_path):
     path = tmp_path / "provider-channels.json"
     saved = channels_payload(

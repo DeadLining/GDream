@@ -13,6 +13,7 @@ MP4 = b"\x00\x00\x00\x18ftypmp42video-data"
 
 class Provider:
     model = "video-test"
+    provider_id = "wan-video"
 
     async def submit_image_to_video(
         self, prompt, image_bytes, image_media_type, duration
@@ -60,6 +61,7 @@ def test_generates_immutable_video_version_from_active_panel(db_session, tmp_pat
     assert asset.parent_asset_id == panel.id
     assert asset.media_type == "video/mp4"
     assert asset.request_metadata["provider_task_id"] == "task-1"
+    assert asset.provider == "wan-video"
     assert shot.active_video_asset_id == asset.id
     assert provider.duration == 6
 

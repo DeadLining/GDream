@@ -41,7 +41,7 @@ export function ProviderChannelSection({kind, label, draft, testing, disabled, t
       <label>{label}模型<input value={draft.model} onChange={event => update('model', event.target.value)} autoComplete="off"/></label>
       {kind === 'tts' && <label>{label} SSH Host<input value={draft.ssh_host} onChange={event => update('ssh_host', event.target.value)} autoComplete="off"/></label>}
       <div className="provider-key-control">
-        <label>{draft.api_key_configured && !draft.clear_api_key ? `${label} API Key（当前 ${draft.api_key_masked}）` : `${label} API Key（未配置）`}
+        <label>{draft.api_key_configured && !draft.clear_api_key ? `${label} API Key（当前 ${draft.api_key_masked}）` : `${label} API Key（${kind === 'tts' || kind === 'video' ? '可选，未配置' : '未配置'}）`}
           <input
             type="password"
             aria-label={`替换${label} API Key`}

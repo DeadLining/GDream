@@ -1,29 +1,15 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
-from typing import Literal
 
 import httpx
 
 from comic_studio.providers.base import ProviderError
-
-
-@dataclass(frozen=True)
-class VideoTask:
-    id: str
-    status: Literal["queued", "processing", "succeeded", "failed"]
-    file_id: str | None = None
-    error: str = ""
-
-
-@dataclass(frozen=True)
-class VideoResult:
-    content: bytes
-    media_type: str = "video/mp4"
+from comic_studio.providers.video_base import VideoResult, VideoTask
 
 
 class MiniMaxVideoProvider:
+    provider_id = "minimax-video"
     def __init__(
         self,
         api_key: str,

@@ -178,6 +178,9 @@ async def test_image_checks_capabilities_without_generating_an_image():
     result = await service.test("image", candidate("image"))
 
     assert result.status == "ok"
+    assert result.check_scope == "model"
+    assert client.requests == [("GET", "v1/models/unsaved-model", {"headers": {"Authorization": "Bearer candidate-secret"}})]
+    assert all("generations" not in path for _, path, _ in client.requests)
 
 
 @pytest.mark.anyio
@@ -212,9 +215,6 @@ async def test_video_without_api_key_checks_openai_models_endpoint():
     assert client.requests == [
         ("GET", "v1/models", {"headers": {}}),
     ]
-    assert result.check_scope == "model"
-    assert client.requests == [("GET", "v1/models/unsaved-model", {"headers": {"Authorization": "Bearer candidate-secret"}})]
-    assert all("generations" not in path for _, path, _ in client.requests)
 
 
 @pytest.mark.anyio

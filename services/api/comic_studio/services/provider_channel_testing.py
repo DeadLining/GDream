@@ -186,7 +186,7 @@ class ProviderChannelTestingService:
     def validate_channel(kind: ProviderKind, channel: ProviderChannel) -> None:
         if not channel.enabled:
             raise ProviderTestError(f"{kind} provider channel is not enabled")
-        if kind in {"llm", "image", "video"} and not channel.api_key_value:
+        if kind in {"llm", "image"} and not channel.api_key_value:
             raise ProviderTestError(f"Enabled {kind} channel requires an api_key")
 
     @staticmethod
@@ -249,10 +249,28 @@ class ProviderChannelTestingService:
     @staticmethod
     async def _test_video(
         provider: Any, channel: ProviderChannel
-    ) -> Literal["endpoint"]:
+    ) -> Literal["model", "endpoint"]:
+        headers = (
+            {"Authorization": f"Bearer {channel.api_key_value}"}
+            if channel.api_key_value
+            else {}
+        )
+        models_response = await provider.get("v1/models", headers=headers)
+        if models_response.status_code not in {404, 405}:
+            models_response.raise_for_status()
+            payload = models_response.json()
+            model_ids = {
+                str(item.get("id"))
+                for item in payload.get("data", [])
+                if isinstance(item, dict) and item.get("id")
+            }
+            if model_ids and channel.model not in model_ids:
+                raise ProviderTestError("Configured video model is unavailable")
+            return "model"
+
         response = await provider.get(
             "v1/query/video_generation",
-            headers={"Authorization": f"Bearer {channel.api_key_value or ''}"},
+            headers=headers,
         )
         if response.status_code in {401, 403} or response.status_code >= 500:
             response.raise_for_status()

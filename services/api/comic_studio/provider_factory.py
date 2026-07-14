@@ -98,7 +98,7 @@ class ProviderFactory:
     def _build(self, kind: str, channel: Any) -> Any:
         capability = _CAPABILITY_FOR_METHOD[kind]
         self._require_configured(kind, channel, require_api_key=self._requires_api_key(kind))
-        provider_class = self._resolve_provider_class(capability)
+        provider_class = self._resolve_provider_class(capability, channel)
         # Provider classes registered through the registry expose ``from_channel``;
         # legacy test doubles injected via ``xxx_provider_class=`` still use the
         # positional constructor, so fall back when the classmethod is absent.
@@ -127,9 +127,24 @@ class ProviderFactory:
             base_url=channel.base_url,
         )
 
-    def _resolve_provider_class(self, capability: Capability) -> Callable[..., Any]:
+    def _resolve_provider_class(
+        self,
+        capability: Capability,
+        channel: Any | None = None,
+    ) -> Callable[..., Any]:
         if capability in self._explicit_overrides:
             return self._explicit_overrides[capability]
+        if channel is not None:
+            for registration in self._registry.registrations():
+                if registration.capability is not capability:
+                    continue
+                supports_channel = getattr(
+                    registration.provider_class,
+                    "supports_channel",
+                    None,
+                )
+                if callable(supports_channel) and supports_channel(channel):
+                    return registration.provider_class
         return self._registry.get(capability)
 
     def _should_prefer_ssh(self, ssh_host: str | None) -> bool:
@@ -142,8 +157,8 @@ class ProviderFactory:
 
     @staticmethod
     def _requires_api_key(kind: str) -> bool:
-        # tts channel may run without an api_key (local Qwen-TTS deployment).
-        return kind != "tts"
+        # Local speech and video services may be directly reachable without auth.
+        return kind in {"llm", "image"}
 
     @staticmethod
     def _require_configured(

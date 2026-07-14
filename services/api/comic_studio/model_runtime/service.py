@@ -485,7 +485,7 @@ class ModelRuntimeService:
                 if update.clear_api_key
                 else replacement_key or current.api_key_value
             )
-            if capability is not Capability.SPEECH and update.enabled and not effective_key:
+            if capability in {Capability.TEXT, Capability.IMAGE} and update.enabled and not effective_key:
                 raise ValueError(f"Enabled {capability.value} channel requires an api_key")
             if capability is not Capability.SPEECH and update.ssh_host:
                 raise ValueError("ssh_host is only valid for speech")

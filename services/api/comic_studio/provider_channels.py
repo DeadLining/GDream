@@ -117,7 +117,7 @@ class ProviderChannels(BaseModel):
 
     @model_validator(mode="after")
     def validate_channel_semantics(self):
-        for channel_name in ("llm", "image", "video"):
+        for channel_name in ("llm", "image"):
             channel = getattr(self, channel_name)
             if channel.ssh_host is not None:
                 raise ValueError("ssh_host is only valid for the tts channel")

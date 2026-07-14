@@ -30,7 +30,7 @@ function validate(kind: ProviderChannelKind, draft: ProviderChannelDraft) {
     return '已启用渠道需要有效的 HTTP(S) Base URL。';
   }
   if (!draft.model.trim()) return '已启用渠道需要模型名称。';
-  if (kind !== 'tts' && (!draft.api_key_configured || draft.clear_api_key) && !draft.api_key.trim()) return '已启用渠道需要 API Key。';
+  if ((kind === 'llm' || kind === 'image') && (!draft.api_key_configured || draft.clear_api_key) && !draft.api_key.trim()) return '已启用渠道需要 API Key。';
   return '';
 }
 
