@@ -333,9 +333,27 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
         models.ShotCamera(
             stage_id=stage.id,
             shot_id=shot.id,
+            position=[1, 2, 6],
+            target=[0, 1, 0],
             focal_length_mm=85,
             shot_size="close_up",
             camera_motion="static",
+        )
+    )
+    db_session.add(
+        models.DirectorObject(
+            stage_id=stage.id,
+            kind="character",
+            source_type="character_reference",
+            source_id=character.id,
+            label="林夏",
+            transform={
+                "position": [-1, 0, 0],
+                "rotation": [0, 0.2, 0],
+                "scale": [1, 1, 1],
+            },
+            appearance={"image_url": "/media/linxia.png"},
+            object_metadata={"asset_id": "reference-asset"},
         )
     )
     db_session.commit()
@@ -351,6 +369,10 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "深色雨衣" in provider.prompt
     assert "左眉新鲜伤痕" in provider.prompt
     assert "85mm" in provider.prompt
+    assert "林夏" in provider.prompt
+    assert "position [-1, 0, 0]" in provider.prompt
+    assert "camera position [1, 2, 6]" in provider.prompt
+    assert "target [0, 1, 0]" in provider.prompt
     snapshot = asset.request_metadata["input_snapshot"]
     assert snapshot["asset_bindings"][0]["variant_id"] == variant.id
     assert snapshot["asset_bindings"][0]["state_id"] == state.id

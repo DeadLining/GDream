@@ -111,3 +111,84 @@ def test_director_routes_update_delete_and_restore_objects(client):
     restored=client.post(f"/api/director-stages/{stage['id']}/revisions/{revisions.json()[-1]['id']}/restore",json={"expected_version":4})
     assert restored.status_code==200
     assert restored.json()["objects"][0]["id"]==created["id"]
+
+
+def test_director_asset_catalog_and_sync_use_real_character_references(client):
+    scene_id, _shot_id = _scene_via_client(client)
+    with client.app.state.session_factory() as session:
+        scene = session.get(models.Scene, scene_id)
+        character = models.Character(
+            project_id=scene.episode.project_id,
+            name="林夏",
+            role="侦探",
+            appearance_bible="黑色短发，深色雨衣",
+            personality="冷静",
+            continuity_rules="雨衣始终扣好",
+            voice_speaker="linxia",
+        )
+        session.add(character)
+        session.flush()
+        scene.continuity_state = {
+            "characters_present": [character.id],
+            "props": [{"name": "证物箱", "description": "银色金属箱"}],
+            "lighting": "冷蓝雨夜",
+        }
+        asset = models.Asset(
+            project_id=scene.episode.project_id,
+            kind=f"character-reference:{character.id}:primary",
+            local_path=f"projects/{scene.episode.project_id}/characters/{character.id}/primary.png",
+            media_type="image/png",
+            provider="upload",
+            model="local",
+            checksum="director-catalog-reference",
+            width=768,
+            height=1024,
+        )
+        session.add(asset)
+        session.flush()
+        session.add(
+            models.CharacterReference(
+                character_id=character.id,
+                asset_id=asset.id,
+                reference_type="primary",
+                label="主参考",
+                is_active=True,
+                review_status="approved",
+            )
+        )
+        session.commit()
+        character_id = character.id
+        asset_id = asset.id
+
+    stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
+    catalog_response = client.get(f"/api/director-stages/{stage['id']}/assets")
+
+    assert catalog_response.status_code == 200
+    catalog = catalog_response.json()
+    character_item = next(item for item in catalog if item["kind"] == "character")
+    assert character_item["source_type"] == "character_reference"
+    assert character_item["source_id"] == character_id
+    assert character_item["asset_id"] == asset_id
+    assert character_item["media_url"].endswith("/primary.png")
+    assert {item["kind"] for item in catalog} == {"background", "character", "prop"}
+
+    synced = client.post(
+        f"/api/director-stages/{stage['id']}/assets/sync",
+        json={"expected_version": stage["version"], "asset_keys": [item["key"] for item in catalog]},
+    )
+
+    assert synced.status_code == 200
+    synced_stage = synced.json()
+    assert synced_stage["environment"]["location"] == "天台"
+    assert {item["kind"] for item in synced_stage["objects"]} == {"background", "character", "prop"}
+    synced_character = next(item for item in synced_stage["objects"] if item["kind"] == "character")
+    assert synced_character["appearance"]["image_url"].endswith("/primary.png")
+    assert synced_character["metadata"]["asset_id"] == asset_id
+
+    repeated = client.post(
+        f"/api/director-stages/{stage['id']}/assets/sync",
+        json={"expected_version": synced_stage["version"], "asset_keys": [item["key"] for item in catalog]},
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["version"] == synced_stage["version"]
+    assert len(repeated.json()["objects"]) == 3
