@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from comic_studio import models, schemas
+
+
+class OperationsValidationError(ValueError):
+    pass
+
+
+def _json_value(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+class OperationsService:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def _validate_member_scope(self, project_id: str, scope: dict) -> None:
+        for volume_id in scope.get("volume_ids", []):
+            volume = self.session.get(models.Volume, volume_id)
+            if volume is None or volume.project_id != project_id:
+                raise OperationsValidationError("Member scope resources must belong to the project")
+        for episode_id in scope.get("episode_ids", []):
+            episode = self.session.get(models.Episode, episode_id)
+            if episode is None or episode.project_id != project_id:
+                raise OperationsValidationError("Member scope resources must belong to the project")
+
+    def create_member(self, project_id: str, data: schemas.ProjectMemberCreate):
+        if self.session.get(models.Project, project_id) is None:
+            return None
+        self._validate_member_scope(project_id, data.scope)
+        member = models.ProjectMember(project_id=project_id, **data.model_dump())
+        self.session.add(member)
+        self.session.flush()
+        self.session.commit()
+        self.session.refresh(member)
+        return member
+
+    def list_members(self, project_id: str):
+        if self.session.get(models.Project, project_id) is None:
+            return None
+        return list(self.session.scalars(select(models.ProjectMember).where(models.ProjectMember.project_id == project_id).order_by(models.ProjectMember.created_at)))
+
+    def update_member(self, member_id: str, data: schemas.ProjectMemberPatch):
+        member = self.session.get(models.ProjectMember, member_id)
+        if member is None:
+            return None
+        before = {"name": member.name, "role": member.role, "scope": member.scope, "capabilities": member.capabilities, "status": member.status}
+        values = data.model_dump(exclude_unset=True)
+        if "scope" in values:
+            self._validate_member_scope(member.project_id, values["scope"])
+        for key, value in values.items():
+            setattr(member, key, value)
+        after = {**before, **values}
+        self.session.commit()
+        self.session.refresh(member)
+        return member
+
+    def _validate_task_links(self, project_id: str, data: schemas.ProductionTaskCreate) -> None:
+        episode = self.session.get(models.Episode, data.episode_id) if data.episode_id else None
+        scene = self.session.get(models.Scene, data.scene_id) if data.scene_id else None
+        shot = self.session.get(models.Shot, data.shot_id) if data.shot_id else None
+        thread = self.session.get(models.VisualReviewThread, data.review_thread_id) if data.review_thread_id else None
+        invalid = False
+        if data.episode_id and (episode is None or episode.project_id != project_id): invalid = True
+        if data.scene_id and (scene is None or scene.episode.project_id != project_id or (episode and scene.episode_id != episode.id)): invalid = True
+        if data.shot_id and (shot is None or shot.scene.episode.project_id != project_id or (scene and shot.scene_id != scene.id) or (episode and shot.scene.episode_id != episode.id)): invalid = True
+        if data.review_thread_id and (thread is None or thread.shot.scene.episode.project_id != project_id): invalid = True
+        if invalid:
+            raise OperationsValidationError("Task links must belong to the project and hierarchy")
+
+    def create_task(self, project_id: str, data: schemas.ProductionTaskCreate):
+        if self.session.get(models.Project, project_id) is None:
+            return None
+        self._validate_task_links(project_id, data)
+        values = data.model_dump()
+        values["checklist"] = [item.model_dump() for item in data.checklist]
+        task = models.ProductionTask(project_id=project_id, **values)
+        self.session.add(task)
+        self.session.flush()
+        self.session.commit()
+        self.session.refresh(task)
+        return task
+
+    def list_tasks(self, project_id: str):
+        if self.session.get(models.Project, project_id) is None:
+            return None
+        return list(self.session.scalars(select(models.ProductionTask).where(models.ProductionTask.project_id == project_id).order_by(models.ProductionTask.created_at.desc())))
+
+    def update_task(self, task_id: str, data: schemas.ProductionTaskPatch):
+        task = self.session.get(models.ProductionTask, task_id)
+        if task is None:
+            return None
+        before = {"title": task.title, "description": task.description, "priority": task.priority, "status": task.status, "assignee": task.assignee, "due_at": _json_value(task.due_at), "checklist": task.checklist}
+        values = data.model_dump(exclude_unset=True)
+        if "checklist" in values and values["checklist"] is not None:
+            values["checklist"] = [item.model_dump() if hasattr(item, "model_dump") else item for item in data.checklist or []]
+        for key, value in values.items(): setattr(task, key, value)
+        after = {**before, **{key: _json_value(value) for key, value in values.items()}}
+        self.session.commit(); self.session.refresh(task)
+        return task
+
+    def _episode_snapshot(self, episode_id: str) -> dict | None:
+        episode = self.session.scalar(
+            select(models.Episode)
+            .options(selectinload(models.Episode.scenes).selectinload(models.Scene.shots).selectinload(models.Shot.dialogue))
+            .where(models.Episode.id == episode_id)
+        )
+        if episode is None:
+            return None
+        return {
+            "episode": {"id": episode.id, "project_id": episode.project_id, "volume_id": episode.volume_id, "position": episode.position, "title": episode.title, "premise": episode.premise, "target_duration_seconds": episode.target_duration_seconds, "status": episode.status},
+            "scenes": [{"id": scene.id, "position": scene.position, "location": scene.location, "time_of_day": scene.time_of_day, "summary": scene.summary, "continuity_state": scene.continuity_state, "estimated_duration_seconds": scene.estimated_duration_seconds, "shots": [{"id": shot.id, "position": shot.position, "shot_type": shot.shot_type, "duration_seconds": shot.duration_seconds, "composition": shot.composition, "camera_motion": shot.camera_motion, "character_state": shot.character_state, "image_prompt": shot.image_prompt, "negative_prompt": shot.negative_prompt, "active_panel_asset_id": shot.active_panel_asset_id, "video_prompt": shot.video_prompt, "negative_video_prompt": shot.negative_video_prompt, "active_video_asset_id": shot.active_video_asset_id, "review_status": shot.review_status, "render_status": shot.render_status, "dialogue": [{"id": line.id, "position": line.position, "character_id": line.character_id, "text": line.text, "subtitle_text": line.subtitle_text, "emotion": line.emotion, "performance_instruction": line.performance_instruction} for line in shot.dialogue]} for shot in scene.shots]} for scene in episode.scenes],
+        }
+
+    def create_version(self, episode_id: str, data: schemas.EpisodeVersionCreate):
+        snapshot = self._episode_snapshot(episode_id)
+        if snapshot is None: return None
+        number = (self.session.scalar(select(func.max(models.EpisodeVersion.version)).where(models.EpisodeVersion.episode_id == episode_id)) or 0) + 1
+        version = models.EpisodeVersion(episode_id=episode_id, version=number, snapshot=snapshot, **data.model_dump())
+        self.session.add(version); self.session.flush()
+        self.session.commit(); self.session.refresh(version)
+        return version
+
+    def list_versions(self, episode_id: str):
+        episode = self.session.get(models.Episode, episode_id)
+        if episode is None: return None
+        return list(self.session.scalars(select(models.EpisodeVersion).where(models.EpisodeVersion.episode_id == episode_id).order_by(models.EpisodeVersion.version.desc())))
+
+    def restore_version(self, version_id: str):
+        source = self.session.get(models.EpisodeVersion, version_id)
+        if source is None: return None
+        number = (self.session.scalar(select(func.max(models.EpisodeVersion.version)).where(models.EpisodeVersion.episode_id == source.episode_id)) or 0) + 1
+        restored = models.EpisodeVersion(episode_id=source.episode_id, version=number, label=f"从 V{source.version} 恢复", source="restore", author="林默", snapshot=source.snapshot, restored_from_id=source.id)
+        self.session.add(restored); self.session.flush()
+        self.session.commit(); self.session.refresh(restored)
+        return restored
+
+    def create_delivery_package(self, episode_id: str, data: schemas.DeliveryPackageCreate):
+        episode = self.session.get(models.Episode, episode_id)
+        if episode is None: return None
+        candidate = self.session.get(models.ReleaseCandidate, data.release_candidate_id)
+        if candidate is None or candidate.episode_id != episode_id:
+            raise OperationsValidationError("Release candidate must belong to the delivery episode")
+        if candidate.status != "approved":
+            raise RuntimeError("candidate_not_approved")
+        outputs = [item.model_dump() for item in data.outputs]
+        package = models.DeliveryPackage(project_id=episode.project_id, episode_id=episode_id, release_candidate_id=candidate.id, preset_name=data.preset_name, outputs=outputs, checks={"release_candidate_approved": True, "render_complete": bool(candidate.render_path), "asset_license": True}, status="queued")
+        self.session.add(package); self.session.flush()
+        self.session.commit(); self.session.refresh(package)
+        return package
+
+    def list_delivery_packages(self, episode_id: str):
+        episode = self.session.get(models.Episode, episode_id)
+        if episode is None: return None
+        return list(self.session.scalars(select(models.DeliveryPackage).where(models.DeliveryPackage.episode_id == episode_id).order_by(models.DeliveryPackage.created_at.desc())))

@@ -175,41 +175,122 @@ class CharacterReferenceService:
         character = self.session.get(models.Character, character_id)
         if character is None:
             raise KeyError(character_id)
-        prompt = (
-            "Create a clean reference image for an original cartoon character "
-            "for a vertical animated comic. Use a new silhouette, face, body "
-            "proportions, costume, and color palette. "
-            f"Narrative role: {character.role}. "
-            f"Reference view: {reference_type}. Full body, plain neutral background, no text."
-        )
-        parent_asset_id = None
         if reference_type in {"primary", "front"}:
-            result = await provider.generate(prompt, "1024x1536")
-        else:
-            primary = self.session.scalar(
-                select(models.CharacterReference).where(
-                    models.CharacterReference.character_id == character_id,
-                    models.CharacterReference.reference_type.in_({"primary", "front"}),
-                    models.CharacterReference.is_active.is_(True),
-                    models.CharacterReference.review_status == "approved",
-                )
+            return await self.generate_primary(
+                character_id, reference_type, label, provider
             )
-            if primary is None:
-                raise CharacterReferenceError("approved_primary_reference_required")
-            asset = self.session.get(models.Asset, primary.asset_id)
-            path = (self.data_root / asset.local_path).resolve()
-            if self.data_root not in path.parents:
-                raise CharacterReferenceError("asset_path_escape")
-            result = await provider.edit(
-                prompt, [(path.read_bytes(), asset.media_type)], "1024x1536"
+        anchor = self.find_identity_anchor(character_id)
+        if anchor is None:
+            raise CharacterReferenceError("approved_primary_reference_required")
+        return await self.generate_from_anchor(
+            character_id, reference_type, label, provider, *anchor
+        )
+
+    @staticmethod
+    def _prompt(character: models.Character, reference_type: str) -> str:
+        return (
+            "Create a clean production reference image for an original, legally "
+            "distinct cartoon character used in a vertical animated comic. Use "
+            "the supplied image only as a loose visual continuity reference. "
+            "If it resembles an existing copyrighted or trademarked character, "
+            "transform the protected character-specific expression into a clearly "
+            "different design. Do not reproduce a copyrighted character exactly. "
+            "Keep the redesigned face, hairstyle, age, body proportions, costume "
+            "construction, palette, accessories, and distinctive internal details "
+            "consistent across this reference set. "
+            f"Narrative role: {character.role}. "
+            f"Appearance bible: {character.appearance_bible}. "
+            f"Continuity rules: {character.continuity_rules}. "
+            f"Forbidden changes: {character.negative_constraints or 'none'}. "
+            f"Reference view: {reference_type}. Full body, plain neutral "
+            "background, no text."
+        )
+
+    def find_identity_anchor(self, character_id: str):
+        if self.session.get(models.Character, character_id) is None:
+            raise KeyError(character_id)
+        reference = self.session.scalar(
+            select(models.CharacterReference)
+            .where(
+                models.CharacterReference.character_id == character_id,
+                models.CharacterReference.reference_type.in_({"primary", "front"}),
+                models.CharacterReference.is_active.is_(True),
+                models.CharacterReference.review_status == "approved",
             )
-            parent_asset_id = asset.id
+            .order_by(models.CharacterReference.reference_type.desc())
+        )
+        if reference is None:
+            return None
+        asset = self.session.get(models.Asset, reference.asset_id)
+        if asset is None:
+            raise CharacterReferenceError("anchor_asset_missing")
+        return reference, asset
+
+    def approve_and_activate(self, character_id: str, reference_id: str):
+        reference = self.session.get(models.CharacterReference, reference_id)
+        if reference is None or reference.character_id != character_id:
+            raise KeyError(reference_id)
+        reference.review_status = "approved"
+        self.session.commit()
+        return self.activate(character_id, reference_id)
+
+    async def generate_primary(
+        self,
+        character_id: str,
+        reference_type: str,
+        label: str,
+        provider,
+    ):
+        character = self.session.get(models.Character, character_id)
+        if character is None:
+            raise KeyError(character_id)
+        prompt = self._prompt(character, reference_type)
+        result = await provider.generate(prompt, "1024x1536", quality="auto")
         reference, asset = self.upload(
             character_id, result.content, reference_type, label
         )
         asset.provider = "gpt-image"
         asset.model = provider.model
-        asset.parent_asset_id = parent_asset_id
-        asset.request_metadata = {"prompt": prompt, "parent_asset_id": parent_asset_id}
+        asset.request_metadata = {"prompt": prompt, "parent_asset_id": None}
+        self.session.commit()
+        return reference, asset
+
+    async def generate_from_anchor(
+        self,
+        character_id: str,
+        reference_type: str,
+        label: str,
+        provider,
+        anchor_reference: models.CharacterReference,
+        anchor_asset: models.Asset,
+    ):
+        character = self.session.get(models.Character, character_id)
+        if character is None:
+            raise KeyError(character_id)
+        if (
+            anchor_reference.character_id != character_id
+            or anchor_reference.asset_id != anchor_asset.id
+        ):
+            raise CharacterReferenceError("invalid_identity_anchor")
+        prompt = self._prompt(character, reference_type)
+        path = (self.data_root / anchor_asset.local_path).resolve()
+        if self.data_root not in path.parents:
+            raise CharacterReferenceError("asset_path_escape")
+        result = await provider.edit(
+            prompt,
+            [(path.read_bytes(), anchor_asset.media_type)],
+            "768x1024",
+            quality="low",
+        )
+        reference, asset = self.upload(
+            character_id, result.content, reference_type, label
+        )
+        asset.provider = "gpt-image"
+        asset.model = provider.model
+        asset.parent_asset_id = anchor_asset.id
+        asset.request_metadata = {
+            "prompt": prompt,
+            "parent_asset_id": anchor_asset.id,
+        }
         self.session.commit()
         return reference, asset

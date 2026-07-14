@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from comic_studio import models
 from comic_studio.jobs import JobStore
+from comic_studio.model_runtime.adapters import ProviderRegistry
 from comic_studio.model_runtime.contracts import Capability, TextStreamRequest
 from comic_studio.model_runtime.errors import (
     ModelRuntimeError,
@@ -15,11 +16,17 @@ from comic_studio.model_runtime.errors import (
 from comic_studio.model_runtime.repository import InvocationRepository
 from comic_studio.provider_channels import ProviderChannel, ProviderChannels
 from comic_studio.schemas import ProviderChannelUpdate
+from comic_studio.redaction import redact
 from comic_studio.services.provider_channel_testing import (
     ProviderChannelTestingService,
     default_client_factory,
 )
+from comic_studio.services.provider_selector import Candidate, ProviderSelector
 from comic_studio.services.character_references import CharacterReferenceService
+from comic_studio.services.character_reference_sets import (
+    CharacterReferenceSetError,
+    CharacterReferenceSetService,
+)
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
 from comic_studio.services.videos import VideoService
@@ -59,12 +66,114 @@ class ModelRuntimeService:
         provider = adapter.__class__.__name__.removesuffix("Provider").casefold()
         return provider, str(getattr(adapter, "model", ""))
 
+    def _safe_channel(self, capability: Capability) -> ProviderChannel | None:
+        """Look up the configured channel for ``capability``; None if unavailable.
+
+        Defensively returns None when ``channel_store`` is absent (e.g. in some
+        unit tests) so decision-log construction never breaks the request path.
+        """
+        if self.channel_store is None:
+            return None
+        try:
+            return getattr(self.channel_store.snapshot, self._channel_names[capability])
+        except (AttributeError, KeyError):
+            return None
+
+    def _build_decision_log(
+        self,
+        capability: Capability,
+        adapter,
+        channel: ProviderChannel | None = None,
+    ) -> dict:
+        """Provenance record explaining why a particular provider was chosen.
+
+        When more than one candidate is registered for a capability, the
+        ``ProviderSelector`` scores each candidate using recent invocation
+        history and the winner is recorded as ``selected``. The score breakdown
+        is persisted so operators can audit the choice.
+        """
+        selected_provider, selected_model = self._adapter_identity(adapter)
+        candidates: list[dict] = []
+        registry: ProviderRegistry | None = getattr(
+            getattr(self.adapters, "provider_factory", None),
+            "_registry",
+            None,
+        )
+        if isinstance(registry, ProviderRegistry) and capability in registry:
+            for registration in registry.registrations():
+                if registration.capability != capability:
+                    continue
+                provider_class = registration.provider_class
+                provider_name = provider_class.__name__.removesuffix("Provider").casefold()
+                candidates.append(
+                    {
+                        "provider": provider_name,
+                        "module": registration.module_name,
+                        "selected": provider_name == selected_provider,
+                    }
+                )
+
+        channel_payload: dict | None = None
+        if channel is not None:
+            channel_payload = {
+                "name": channel.name,
+                "model": channel.model,
+                "base_url": channel.base_url,
+            }
+
+        # M4.2: score candidates when multiple providers are available.
+        if len(candidates) > 1 and self.session_factory is not None and channel_payload is not None:
+            selector_candidates = [
+                Candidate(
+                    provider=c["provider"],
+                    model=channel_payload["model"],
+                    module=c["module"],
+                    channel=channel_payload,
+                    selected=c["selected"],
+                )
+                for c in candidates
+            ]
+            with self.session_factory() as session:
+                result = ProviderSelector(session).select(capability, selector_candidates)
+            selected = {
+                "provider": result.selected.provider,
+                "model": result.selected.model,
+            }
+            reason = result.reason
+            scores = result.scores
+            totals = result.totals
+            candidates = [
+                {
+                    "provider": c.provider,
+                    "module": c.module,
+                    "selected": c.selected,
+                }
+                for c in selector_candidates
+            ]
+        else:
+            selected = {"provider": selected_provider, "model": selected_model}
+            reason = "single-registered-provider"
+            scores = {}
+            totals = {}
+
+        return {
+            "selected": selected,
+            "candidates": candidates,
+            "reason": reason,
+            "scores": scores,
+            "totals": totals,
+            "channel": channel_payload,
+            "decided_at": datetime.now(UTC).isoformat(),
+        }
+
     async def stream_text(self, request: TextStreamRequest):
         adapter = self.adapters.create(Capability.TEXT)
         provider, model = self._adapter_identity(adapter)
+        channel = self._safe_channel(Capability.TEXT)
+        decision_log = self._build_decision_log(Capability.TEXT, adapter, channel)
         with self.session_factory() as session:
             invocation = InvocationRepository(session).start(
-                Capability.TEXT, provider, model
+                Capability.TEXT, provider, model, decision_log=decision_log
             )
         started = perf_counter()
         try:
@@ -93,11 +202,53 @@ class ModelRuntimeService:
     async def plan_episode(self, context: dict):
         return await self.adapters.create(Capability.TEXT).plan_episode(context)
 
+    async def suggest_asset_variant(self, context: dict):
+        adapter = self.adapters.create(Capability.TEXT)
+        provider, model = self._adapter_identity(adapter)
+        channel = self._safe_channel(Capability.TEXT)
+        decision_log = self._build_decision_log(Capability.TEXT, adapter, channel)
+        with self.session_factory() as session:
+            invocation = InvocationRepository(session).start(
+                Capability.TEXT,
+                provider,
+                model,
+                target_type="character",
+                target_id=str(context.get("character_id", "")),
+                decision_log=decision_log,
+            )
+        started = perf_counter()
+        try:
+            result = await adapter.suggest_asset_variant(context)
+            with self.session_factory() as session:
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="succeeded",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                )
+            return result
+        except Exception as error:
+            runtime_error = classify_provider_error(error, Capability.TEXT, provider)
+            with self.session_factory() as session:
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="failed",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                    error_code=runtime_error.code.value,
+                    retryable=runtime_error.retryable,
+                )
+            raise runtime_error from error
+
     async def parse_script_import(self, context: dict):
         return await self.adapters.create(Capability.TEXT).parse_script_import(context)
 
     async def execute_image(
-        self, target_type: str, target_id: str, request_payload: dict
+        self,
+        target_type: str,
+        target_id: str,
+        request_payload: dict,
+        *,
+        on_progress=None,
+        resume: dict | None = None,
     ):
         provider = self.adapters.create(Capability.IMAGE)
         with self.session_factory() as session:
@@ -107,6 +258,25 @@ class ModelRuntimeService:
                 ).generate_panel(
                     target_id,
                     activate=bool(request_payload.get("activate", True)),
+                )
+            if target_type == "grid_panel":
+                shot_ids = [sid for sid in target_id.split(",") if sid]
+                return await PanelService(
+                    session, self.data_root, provider
+                ).generate_grid_panels(
+                    shot_ids,
+                    activate=bool(request_payload.get("activate", True)),
+                )
+            if request_payload.get("mode") == "reference_set":
+                if on_progress is None:
+                    raise ValueError("reference_set progress callback is required")
+                return await CharacterReferenceSetService(
+                    session, self.data_root
+                ).generate(
+                    target_id,
+                    provider,
+                    on_progress=on_progress,
+                    resume=resume or {},
                 )
             return await CharacterReferenceService(
                 session, self.data_root
@@ -151,6 +321,8 @@ class ModelRuntimeService:
 
     @staticmethod
     def _result_metadata(capability: Capability, result) -> dict:
+        if isinstance(result, dict):
+            return result
         asset = result[1] if isinstance(result, tuple) else result
         metadata = {
             "capability": capability.value,
@@ -166,6 +338,8 @@ class ModelRuntimeService:
             capability = Capability(job.request_payload["capability"])
             adapter = self.adapters.create(capability)
             provider, model = self._adapter_identity(adapter)
+            channel = self._safe_channel(capability)
+            decision_log = self._build_decision_log(capability, adapter, channel)
             invocation = InvocationRepository(session).start(
                 capability,
                 provider,
@@ -173,12 +347,27 @@ class ModelRuntimeService:
                 job.target_type,
                 job.target_id,
                 job.id,
+                decision_log=decision_log,
             )
         started = perf_counter()
         try:
             if capability is Capability.IMAGE:
+                async def update_image_progress(metadata: dict) -> None:
+                    current = int(metadata.get("current_index", 0))
+                    total = max(1, int(metadata.get("total", 1)))
+                    with self.session_factory() as progress_session:
+                        JobStore(progress_session).update_progress(
+                            job.id,
+                            progress=round(current / total * 100),
+                            result_metadata=metadata,
+                        )
+
                 result = await self.execute_image(
-                    job.target_type, job.target_id, job.request_payload
+                    job.target_type,
+                    job.target_id,
+                    job.request_payload,
+                    on_progress=update_image_progress,
+                    resume=job.result_metadata,
                 )
             elif capability is Capability.SPEECH:
                 result = await self.execute_speech(job.target_id)
@@ -199,13 +388,24 @@ class ModelRuntimeService:
                     elapsed_ms=round((perf_counter() - started) * 1000),
                 )
         except Exception as error:
-            runtime_error = classify_provider_error(error, capability, provider)
+            batch_metadata = {}
+            classified_error = error
+            if isinstance(error, CharacterReferenceSetError):
+                batch_metadata = {
+                    **error.metadata,
+                    "provider_error": str(redact(str(error.__cause__ or error)))[:1000],
+                }
+                classified_error = error.__cause__ or error
+            runtime_error = classify_provider_error(
+                classified_error, capability, provider
+            )
             with self.session_factory() as session:
                 JobStore(session).transition(
                     job.id,
                     "failed",
                     error=runtime_error.message,
                     result_metadata={
+                        **batch_metadata,
                         "capability": capability.value,
                         "error_code": runtime_error.code.value,
                         "retryable": runtime_error.retryable,
@@ -410,7 +610,13 @@ class ModelRuntimeService:
             job = store.get(job_id)
             if job is None:
                 raise KeyError(job_id)
-            retried = store.transition(job.id, "queued")
+            preserve = (
+                job.operation == "runtime_image"
+                and job.request_payload.get("mode") == "reference_set"
+            )
+            retried = store.requeue(
+                job.id, preserve_result_metadata=preserve
+            )
             session.expunge(retried)
             return retried
 

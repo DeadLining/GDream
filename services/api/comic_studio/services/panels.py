@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session, selectinload
 from comic_studio import models
 from comic_studio.assets import AssetStore
 from comic_studio.providers.gpt_image import GPTImageProvider
+from comic_studio.services.grid_split import split_grid_image
+from comic_studio.services.skill_loader import get_skill_loader
 
 
 class PanelService:
@@ -18,6 +20,148 @@ class PanelService:
         self.session = session
         self.assets = AssetStore(session, data_root)
         self.provider = provider
+
+    async def generate_grid_panels(
+        self,
+        shot_ids: list[str],
+        *,
+        activate: bool = False,
+    ) -> list[models.Asset]:
+        """Generate a single 2x2 grid image and assign one cell to each shot."""
+        if not shot_ids:
+            return []
+        statement = (
+            select(models.Shot)
+            .options(
+                selectinload(models.Shot.scene)
+                .selectinload(models.Scene.episode)
+                .selectinload(models.Episode.project)
+                .selectinload(models.Project.characters)
+            )
+            .where(models.Shot.id.in_(shot_ids))
+            .order_by(models.Shot.scene_id, models.Shot.position)
+        )
+        shots = list(self.session.scalars(statement))
+        if not shots:
+            raise KeyError(shot_ids)
+        project = shots[0].scene.episode.project
+        scene = shots[0].scene
+        present_character_ids: set[str] = set()
+        for shot in shots:
+            present_character_ids.update(
+                key for key in shot.character_state if isinstance(key, str)
+            )
+            present_character_ids.update(
+                line.character_id for line in shot.dialogue if line.character_id is not None
+            )
+        reference_assets: list[models.Asset] = []
+        if present_character_ids:
+            references = list(
+                self.session.scalars(
+                    select(models.CharacterReference).where(
+                        models.CharacterReference.character_id.in_(present_character_ids),
+                        models.CharacterReference.is_active.is_(True),
+                        models.CharacterReference.review_status == "approved",
+                    )
+                )
+            )
+            by_character: dict[str, list[models.CharacterReference]] = {}
+            for reference in references:
+                by_character.setdefault(reference.character_id, []).append(reference)
+            for character_id in present_character_ids:
+                candidates = by_character.get(character_id, [])
+                identity = next(
+                    (
+                        item
+                        for kind in ("primary", "front")
+                        for item in candidates
+                        if item.reference_type == kind
+                    ),
+                    None,
+                )
+                if identity is None:
+                    raise ValueError(f"missing_character_reference:{character_id}")
+                selected = [identity]
+                outfit = next(
+                    (item for item in candidates if item.reference_type == "outfit"),
+                    None,
+                )
+                if outfit is not None:
+                    selected.append(outfit)
+                for reference in selected:
+                    asset = self.session.get(models.Asset, reference.asset_id)
+                    if asset is not None:
+                        reference_assets.append(asset)
+            reference_assets = reference_assets[:4]
+        character_by_id = {character.id: character for character in project.characters}
+        character_rules = "\n".join(
+            f"- {character.name}: {character.appearance_bible}. "
+            f"Continuity: {character.continuity_rules}. Avoid: {character.negative_constraints}"
+            for character in project.characters
+        )
+        style_id = next(
+            (
+                character_by_id[cid].art_style_id
+                for cid in present_character_ids
+                if cid in character_by_id and character_by_id[cid].art_style_id
+            ),
+            None,
+        )
+        style_prefix = ""
+        style_negative = ""
+        if style_id:
+            from comic_studio.services.art_style_loader import get_art_style_loader
+
+            loader = get_art_style_loader()
+            style_prefix = loader.get_prefix(style_id)
+            style_negative = loader.get_negative(style_id)
+        panel_descriptions = "\n".join(
+            f"{index}. Shot: {shot.composition}. {shot.image_prompt}"
+            for index, shot in enumerate(shots, start=1)
+        )
+        negative_constraints = self._combine_negative(
+            ", ".join(dict.fromkeys(shot.negative_prompt for shot in shots if shot.negative_prompt)),
+            style_negative,
+        )
+        prompt = get_skill_loader().render(
+            "grid_panel_prompt",
+            visual_style=project.visual_style,
+            scene_location=scene.location,
+            scene_summary=scene.summary,
+            panel_descriptions=panel_descriptions,
+            character_rules=character_rules,
+            negative_constraints=negative_constraints,
+        )
+        if style_prefix:
+            prompt = f"Style: {style_prefix}.\n\n{prompt}"
+        reference_inputs = [
+            self._asset_to_input(asset) for asset in reference_assets
+        ]
+        result = (
+            await self.provider.edit(prompt, reference_inputs, "1024x1536")
+            if reference_inputs
+            else await self.provider.generate(prompt, "1024x1536")
+        )
+        cells = split_grid_image(result.content, rows=2, columns=2)
+        assets: list[models.Asset] = []
+        for shot, cell in zip(shots, cells):
+            asset = self.assets.register_panel(
+                project_id=project.id,
+                shot_id=shot.id,
+                content=cell,
+                media_type=result.media_type,
+                provider="gpt-image",
+                model=self.provider.model,
+                request_metadata={
+                    "prompt": prompt,
+                    "size": "1024x1536",
+                    "grid": True,
+                    "reference_asset_ids": [asset.id for asset in reference_assets],
+                },
+                activate=activate,
+            )
+            assets.append(asset)
+        return assets
 
     async def generate_panel(
         self, shot_id: str, *, activate: bool = False
@@ -82,26 +226,41 @@ class PanelService:
                     if asset is not None:
                         reference_assets.append(asset)
             reference_assets = reference_assets[:4]
+        from comic_studio.services.art_style_loader import get_art_style_loader
+
         character_rules = "\n".join(
             f"- {character.name}: {character.appearance_bible}. "
             f"Continuity: {character.continuity_rules}. Avoid: {character.negative_constraints}"
             for character in project.characters
         )
-        prompt = (
-            "Create one polished vertical comic panel with no captions or text.\n"
-            f"Series visual style: {project.visual_style}\n"
-            f"Scene: {shot.scene.location}; {shot.scene.summary}\n"
-            f"Shot composition: {shot.composition}\n"
-            f"Shot prompt: {shot.image_prompt}\n"
-            f"Characters:\n{character_rules}\n"
-            f"Negative constraints: {shot.negative_prompt}"
+        style_id = self._resolve_shot_style_id(shot, project.characters)
+        style_prefix = ""
+        style_negative = ""
+        if style_id:
+            loader = get_art_style_loader()
+            style_prefix = loader.get_prefix(style_id)
+            style_negative = loader.get_negative(style_id)
+        prompt = get_skill_loader().render(
+            "panel_prompt",
+            visual_style=project.visual_style,
+            scene_location=shot.scene.location,
+            scene_summary=shot.scene.summary,
+            shot_composition=shot.composition,
+            shot_image_prompt=shot.image_prompt,
+            character_rules=character_rules,
+            negative_constraints=self._combine_negative(shot.negative_prompt, style_negative),
         )
+        if style_prefix:
+            prompt = f"Style: {style_prefix}.\n\n{prompt}"
+        tail_asset = self._tail_frame_asset(shot)
+        if tail_asset is not None:
+            # Make the prompt explicitly call out the continuity anchor.
+            prompt = f"{prompt}\n\nContinuity: continue the visual from the previous shot's tail frame (reference image 1)."
         reference_inputs = []
+        if tail_asset is not None:
+            reference_inputs.append(self._asset_to_input(tail_asset))
         for asset in reference_assets:
-            path = (self.assets.data_root / asset.local_path).resolve()
-            if self.assets.data_root not in path.parents:
-                raise ValueError("Asset path escaped data root")
-            reference_inputs.append((path.read_bytes(), asset.media_type))
+            reference_inputs.append(self._asset_to_input(asset))
         result = (
             await self.provider.edit(prompt, reference_inputs, "1024x1536")
             if reference_inputs
@@ -117,7 +276,60 @@ class PanelService:
             request_metadata={
                 "prompt": prompt,
                 "size": "1024x1536",
-                "reference_asset_ids": [asset.id for asset in reference_assets],
+                "reference_asset_ids": [
+                    *(["tail:" + tail_asset.id] if tail_asset is not None else []),
+                    *[asset.id for asset in reference_assets],
+                ],
             },
             activate=activate,
         )
+
+    def _tail_frame_asset(self, shot: models.Shot) -> models.Asset | None:
+        """Resolve the previous-shot tail-frame anchor declared on ``shot``.
+
+        Returns None when the shot has no tail-frame link or when the linked
+        asset no longer exists; the caller treats None as "no continuity anchor".
+        """
+        asset_id = shot.previous_shot_tail_asset_id
+        if not asset_id:
+            return None
+        return self.session.get(models.Asset, asset_id)
+
+    def _resolve_shot_style_id(
+        self, shot: models.Shot, characters: list[models.Character]
+    ) -> str | None:
+        """Pick the first present character with an explicit art style.
+
+        If no character declares a style, the project-level visual_style is
+        still in the prompt; this only affects the art-style catalog prefix.
+        """
+        character_by_id = {character.id: character for character in characters}
+        for character_id in shot.character_state:
+            character = character_by_id.get(character_id)
+            if character and character.art_style_id:
+                return character.art_style_id
+        for line in shot.dialogue:
+            if line.character_id:
+                character = character_by_id.get(line.character_id)
+                if character and character.art_style_id:
+                    return character.art_style_id
+        return None
+
+    @staticmethod
+    def _combine_negative(base: str, extra: str) -> str:
+        if not base:
+            return extra
+        if not extra:
+            return base
+        return f"{base}, {extra}"
+
+    def _asset_to_input(self, asset: models.Asset) -> tuple[bytes, str]:
+        """Read an asset off disk and return (bytes, media_type) for the provider.
+
+        Mirrors the pre-M3.2 inline logic, hoisted so tail-frame references and
+        character references share the same path-escape guard.
+        """
+        path = (self.assets.data_root / asset.local_path).resolve()
+        if self.assets.data_root not in path.parents:
+            raise ValueError("Asset path escaped data root")
+        return (path.read_bytes(), asset.media_type)

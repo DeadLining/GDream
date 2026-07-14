@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 
 from comic_studio import models
 from comic_studio.jobs import JobStore
+from comic_studio.services.render_review import RenderReviewError, RenderReviewService
 from comic_studio.services.rendering import RenderingService
 
 
@@ -34,6 +35,21 @@ def run_render_job(app, job_id: str, episode_id: str) -> None:
                 settings.data_root,
                 Path(settings.compositor_root),
             ).render(episode_id, output)
+            # M1.2: run post-render self-review and persist the result so
+            # broken renders (black frames, silence, missing audio) never
+            # silently surface as publishable. Failures here are recorded
+            # but do not fail the render job itself.
+            review_payload = None
+            try:
+                from comic_studio.services.render_review import review_to_payload
+
+                record = RenderReviewService(session).review_render(
+                    output, episode_id, job_id=job.id
+                )
+                session.commit()
+                review_payload = review_to_payload(record)
+            except RenderReviewError as review_exc:
+                review_payload = {"error": str(review_exc), "overall_pass": None}
             jobs.transition(
                 job_id,
                 "succeeded",
@@ -42,6 +58,7 @@ def run_render_job(app, job_id: str, episode_id: str) -> None:
                     "output_path": str(output.relative_to(settings.data_root)),
                     "media_url": f"/media/{output.relative_to(settings.data_root)}",
                     "probe": report,
+                    "review": review_payload,
                 },
             )
         except Exception as exc:
@@ -60,3 +77,18 @@ def render_episode(
         job = JobStore(session).create("render_episode", "episode", episode_id, {})
     background_tasks.add_task(run_render_job, request.app, job.id, episode_id)
     return {"job_id": job.id, "status": job.status}
+
+
+@router.get("/api/episodes/{episode_id}/render-review")
+def get_render_review(episode_id: str, request: Request):
+    """M1.2: return the latest post-render review for an episode."""
+
+    from comic_studio.services.render_review import review_to_payload
+
+    with request.app.state.session_factory() as session:
+        if session.get(models.Episode, episode_id) is None:
+            raise HTTPException(status_code=404, detail="Episode not found")
+        record = RenderReviewService(session).latest_for_episode(episode_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="No render review found")
+        return review_to_payload(record)

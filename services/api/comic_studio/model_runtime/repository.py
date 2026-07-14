@@ -17,6 +17,7 @@ class InvocationRepository:
         target_type: str = "",
         target_id: str = "",
         job_id: str | None = None,
+        decision_log: dict | None = None,
     ) -> models.ModelInvocation:
         item = models.ModelInvocation(
             capability=capability.value,
@@ -26,6 +27,7 @@ class InvocationRepository:
             target_id=target_id,
             job_id=job_id,
             status="running",
+            decision_log=decision_log,
         )
         self.session.add(item)
         self.session.commit()

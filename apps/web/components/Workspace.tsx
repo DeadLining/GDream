@@ -1,10 +1,11 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {createEpisode,createProject,deleteEpisode,getEpisode,getProductionReadiness,getProject,listProjects,previewEpisodeDeletion,startPlanning} from '../lib/api';
+import {createEpisode,createProject,createVolume,deleteEpisode,getEpisode,getProductionReadiness,getProject,listProjects,listStorylines,listVolumes,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
-import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,Shot} from '../lib/types';
-import {AppToolbar} from './AppToolbar';
+import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
+import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,Shot,Storyline,Volume} from '../lib/types';
+import {AppToolbar, type GlobalSection} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
 import {CreateProjectDialog} from './CreateProjectDialog';
 import {EpisodeOverview} from './EpisodeOverview';
@@ -19,16 +20,31 @@ import {ScriptLibrary} from './ScriptLibrary';
 import {CharacterWorkspace} from './CharacterWorkspace';
 import {DeleteEpisodeDialog} from './DeleteEpisodeDialog';
 import {DirectorWorkspace} from './director/DirectorWorkspace';
+import {SceneWorkspace} from './SceneWorkspace';
+import {VisualReviewWorkspace} from './VisualReviewWorkspace';
+import {ProductOverview} from './ProductOverview';
+import {ProjectSettings} from './ProjectSettings';
+import {WorkspaceHome} from './WorkspaceHome';
+import {GlobalSearchOverlay} from './GlobalSearchOverlay';
+import {TaskCenter} from './TaskCenter';
+import {VersionHistory} from './VersionHistory';
+import {RecycleBin} from './RecycleBin';
+import {TeamPermissions} from './TeamPermissions';
+import {ExportDelivery} from './ExportDelivery';
 
 export function Workspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<ProjectDetail | null>(null);
+  const [volumes,setVolumes]=useState<Volume[]>([]);
+  const [storylines,setStorylines]=useState<Storyline[]>([]);
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
   const [readinessError, setReadinessError] = useState('');
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [workArea, setWorkArea] = useState<WorkArea>('overview');
-  const [platformPage, setPlatformPage] = useState<'project' | 'models'>('project');
+  const [platformPage, setPlatformPage] = useState<PlatformPage>('project');
+  const [searchOpen,setSearchOpen]=useState(false);
+  const [globalSection, setGlobalSection] = useState<GlobalSection>('episode');
   const [mobile, setMobile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -83,9 +99,11 @@ export function Workspace() {
   };
 
   const loadProjectForRequest = async (id: string, request: number) => {
-    const loaded = await getProject(id);
+    const [loaded,loadedVolumes,loadedStorylines] = await Promise.all([getProject(id),listVolumes(id),listStorylines(id)]);
     if (navigationRequest.current !== request) return;
     setProject(loaded);
+    setVolumes(loadedVolumes);
+    setStorylines(loadedStorylines);
     localStorage.setItem('ai-comic-project', id);
     const preferred = localStorage.getItem('ai-comic-episode');
     const selected = loaded.episodes.find(item => item.id === preferred) ?? loaded.episodes[0];
@@ -114,6 +132,8 @@ export function Workspace() {
     else {
       if (navigationRequest.current !== request) return;
       setProject(null);
+      setVolumes([]);
+      setStorylines([]);
       setEpisode(null);
       setReadiness(null);
       setReadinessError('');
@@ -152,6 +172,7 @@ export function Workspace() {
     }
     setPlatformPage('models');
   };
+  const toggleProjectSettings=()=>{if(platformPage==='settings'){setPlatformPage('project');return;}if(canLeaveSettings())setPlatformPage('settings');};
   const navigateProject=(id:string)=>{if(canLeaveSettings()){deletionGeneration.current+=1;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);void loadProject(id);}};
   const navigateEpisode = (id: string) => {if (canLeaveSettings()) void loadEpisode(id);};
   const openEpisodeDeletion=async(id:string)=>{const target=project?.episodes.find(item=>item.id===id);if(!target)return;const generation=++deletionGeneration.current;setDeletingEpisode(target);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);try{const preview=await previewEpisodeDeletion(id);if(deletionGeneration.current===generation)setDeletionPreview(preview);}catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'无法读取删除影响');}};
@@ -159,7 +180,8 @@ export function Workspace() {
   const confirmEpisodeDeletion=async()=>{if(!deletingEpisode||deletionBusy||!project)return;const target=deletingEpisode;const navigationAtStart=navigationRequest.current;const generation=++deletionGeneration.current;const selectedId=episode?.id??null;const index=project.episodes.findIndex(item=>item.id===target.id);const adjacent=project.episodes[index+1]??project.episodes[index-1]??null;setDeletionBusy(true);setDeletionError('');try{const result=await deleteEpisode(target.id);if(deletionGeneration.current!==generation||navigationRequest.current!==navigationAtStart)return;const preferred=selectedId===target.id?adjacent?.id??null:selectedId;if(preferred)localStorage.setItem('ai-comic-episode',preferred);else localStorage.removeItem('ai-comic-episode');await loadProject(target.project_id);if(deletionGeneration.current!==generation)return;if(result.cleanup_warnings.length){setDeletionWarnings(result.cleanup_warnings);setDeletionPreview(null);}else{setDeletingEpisode(null);setDeletionPreview(null);}}catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'删除失败');}finally{if(deletionGeneration.current===generation)setDeletionBusy(false);}};
   const openReview = () => {
     if (!mobile) {
-      changeWorkArea('review');
+      setGlobalSection('episode');
+      changeWorkArea('visual-review');
       return;
     }
     const blockers = readiness?.blockers;
@@ -189,37 +211,57 @@ export function Workspace() {
     }
   };
 
-  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => {if (canLeaveSettings()) {setPlatformPage('project'); changeWorkArea('production');}}} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey} onModelCenter={toggleModelCenter} modelCenterOpen={platformPage === 'models'}/>;
+  const navigateGlobal = (section: GlobalSection) => {
+    if (!canLeaveSettings()) return;
+    setPlatformPage('project');
+    setGlobalSection(section);
+    changeWorkArea(globalSectionWorkAreas[section]);
+  };
+  const openPlatformPage=(page:PlatformPage)=>{if(canLeaveSettings())setPlatformPage(page);};
+  const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => {if (canLeaveSettings()) {setPlatformPage('project'); setGlobalSection('episode'); changeWorkArea('production');}}} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey} onModelCenter={toggleModelCenter} modelCenterOpen={platformPage === 'models'} onProjectSettings={toggleProjectSettings} projectSettingsOpen={platformPage==='settings'} activeSection={globalSection} onNavigate={navigateGlobal} onWorkspaceHome={()=>openPlatformPage('home')} onSearch={()=>setSearchOpen(true)} onTasks={()=>openPlatformPage('tasks')} onVersions={()=>openPlatformPage('versions')}/>;
+  const searchOverlay=searchOpen?<GlobalSearchOverlay project={project} episode={episode} onClose={()=>setSearchOpen(false)} onOpenAsset={()=>{setSearchOpen(false);setPlatformPage('project');setGlobalSection('assets');setWorkArea('characters');}} onOpenShot={id=>{setSearchOpen(false);setPlatformPage('project');setGlobalSection('episode');selectShotById(id);setWorkArea('storyboard');}}/>:null;
+  const navigateOperations=(page:string)=>{const next=resolveOperationsPage(page);if(next)openPlatformPage(next);};
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
-  if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/></div>;
+  if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>{searchOverlay}</div>;
+  if(platformPage==='settings'&&project){const sceneCount=episode?.scenes.length??0;const shotCount=episode?.scenes.reduce((sum,scene)=>sum+scene.shots.length,0)??0;return <div className="app-shell">{toolbar}<ProjectSettings project={project} volumes={volumes} sceneCount={sceneCount} shotCount={shotCount} onSave={async data=>{const updated=await updateProject(project.id,data);setProject(current=>current?{...current,...updated}:current);setProjects(current=>current.map(item=>item.id===updated.id?updated:item));}}/>{searchOverlay}</div>;}
+  if(platformPage==='home')return <div className="app-shell">{toolbar}<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={id=>{void loadProject(id);setPlatformPage('project');setGlobalSection('episode');setWorkArea('overview');}} onCreateProject={()=>setProjectDialog(true)} onNavigate={navigateOperations}/><CreateProjectDialog open={projectDialog} onClose={()=>setProjectDialog(false)} onCreate={async(data:ProjectCreate)=>{const created=await createProject(data);setProjectDialog(false);await reloadProjects(created.id);setPlatformPage('project');}}/>{searchOverlay}</div>;
+  if(platformPage==='tasks')return <div className="app-shell">{toolbar}<TaskCenter project={project} episode={episode}/>{searchOverlay}</div>;
+  if(platformPage==='versions')return <div className="app-shell">{toolbar}<VersionHistory episode={episode}/>{searchOverlay}</div>;
+  if(platformPage==='trash')return <div className="app-shell">{toolbar}<RecycleBin project={project}/>{searchOverlay}</div>;
+  if(platformPage==='team')return <div className="app-shell">{toolbar}<TeamPermissions project={project} onSave={members=>localStorage.setItem('ai-comic-team-draft',JSON.stringify(members))} onNavigate={navigateOperations}/>{searchOverlay}</div>;
+  if(platformPage==='export')return <div className="app-shell">{toolbar}<ExportDelivery project={project} episode={episode} onNavigate={navigateOperations}/>{searchOverlay}</div>;
 
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
   let center;
-  if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
-  else if (workArea === 'characters' && project) center = <CharacterWorkspace characters={project.characters}/>;
+  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}}/>;
+  else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
+  else if (workArea === 'characters' && project) center = <CharacterWorkspace characters={project.characters} episodes={project.episodes}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
-  else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={selectShotById} onOpenProduction={() => changeWorkArea('production')} onOpenReview={openReview}/>;
+  else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={id => {selectShotById(id); setGlobalSection('episode'); changeWorkArea('storyboard');}} onOpenProduction={() => {setGlobalSection('episode'); changeWorkArea('production');}} onOpenReview={openReview}/>;
   else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
-  else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById}/>;
-  else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById}/>;
+  else if (workArea === 'scene') center = <SceneWorkspace episode={episode} onOpenShot={id => {selectShotById(id); changeWorkArea('storyboard');}}/>;
+  else if (workArea === 'production') center = <ProductionPanel episodeId={episode.id} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById} onSelectCanvasShot={setSelectedShotId}/>;
+  else if (workArea === 'visual-review') center = <VisualReviewWorkspace episode={episode} selectedShotId={selectedShotId} onSelectShot={setSelectedShotId}/>;
+  else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} onSelectShot={selectShotById} onEpisodeChanged={refreshEpisode}/>;
   else if (workArea === 'director' && selectedScene && selectedShotId) center = <DirectorWorkspace scene={selectedScene} selectedShotId={selectedShotId} mobile={mobile} onSelectShot={setSelectedShotId} onShotUpdated={updateShotInEpisode}/>;
   else if (workArea === 'director') center = <main className="center-state"><h1>3D 导演台</h1><p>请先生成并选择一个分镜。</p></main>;
-  else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
-  const visibleWorkAreas: WorkArea[] = !projects.length
-    ? ['overview']
-    : mobile
-    ? ['overview', 'import', 'characters', 'storyboard', 'director', 'production', 'inspector']
-    : ['overview', 'import', 'characters', 'storyboard', 'director', 'production', 'review'];
+  else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} onOpenDirector={id => {selectShotById(id); changeWorkArea('director');}} job={job} planStarting={planStarting}/>;
+  const showShotInspector = workArea === 'storyboard' || workArea === 'inspector';
+  const stageWorkAreas: WorkArea[] = ['overview', 'scene', 'storyboard', 'production', 'visual-review'];
+  const visibleWorkAreas: WorkArea[] = globalSection === 'episode'
+    ? mobile ? [...stageWorkAreas, 'inspector'] : stageWorkAreas
+    : [workArea];
+  const showStageTabs = Boolean(projects.length && episode && globalSection === 'episode');
 
   return <div className="app-shell">
     {toolbar}
     {readinessError && <p className="readiness-error" role="alert">{readinessError}</p>}
     {projects.length > 0 && <div className="mobile-project-bar"><select aria-label="选择项目" value={project?.id ?? ''} onChange={event => navigateProject(event.target.value)}>{projects.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select><select aria-label="选择剧集" value={episode?.id ?? ''} onChange={event => navigateEpisode(event.target.value)}>{project?.episodes.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>}
-    <WorkspaceTabs value={workArea} onChange={changeWorkArea} mobile={mobile} areas={visibleWorkAreas} fullWidth={!projects.length}/>
-    {visibleWorkAreas.filter(area => area !== workArea).map(area => <section key={area} id={`workspace-panel-${area}`} role="tabpanel" aria-labelledby={`workspace-tab-${area}`} hidden/>)}
-    <div className={`workspace-grid mobile-${workArea} ${projects.length ? '' : 'workspace-grid-empty'}`}>
+    {showStageTabs && <WorkspaceTabs value={workArea} onChange={changeWorkArea} mobile={mobile} areas={visibleWorkAreas}/>}
+    {showStageTabs && visibleWorkAreas.filter(area => area !== workArea).map(area => <section key={area} id={`workspace-panel-${area}`} role="tabpanel" aria-labelledby={`workspace-tab-${area}`} hidden/>)}
+    <div className={`workspace-grid mobile-${workArea} ${projects.length ? '' : 'workspace-grid-empty'} ${showShotInspector ? '' : 'without-inspector'}`}>
       {projects.length > 0 && <ProjectNavigator
         projects={projects}
         project={project}
@@ -229,16 +271,16 @@ export function Workspace() {
         onDeleteEpisode={id=>void openEpisodeDeletion(id)}
         onNewProject={() => setProjectDialog(true)}
         onNewEpisode={() => setEpisodeDialog(true)}
-        onScriptImport={() => changeWorkArea('import')}
-        onCharacters={() => changeWorkArea('characters')}
+        onScriptImport={() => {setGlobalSection('script'); changeWorkArea('import');}}
+        onCharacters={() => {setGlobalSection('assets'); changeWorkArea('characters');}}
       />}
       <section
         className="workspace-center"
-        id={workArea === 'inspector' ? undefined : `workspace-panel-${workArea}`}
-        role={workArea === 'inspector' ? undefined : 'tabpanel'}
-        aria-labelledby={workArea === 'inspector' ? undefined : `workspace-tab-${workArea}`}
+        id={showStageTabs && workArea !== 'inspector' ? `workspace-panel-${workArea}` : undefined}
+        role={showStageTabs && workArea !== 'inspector' ? 'tabpanel' : undefined}
+        aria-labelledby={showStageTabs && workArea !== 'inspector' ? `workspace-tab-${workArea}` : undefined}
       >{center}</section>
-      {projects.length > 0 && workArea !== 'director' && <section
+      {projects.length > 0 && showShotInspector && <section
         className="workspace-inspector"
         id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
         role={workArea === 'inspector' ? 'tabpanel' : undefined}
@@ -248,5 +290,6 @@ export function Workspace() {
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>
     <DeleteEpisodeDialog episode={deletingEpisode} preview={deletionPreview} busy={deletionBusy} error={deletionError} warnings={deletionWarnings} onCancel={closeEpisodeDeletion} onConfirm={()=>void confirmEpisodeDeletion()}/>
+    {searchOverlay}
   </div>;
 }

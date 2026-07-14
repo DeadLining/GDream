@@ -30,6 +30,33 @@ class QwenTTSProvider:
         self.ssh_executor = ssh_executor or self._default_ssh_executor
         self.prefer_ssh = prefer_ssh
 
+    @classmethod
+    def from_channel(cls, channel, *, prefer_ssh_for_host=None, **_kwargs):
+        """Build an instance from a :class:`ProviderChannel`.
+
+        ``prefer_ssh_for_host`` is consulted only when the channel actually has
+        an ``ssh_host``; any predicate error fails closed (``prefer_ssh=False``).
+        """
+        ssh_host = channel.ssh_host
+        prefer_ssh = cls._evaluate_prefer_ssh(ssh_host, prefer_ssh_for_host)
+        return cls(
+            api_key=channel.api_key_value or "",
+            model=channel.model,
+            base_url=channel.base_url,
+            ssh_host=ssh_host,
+            prefer_ssh=prefer_ssh,
+        )
+
+    @staticmethod
+    def _evaluate_prefer_ssh(ssh_host, prefer_ssh_for_host) -> bool:
+        if not ssh_host or prefer_ssh_for_host is None:
+            return False
+        try:
+            return bool(prefer_ssh_for_host(ssh_host))
+        except Exception:
+            return False
+
+
     async def check_health(self) -> None:
         if self.prefer_ssh and self.ssh_host:
             await asyncio.to_thread(self._check_health_via_ssh)
@@ -196,3 +223,9 @@ class QwenTTSProvider:
             raise ProviderError("Qwen TTS returned invalid health data") from None
         if not isinstance(payload, dict) or payload.get("status") != "ok":
             raise ProviderError("Qwen TTS health check failed")
+
+
+from comic_studio.model_runtime.adapters import register_capability
+from comic_studio.model_runtime.contracts import Capability
+
+PROVIDER_CAPABILITY = register_capability(Capability.SPEECH, provider_class="QwenTTSProvider")

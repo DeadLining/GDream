@@ -70,4 +70,13 @@ describe('ModelCenter', () => {
     await waitFor(() => expect(mocks.getModelRuntimeHealth).toHaveBeenCalledTimes(2));
     expect(mocks.getModelRuntimeInvocations).toHaveBeenCalledTimes(2);
   });
+
+  it('provides stable in-page navigation for operations and channel settings', async () => {
+    render(<ModelCenter/>);
+
+    expect(await screen.findByRole('navigation', {name: '模型中心分区'})).toBeVisible();
+    expect(screen.getByRole('link', {name: '能力概览'})).toHaveAttribute('href', '#model-capabilities');
+    expect(screen.getByRole('link', {name: '运行记录'})).toHaveAttribute('href', '#model-operations');
+    expect(screen.getByRole('link', {name: '渠道配置'})).toHaveAttribute('href', '#model-settings');
+  });
 });

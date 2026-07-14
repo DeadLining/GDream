@@ -1,24 +1,22 @@
 import type {KeyboardEvent} from 'react';
+import type {WorkArea} from '../lib/navigation';
 
-export type WorkArea = 'overview' | 'import' | 'characters' | 'storyboard' | 'director' | 'production' | 'review' | 'inspector';
+export type {WorkArea} from '../lib/navigation';
 
 const desktopTabs: Array<{value: WorkArea; label: string}> = [
-  {value: 'overview', label: '总览'},
-  {value: 'import', label: '剧本创作'},
-  {value: 'characters', label: '角色'},
+  {value: 'overview', label: '概览'},
+  {value: 'scene', label: '场景'},
   {value: 'storyboard', label: '分镜'},
-  {value: 'director', label: '3D导演'},
   {value: 'production', label: '生产'},
-  {value: 'review', label: '审核'},
+  {value: 'visual-review', label: '视觉审阅'},
 ];
 
 const mobileTabs: Array<{value: WorkArea; label: string}> = [
-  {value: 'overview', label: '总览'},
-  {value: 'import', label: '创作'},
-  {value: 'characters', label: '角色'},
+  {value: 'overview', label: '概览'},
+  {value: 'scene', label: '场景'},
   {value: 'storyboard', label: '分镜'},
-  {value: 'director', label: '导演'},
   {value: 'production', label: '生产'},
+  {value: 'visual-review', label: '审阅'},
   {value: 'inspector', label: '检查器'},
 ];
 

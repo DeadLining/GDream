@@ -1,5 +1,4 @@
-import {readFileSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {readAllStyles} from './_styles';
 import {cleanup,render,screen,waitFor,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
@@ -13,7 +12,7 @@ const imported={id:'i1',project_id:'p1',status:'ready',mode:'auto',source_format
 beforeEach(()=>{vi.clearAllMocks();localStorage.clear();mocks.stream.mockImplementation(async(_projectId,_request,handlers)=>{handlers.onChunk('第一集：雨夜\n');handlers.onChunk('场景一');handlers.onDone();});mocks.create.mockResolvedValue({...imported,status:'uploaded',structured_draft:{}});mocks.parse.mockResolvedValue(imported);mocks.update.mockResolvedValue(imported);mocks.confirm.mockResolvedValue({...imported,status:'applied'});});
 afterEach(cleanup);
 
-const workspaceStyles=readFileSync(resolve(process.cwd(),'app/globals.css'),'utf8');
+const workspaceStyles=readAllStyles();
 
 it('streams an AI script into the editor and waits for manual parsing',async()=>{const user=userEvent.setup();render(<ScriptImportWorkspace projectId="p1" onConfirmed={()=>{}}/>);expect(screen.getByRole('heading',{name:'剧本创作'})).toBeVisible();const modes=screen.getByRole('group',{name:'创作模式'});expect(modes).toHaveClass('script-mode-segments');expect(within(modes).getAllByRole('button')).toHaveLength(2);await user.type(screen.getByLabelText('本次创作要求（可选）'),'生成三集');await user.click(screen.getByRole('button',{name:'开始 AI 创作'}));expect(await screen.findByLabelText('AI 剧本草稿')).toHaveValue('第一集：雨夜\n场景一');expect(mocks.stream).toHaveBeenCalled();expect(mocks.create).not.toHaveBeenCalled();await user.click(screen.getByRole('button',{name:'解析并预览'}));await waitFor(()=>expect(mocks.create).toHaveBeenCalledWith('p1','auto','第一集：雨夜\n场景一'));});
 

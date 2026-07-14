@@ -1,0 +1,1 @@
+2D anime, hand drawn, line art, flat shading, chibi, cartoon, watercolor, sketch, low poly, blurry, watermark, text, signature.

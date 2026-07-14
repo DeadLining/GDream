@@ -39,6 +39,7 @@ export function ProviderHealthStatus({healthRefreshKey = 0}: {healthRefreshKey?:
   const generation = useRef(0);
   const pending = useRef(false);
   const previousRefreshKey = useRef(healthRefreshKey);
+  const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -47,6 +48,15 @@ export function ProviderHealthStatus({healthRefreshKey = 0}: {healthRefreshKey?:
       generation.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    if (!detailsOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!container.current?.contains(event.target as Node)) setDetailsOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [detailsOpen]);
 
   const check = useCallback(async (supersede = false, openOnSuccess = false) => {
     if (pending.current && !supersede) return;
@@ -86,15 +96,11 @@ export function ProviderHealthStatus({healthRefreshKey = 0}: {healthRefreshKey?:
         : '检测服务';
 
   const activate = () => {
-    if (requestState === 'success') {
-      setDetailsOpen(value => !value);
-      return;
-    }
     void check(false, true);
   };
 
   return (
-    <div className="provider-health-status">
+    <div className="provider-health-status" ref={container}>
       <button
         className="health-button"
         type="button"

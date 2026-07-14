@@ -3,6 +3,7 @@ from collections.abc import Awaitable, Callable
 
 from comic_studio import models
 from comic_studio.production import ProductionStore
+from comic_studio.services.budgeting import BudgetingService
 
 
 Worker = Callable[[models.ProductionItem], Awaitable[dict]]
@@ -20,6 +21,10 @@ class ProductionCoordinator:
         while True:
             session.expire_all(); run = store.get_run(run_id)
             if run.pause_requested or run.status == "paused": return store.refresh_counters(run_id)
+            # M4.1: pause before the next batch if the budget cap would be exceeded.
+            if BudgetingService(session).should_pause_run(run_id):
+                run = store.transition_run(run_id, "paused")
+                return store.refresh_counters(run_id)
             queued = [item for item in store.list_items(run_id) if item.status == "queued"]
             if not queued: break
             batch = queued[:run.concurrency]
@@ -30,6 +35,7 @@ class ProductionCoordinator:
                 try:
                     result = await self.workers[item.stage](item)
                     store.transition_item(item.id, "succeeded", result_metadata=result)
+                    BudgetingService(session).record_item_cost(item.run_id, item.stage)
                 except Exception as exc:
                     store.transition_item(item.id, "failed", error=f"{type(exc).__name__}: {exc}")
 

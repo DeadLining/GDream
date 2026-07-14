@@ -1,0 +1,1 @@
+3D rendered realistic style, cinematic lighting, PBR materials, depth of field, lifelike proportions, dramatic shadows, vertical cinematic composition, high fidelity textures.

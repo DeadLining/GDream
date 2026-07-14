@@ -1,8 +1,7 @@
 import {cleanup, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {readFileSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {readAllStyles} from './_styles';
 import {ProviderSettings} from '../components/ProviderSettings';
 import type {ProviderChannelsRead} from '../lib/types';
 
@@ -48,7 +47,7 @@ const snapshot: ProviderChannelsRead = {
   persistence: {status: 'saved', file_path: 'data/provider-channels.json'},
   reloaded_at: '2026-07-11T10:00:00Z',
 };
-const settingsStyles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
+const settingsStyles = readAllStyles();
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

@@ -21,3 +21,13 @@ out/
 dist/
 packages/compositor/public/fixture/
 packages/compositor/public/jobs/
+
+# Build / tooling artifacts
+*.tsbuildinfo
+.codegraph/
+page_image/
+
+# Runtime data (generated assets, logs)
+/data/projects/
+/data/mock-ssh.json
+/data/mock-ssh.log

@@ -5,7 +5,7 @@ import {ScriptLibrary} from '../components/ScriptLibrary';
 import type {ScriptDocument, ScriptDocumentSummary} from '../lib/types';
 
 const mocks=vi.hoisted(()=>({
-  list:vi.fn(),get:vi.fn(),create:vi.fn(),patch:vi.fn(),remove:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),
+  list:vi.fn(),get:vi.fn(),create:vi.fn(),patch:vi.fn(),remove:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),
 }));
 
 vi.mock('../lib/api',async importOriginal=>({
@@ -13,6 +13,7 @@ vi.mock('../lib/api',async importOriginal=>({
   listScripts:mocks.list,getScript:mocks.get,createScript:mocks.create,
   patchScript:mocks.patch,deleteScript:mocks.remove,uploadScript:mocks.upload,
   listScriptRevisions:mocks.revisions,restoreScriptRevision:mocks.restore,
+  listVolumes:mocks.volumes,listStorylines:mocks.storylines,
 }));
 
 const revision=(content='第一集',checksum='old')=>({id:'r1',document_id:'s1',revision_number:1,status:'working' as const,content,checksum,creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'',generation_brief:'',generation_metadata:{},created_at:'2026-07-12T00:00:00Z'});
@@ -23,6 +24,8 @@ beforeEach(()=>{
   mocks.list.mockResolvedValue([summary]);mocks.get.mockResolvedValue(document);
   mocks.create.mockResolvedValue(document);mocks.patch.mockImplementation(async(_id,data)=>({...document,title:data.title??document.title,current_revision:{...document.current_revision,content:data.content??document.current_revision.content,checksum:'new'}}));mocks.remove.mockResolvedValue(undefined);
   mocks.upload.mockResolvedValue({...document,id:'upload-1',title:'story',source_type:'upload'});mocks.revisions.mockResolvedValue([{...revision(),status:'finalized'}]);mocks.restore.mockResolvedValue({...document,current_revision:{...revision(),id:'r2',revision_number:2,status:'finalized'}});
+  mocks.volumes.mockResolvedValue([{id:'v1',project_id:'p1',position:1,title:'海底异变',summary:'',created_at:'',updated_at:'',episodes:[{id:'e1',project_id:'p1',volume_id:'v1',position:1,title:'第一集',premise:'',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''}]}]);
+  mocks.storylines.mockResolvedValue([{id:'l1',project_id:'p1',title:'真实时间裂缝',kind:'foreshadowing',color:'#B9473E',description:'',created_at:'',updated_at:'',events:[{id:'ev1',storyline_id:'l1',episode_id:'e1',scene_id:null,shot_id:null,position:1,stage:'setup',title:'海螺发光',description:'',setup_event_id:null,payoff_event_id:null,metadata:{},created_at:'',updated_at:''}]}]);
 });
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 
@@ -76,4 +79,18 @@ it('uploads a script and restores a historical revision',async()=>{
   expect(await screen.findByText('版本 1')).toBeVisible();
   await user.click(screen.getByRole('button',{name:'恢复版本 1'}));
   await waitFor(()=>expect(mocks.restore).toHaveBeenCalledWith('upload-1','r1'));
+});
+
+it('opens the storyline canvas without replacing the script document',async()=>{
+  render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
+  expect(await screen.findByLabelText('剧本正文')).toHaveValue('第一集');
+
+  await userEvent.click(screen.getByRole('button',{name:'故事线画布'}));
+
+  expect(screen.getByRole('heading',{name:'故事线画布'})).toBeVisible();
+  expect(screen.getByText('海底异变')).toBeVisible();
+  expect(screen.getByRole('button',{name:'真实时间裂缝'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'海螺发光'})).toBeVisible();
+  await userEvent.click(screen.getByRole('button',{name:'文档编辑'}));
+  expect(screen.getByLabelText('剧本正文')).toHaveValue('第一集');
 });

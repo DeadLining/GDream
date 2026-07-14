@@ -26,6 +26,8 @@ def create_production_run(episode_id: str, data: schemas.ProductionRunCreate, re
         except RuntimeError as exc:
             if str(exc) == "active_run":
                 raise HTTPException(status_code=409, detail="Episode already has an active production run") from exc
+            if str(exc) == "shot_overlap":
+                raise HTTPException(status_code=409, detail="One of the selected shots is already running in another shot-group run") from exc
             raise
         if run is None: raise HTTPException(status_code=404, detail="Episode not found")
         return schemas.ProductionRunRead.model_validate(run)

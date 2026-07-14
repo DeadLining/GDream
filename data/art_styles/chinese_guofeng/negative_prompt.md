@@ -1,0 +1,1 @@
+western cartoon, anime, 3D render, photorealistic, modern clothing, skyscrapers, cars, neon, text, watermark, signature, deformed hands.

@@ -28,6 +28,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project.scripts]
+comic-studio = "comic_studio.cli:main"
+
+
 [tool.hatch.build.targets.wheel]
 packages = ["comic_studio"]
 

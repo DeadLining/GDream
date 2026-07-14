@@ -85,6 +85,19 @@ class ScriptDocumentService:
         self.session.add(revision)
         self.session.flush()
         document.current_revision_id = revision.id
+        # M1.1: populate deterministic chapter splits so downstream prompts
+        # can reference per-chapter context. Failure here must not block
+        # script creation — chapters can be re-extracted on demand.
+        try:
+            from comic_studio.services.chapter_events import ChapterEventService
+
+            ChapterEventService(self.session).populate_chapters(
+                document.id, content, replace=True
+            )
+        except Exception:
+            # Chapter extraction is best-effort on import; the route layer
+            # exposes explicit re-extraction for retry.
+            pass
         self.session.commit()
         return self._load(document.id)
 

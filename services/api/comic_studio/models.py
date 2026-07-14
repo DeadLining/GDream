@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from comic_studio.db import Base
@@ -44,6 +44,70 @@ class Project(Base):
     scripts: Mapped[list[ScriptDocument]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="ScriptDocument.updated_at"
     )
+    volumes: Mapped[list[Volume]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="Volume.position"
+    )
+    storylines: Mapped[list[Storyline]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="Storyline.created_at"
+    )
+
+
+class Volume(Base):
+    __tablename__ = "volumes"
+    __table_args__ = (UniqueConstraint("project_id", "position", name="uq_volume_project_position"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    project: Mapped[Project] = relationship(back_populates="volumes")
+    episodes: Mapped[list[Episode]] = relationship(
+        back_populates="volume", order_by="Episode.position"
+    )
+
+
+class Storyline(Base):
+    __tablename__ = "storylines"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    color: Mapped[str] = mapped_column(String(7))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    project: Mapped[Project] = relationship(back_populates="storylines")
+    events: Mapped[list[StorylineEvent]] = relationship(
+        back_populates="storyline", cascade="all, delete-orphan", order_by="StorylineEvent.position"
+    )
+
+
+class StorylineEvent(Base):
+    __tablename__ = "storyline_events"
+    __table_args__ = (UniqueConstraint("storyline_id", "position", name="uq_storyline_event_position"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    storyline_id: Mapped[str] = mapped_column(ForeignKey("storylines.id", ondelete="CASCADE"), index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    scene_id: Mapped[str | None] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), nullable=True, index=True)
+    shot_id: Mapped[str | None] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), nullable=True, index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    stage: Mapped[str] = mapped_column(String(32), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    setup_event_id: Mapped[str | None] = mapped_column(ForeignKey("storyline_events.id", ondelete="SET NULL"), nullable=True)
+    payoff_event_id: Mapped[str | None] = mapped_column(ForeignKey("storyline_events.id", ondelete="SET NULL"), nullable=True)
+    event_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    storyline: Mapped[Storyline] = relationship(back_populates="events", foreign_keys=[storyline_id])
 
 
 class Character(Base):
@@ -61,6 +125,7 @@ class Character(Base):
     negative_constraints: Mapped[str] = mapped_column(Text, default="")
     voice_speaker: Mapped[str] = mapped_column(String(80))
     voice_instruction: Mapped[str] = mapped_column(Text, default="")
+    art_style_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
@@ -70,6 +135,90 @@ class Character(Base):
     references: Mapped[list[CharacterReference]] = relationship(
         back_populates="character", cascade="all, delete-orphan", order_by="CharacterReference.created_at"
     )
+    variants: Mapped[list[AssetVariant]] = relationship(
+        back_populates="character", cascade="all, delete-orphan", order_by="AssetVariant.created_at"
+    )
+
+
+class AssetVariant(Base):
+    __tablename__ = "asset_variants"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    character_id: Mapped[str] = mapped_column(ForeignKey("characters.id", ondelete="CASCADE"), index=True)
+    episode_id: Mapped[str | None] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True, index=True)
+    parent_variant_id: Mapped[str | None] = mapped_column(ForeignKey("asset_variants.id", ondelete="RESTRICT"), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    label: Mapped[str] = mapped_column(String(160))
+    inherited_fields: Mapped[list] = mapped_column(JSON, default=list)
+    overrides: Mapped[dict] = mapped_column(JSON, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    review_status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    character: Mapped[Character] = relationship(back_populates="variants")
+    states: Mapped[list[AssetVariantState]] = relationship(
+        back_populates="variant", cascade="all, delete-orphan", order_by="AssetVariantState.created_at"
+    )
+    usages: Mapped[list[AssetVariantUsage]] = relationship(
+        back_populates="variant", cascade="all, delete-orphan", order_by="AssetVariantUsage.created_at"
+    )
+
+
+class AssetVariantState(Base):
+    __tablename__ = "asset_variant_states"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    variant_id: Mapped[str] = mapped_column(ForeignKey("asset_variants.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    label: Mapped[str] = mapped_column(String(160))
+    overrides: Mapped[dict] = mapped_column(JSON, default=dict)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    variant: Mapped[AssetVariant] = relationship(back_populates="states")
+    usages: Mapped[list[AssetVariantUsage]] = relationship(back_populates="state")
+
+
+class AssetVariantUsage(Base):
+    __tablename__ = "asset_variant_usages"
+    __table_args__ = (UniqueConstraint("variant_id", "shot_id", "usage_kind", name="uq_variant_shot_usage"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    variant_id: Mapped[str] = mapped_column(ForeignKey("asset_variants.id", ondelete="CASCADE"), index=True)
+    state_id: Mapped[str | None] = mapped_column(ForeignKey("asset_variant_states.id", ondelete="SET NULL"), nullable=True, index=True)
+    shot_id: Mapped[str] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), index=True)
+    asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True)
+    usage_kind: Mapped[str] = mapped_column(String(24), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    variant: Mapped[AssetVariant] = relationship(back_populates="usages")
+    state: Mapped[AssetVariantState | None] = relationship(back_populates="usages")
+
+
+class TrashItem(Base):
+    __tablename__ = "trash_items"
+    __table_args__ = (
+        UniqueConstraint("resource_type", "resource_id", name="uq_trash_resource"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    resource_type: Mapped[str] = mapped_column(String(64), index=True)
+    resource_id: Mapped[str] = mapped_column(String(36), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    original_location: Mapped[list] = mapped_column(JSON, default=list)
+    lineage: Mapped[list] = mapped_column(JSON, default=list)
+    deleted_by: Mapped[str] = mapped_column(String(120), default="")
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class Episode(Base):
@@ -79,6 +228,10 @@ class Episode(Base):
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+    volume_id: Mapped[str | None] = mapped_column(
+        ForeignKey("volumes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, default=0)
     title: Mapped[str] = mapped_column(String(200))
     premise: Mapped[str] = mapped_column(Text)
     target_duration_seconds: Mapped[int] = mapped_column(Integer)
@@ -89,11 +242,18 @@ class Episode(Base):
     )
 
     project: Mapped[Project] = relationship(back_populates="episodes")
+    volume: Mapped[Volume | None] = relationship(back_populates="episodes")
     scenes: Mapped[list[Scene]] = relationship(
         back_populates="episode", cascade="all, delete-orphan", order_by="Scene.position"
     )
     script_source: Mapped[ScriptImportEpisode | None] = relationship(
         back_populates="episode", cascade="all, delete-orphan", uselist=False
+    )
+    review_threads: Mapped[list[ReviewThread]] = relationship(
+        back_populates="episode", cascade="all, delete-orphan", order_by="ReviewThread.created_at"
+    )
+    release_candidates: Mapped[list[ReleaseCandidate]] = relationship(
+        back_populates="episode", cascade="all, delete-orphan", order_by="ReleaseCandidate.created_at"
     )
 
 
@@ -136,6 +296,7 @@ class Shot(Base):
     image_prompt: Mapped[str] = mapped_column(Text, default="")
     negative_prompt: Mapped[str] = mapped_column(Text, default="")
     active_panel_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    previous_shot_tail_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     video_prompt: Mapped[str] = mapped_column(Text, default="")
     negative_video_prompt: Mapped[str] = mapped_column(Text, default="")
     active_video_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -150,6 +311,130 @@ class Shot(Base):
     director_camera: Mapped[ShotCamera | None] = relationship(
         back_populates="shot", cascade="all, delete-orphan", uselist=False
     )
+    visual_review_threads: Mapped[list[VisualReviewThread]] = relationship(
+        back_populates="shot", cascade="all, delete-orphan", order_by="VisualReviewThread.created_at"
+    )
+
+
+class VisualReviewThread(Base):
+    __tablename__ = "visual_review_threads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    shot_id: Mapped[str] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), index=True)
+    source_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(24), default="open", index=True)
+    modification_scope: Mapped[str] = mapped_column(String(24), default="shot", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    shot: Mapped[Shot] = relationship(back_populates="visual_review_threads")
+    annotations: Mapped[list[VisualAnnotation]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="VisualAnnotation.created_at")
+    messages: Mapped[list[VisualReviewMessage]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="VisualReviewMessage.created_at")
+    candidates: Mapped[list[VisualReviewCandidate]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="VisualReviewCandidate.created_at")
+
+
+class VisualAnnotation(Base):
+    __tablename__ = "visual_annotations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("visual_review_threads.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    geometry: Mapped[dict] = mapped_column(JSON)
+    color: Mapped[str] = mapped_column(String(7))
+    label: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    thread: Mapped[VisualReviewThread] = relationship(back_populates="annotations")
+
+
+class VisualReviewMessage(Base):
+    __tablename__ = "visual_review_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("visual_review_threads.id", ondelete="CASCADE"), index=True)
+    author_kind: Mapped[str] = mapped_column(String(24), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    thread: Mapped[VisualReviewThread] = relationship(back_populates="messages")
+
+
+class VisualReviewCandidate(Base):
+    __tablename__ = "visual_review_candidates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("visual_review_threads.id", ondelete="CASCADE"), index=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="ready", index=True)
+    generation_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    thread: Mapped[VisualReviewThread] = relationship(back_populates="candidates")
+
+
+class ReviewThread(Base):
+    __tablename__ = "review_threads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    shot_id: Mapped[str | None] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), nullable=True, index=True)
+    timecode_seconds: Mapped[float] = mapped_column(Float, default=0)
+    severity: Mapped[str] = mapped_column(String(24), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(24), default="open", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    episode: Mapped[Episode] = relationship(back_populates="review_threads")
+    messages: Mapped[list[ReviewMessage]] = relationship(back_populates="thread", cascade="all, delete-orphan", order_by="ReviewMessage.created_at")
+
+
+class ReviewMessage(Base):
+    __tablename__ = "review_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    thread_id: Mapped[str] = mapped_column(ForeignKey("review_threads.id", ondelete="CASCADE"), index=True)
+    author_kind: Mapped[str] = mapped_column(String(24), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    thread: Mapped[ReviewThread] = relationship(back_populates="messages")
+
+
+class ReleaseCandidate(Base):
+    __tablename__ = "release_candidates"
+    __table_args__ = (UniqueConstraint("episode_id", "version", name="uq_release_candidate_version"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    version: Mapped[str] = mapped_column(String(64))
+    render_path: Mapped[str] = mapped_column(Text)
+    qc_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(24), default="draft", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    episode: Mapped[Episode] = relationship(back_populates="release_candidates")
+    publications: Mapped[list[PublicationRecord]] = relationship(back_populates="candidate", cascade="all, delete-orphan", order_by="PublicationRecord.created_at")
+
+
+class PublicationRecord(Base):
+    __tablename__ = "publication_records"
+    __table_args__ = (UniqueConstraint("candidate_id", "platform", "idempotency_key", name="uq_publication_idempotency"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    candidate_id: Mapped[str] = mapped_column(ForeignKey("release_candidates.id", ondelete="CASCADE"), index=True)
+    platform: Mapped[str] = mapped_column(String(64), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), index=True)
+    external_reference: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(24), default="published", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    candidate: Mapped[ReleaseCandidate] = relationship(back_populates="publications")
 
 
 class DirectorStage(Base):
@@ -329,6 +614,8 @@ class ModelInvocation(Base):
     elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
     error_code: Mapped[str] = mapped_column(String(64), default="")
     retryable: Mapped[bool] = mapped_column(Boolean, default=False)
+    decision_log: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    cost_usd: Mapped[float] = mapped_column(Numeric(precision=12, scale=6), default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
@@ -356,6 +643,11 @@ class ScriptDocument(Base):
         back_populates="document",
         cascade="all, delete-orphan",
         order_by="ScriptRevision.revision_number",
+    )
+    chapters: Mapped[list[ScriptChapter]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="ScriptChapter.chapter_index",
     )
 
 
@@ -391,6 +683,36 @@ class ScriptRevision(Base):
 
     document: Mapped[ScriptDocument] = relationship(back_populates="revisions")
     imports: Mapped[list[ScriptImport]] = relationship(back_populates="script_revision")
+
+
+class ScriptChapter(Base):
+    __tablename__ = "script_chapters"
+    __table_args__ = (
+        UniqueConstraint(
+            "script_document_id", "chapter_index", name="uq_script_chapter_index"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    script_document_id: Mapped[str] = mapped_column(
+        ForeignKey("script_documents.id", ondelete="CASCADE"), index=True
+    )
+    chapter_index: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_text: Mapped[str] = mapped_column(Text)
+    event_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    character_ids: Mapped[list] = mapped_column(JSON, default=list)
+    scene_ids: Mapped[list] = mapped_column(JSON, default=list)
+    extraction_status: Mapped[str] = mapped_column(
+        String(24), default="pending", index=True
+    )
+    extraction_error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    document: Mapped[ScriptDocument] = relationship(back_populates="chapters")
 
 
 class ScriptImport(Base):
@@ -478,11 +800,17 @@ class ProductionRun(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    scope_type: Mapped[str] = mapped_column(String(16), default="episode", index=True)
+    shot_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     stages: Mapped[list] = mapped_column(JSON, default=list)
     concurrency: Mapped[int] = mapped_column(Integer, default=2)
     regenerate_panels: Mapped[bool] = mapped_column(Boolean, default=False)
     regenerate_speech: Mapped[bool] = mapped_column(Boolean, default=False)
     regenerate_videos: Mapped[bool] = mapped_column(Boolean, default=False)
+    panel_generation_mode: Mapped[str] = mapped_column(String(16), default="solo")
+    budget_cap_usd: Mapped[float | None] = mapped_column(Numeric(precision=12, scale=6), nullable=True)
+    spent_usd: Mapped[float] = mapped_column(Numeric(precision=12, scale=6), default=0)
+    budget_mode: Mapped[str] = mapped_column(String(16), default="observe")
     pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     queued_items: Mapped[int] = mapped_column(Integer, default=0)
@@ -507,7 +835,7 @@ class ProductionItem(Base):
     run_id: Mapped[str] = mapped_column(ForeignKey("production_runs.id", ondelete="CASCADE"), index=True)
     stage: Mapped[str] = mapped_column(String(24))
     target_type: Mapped[str] = mapped_column(String(24))
-    target_id: Mapped[str] = mapped_column(String(36), index=True)
+    target_id: Mapped[str] = mapped_column(String(160), index=True)
     position: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -517,3 +845,156 @@ class ProductionItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     run: Mapped[ProductionRun] = relationship(back_populates="items")
+
+
+class ProjectMember(Base):
+    __tablename__ = "project_members"
+    __table_args__ = (UniqueConstraint("project_id", "email", name="uq_project_member_email"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(254))
+    role: Mapped[str] = mapped_column(String(64), index=True)
+    scope: Mapped[dict] = mapped_column(JSON, default=dict)
+    capabilities: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class ProductionTask(Base):
+    __tablename__ = "production_tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    episode_id: Mapped[str | None] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True, index=True)
+    scene_id: Mapped[str | None] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), nullable=True, index=True)
+    shot_id: Mapped[str | None] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), nullable=True, index=True)
+    review_thread_id: Mapped[str | None] = mapped_column(ForeignKey("visual_review_threads.id", ondelete="SET NULL"), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    priority: Mapped[str] = mapped_column(String(24), default="medium", index=True)
+    status: Mapped[str] = mapped_column(String(24), default="todo", index=True)
+    assignee: Mapped[str] = mapped_column(String(120), default="")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    checklist: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class EpisodeVersion(Base):
+    __tablename__ = "episode_versions"
+    __table_args__ = (UniqueConstraint("episode_id", "version", name="uq_episode_version_number"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String(160))
+    source: Mapped[str] = mapped_column(String(24), index=True)
+    author: Mapped[str] = mapped_column(String(120), default="")
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    restored_from_id: Mapped[str | None] = mapped_column(ForeignKey("episode_versions.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class DeliveryPackage(Base):
+    __tablename__ = "delivery_packages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    release_candidate_id: Mapped[str] = mapped_column(ForeignKey("release_candidates.id", ondelete="RESTRICT"), index=True)
+    preset_name: Mapped[str] = mapped_column(String(160))
+    outputs: Mapped[list] = mapped_column(JSON, default=list)
+    checks: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    artifact_path: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class ProductionCanvasLayout(Base):
+    __tablename__ = "production_canvas_layouts"
+    __table_args__ = (
+        UniqueConstraint("episode_id", name="uq_production_canvas_episode"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(
+        ForeignKey("episodes.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    layout: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class ProductionWorkflowBinding(Base):
+    __tablename__ = "production_workflow_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "capability", "name", name="uq_production_workflow_name"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    capability: Mapped[str] = mapped_column(String(24), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    workflow_id: Mapped[str] = mapped_column(String(200))
+    workflow_version: Mapped[int] = mapped_column(Integer, default=1)
+    input_mapping_version: Mapped[int] = mapped_column(Integer, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class RenderReviewRecord(Base):
+    """M1.2: post-render self-review result for a rendered MP4.
+
+    Records ffprobe summary, black-frame positions, silence ranges, and
+    subtitle presence so that failed renders never silently surface as
+    publishable.
+    """
+
+    __tablename__ = "render_review_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(String(36), index=True)
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    render_path: Mapped[str] = mapped_column(Text)
+    ffprobe_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    black_frame_positions: Mapped[list] = mapped_column(JSON, default=list)
+    silence_ranges: Mapped[list] = mapped_column(JSON, default=list)
+    subtitle_present: Mapped[bool] = mapped_column(Boolean, default=False)
+    overall_pass: Mapped[bool] = mapped_column(Boolean, default=True)
+    findings: Mapped[list] = mapped_column(JSON, default=list)
+    slideshow_risk: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class ImageProxyCache(Base):
+    """M4.4: on-disk cache for remote images (object storage / CDN URLs).
+
+    Keeps a stable ``url_hash`` (SHA-256 of the source URL) so repeated
+    requests for the same remote image are served from local disk instead of
+    re-fetching. Rows may expire; expired entries are pruned on access.
+    """
+
+    __tablename__ = "image_proxy_cache"
+
+    url_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, index=True)
+    local_path: Mapped[str] = mapped_column(Text)
+    media_type: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    byte_size: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+

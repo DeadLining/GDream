@@ -1,7 +1,6 @@
-import {act, cleanup, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {readFileSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {readAllStyles} from './_styles';
 import {useState} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Workspace} from '../components/Workspace';
@@ -9,7 +8,7 @@ import {WorkspaceTabs, type WorkArea} from '../components/WorkspaceTabs';
 import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
-  listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(),
+  listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(), listVolumes:vi.fn(),listStorylines:vi.fn(),
   getAsset: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
   listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
@@ -19,10 +18,13 @@ const mocks = vi.hoisted(() => ({
   getModelRuntimeHealth: vi.fn(), getModelRuntimeInvocations: vi.fn(), retryModelRuntimeJob: vi.fn(),
   getMockSshHosts: vi.fn(), getMockSshStatus: vi.fn(), startMockSsh: vi.fn(), stopMockSsh: vi.fn(),
   listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
+  listVisualReviewThreads:vi.fn(),updateVisualReviewThread:vi.fn(),createVisualReviewMessage:vi.fn(),createVisualReviewThread:vi.fn(),acceptVisualReviewCandidate:vi.fn(),
+  listReviewThreads:vi.fn(),createReviewMessage:vi.fn(),updateReviewThread:vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
   listProjects: mocks.listProjects, getProject: mocks.getProject,
+  listVolumes:mocks.listVolumes,listStorylines:mocks.listStorylines,
   getAsset: mocks.getAsset,
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
@@ -39,6 +41,8 @@ vi.mock('../lib/api', () => ({
   getMockSshHosts: mocks.getMockSshHosts, getMockSshStatus: mocks.getMockSshStatus,
   startMockSsh: mocks.startMockSsh, stopMockSsh: mocks.stopMockSsh,
   listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
+  listVisualReviewThreads:mocks.listVisualReviewThreads,updateVisualReviewThread:mocks.updateVisualReviewThread,createVisualReviewMessage:mocks.createVisualReviewMessage,createVisualReviewThread:mocks.createVisualReviewThread,acceptVisualReviewCandidate:mocks.acceptVisualReviewCandidate,
+  listReviewThreads:mocks.listReviewThreads,createReviewMessage:mocks.createReviewMessage,updateReviewThread:mocks.updateReviewThread,
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
@@ -82,7 +86,7 @@ const succeededJob: Job = {
   status: 'succeeded', progress: 100, result_metadata: {}, error: '', retry_count: 0,
   created_at: '', updated_at: '',
 };
-const workspaceStyles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
+const workspaceStyles = readAllStyles();
 
 function contrastRatio(foreground: string, background: string) {
   const luminance = (hex: string) => {
@@ -128,7 +132,7 @@ function TabsHarness() {
 }
 
 function RejectedTabsHarness() {
-  return <WorkspaceTabs value="review" onChange={() => false}/>;
+  return <WorkspaceTabs value="visual-review" onChange={() => false}/>;
 }
 
 describe('Workspace', () => {
@@ -141,6 +145,10 @@ describe('Workspace', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mocks.listPanelVersions.mockResolvedValue([]);
+    mocks.listVolumes.mockResolvedValue([]);
+    mocks.listStorylines.mockResolvedValue([]);
+    mocks.listVisualReviewThreads.mockResolvedValue([]);
+    mocks.listReviewThreads.mockResolvedValue([]);
     mocks.getAsset.mockResolvedValue({id: 'asset-2', kind: 'panel', media_url: '/media/panel.png', media_type: 'image/png', provider: 'test', model: 'test', generation_attempt: 1, review_status: 'approved', width: 1024, height: 1536, duration_seconds: null, created_at: ''});
     mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
@@ -221,9 +229,8 @@ describe('Workspace', () => {
     await userEvent.click(screen.getByRole('button', {name: '刷新项目'}));
 
     expect(await screen.findByRole('heading', {name: '新建第一个项目'})).toBeVisible();
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('tabindex', '0');
-    expect(document.getElementById('workspace-panel-overview')).toHaveAttribute('role', 'tabpanel');
+    expect(screen.queryByRole('tablist', {name: '工作区'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: '单集制作'})).toHaveAttribute('aria-current', 'page');
   });
 
   it('keeps provider settings active when refresh removes the active project', async () => {
@@ -311,7 +318,9 @@ describe('Workspace', () => {
 
     render(<Workspace />);
 
-    expect(await screen.findByText('霓虹夜行 / 失窃的雨夜')).toBeVisible();
+    expect((await screen.findAllByRole('option', {name: '霓虹夜行'})).every(option => (option as HTMLOptionElement).selected)).toBe(true);
+    expect(screen.getByRole('button', {name: '01失窃的雨夜尚未规划'})).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByText('霓虹夜行 / 失窃的雨夜')).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: '刷新项目'})).toHaveAttribute('title', '刷新项目');
     expect(screen.getByRole('button', {name: '批量生产'})).toHaveAttribute('title', '批量生产');
     expect(screen.queryByRole('button', {name: '设置'})).not.toBeInTheDocument();
@@ -362,7 +371,7 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', {name: '模型中心'})).toBeVisible();
 
     await userEvent.click(screen.getByRole('button', {name: '模型中心'}));
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
   });
 
@@ -373,11 +382,14 @@ describe('Workspace', () => {
 
     render(<Workspace />);
 
-    const overviewTab = await screen.findByRole('tab', {name: '总览'});
+    const overviewTab = await screen.findByRole('tab', {name: '概览'});
     expect(overviewTab).toHaveAttribute('aria-selected', 'true');
     expect(overviewTab).toHaveAttribute('aria-controls', 'workspace-panel-overview');
     expect(document.getElementById('workspace-panel-overview')).toHaveAttribute('role', 'tabpanel');
     expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', {name: '场景'}));
+    expect(screen.getByRole('heading', {name: '雨夜巷道'})).toBeVisible();
 
     await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
     expect(screen.getByRole('tab', {name: '分镜'})).toHaveAttribute('aria-selected', 'true');
@@ -388,11 +400,15 @@ describe('Workspace', () => {
     await userEvent.click(screen.getByRole('tab', {name: '生产'}));
     expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
 
-    await userEvent.click(screen.getByRole('tab', {name: '审核'}));
+    await userEvent.click(screen.getByRole('tab', {name: '视觉审阅'}));
+    expect(screen.getByRole('heading', {name: '创建圈点后开始对话'})).toBeVisible();
+    expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', {name: '审核发布'}));
     expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
-    expect(screen.getByRole('heading', {name: '镜头 2'})).toBeVisible();
-    await userEvent.click(screen.getByRole('button', {name: /镜头 1/}));
-    expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
+    expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
+    await userEvent.click(within(screen.getByLabelText('待处理评论')).getByRole('button', {name: /镜头 1/}));
+    expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
   });
 
   it('numbers an opaque episode id from its later ordered project position', async () => {
@@ -431,6 +447,21 @@ describe('Workspace', () => {
     expect(screen.getByRole('button', {name: /镜头 2/})).toHaveClass('selected');
   });
 
+  it('shows the shot inspector only in shot-focused work areas', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+
+    expect(await screen.findByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
+    expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', {name: '分镜'}));
+
+    expect(document.querySelector('.workspace-inspector')).toBeVisible();
+  });
+
   it('keeps only the selected mobile work area visible', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query === '(max-width: 899px)',
@@ -448,7 +479,7 @@ describe('Workspace', () => {
 
     render(<Workspace />);
 
-    expect(await screen.findByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
     expect(document.querySelector('.workspace-grid')).toHaveClass('mobile-overview');
     expect(workspaceStyles).toMatch(/\.mobile-overview \.workspace-inspector\s*\{\s*display:\s*none/);
 
@@ -463,12 +494,11 @@ describe('Workspace', () => {
     expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
   });
 
-  it('keeps seven mobile work areas in one stable 44px tab row', () => {
-    const mobileTabsRule = workspaceStyles.match(/\.workspace-tabs-mobile\s*\{[^}]*grid-template-columns:\s*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)[^}]*\}/);
-
-    expect(mobileTabsRule?.[1]).toBe('7');
-    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*display:\s*grid/);
-    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*none/);
+  it('keeps the five production stages in one scroll-safe mobile row', () => {
+    render(<WorkspaceTabs value="overview" onChange={() => true} mobile areas={['overview', 'scene', 'storyboard', 'production', 'visual-review']}/>);
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*overflow-x:\s*auto/);
+    expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*flex:\s*1 0 20%/);
   });
 
   it('opens the first relevant blocker in the mobile inspector from the review action', async () => {
@@ -496,7 +526,7 @@ describe('Workspace', () => {
 
     await userEvent.click(await screen.findByRole('button', {name: '处理阻塞项'}));
 
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getAllByRole('tab').some(tab => tab.getAttribute('aria-selected') === 'true')).toBe(true);
   });
 
@@ -508,7 +538,7 @@ describe('Workspace', () => {
     render(<Workspace />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('渲染准备状态暂时无法获取');
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('heading', {name: '剧集总览暂不可用'})).toBeVisible();
     expect(screen.queryByText('制作剧集')).not.toBeInTheDocument();
     expect(screen.queryByText('缺少画面 0')).not.toBeInTheDocument();
@@ -560,15 +590,14 @@ describe('Workspace', () => {
   });
 
   it('uses stronger semantic colors with accessible shell contrast', () => {
-    const mutedStrong = workspaceStyles.match(/--muted-strong:\s*(#[a-f\d]{6})/i)?.[1];
-    const accentStrong = workspaceStyles.match(/--accent-strong:\s*(#[a-f\d]{6})/i)?.[1];
+    const mutedStrong = workspaceStyles.match(/--color-muted:\s*(#[a-f\d]{6})/i)?.[1];
+    const accentStrong = workspaceStyles.match(/--color-accent-strong:\s*(#[a-f\d]{6})/i)?.[1];
 
     expect(mutedStrong).toBeTruthy();
     expect(accentStrong).toBeTruthy();
     expect(contrastRatio(mutedStrong!, '#ffffff')).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(mutedStrong!, '#f8f9fa')).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio('#ffffff', accentStrong!)).toBeGreaterThanOrEqual(4.5);
-    expect(workspaceStyles).toMatch(/\.workspace-breadcrumb\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.nav-footer\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.center-state p, \.episode-empty p\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.empty-inspector\s*\{[^}]*color:\s*var\(--muted-strong\)/);
@@ -588,11 +617,11 @@ describe('Workspace', () => {
     expect(screen.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
     act(() => viewport.setMatches(false));
 
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', {name: '检查器'})).not.toBeInTheDocument();
   });
 
-  it('normalizes review when the viewport switches from desktop to mobile', async () => {
+  it('preserves visual review when the viewport switches from desktop to mobile', async () => {
     const viewport = mediaController(false);
     vi.stubGlobal('matchMedia', vi.fn(() => viewport.media));
     mocks.listProjects.mockResolvedValue([project]);
@@ -600,12 +629,11 @@ describe('Workspace', () => {
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
     render(<Workspace />);
 
-    await userEvent.click(await screen.findByRole('tab', {name: '审核'}));
-    expect(screen.getByRole('tab', {name: '审核'})).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(await screen.findByRole('tab', {name: '视觉审阅'}));
+    expect(screen.getByRole('tab', {name: '视觉审阅'})).toHaveAttribute('aria-selected', 'true');
     act(() => viewport.setMatches(true));
 
-    expect(screen.getByRole('tab', {name: '总览'})).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('tab', {name: '审核'})).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', {name: '审阅'})).toHaveAttribute('aria-selected', 'true');
   });
 
   it('keeps the latest episode when an older request resolves last', async () => {
@@ -640,34 +668,30 @@ describe('Workspace', () => {
 
   it('supports roving keyboard navigation across workspace tabs', async () => {
     render(<TabsHarness />);
-    const overview = screen.getByRole('tab', {name: '总览'});
-    const scriptImport = screen.getByRole('tab', {name: '剧本创作'});
-    const characters = screen.getByRole('tab', {name: '角色'});
+    const overview = screen.getByRole('tab', {name: '概览'});
+    const scene = screen.getByRole('tab', {name: '场景'});
     const storyboard = screen.getByRole('tab', {name: '分镜'});
 
     expect(overview).toHaveAttribute('tabindex', '0');
     expect(storyboard).toHaveAttribute('tabindex', '-1');
     overview.focus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(scriptImport).toHaveFocus();
-    expect(scriptImport).toHaveAttribute('aria-selected', 'true');
-    await userEvent.keyboard('{ArrowRight}');
-    expect(characters).toHaveFocus();
-    expect(characters).toHaveAttribute('aria-selected', 'true');
+    expect(scene).toHaveFocus();
+    expect(scene).toHaveAttribute('aria-selected', 'true');
     await userEvent.keyboard('{ArrowRight}');
     expect(storyboard).toHaveFocus();
     expect(storyboard).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', {name: '审核'})).toHaveFocus();
+    expect(screen.getByRole('tab', {name: '视觉审阅'})).toHaveFocus();
     await userEvent.keyboard('{Home}');
     expect(overview).toHaveFocus();
   });
 
   it('keeps selected tab focus when guarded click or keyboard navigation is rejected', async () => {
     render(<RejectedTabsHarness/>);
-    const settings = screen.getByRole('tab', {name: '审核'});
-    const overview = screen.getByRole('tab', {name: '总览'});
+    const settings = screen.getByRole('tab', {name: '视觉审阅'});
+    const overview = screen.getByRole('tab', {name: '概览'});
     settings.focus();
 
     await userEvent.keyboard('{Home}');

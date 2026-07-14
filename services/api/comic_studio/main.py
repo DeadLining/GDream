@@ -35,6 +35,19 @@ from comic_studio.routes.videos import router as videos_router
 from comic_studio.routes.director import router as director_router
 from comic_studio.routes.mock_ssh import router as mock_ssh_router
 from comic_studio.routes.model_runtime import router as model_runtime_router
+from comic_studio.routes.narrative import router as narrative_router
+from comic_studio.routes.asset_lineage import router as asset_lineage_router
+from comic_studio.routes.visual_review import router as visual_review_router
+from comic_studio.routes.review_publication import router as review_publication_router
+from comic_studio.routes.operations import router as operations_router
+from comic_studio.routes.recycle_bin import router as recycle_bin_router
+from comic_studio.routes.discovery import router as discovery_router
+from comic_studio.routes.production_canvas import router as production_canvas_router
+from comic_studio.routes.chapters import router as chapters_router
+from comic_studio.routes.skills import router as skills_router
+from comic_studio.routes.projects_portability import router as projects_portability_router
+from comic_studio.routes.art_styles import router as art_styles_router
+from comic_studio.routes.image_proxy import router as image_proxy_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
 from comic_studio.services.production_coordinator import ProductionCoordinator
@@ -204,6 +217,9 @@ def create_app(
         CapabilityAdapterRegistry(lambda: app.state.provider_factory),
         mock_ssh_manager=app.state.mock_ssh_manager,
     )
+    from comic_studio.services.art_style_loader import get_art_style_loader
+
+    app.state.art_style_loader = get_art_style_loader()
 
     def recover_production_runs():
         recovered = []
@@ -260,12 +276,18 @@ def create_app(
     app.state.recover_script_generations = recover_script_generations
 
     async def produce_panel(item):
-        asset = await app.state.model_runtime.execute_image(
-            "shot", item.target_id, {"activate": True}
+        target_type = getattr(item, "target_type", "shot")
+        result = await app.state.model_runtime.execute_image(
+            target_type, item.target_id, {"activate": True}
         )
+        if isinstance(result, list):
+            return {
+                "asset_ids": [asset.id for asset in result],
+                "media_urls": [f"/media/{asset.local_path}" for asset in result],
+            }
         return {
-            "asset_id": asset.id,
-            "media_url": f"/media/{asset.local_path}",
+            "asset_id": result.id,
+            "media_url": f"/media/{result.local_path}",
         }
 
     async def produce_speech(item):
@@ -300,6 +322,19 @@ def create_app(
     app.include_router(director_router)
     app.include_router(mock_ssh_router)
     app.include_router(model_runtime_router)
+    app.include_router(narrative_router)
+    app.include_router(asset_lineage_router)
+    app.include_router(visual_review_router)
+    app.include_router(review_publication_router)
+    app.include_router(operations_router)
+    app.include_router(recycle_bin_router)
+    app.include_router(discovery_router)
+    app.include_router(production_canvas_router)
+    app.include_router(chapters_router)
+    app.include_router(skills_router)
+    app.include_router(projects_portability_router)
+    app.include_router(art_styles_router)
+    app.include_router(image_proxy_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

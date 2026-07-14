@@ -14,6 +14,7 @@ type PollOptions = {
   now?: () => number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  onUpdate?: (job: Job) => void;
 };
 
 const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => {
@@ -30,6 +31,7 @@ export async function pollJob(jobId: string, options: PollOptions = {}): Promise
   while (now() - startedAt < timeoutMs) {
     if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     const job = await loadJob(jobId);
+    options.onUpdate?.(job);
     if (job.status === 'succeeded' || job.status === 'failed') return job;
     attempt += 1;
     await sleep(attempt <= 10 ? 1000 : 3000);

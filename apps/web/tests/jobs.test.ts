@@ -38,6 +38,20 @@ describe('pollJob', () => {
     expect(sleep).toHaveBeenNthCalledWith(11, 3000);
   });
 
+  it('reports every persisted state to an update callback', async () => {
+    const running = {...job('running'), progress:29};
+    const succeeded = job('succeeded');
+    const loadJob = vi.fn()
+      .mockResolvedValueOnce(running)
+      .mockResolvedValueOnce(succeeded);
+    const onUpdate = vi.fn();
+
+    await pollJob('job-1', {loadJob, sleep:async()=>{}, onUpdate});
+
+    expect(onUpdate).toHaveBeenNthCalledWith(1, running);
+    expect(onUpdate).toHaveBeenNthCalledWith(2, succeeded);
+  });
+
   it('stops after the configured timeout', async () => {
     let now = 0;
     const sleep = async (milliseconds: number) => { now += milliseconds; };

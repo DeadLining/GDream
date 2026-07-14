@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
+from comic_studio.services.narrative import next_unassigned_episode_position
 
 
 def patch_resource(session: Session, model_type, resource_id: str, data):
@@ -69,7 +70,11 @@ class EpisodeRepository:
     ) -> models.Episode | None:
         if self.session.get(models.Project, project_id) is None:
             return None
-        episode = models.Episode(project_id=project_id, **data.model_dump())
+        episode = models.Episode(
+            project_id=project_id,
+            position=next_unassigned_episode_position(self.session, project_id),
+            **data.model_dump(),
+        )
         self.session.add(episode)
         self.session.commit()
         self.session.refresh(episode)

@@ -1,0 +1,1 @@
+American comic sketch style, rough pencil and ink lines, strong hatching, high contrast, dynamic poses, expressive faces, hand-drawn panel feel, dramatic shadows, vertical composition.

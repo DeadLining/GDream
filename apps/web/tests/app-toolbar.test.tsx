@@ -80,6 +80,50 @@ describe('AppToolbar episode render state', () => {
     expect(onModelCenter).toHaveBeenCalledOnce();
   });
 
+  it('opens project settings from the platform toolbar', async () => {
+    const onProjectSettings=vi.fn();
+    render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" onProjectSettings={onProjectSettings}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'作品设置'}));
+
+    expect(onProjectSettings).toHaveBeenCalledOnce();
+  });
+
+  it('opens cross-project operations from the unified toolbar', async () => {
+    const onWorkspaceHome=vi.fn();
+    const onSearch=vi.fn();
+    const onTasks=vi.fn();
+    const onVersions=vi.fn();
+    render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" onWorkspaceHome={onWorkspaceHome} onSearch={onSearch} onTasks={onTasks} onVersions={onVersions}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'打开工作台'}));
+    await userEvent.click(screen.getByRole('button',{name:'全局搜索'}));
+    await userEvent.click(screen.getByRole('button',{name:'任务中心'}));
+    await userEvent.click(screen.getByRole('button',{name:'版本历史'}));
+
+    expect(onWorkspaceHome).toHaveBeenCalledOnce();
+    expect(onSearch).toHaveBeenCalledOnce();
+    expect(onTasks).toHaveBeenCalledOnce();
+    expect(onVersions).toHaveBeenCalledOnce();
+  });
+
+  it('renders the approved product-level navigation', () => {
+    render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" />);
+
+    const navigation = screen.getByRole('navigation', {name: '产品导航'});
+    expect(navigation).toHaveTextContent('作品总览');
+    expect(navigation).toHaveTextContent('剧本');
+    expect(navigation).toHaveTextContent('资产库');
+    expect(navigation).toHaveTextContent('单集制作');
+    expect(navigation).toHaveTextContent('审核发布');
+  });
+
+  it('does not render a global project and episode breadcrumb', () => {
+    render(<AppToolbar projectLabel="Project" episodeLabel="A" episodeId="episode-a" />);
+
+    expect(screen.queryByText('Project / A')).not.toBeInTheDocument();
+  });
+
   it('shows a retryable status instead of throwing when the local API is unavailable', async () => {
     mocks.getProviderHealth.mockRejectedValueOnce(new Error('connectivity_failure'));
     mocks.getProviderHealth.mockResolvedValueOnce({

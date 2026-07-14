@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from comic_studio.providers.base import ProviderError
 from comic_studio.director import DirectorSuggestionPatch
+from comic_studio.model_runtime.contracts import AssetVariantSuggestion
 from comic_studio.schemas import EpisodePlan
 from comic_studio.script_imports import ScriptImportDraft
 
@@ -43,6 +44,13 @@ DIRECTOR_SYSTEM_PROMPT = """You are a 3D staging and cinematography assistant fo
 dynamic-comic studio. Return one JSON object only using the supplied strict schema. Reference only
 the supplied object identifiers. Return transforms and camera parameters, never executable code.
 Treat the result as a reviewable suggestion and do not use Markdown fences."""
+
+ASSET_VARIANT_SYSTEM_PROMPT = """You are an asset art director for a serialized Chinese dynamic-comic studio.
+Turn the user's conversation and image annotations into one structured character asset proposal. Classify a
+change as kind=episode only when it is a stable look for most of an episode, such as age, base hairstyle, or
+costume. Classify temporary expression, injury, pose, or local costume damage as kind=state. Preserve the
+character's identity constraints. Return one JSON object only, using the supplied schema, with concise Chinese
+labels and assistant_message. Do not use Markdown fences."""
 
 
 def _extract_text(payload: dict[str, Any]) -> str:
@@ -114,6 +122,19 @@ class MiniMaxProvider:
         self.model = model
         self._client = client
         self.base_url = base_url.rstrip("/") + "/"
+
+    @classmethod
+    def from_channel(cls, channel, *, prefer_ssh_for_host=None, **_kwargs):
+        """Build an instance from a :class:`ProviderChannel`.
+
+        ``prefer_ssh_for_host`` is accepted for registry uniformity but ignored:
+        MiniMax never tunnels through SSH.
+        """
+        return cls(
+            channel.api_key_value,
+            model=channel.model,
+            base_url=channel.base_url,
+        )
 
     async def plan_episode(self, context: dict[str, Any]) -> EpisodePlan:
         messages = [
@@ -189,6 +210,38 @@ class MiniMaxProvider:
                     ) from exc
         raise ProviderError("MiniMax director suggestion failed")
 
+    async def suggest_asset_variant(self, context: dict[str, Any]) -> dict[str, Any]:
+        messages = [{
+            "role": "user",
+            "content": (
+                "Create a character asset variant or state proposal using this JSON schema:\n"
+                + json.dumps(AssetVariantSuggestion.model_json_schema(), ensure_ascii=False)
+                + "\nTrusted character, episode, conversation, and annotation context:\n"
+                + json.dumps(context, ensure_ascii=False)
+            ),
+        }]
+        validation_feedback = ""
+        for attempt in range(2):
+            if validation_feedback:
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "The prior response failed schema validation. "
+                        f"Validation details: {validation_feedback}. Return corrected JSON only."
+                    ),
+                })
+            try:
+                text = await self._request(messages, system=ASSET_VARIANT_SYSTEM_PROMPT)
+                repaired = repair_json(_strip_fences(text), return_objects=True)
+                return AssetVariantSuggestion.model_validate(repaired).model_dump()
+            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+                validation_feedback = str(exc)[:1500]
+                if attempt == 1:
+                    raise ProviderError(
+                        f"MiniMax returned an invalid asset variant suggestion: {validation_feedback}"
+                    ) from exc
+        raise ProviderError("MiniMax asset variant suggestion failed")
+
     async def parse_script_import(self, context: dict[str, Any]) -> ScriptImportDraft:
         generating = context.get("mode") == "generate"
         instruction = (
@@ -244,6 +297,62 @@ class MiniMaxProvider:
                         f"MiniMax returned an invalid script import draft: {validation_feedback}"
                     ) from exc
         raise ProviderError("MiniMax script import parsing failed")
+
+    async def extract_chapter_events(self, context: dict[str, Any]) -> dict[str, Any]:
+        """Extract structured chapter events via the TEXT provider.
+
+        Returns a plain dict validated against
+        :class:`comic_studio.services.chapter_events.ChapterEventDraft`.
+        The caller is responsible for persistence.
+        """
+
+        from comic_studio.services.chapter_events import ChapterEventDraft
+
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    "Extract the narrative events for this chapter using the "
+                    "required JSON schema:\n"
+                    + json.dumps(
+                        ChapterEventDraft.model_json_schema(), ensure_ascii=False
+                    )
+                    + "\nChapter context:\n"
+                    + json.dumps(context, ensure_ascii=False)
+                ),
+            }
+        ]
+        validation_feedback = ""
+        for attempt in range(2):
+            if validation_feedback:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "The prior response failed JSON schema validation. "
+                            f"Validation details: {validation_feedback}. Return corrected JSON only."
+                        ),
+                    }
+                )
+            try:
+                text = await self._request(
+                    messages,
+                    system=(
+                        "You are a meticulous story editor. Summarize the narrative "
+                        "beats, conflicts, and open threads of each chapter in concise "
+                        "Chinese. Never invent events that are not present in the source."
+                    ),
+                    timeout_seconds=120,
+                )
+                repaired = repair_json(_strip_fences(text), return_objects=True)
+                return ChapterEventDraft.model_validate(repaired).model_dump()
+            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+                validation_feedback = str(exc)[:1500]
+                if attempt == 1:
+                    raise ProviderError(
+                        f"MiniMax returned invalid chapter events: {validation_feedback}"
+                    ) from exc
+        raise ProviderError("MiniMax chapter event extraction failed")
 
     async def stream_script(self, context: dict[str, Any]):
         owns_client = self._client is None
@@ -336,3 +445,9 @@ class MiniMaxProvider:
         finally:
             if owns_client:
                 await client.aclose()
+
+
+from comic_studio.model_runtime.adapters import register_capability
+from comic_studio.model_runtime.contracts import Capability
+
+PROVIDER_CAPABILITY = register_capability(Capability.TEXT, provider_class="MiniMaxProvider")

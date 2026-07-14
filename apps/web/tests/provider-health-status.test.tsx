@@ -1,7 +1,6 @@
 import {act, cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {readFileSync} from 'node:fs';
-import {resolve} from 'node:path';
+import {readAllStyles} from './_styles';
 import {StrictMode} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {ProviderHealthStatus} from '../components/ProviderHealthStatus';
@@ -51,7 +50,7 @@ describe('ProviderHealthStatus', () => {
     expect(button).toHaveTextContent('4/4 正常');
   });
 
-  it('opens all four results after one manual check and remains toggleable', async () => {
+  it('opens all four results and reruns the check when the status button is clicked again', async () => {
     mocks.getProviderHealth.mockResolvedValue(healthy);
     render(<ProviderHealthStatus/>);
     const button = screen.getByRole('button', {name: '检测模型服务'});
@@ -71,6 +70,18 @@ describe('ProviderHealthStatus', () => {
     expect(screen.getByText('api.minimax.chat')).toBeVisible();
 
     await userEvent.click(button);
+    await waitFor(() => expect(mocks.getProviderHealth).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('region', {name: '模型服务检测详情'})).toBeVisible();
+  });
+
+  it('closes the result popover when clicking outside it', async () => {
+    mocks.getProviderHealth.mockResolvedValue(healthy);
+    render(<div><ProviderHealthStatus/><button type="button">页面其他区域</button></div>);
+
+    await userEvent.click(screen.getByRole('button', {name: '检测模型服务'}));
+    expect(await screen.findByRole('region', {name: '模型服务检测详情'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', {name: '页面其他区域'}));
     expect(screen.queryByRole('region', {name: '模型服务检测详情'})).not.toBeInTheDocument();
   });
 
@@ -196,7 +207,7 @@ describe('ProviderHealthStatus', () => {
     expect(screen.getByText('model-with-an-extremely-long-unbroken-name')).toHaveClass('provider-health-model');
     expect(screen.getByText('X'.repeat(160))).toHaveClass('provider-health-error');
 
-    const styles = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
+    const styles = readAllStyles();
     expect(styles).toMatch(/\.provider-health-popover\s*\{[^}]*max-width:[^;}]+[^}]*overflow:/);
     expect(styles).toMatch(/\.provider-health-model[^}]*overflow-wrap:\s*anywhere/);
     expect(styles).toMatch(/\.provider-health-error[^}]*overflow-wrap:\s*anywhere/);

@@ -33,11 +33,19 @@ class ProductionStore:
         self.session = session
 
     def create_run(self, episode_id: str, *, stages: list[str], concurrency: int,
-                   regenerate_panels: bool = False, regenerate_speech: bool = False, regenerate_videos: bool = False):
+                   regenerate_panels: bool = False, regenerate_speech: bool = False, regenerate_videos: bool = False,
+                   panel_generation_mode: str = "solo",
+                   budget_cap_usd: float | None = None, budget_mode: str = "observe",
+                   scope_type: str = "episode", shot_ids: list[str] | None = None):
         run = models.ProductionRun(
             episode_id=episode_id, stages=stages, concurrency=concurrency,
             regenerate_panels=regenerate_panels, regenerate_speech=regenerate_speech,
             regenerate_videos=regenerate_videos,
+            panel_generation_mode=panel_generation_mode,
+            budget_cap_usd=budget_cap_usd,
+            budget_mode=budget_mode,
+            scope_type=scope_type,
+            shot_ids=list(shot_ids) if shot_ids else None,
         )
         self.session.add(run); self.session.commit(); self.session.refresh(run); return run
 

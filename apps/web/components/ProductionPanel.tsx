@@ -1,27 +1,34 @@
 'use client';
 
-import {useEffect, useRef, useState} from 'react';
-import {Film, Image, Mic2, Pause, Play, RefreshCw} from 'lucide-react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {
   continueProductionRun,
   createProductionRun,
+  getEpisodeProductionGraph,
+  getProductionCanvasLayout,
   getProductionReadiness,
   getProductionRun,
   listProductionItems,
   pauseProductionRun,
+  putProductionCanvasLayout,
   retryProductionRun,
 } from '../lib/api';
 import {pollProductionRun} from '../lib/production';
-import type {ProductionItem, ProductionReadiness, ProductionRun, ProductionStage} from '../lib/types';
-import {ProductionItemRow} from './ProductionItemRow';
+import type {EpisodeProductionGraph,ProductionCanvasLayout,ProductionItem, ProductionReadiness, ProductionRun, ProductionStage} from '../lib/types';
+import {ProductionCanvas} from './production-canvas/ProductionCanvas';
+import {ProductionRunControls} from './production-canvas/ProductionRunControls';
+import {ShotGroupRerun} from './production-canvas/ShotGroupRerun';
+import {ProductionTaskDrawer} from './production-canvas/ProductionTaskDrawer';
 
 export function ProductionPanel({
   episodeId,
   onSelectTarget,
+  onSelectCanvasShot,
   onReadiness,
 }: {
   episodeId: string;
   onSelectTarget: (id: string) => void;
+  onSelectCanvasShot?: (id: string) => void;
   onReadiness?: (ready: boolean) => void;
 }) {
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
@@ -30,6 +37,9 @@ export function ProductionPanel({
   const [regenPanels, setRegenPanels] = useState(false);
   const [regenSpeech, setRegenSpeech] = useState(false);
   const [regenVideos, setRegenVideos] = useState(false);
+  const [panelGenerationMode, setPanelGenerationMode] = useState<'solo'|'grid'>('solo');
+  const [budgetCapUsd, setBudgetCapUsd] = useState(0);
+  const [budgetMode, setBudgetMode] = useState<'observe'|'warn'|'cap'>('observe');
   const [run, setRun] = useState<ProductionRun | null>(null);
   const [items, setItems] = useState<ProductionItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -37,8 +47,18 @@ export function ProductionPanel({
   const [stateEpisodeId, setStateEpisodeId] = useState(episodeId);
   const [starting, setStarting] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [canvasError,setCanvasError]=useState('');
+  const [graph,setGraph]=useState<EpisodeProductionGraph|null>(null);
+  const [canvasLayout,setCanvasLayout]=useState<ProductionCanvasLayout|null>(null);
+  const [selectedShotId,setSelectedShotId]=useState<string|null>(null);
+  const [configOpen,setConfigOpen]=useState(false);
+  const [queueOpen,setQueueOpen]=useState(false);
+  const [selectedCanvasShotIds,setSelectedCanvasShotIds]=useState<string[]>([]);
+  const [rerunStarting,setRerunStarting]=useState(false);
+  const [rerunError,setRerunError]=useState('');
   const startingRef = useRef(false);
   const sessionRef = useRef({generation: 0, controller: new AbortController()});
+  const layoutSaveRef=useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const isCurrent = (generation: number, signal: AbortSignal) => sessionRef.current.generation === generation && !signal.aborted;
   const refreshReadiness = async (id: string, generation: number, signal: AbortSignal) => {
@@ -51,6 +71,11 @@ export function ProductionPanel({
     const value = await listProductionItems(id);
     if (isCurrent(generation, signal)) setItems(value);
   };
+  const loadCanvas = async (id:string,generation:number,signal:AbortSignal) => {
+    const [nextGraph,nextLayout]=await Promise.all([getEpisodeProductionGraph(id),getProductionCanvasLayout(id)]);
+    if(!isCurrent(generation,signal))return;
+    setGraph(nextGraph);setCanvasLayout(nextLayout.layout);setCanvasError('');
+  };
   const finishActiveRun = async (id: string, generation: number, signal: AbortSignal, shouldContinue: boolean) => {
     if (shouldContinue) {
       const continued = await continueProductionRun(id);
@@ -62,6 +87,7 @@ export function ProductionPanel({
     setRun(finished);
     await loadItems(id, generation, signal);
     await refreshReadiness(episodeId, generation, signal);
+    await loadCanvas(episodeId,generation,signal);
   };
 
   useEffect(() => {
@@ -78,7 +104,11 @@ export function ProductionPanel({
     startingRef.current = false;
     setStarting(false);
     setActionError('');
+    setCanvasError('');
+    setGraph(null);setCanvasLayout(null);setSelectedShotId(null);
+    setConfigOpen(false);setQueueOpen(false);
     void refreshReadiness(episodeId, generation, controller.signal);
+    void loadCanvas(episodeId,generation,controller.signal).catch(cause=>{if(isCurrent(generation,controller.signal))setCanvasError(cause instanceof Error?cause.message:'生产画布加载失败');});
     const runId = localStorage.getItem(`ai-comic-production-${episodeId}`);
     if (runId) {
       void (async () => {
@@ -92,13 +122,14 @@ export function ProductionPanel({
         if (!(cause instanceof DOMException && cause.name === 'AbortError')) throw cause;
       });
     }
-    return () => controller.abort();
+    return () => {controller.abort();if(layoutSaveRef.current)clearTimeout(layoutSaveRef.current);};
   }, [episodeId]);
 
   const start = async () => {
     if (startingRef.current) return;
     startingRef.current = true;
     setStarting(true);
+    setConfigOpen(false);
     setActionError('');
     const {generation, controller} = sessionRef.current;
     const id = episodeId;
@@ -109,6 +140,9 @@ export function ProductionPanel({
         regenerate_panels: regenPanels,
         regenerate_speech: regenSpeech,
         regenerate_videos: regenVideos,
+        panel_generation_mode: panelGenerationMode,
+        budget_cap_usd: budgetCapUsd || undefined,
+        budget_mode: budgetMode,
       });
       if (!isCurrent(generation, controller.signal)) return;
       localStorage.setItem(`ai-comic-production-${id}`, created.id);
@@ -143,22 +177,53 @@ export function ProductionPanel({
     setSelected([]);
     await finishActiveRun(run.id, generation, controller.signal, true);
   };
+  const startShotGroupRerun = async (stages: ProductionStage[]) => {
+    if (selectedCanvasShotIds.length === 0 || rerunStarting) return;
+    setRerunStarting(true);
+    setRerunError('');
+    const {generation, controller} = sessionRef.current;
+    try {
+      const created = await createProductionRun(episodeId, {
+        stages,
+        concurrency,
+        regenerate_panels: false,
+        regenerate_speech: false,
+        regenerate_videos: false,
+        panel_generation_mode: panelGenerationMode,
+        budget_cap_usd: budgetCapUsd || undefined,
+        budget_mode: budgetMode,
+        shot_ids: selectedCanvasShotIds,
+      });
+      if (!isCurrent(generation, controller.signal)) return;
+      // Mirror the new run into the panel state so the operator can watch progress.
+      setRun(created);
+      setSelectedCanvasShotIds([]);
+      await finishActiveRun(created.id, generation, controller.signal, true);
+    } catch (cause) {
+      if (isCurrent(generation, controller.signal)) {
+        setRerunError(cause instanceof Error ? cause.message : '补跑启动失败');
+      }
+    } finally {
+      if (isCurrent(generation, controller.signal)) setRerunStarting(false);
+    }
+  };
 
   const currentEpisodeState = stateEpisodeId === episodeId;
   const displayedReadiness = currentEpisodeState ? readiness : null;
   const displayedRun = currentEpisodeState ? run : null;
   const displayedItems = currentEpisodeState ? items : [];
-  const visible = displayedItems.filter(item => filter === 'all' || (
-    filter === 'completed' ? ['succeeded', 'skipped'].includes(item.status) : item.status === filter
-  ));
-  const filters = [
-    {value: 'all', label: '全部'},
-    {value: 'running', label: '进行中'},
-    {value: 'failed', label: '失败'},
-    {value: 'completed', label: '已完成'},
-  ];
-
-  return <main className="production-panel">
+  const selectCanvasShot=(id:string)=>{setSelectedShotId(id);(onSelectCanvasShot??onSelectTarget)(id);};
+  const saveCanvasLayout=(next:ProductionCanvasLayout)=>{
+    if(layoutSaveRef.current)clearTimeout(layoutSaveRef.current);
+    layoutSaveRef.current=setTimeout(()=>{void putProductionCanvasLayout(episodeId,next).catch(cause=>setActionError(cause instanceof Error?cause.message:'画布布局保存失败'));},500);
+  };
+  const canvasGraph=useMemo(()=>graph?{...graph,production_items:displayedItems.length?displayedItems:graph.production_items}:null,[graph,displayedItems]);
+  const retryCanvas=()=>{
+    const {generation,controller}=sessionRef.current;
+    setCanvasError('');
+    void loadCanvas(episodeId,generation,controller.signal).catch(cause=>{if(isCurrent(generation,controller.signal))setCanvasError(cause instanceof Error?cause.message:'生产画布加载失败');});
+  };
+  return <main className="production-panel production-workbench">
     <header>
       <div><span className="eyebrow">批量生产</span><h1>剧集生产队列</h1></div>
       {displayedReadiness && <div className="readiness-summary">
@@ -168,29 +233,18 @@ export function ProductionPanel({
         <span>缺少视频 {displayedReadiness.blockers.missing_videos?.length ?? 0}</span>
       </div>}
     </header>
-    <section className="production-options" aria-label="生产选项">
-      <label><input aria-label="画面" type="checkbox" checked={stages.includes('panels')} onChange={event => setStages(event.target.checked ? [...stages, 'panels'] : stages.filter(x => x !== 'panels'))}/><Image size={15} aria-hidden="true"/>画面</label>
-      <label><input aria-label="配音" type="checkbox" checked={stages.includes('speech')} onChange={event => setStages(event.target.checked ? [...stages, 'speech'] : stages.filter(x => x !== 'speech'))}/><Mic2 size={15} aria-hidden="true"/>配音</label>
-      <label><input aria-label="视频" type="checkbox" checked={stages.includes('videos')} onChange={event => setStages(event.target.checked ? [...stages, 'videos'] : stages.filter(x => x !== 'videos'))}/><Film size={15} aria-hidden="true"/>视频</label>
-      <label>并发数<input aria-label="并发数" type="number" min={1} max={4} value={concurrency} onChange={event => setConcurrency(Number(event.target.value))}/></label>
-      <label><input type="checkbox" checked={regenPanels} onChange={event => setRegenPanels(event.target.checked)}/>重生成画面</label>
-      <label><input type="checkbox" checked={regenSpeech} onChange={event => setRegenSpeech(event.target.checked)}/>重生成配音</label>
-      <label><input type="checkbox" checked={regenVideos} onChange={event => setRegenVideos(event.target.checked)}/>重生成视频</label>
-    </section>
-    <div className="production-actions">
-      {!displayedRun && <button className="primary-action" disabled={!stages.length || starting} aria-busy={starting} onClick={start}><Play size={15} aria-hidden="true"/>{starting ? '正在启动' : '开始批量生产'}</button>}
-      {displayedRun?.status === 'running' && <button onClick={pause}><Pause size={15} aria-hidden="true"/>暂停</button>}
-      {displayedRun?.status === 'paused' && <button onClick={resume}><Play size={15} aria-hidden="true"/>继续</button>}
-      {displayedRun?.failed_items ? <button onClick={retry} disabled={!selected.length}><RefreshCw size={15} aria-hidden="true"/>重试选中失败项</button> : null}
+    <div className="production-canvas-stage">
+      {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
+      <ShotGroupRerun selectedShotIds={selectedCanvasShotIds} starting={rerunStarting} error={rerunError} onSubmit={stages=>void startShotGroupRerun(stages)}/>
+      <ProductionRunControls open={configOpen} onOpenChange={setConfigOpen} stages={stages} setStages={setStages} concurrency={concurrency} setConcurrency={setConcurrency}
+        regenerate={{panels:regenPanels,speech:regenSpeech,videos:regenVideos}} setRegenerate={next=>{setRegenPanels(next.panels);setRegenSpeech(next.speech);setRegenVideos(next.videos);}}
+        panelGenerationMode={panelGenerationMode} setPanelGenerationMode={setPanelGenerationMode}
+        budgetCapUsd={budgetCapUsd} setBudgetCapUsd={setBudgetCapUsd}
+        budgetMode={budgetMode} setBudgetMode={setBudgetMode}
+        run={displayedRun} starting={starting} onStart={()=>void start()} onPause={()=>void pause()} onResume={()=>void resume()} onOpenQueue={()=>setQueueOpen(true)}/>
+      <ProductionTaskDrawer open={queueOpen} run={displayedRun} items={displayedItems} filter={filter} onFilter={setFilter} selected={selected}
+        onSelect={(id,checked)=>setSelected(checked?[...selected,id]:selected.filter(itemId=>itemId!==id))} onRetry={()=>void retry()} onOpenItem={onSelectTarget} onClose={()=>setQueueOpen(false)}/>
     </div>
     {actionError && <p className="production-action-error" role="alert">{actionError}</p>}
-    {displayedRun && <>
-      <div className="production-progress">
-        <progress max={displayedRun.total_items || 1} value={displayedRun.succeeded_items + displayedRun.failed_items + displayedRun.skipped_items}/>
-        <span>成功 {displayedRun.succeeded_items}</span><span>失败 {displayedRun.failed_items}</span><span>跳过 {displayedRun.skipped_items}</span>
-      </div>
-      <nav className="production-filters" aria-label="生产队列筛选">{filters.map(({value, label}) => <button key={value} className={filter === value ? 'active' : ''} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</nav>
-      <div className="production-items">{visible.map(item => <ProductionItemRow key={item.id} item={item} selected={selected.includes(item.id)} onSelect={checked => setSelected(checked ? [...selected, item.id] : selected.filter(id => id !== item.id))} onOpen={() => onSelectTarget(item.target_id)}/>)}</div>
-    </>}
   </main>;
 }

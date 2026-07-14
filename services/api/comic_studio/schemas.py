@@ -181,6 +181,7 @@ class CharacterCreate(BaseModel):
     negative_constraints: str = ""
     voice_speaker: str = Field(min_length=1, max_length=80)
     voice_instruction: str = ""
+    art_style_id: str | None = None
 
 
 class CharacterRead(CharacterCreate):
@@ -201,6 +202,374 @@ class CharacterPatch(PatchModel):
     negative_constraints: str | None = None
     voice_speaker: str | None = Field(default=None, min_length=1, max_length=80)
     voice_instruction: str | None = None
+    art_style_id: str | None = None
+
+
+ASSET_OVERRIDE_FIELDS = {
+    "identity", "face", "hair", "body", "age", "outfit", "injury",
+    "expression", "eyes", "brows", "mouth", "accessories", "voice",
+}
+
+
+class AssetOverridesModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("overrides", check_fields=False)
+    @classmethod
+    def validate_override_fields(cls, value: dict) -> dict:
+        invalid = sorted(set(value) - ASSET_OVERRIDE_FIELDS)
+        if invalid:
+            raise ValueError(f"Unsupported override fields: {', '.join(invalid)}")
+        return value
+
+
+class AssetVariantCreate(AssetOverridesModel):
+    kind: Literal["master", "episode"]
+    label: str = Field(min_length=1, max_length=160)
+    episode_id: str | None = Field(default=None, max_length=36)
+    parent_variant_id: str | None = Field(default=None, max_length=36)
+    inherited_fields: list[str] = Field(default_factory=list, max_length=32)
+    overrides: dict = Field(default_factory=dict)
+
+    @field_validator("inherited_fields")
+    @classmethod
+    def validate_inherited_fields(cls, value: list[str]) -> list[str]:
+        invalid = sorted(set(value) - ASSET_OVERRIDE_FIELDS)
+        if invalid:
+            raise ValueError(f"Unsupported inherited fields: {', '.join(invalid)}")
+        return value
+
+
+class AssetVariantPatch(AssetOverridesModel):
+    kind: Literal["master", "episode"] | None = None
+    label: str | None = Field(default=None, min_length=1, max_length=160)
+    episode_id: str | None = Field(default=None, max_length=36)
+    parent_variant_id: str | None = Field(default=None, max_length=36)
+    inherited_fields: list[str] | None = Field(default=None, max_length=32)
+    overrides: dict | None = None
+
+    @field_validator("inherited_fields")
+    @classmethod
+    def validate_inherited_fields(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        invalid = sorted(set(value) - ASSET_OVERRIDE_FIELDS)
+        if invalid:
+            raise ValueError(f"Unsupported inherited fields: {', '.join(invalid)}")
+        return value
+
+
+class AssetVariantStateCreate(AssetOverridesModel):
+    kind: Literal["expression", "outfit", "injury", "age", "custom"]
+    label: str = Field(min_length=1, max_length=160)
+    overrides: dict = Field(default_factory=dict)
+
+
+class AssetVariantStatePatch(AssetOverridesModel):
+    kind: Literal["expression", "outfit", "injury", "age", "custom"] | None = None
+    label: str | None = Field(default=None, min_length=1, max_length=160)
+    overrides: dict | None = None
+
+
+class AssetVariantUsageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    state_id: str | None = Field(default=None, max_length=36)
+    shot_id: str = Field(min_length=1, max_length=36)
+    asset_id: str | None = Field(default=None, max_length=36)
+    usage_kind: Literal["panel", "video", "reference"]
+
+
+class AssetVariantUsageRead(AssetVariantUsageCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    variant_id: str
+    created_at: datetime
+
+
+class AssetVariantStateRead(AssetVariantStateCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    variant_id: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssetVariantRead(AssetVariantCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    character_id: str
+    version: int
+    review_status: ReviewStatus
+    created_at: datetime
+    updated_at: datetime
+    states: list[AssetVariantStateRead] = []
+    usages: list[AssetVariantUsageRead] = []
+
+
+class AssetVariantImpactRead(BaseModel):
+    shots: list[str]
+    assets: list[str]
+    usage_count: int
+
+
+class TrashItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    resource_type: Literal["asset_variant", "asset_variant_state"]
+    resource_id: str
+    name: str
+    original_location: list[str]
+    lineage: list[str]
+    deleted_by: str
+    deleted_at: datetime
+    expires_at: datetime
+    reference_count: int
+    can_permanently_delete: bool
+
+
+class TrashRestoreRead(BaseModel):
+    restored: bool
+    resource_type: Literal["asset_variant", "asset_variant_state"]
+    resource_id: str
+
+
+class WorkspaceProjectSummary(BaseModel):
+    project_id: str
+    title: str
+    logline: str
+    volume_count: int
+    episode_count: int
+    scene_count: int
+    shot_count: int
+    open_task_count: int
+    pending_review_count: int
+    completion_percent: int
+    current_stage: str
+    latest_task_titles: list[str]
+    updated_at: datetime
+
+
+class WorkspaceSummaryRead(BaseModel):
+    active_project_count: int
+    active_task_count: int
+    pending_review_count: int
+    updated_today_count: int
+    projects: list[WorkspaceProjectSummary]
+
+
+class ProjectSearchResult(BaseModel):
+    kind: Literal["script", "character", "asset_variant", "asset_state", "episode", "scene", "shot", "review", "task"]
+    id: str
+    title: str
+    subtitle: str
+    hierarchy: list[str] = []
+    status: str = ""
+    project_id: str
+    episode_id: str | None = None
+    scene_id: str | None = None
+    shot_id: str | None = None
+    character_id: str | None = None
+    variant_id: str | None = None
+    state_id: str | None = None
+    reference_count: int = 0
+
+
+class ProjectSearchRead(BaseModel):
+    query: str
+    results: list[ProjectSearchResult]
+
+
+class VisualReviewThreadCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_asset_id: str | None = Field(default=None, max_length=36)
+    title: str = Field(min_length=1, max_length=200)
+    modification_scope: Literal["shot", "episode", "master"] = "shot"
+
+
+class VisualReviewThreadPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    modification_scope: Literal["shot", "episode", "master"]
+
+
+class VisualAnnotationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["circle", "rectangle", "path"]
+    geometry: dict
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    label: str = Field(default="", max_length=120)
+
+    @model_validator(mode="after")
+    def validate_geometry(self):
+        if self.kind == "circle":
+            keys = ("cx", "cy", "rx", "ry")
+            if set(self.geometry) != set(keys):
+                raise ValueError("Circle geometry requires cx, cy, rx, and ry")
+            values = [self.geometry[key] for key in keys]
+            if not all(isinstance(value, (int, float)) for value in values):
+                raise ValueError("Circle geometry values must be numeric")
+            cx, cy, rx, ry = values
+            if not (0 <= cx <= 1 and 0 <= cy <= 1 and 0 < rx <= 1 and 0 < ry <= 1):
+                raise ValueError("Annotation geometry must use normalized coordinates")
+            if cx - rx < 0 or cx + rx > 1 or cy - ry < 0 or cy + ry > 1:
+                raise ValueError("Annotation geometry must stay inside the canvas")
+        elif self.kind == "rectangle":
+            keys = ("x", "y", "width", "height")
+            if set(self.geometry) != set(keys):
+                raise ValueError("Rectangle geometry requires x, y, width, and height")
+            x, y, width, height = [self.geometry[key] for key in keys]
+            if not all(isinstance(value, (int, float)) for value in (x, y, width, height)):
+                raise ValueError("Rectangle geometry values must be numeric")
+            if not (0 <= x <= 1 and 0 <= y <= 1 and 0 < width <= 1 and 0 < height <= 1 and x + width <= 1 and y + height <= 1):
+                raise ValueError("Annotation geometry must stay inside the canvas")
+        else:
+            points = self.geometry.get("points")
+            if set(self.geometry) != {"points"} or not isinstance(points, list) or len(points) < 2 or len(points) > 200:
+                raise ValueError("Path geometry requires 2 to 200 points")
+            if not all(isinstance(point, list) and len(point) == 2 and all(isinstance(value, (int, float)) and 0 <= value <= 1 for value in point) for point in points):
+                raise ValueError("Path points must use normalized coordinates")
+        return self
+
+
+class VisualAnnotationPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["circle", "rectangle", "path"] | None = None
+    geometry: dict | None = None
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    label: str | None = Field(default=None, max_length=120)
+
+
+class VisualReviewMessageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    author_kind: Literal["user", "assistant", "system"]
+    content: str = Field(min_length=1, max_length=20000)
+
+
+class VisualReviewCandidateCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    asset_id: str = Field(min_length=1, max_length=36)
+    generation_metadata: dict = Field(default_factory=dict)
+
+
+class VisualAnnotationRead(VisualAnnotationCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    thread_id: str
+    created_at: datetime
+
+
+class VisualReviewMessageRead(VisualReviewMessageCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    thread_id: str
+    created_at: datetime
+
+
+class VisualReviewCandidateRead(VisualReviewCandidateCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    thread_id: str
+    status: Literal["ready", "accepted", "rejected", "failed"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class VisualReviewThreadRead(VisualReviewThreadCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    episode_id: str
+    shot_id: str
+    status: Literal["open", "resolved"]
+    created_at: datetime
+    updated_at: datetime
+    annotations: list[VisualAnnotationRead] = []
+    messages: list[VisualReviewMessageRead] = []
+    candidates: list[VisualReviewCandidateRead] = []
+
+
+class ReviewThreadCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    shot_id: str | None = Field(default=None, max_length=36)
+    timecode_seconds: float = Field(default=0, ge=0, le=86400)
+    severity: Literal["critical", "major", "minor"]
+    title: str = Field(min_length=1, max_length=200)
+
+
+class ReviewThreadPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["open", "resolved"]
+
+
+class ReviewMessageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    author_kind: Literal["user", "assistant", "system"]
+    content: str = Field(min_length=1, max_length=20000)
+
+
+class ReviewMessageRead(ReviewMessageCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    thread_id: str
+    created_at: datetime
+
+
+class ReviewThreadRead(ReviewThreadCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    episode_id: str
+    status: Literal["open", "resolved"]
+    created_at: datetime
+    updated_at: datetime
+    messages: list[ReviewMessageRead] = []
+
+
+class ReleaseCandidateCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: str = Field(min_length=1, max_length=64)
+    render_path: str = Field(min_length=1, max_length=1000)
+    qc_snapshot: dict = Field(default_factory=dict)
+
+    @field_validator("render_path")
+    @classmethod
+    def validate_render_path(cls, value: str) -> str:
+        normalized = value.strip().replace("\\", "/")
+        if normalized.startswith("/") or any(part == ".." for part in normalized.split("/")):
+            raise ValueError("render_path must be a relative data path")
+        return normalized
+
+
+class ReleaseCandidateRead(ReleaseCandidateCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    episode_id: str
+    status: Literal["draft", "approved", "published"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReleaseGateRead(BaseModel):
+    ready: bool
+    production_ready: bool
+    production_blockers: dict
+    open_critical_threads: list[str]
+
+
+class PublicationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    platform: Literal["internal_master", "short_video", "widescreen"]
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+class PublicationRead(PublicationCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    candidate_id: str
+    external_reference: str
+    status: Literal["published", "failed"]
+    created_at: datetime
+    published_at: datetime | None
 
 
 class ProjectCreate(BaseModel):
@@ -233,6 +602,11 @@ class EpisodeCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     premise: str = Field(min_length=1)
     target_duration_seconds: int = Field(ge=15, le=1800)
+
+
+class VolumeEpisodeCreate(EpisodeCreate):
+    model_config = ConfigDict(extra="forbid")
+    position: int = Field(ge=1, le=10000)
 
 
 class EpisodeDeletionCounts(BaseModel):
@@ -328,6 +702,8 @@ class EpisodeRead(EpisodeCreate):
 
     id: str
     project_id: str
+    volume_id: str | None
+    position: int
     status: str
     created_at: datetime
     updated_at: datetime
@@ -337,6 +713,97 @@ class EpisodePatch(PatchModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     premise: str | None = Field(default=None, min_length=1)
     target_duration_seconds: int | None = Field(default=None, ge=15, le=1800)
+    volume_id: str | None = None
+    position: int | None = Field(default=None, ge=0, le=10000)
+
+
+class VolumeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=10000)
+    position: int = Field(ge=1, le=10000)
+
+
+class VolumePatch(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    summary: str | None = Field(default=None, max_length=10000)
+    position: int | None = Field(default=None, ge=1, le=10000)
+
+
+class VolumeRead(VolumeCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    created_at: datetime
+    updated_at: datetime
+    episodes: list[EpisodeRead] = []
+
+
+StorylineKind = Literal["foreshadowing", "character_arc", "conflict", "mystery", "theme"]
+StorylineStage = Literal["setup", "development", "escalation", "payoff", "resolved"]
+
+
+class StorylineCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=200)
+    kind: StorylineKind
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    description: str = Field(default="", max_length=20000)
+
+
+class StorylinePatch(PatchModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    kind: StorylineKind | None = None
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    description: str | None = Field(default=None, max_length=20000)
+
+
+class StorylineEventCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    episode_id: str = Field(min_length=1, max_length=36)
+    scene_id: str | None = Field(default=None, max_length=36)
+    shot_id: str | None = Field(default=None, max_length=36)
+    position: int = Field(ge=1, le=10000)
+    stage: StorylineStage
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=20000)
+    setup_event_id: str | None = Field(default=None, max_length=36)
+    payoff_event_id: str | None = Field(default=None, max_length=36)
+    metadata: dict = Field(default_factory=dict)
+
+
+class StorylineEventPatch(PatchModel):
+    episode_id: str | None = Field(default=None, min_length=1, max_length=36)
+    scene_id: str | None = Field(default=None, max_length=36)
+    shot_id: str | None = Field(default=None, max_length=36)
+    position: int | None = Field(default=None, ge=1, le=10000)
+    stage: StorylineStage | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=20000)
+    setup_event_id: str | None = Field(default=None, max_length=36)
+    payoff_event_id: str | None = Field(default=None, max_length=36)
+    metadata: dict | None = None
+
+
+class StorylineEventRead(StorylineEventCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    storyline_id: str
+    created_at: datetime
+    updated_at: datetime
+    metadata: dict = Field(
+        default_factory=dict,
+        validation_alias="event_metadata",
+        serialization_alias="metadata",
+    )
+
+class StorylineRead(StorylineCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    created_at: datetime
+    updated_at: datetime
+    events: list[StorylineEventRead] = []
 
 
 class ProjectDetail(ProjectRead):
@@ -416,12 +883,18 @@ class ProductionRunCreate(BaseModel):
     regenerate_panels: bool = False
     regenerate_speech: bool = False
     regenerate_videos: bool = False
+    panel_generation_mode: Literal["solo", "grid"] = "solo"
+    budget_cap_usd: float | None = Field(default=None, ge=0)
+    budget_mode: Literal["observe", "warn", "cap"] = "observe"
+    shot_ids: list[str] | None = None
 
 
 class ProductionRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str; episode_id: str; status: str; stages: list[str]; concurrency: int
-    regenerate_panels: bool; regenerate_speech: bool; regenerate_videos: bool; pause_requested: bool
+    scope_type: str; shot_ids: list[str] | None
+    regenerate_panels: bool; regenerate_speech: bool; regenerate_videos: bool; panel_generation_mode: str; pause_requested: bool
+    budget_cap_usd: float | None; spent_usd: float; budget_mode: str
     total_items: int; queued_items: int; running_items: int; succeeded_items: int
     failed_items: int; skipped_items: int; summary_error: str
     created_at: datetime; updated_at: datetime
@@ -479,3 +952,233 @@ class PlannedScene(BaseModel):
 
 class EpisodePlan(BaseModel):
     scenes: list[PlannedScene] = Field(min_length=1)
+
+
+MemberRole = Literal["producer", "writer", "editor", "character_artist", "storyboard_artist", "director", "reviewer", "admin"]
+MemberStatus = Literal["active", "invited", "disabled"]
+TaskPriority = Literal["low", "medium", "high", "critical"]
+TaskStatus = Literal["todo", "in_progress", "review", "completed", "cancelled"]
+
+
+class ProjectMemberCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$", max_length=254)
+    role: MemberRole
+    scope: dict = Field(default_factory=dict)
+    capabilities: dict = Field(default_factory=dict)
+
+
+class ProjectMemberPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    role: MemberRole | None = None
+    scope: dict | None = None
+    capabilities: dict | None = None
+    status: MemberStatus | None = None
+
+
+class ProjectMemberRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    name: str
+    email: str
+    role: str
+    scope: dict
+    capabilities: dict
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskChecklistItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str = Field(min_length=1, max_length=200)
+    done: bool = False
+
+
+class ProductionTaskCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=5000)
+    priority: TaskPriority = "medium"
+    assignee: str = Field(default="", max_length=120)
+    due_at: datetime | None = None
+    episode_id: str | None = None
+    scene_id: str | None = None
+    shot_id: str | None = None
+    review_thread_id: str | None = None
+    checklist: list[TaskChecklistItem] = Field(default_factory=list, max_length=100)
+
+
+class ProductionTaskPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5000)
+    priority: TaskPriority | None = None
+    status: TaskStatus | None = None
+    assignee: str | None = Field(default=None, max_length=120)
+    due_at: datetime | None = None
+    checklist: list[TaskChecklistItem] | None = Field(default=None, max_length=100)
+
+
+class ProductionTaskRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    episode_id: str | None
+    scene_id: str | None
+    shot_id: str | None
+    review_thread_id: str | None
+    title: str
+    description: str
+    priority: str
+    status: str
+    assignee: str
+    due_at: datetime | None
+    checklist: list[dict]
+    created_at: datetime
+    updated_at: datetime
+
+
+class EpisodeVersionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str = Field(min_length=1, max_length=160)
+    source: Literal["manual", "autosave", "checkpoint"]
+    author: str = Field(default="", max_length=120)
+
+
+class EpisodeVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    episode_id: str
+    version: int
+    label: str
+    source: str
+    author: str
+    snapshot: dict
+    restored_from_id: str | None
+    created_at: datetime
+
+
+class DeliveryOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["landscape_video", "vertical_video", "clean_master", "subtitles", "audio_mix", "asset_manifest"]
+    format: str = Field(min_length=1, max_length=32)
+    enabled: bool = True
+
+
+class DeliveryPackageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    release_candidate_id: str
+    preset_name: str = Field(min_length=1, max_length=160)
+    outputs: list[DeliveryOutput] = Field(min_length=1, max_length=20)
+
+
+class DeliveryPackageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    episode_id: str
+    release_candidate_id: str
+    preset_name: str
+    outputs: list[dict]
+    checks: dict
+    status: str
+    artifact_path: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProductionCanvasLayoutPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: Literal[1, 2, 3]
+    viewport: dict[str, float]
+    nodes: dict[str, dict[str, float]]
+    expanded_shots: list[str] = Field(default_factory=list)
+    pinned_shots: list[str] = Field(default_factory=list)
+    collapsed_scene_ids: list[str] = Field(default_factory=list)
+
+
+class ProductionCanvasLayoutRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    episode_id: str
+    version: int
+    layout: ProductionCanvasLayoutPayload
+    updated_at: datetime
+
+
+class ProductionWorkflowBindingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    capability: Literal["panel", "video"]
+    name: str
+    workflow_id: str
+    workflow_version: int
+    input_mapping_version: int
+    enabled: bool
+
+
+class ProductionWorkflowBindingUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    workflow_id: str = Field(min_length=1, max_length=200)
+    workflow_version: int = Field(ge=1)
+    input_mapping_version: int = Field(ge=1)
+    enabled: bool = True
+
+
+class ProductionGraphSceneRead(BaseModel):
+    id: str
+    position: int
+    location: str
+    summary: str
+
+
+class ProductionGraphShotRead(BaseModel):
+    id: str
+    scene_id: str
+    position: int
+    shot_type: str
+    duration_seconds: float
+    composition: str
+    review_status: str
+    render_status: str
+    video_render_status: str
+    active_panel_asset_id: str | None
+    active_panel_media_url: str | None = None
+    previous_shot_tail_asset_id: str | None = None
+    active_video_asset_id: str | None
+    active_video_media_url: str | None = None
+    dialogue_ids: list[str] = Field(default_factory=list)
+    dialogue_count: int = 0
+    speech_ready_count: int = 0
+
+
+class ProductionGraphAssetRead(BaseModel):
+    id: str
+    kind: Literal["variant", "state", "asset"]
+    label: str
+    media_url: str | None = None
+    version: int
+    status: str
+    shot_ids: list[str]
+
+
+class ProductionMediaDependencyRead(BaseModel):
+    source_shot_id: str
+    target_shot_id: str
+    source_kind: str
+    target_kind: str
+
+
+class EpisodeProductionGraphRead(BaseModel):
+    episode_id: str
+    project_id: str
+    scenes: list[ProductionGraphSceneRead]
+    shots: list[ProductionGraphShotRead]
+    assets: list[ProductionGraphAssetRead]
+    production_items: list[ProductionItemRead]
+    media_dependencies: list[ProductionMediaDependencyRead]
+    workflow_bindings: list[ProductionWorkflowBindingRead]

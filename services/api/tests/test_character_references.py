@@ -172,8 +172,11 @@ def test_generates_primary_and_reference_based_variant(client):
     assert variant.json()["reference_type"] == "side"
     assert provider.edits == 1
     assert character["name"] not in provider.prompts[0]
-    assert character["appearance_bible"] not in provider.prompts[0]
+    assert character["appearance_bible"] in provider.prompts[0]
+    assert character["continuity_rules"] in provider.prompts[0]
     assert "original" in provider.prompts[0].lower()
+    assert "legally distinct" in provider.prompts[0].lower()
+    assert "do not reproduce" in provider.prompts[0].lower()
 
 
 def test_generate_returns_sanitized_provider_failure(client):

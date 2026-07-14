@@ -8,7 +8,7 @@ const SHOT_TYPES: Record<string, string> = {
   long_shot: '远景', over_the_shoulder: '过肩', point_of_view: '主观', insert: '插入',
 };
 
-export function ShotCard({shot, selected, onSelect}: {shot: Shot; selected: boolean; onSelect: () => void}) {
+export function ShotCard({shot, selected, onSelect, isTailSource}: {shot: Shot; selected: boolean; onSelect: () => void; isTailSource?: boolean}) {
   const hasPanel = Boolean(shot.active_panel_asset_id);
   const [panelUrl,setPanelUrl]=useState<string|null>(null);
   useEffect(()=>{
@@ -21,16 +21,18 @@ export function ShotCard({shot, selected, onSelect}: {shot: Shot; selected: bool
     return()=>{current=false;};
   },[shot.active_panel_asset_id]);
   const failed = shot.render_status === 'failed';
+  const hasTailLink = Boolean(shot.previous_shot_tail_asset_id);
   const shotType = SHOT_TYPES[shot.shot_type] ?? shot.shot_type.replaceAll('_', ' ');
   const reviewLabel = shot.review_status === 'approved' ? '已通过' : shot.review_status === 'needs_changes' ? '需修改' : '待审核';
   const mediaLabel = failed ? '生成失败' : hasPanel ? '已有画面' : '缺少画面';
   const accessibleName = `镜头 ${shot.position}：${shotType}，${shot.duration_seconds}s，${shot.composition}，${reviewLabel}，${mediaLabel}${selected ? '，已选中' : ''}`;
 
   return (
-    <button className={`shot-card${selected ? ' selected' : ''}${failed ? ' failed' : ''}`} onClick={onSelect} aria-label={accessibleName} aria-pressed={selected}>
+    <button className={`shot-card${selected ? ' selected' : ''}${failed ? ' failed' : ''}${isTailSource ? ' tail-source' : ''}`} onClick={onSelect} aria-label={accessibleName} aria-pressed={selected}>
       <div className="shot-media">
         {panelUrl ? <img src={panelUrl} alt={shot.composition} /> : <div className="empty-panel"><ImageOff size={28}/><span>{failed ? '生成失败' : hasPanel ? '加载画面' : '等待生成'}</span></div>}
         <span className="shot-number">{String(shot.position).padStart(2, '0')}</span>
+        {hasTailLink && <span className="shot-tail-badge" title="承接上一镜头尾帧">尾帧</span>}
       </div>
       <div className="shot-meta">
         <strong>{shotType}</strong>

@@ -29,6 +29,24 @@ def _create_legacy_database(path: Path) -> None:
         )
         connection.exec_driver_sql(
             """
+            CREATE TABLE characters (
+                id VARCHAR(36) PRIMARY KEY,
+                project_id VARCHAR(36) NOT NULL,
+                name VARCHAR(120) NOT NULL,
+                role VARCHAR(80) NOT NULL,
+                appearance_bible TEXT NOT NULL,
+                personality TEXT NOT NULL,
+                continuity_rules TEXT NOT NULL,
+                negative_constraints TEXT NOT NULL,
+                voice_speaker VARCHAR(80) NOT NULL,
+                voice_instruction TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        connection.exec_driver_sql(
+            """
             CREATE TABLE shots (
                 id VARCHAR(36) PRIMARY KEY,
                 scene_id VARCHAR(36) NOT NULL,
@@ -69,6 +87,24 @@ def _create_legacy_database(path: Path) -> None:
             )
             """
         )
+        connection.exec_driver_sql(
+            """
+            CREATE TABLE production_items (
+                id VARCHAR(36) PRIMARY KEY,
+                run_id VARCHAR(36) NOT NULL,
+                stage VARCHAR(24) NOT NULL,
+                target_type VARCHAR(24) NOT NULL,
+                target_id VARCHAR(36) NOT NULL,
+                position INTEGER NOT NULL,
+                status VARCHAR(24) NOT NULL,
+                attempt_count INTEGER NOT NULL,
+                result_metadata JSON NOT NULL,
+                error TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
         connection.execute(
             text(
                 """
@@ -98,6 +134,18 @@ def test_fresh_database_upgrades_to_current_schema(tmp_path):
     assert "model_invocations" in inspector.get_table_names()
     for table in ("director_stages", "director_objects", "shot_cameras", "director_revisions", "director_suggestions"):
         assert table in inspector.get_table_names()
+    for table in ("volumes", "storylines", "storyline_events"):
+        assert table in inspector.get_table_names()
+    for table in ("asset_variants", "asset_variant_states", "asset_variant_usages"):
+        assert table in inspector.get_table_names()
+    for table in ("visual_review_threads", "visual_annotations", "visual_review_messages", "visual_review_candidates"):
+        assert table in inspector.get_table_names()
+    for table in ("review_threads", "review_messages", "release_candidates", "publication_records"):
+        assert table in inspector.get_table_names()
+    for table in ("production_canvas_layouts", "production_workflow_bindings"):
+        assert table in inspector.get_table_names()
+    assert "volume_id" in {column["name"] for column in inspector.get_columns("episodes")}
+    assert "position" in {column["name"] for column in inspector.get_columns("episodes")}
     assert "script_revision_id" in {
         column["name"] for column in inspector.get_columns("script_imports")
     }
@@ -127,6 +175,16 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
     assert "script_import_episodes" in inspector.get_table_names()
     assert "model_invocations" in inspector.get_table_names()
     for table in ("director_stages", "director_objects", "shot_cameras", "director_revisions", "director_suggestions"):
+        assert table in inspector.get_table_names()
+    for table in ("volumes", "storylines", "storyline_events"):
+        assert table in inspector.get_table_names()
+    for table in ("asset_variants", "asset_variant_states", "asset_variant_usages"):
+        assert table in inspector.get_table_names()
+    for table in ("visual_review_threads", "visual_annotations", "visual_review_messages", "visual_review_candidates"):
+        assert table in inspector.get_table_names()
+    for table in ("review_threads", "review_messages", "release_candidates", "publication_records"):
+        assert table in inspector.get_table_names()
+    for table in ("production_canvas_layouts", "production_workflow_bindings"):
         assert table in inspector.get_table_names()
     assert "active_video_asset_id" in {
         column["name"] for column in inspector.get_columns("shots")

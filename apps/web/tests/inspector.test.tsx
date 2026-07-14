@@ -96,6 +96,34 @@ describe('Inspector', () => {
     expect(screen.getByRole('button',{name:'生成画面'})).toBeEnabled();
   });
 
+  it('presents image plus text video generation and runs it from the active panel', async () => {
+    mocks.listPanelVersions.mockResolvedValue([asset]);
+    mocks.startVideoGeneration.mockResolvedValue({job_id:'video-job-1',status:'queued'});
+    mocks.pollJob.mockResolvedValue({...succeeded,id:'video-job-1',operation:'generate_video',result_metadata:{asset_id:'video-asset-1'}});
+    mocks.listVideoVersions
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{...asset,id:'video-asset-1',kind:'video',media_url:'/media/video.mp4',media_type:'video/mp4',duration_seconds:5}]);
+
+    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1',review_status:'approved',video_prompt:'缓慢推近'}}/>);
+
+    expect(await screen.findByRole('heading',{name:'图 + 文生成视频'})).toBeVisible();
+    expect(screen.getByText('首帧画面')).toBeVisible();
+    expect(screen.getByRole('img',{name:'视频首帧：画面版本 2'})).toHaveAttribute('src','/media/panel.png');
+    expect(screen.getByLabelText('视频动态提示词')).toHaveValue('缓慢推近');
+
+    await userEvent.click(screen.getByRole('button',{name:'使用首帧和提示词生成视频'}));
+
+    await waitFor(() => expect(mocks.startVideoGeneration).toHaveBeenCalledWith('shot-1',true));
+    expect(mocks.listVideoVersions).toHaveBeenCalledTimes(2);
+  });
+
+  it('explains why image plus text video generation is unavailable without an approved panel', async () => {
+    render(<Inspector shot={shot}/>);
+
+    expect(await screen.findByText('先生成并选中一张画面，再将镜头审核为已通过。')).toBeVisible();
+    expect(screen.getByRole('button',{name:'使用首帧和提示词生成视频'})).toBeDisabled();
+  });
+
   it('activates panel versions and saves edited dialogue', async () => {
     mocks.listPanelVersions.mockResolvedValue([asset]);
     mocks.activatePanel.mockResolvedValue({...shot,active_panel_asset_id:'asset-1'});

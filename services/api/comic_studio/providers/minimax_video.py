@@ -37,6 +37,15 @@ class MiniMaxVideoProvider:
         self.base_url = base_url.rstrip("/")
         self._client = client
 
+    @classmethod
+    def from_channel(cls, channel, *, prefer_ssh_for_host=None, **_kwargs):
+        """Build an instance from a :class:`ProviderChannel`."""
+        return cls(
+            channel.api_key_value,
+            model=channel.model,
+            base_url=channel.base_url,
+        )
+
     def _headers(self):
         return {
             "Authorization": f"Bearer {self.api_key}",
@@ -138,3 +147,9 @@ class MiniMaxVideoProvider:
         finally:
             if owns:
                 await client.aclose()
+
+
+from comic_studio.model_runtime.adapters import register_capability
+from comic_studio.model_runtime.contracts import Capability
+
+PROVIDER_CAPABILITY = register_capability(Capability.VIDEO, provider_class="MiniMaxVideoProvider")

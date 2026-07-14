@@ -3,7 +3,7 @@ import {createProductionRun} from '../lib/api';
 import {pollProductionRun} from '../lib/production';
 import type {ProductionRun} from '../lib/types';
 
-const run=(status:ProductionRun['status']):ProductionRun=>({id:'run-1',episode_id:'ep-1',status,stages:['panels'],concurrency:2,regenerate_panels:false,regenerate_speech:false,pause_requested:status==='paused',total_items:2,queued_items:status==='running'?1:0,running_items:status==='running'?1:0,succeeded_items:status==='completed'?2:0,failed_items:0,skipped_items:0,summary_error:'',created_at:'',updated_at:''});
+const run=(status:ProductionRun['status']):ProductionRun=>({id:'run-1',episode_id:'ep-1',status,stages:['panels'],concurrency:2,scope_type:'episode',shot_ids:null,regenerate_panels:false,regenerate_speech:false,panel_generation_mode:'solo',budget_cap_usd:null,spent_usd:0,budget_mode:'observe',pause_requested:status==='paused',total_items:2,queued_items:status==='running'?1:0,running_items:status==='running'?1:0,succeeded_items:status==='completed'?2:0,failed_items:0,skipped_items:0,summary_error:'',created_at:'',updated_at:''});
 
 describe('production API',()=>{
  afterEach(()=>vi.unstubAllGlobals());

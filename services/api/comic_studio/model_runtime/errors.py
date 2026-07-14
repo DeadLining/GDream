@@ -5,7 +5,7 @@ import httpx
 
 from comic_studio.model_runtime.contracts import Capability
 from comic_studio.provider_factory import ProviderConfigurationError
-from comic_studio.providers.base import ProviderError
+from comic_studio.providers.base import ProviderError, ProviderHTTPError
 
 
 class RuntimeErrorCode(StrEnum):
@@ -50,6 +50,30 @@ def classify_provider_error(
             RuntimeErrorCode.PROVIDER_UNAVAILABLE,
             f"{label} provider is unavailable",
             True,
+            capability,
+            provider,
+        )
+    if isinstance(error, ProviderHTTPError):
+        if error.status_code in {408, 504}:
+            return ModelRuntimeError(
+                RuntimeErrorCode.PROVIDER_TIMEOUT,
+                f"{label} provider timed out",
+                True,
+                capability,
+                provider,
+            )
+        if error.status_code == 429 or error.status_code >= 500:
+            return ModelRuntimeError(
+                RuntimeErrorCode.PROVIDER_UNAVAILABLE,
+                f"{label} provider is unavailable",
+                True,
+                capability,
+                provider,
+            )
+        return ModelRuntimeError(
+            RuntimeErrorCode.INVALID_RESPONSE,
+            f"{label} provider rejected the request",
+            False,
             capability,
             provider,
         )

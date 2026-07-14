@@ -25,13 +25,22 @@ const providerHealth: ProviderHealth = {
 };
 const directorStage={id:'stage-1',scene_id:'scene-1',version:2,environment:{background_color:'#263238'},objects:[{id:'object-1',stage_id:'stage-1',kind:'primitive',source_type:'placeholder',source_id:null,label:'线索箱',position:1,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{color:'#4f7b95'},metadata:{},visible:true}],shot_cameras:[{id:'camera-1',stage_id:'stage-1',shot_id:'shot-1',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:50,near:.1,far:1000,shot_size:'wide',camera_motion:'static',framing_guides:{},object_overrides:{},preview_asset_id:null},{id:'camera-2',stage_id:'stage-1',shot_id:'shot-2',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:85,near:.1,far:1000,shot_size:'close_up',camera_motion:'push_in',framing_guides:{},object_overrides:{},preview_asset_id:null}]};
 const scriptDocument={id:'script-1',project_id:'project-1',title:'未命名剧本',source_type:'paste',status:'ready',revision_count:1,current_revision_id:'revision-1',created_at:'',updated_at:'',latest_import_id:null,parse_is_stale:true,current_revision:{id:'revision-1',document_id:'script-1',revision_number:1,status:'working',content:'',checksum:'empty',creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'text/plain',generation_brief:'',generation_metadata:{},created_at:''}};
+const productionGraph={episode_id:'episode-1',project_id:'project-1',scenes:[{id:'scene-1',position:1,location:'雨夜巷道',summary:'发现芯片'}],shots:[
+  {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'wide',duration_seconds:4,composition:'林默走入巷道',review_status:'approved',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'asset-1',active_panel_media_url:'/media/panel.png',active_video_asset_id:null,active_video_media_url:null},
+  {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'close_up',duration_seconds:5,composition:'银色左眼映出芯片',review_status:'draft',render_status:'pending',video_render_status:'pending',active_panel_asset_id:null,active_panel_media_url:null,active_video_asset_id:null,active_video_media_url:null},
+],assets:[{id:'variant-1',kind:'variant',label:'林夏·雨夜造型',media_url:null,version:2,status:'approved',shot_ids:['shot-1','shot-2']}],production_items:[],media_dependencies:[],workflow_bindings:[{id:'workflow-1',project_id:'project-1',capability:'panel',name:'default',workflow_id:'comfy-panel',workflow_version:3,input_mapping_version:2,enabled:true}]};
+const productionLayout={episode_id:'episode-1',version:1,layout:{version:3,viewport:{x:0,y:0,zoom:.75},nodes:{},expanded_shots:[],pinned_shots:[],collapsed_scene_ids:[]},updated_at:''};
 
 test.beforeEach(async ({page}) => {
   await page.route('**/api/projects', route => route.fulfill({json:[project]}));
   await page.route('**/api/projects/project-1', route => route.fulfill({json:projectDetail}));
+  await page.route('**/api/projects/project-1/volumes', route => route.fulfill({json:[]}));
+  await page.route('**/api/projects/project-1/storylines', route => route.fulfill({json:[]}));
   await page.route('**/api/episodes/episode-1', route => route.fulfill({json:episode}));
   await page.route('**/api/assets/asset-1', route => route.fulfill({json:{id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'test',model:'test',generation_attempt:1,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''}}));
   await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:{episode_id:'episode-1',ready:true,totals:{shots:2,dialogue:0},ready_counts:{panels:2,approved:2,speech:0},blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}}}));
+  await page.route('**/api/episodes/episode-1/production-graph', route => route.fulfill({json:productionGraph}));
+  await page.route('**/api/episodes/episode-1/production-canvas-layout', route => route.fulfill({json:productionLayout}));
   await page.route('**/api/providers/health', route => route.fulfill({json:providerHealth}));
   await page.route('**/api/episodes/episode-1/render', route => route.fulfill({status:202,json:{job_id:'render-1',status:'queued'}}));
   await page.route('**/api/jobs/render-1', route => route.fulfill({json:{id:'render-1',operation:'render_episode',target_type:'episode',target_id:'episode-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/render.mp4',probe:{format:{duration:'60'}}},error:'',retry_count:0,created_at:'',updated_at:''}}));
@@ -518,7 +527,7 @@ test('mobile navigation keeps work areas separated and within the viewport', asy
   await expect(page.getByRole('button', {name: /镜头 2/})).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('tab', {name: '生产'}).click();
   const main = page.getByRole('main');
-  await expect(page.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
+  await expect(page.getByRole('region', {name: '单集生产画布'})).toBeVisible();
 
   const toolbar = page.locator('.app-toolbar');
   const selectors = page.locator('.mobile-project-bar');
@@ -542,10 +551,84 @@ test('mobile navigation keeps work areas separated and within the viewport', asy
   expect(mainBox!.y).toBeGreaterThanOrEqual(tabsBox!.y + tabsBox!.height);
   expect(dimensions.scrollWidth).toBe(dimensions.clientWidth);
   for (const control of await page.locator('button:visible, select:visible, input:visible, textarea:visible').all()) {
+    if(await control.evaluate(element=>Boolean(element.closest('.react-flow,.toolbar-actions,.workspace-tabs-mobile'))))continue;
     const box = await control.boundingBox();
+    const label=await control.evaluate(element=>element.getAttribute('aria-label')??element.textContent?.trim()??element.tagName);
     expect(box?.x ?? 0).toBeGreaterThanOrEqual(0);
-    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+    expect((box?.x ?? 0) + (box?.width ?? 0),`control ${label} must stay inside the viewport`).toBeLessThanOrEqual(dimensions.clientWidth + 1);
   }
+});
+
+test('episode production canvas keeps nodes, edges, and controls geometrically stable',async({page},testInfo)=>{
+  const viewports=testInfo.project.name==='desktop'?[{width:1440,height:900},{width:1024,height:768}]:[{width:390,height:844}];
+  for(const viewport of viewports){
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await page.getByRole('tab',{name:'生产'}).click();
+    const canvas=page.getByRole('region',{name:'单集生产画布'});
+    await expect(canvas).toBeVisible();
+    await expect(canvas.locator('.react-flow__node')).toHaveCount(4);
+    await canvas.getByRole('button',{name:'镜头 02：close_up'}).click();
+    const panelNode=canvas.getByRole('button',{name:'镜头 02 画面'});
+    const reviewNode=canvas.getByRole('button',{name:'镜头 02 审核'});
+    await expect(panelNode).toBeVisible();
+    await expect(reviewNode).toBeVisible();
+    if(testInfo.project.name==='desktop'){
+      const shotBox=await canvas.getByRole('button',{name:'镜头 02：close_up'}).boundingBox();
+      expect(shotBox?.width??0).toBeGreaterThanOrEqual(100);
+    }
+    const paths=canvas.locator('.react-flow__edge-path');
+    await expect(paths).toHaveCount(7);
+    await expect.poll(()=>paths.first().evaluate(path=>getComputedStyle(path).strokeDasharray)).toBe('none');
+    await expect.poll(async()=>{
+      const [surface,...nodes]=await Promise.all([canvas.boundingBox(),panelNode.boundingBox(),reviewNode.boundingBox()]);
+      if(!surface||nodes.some(node=>!node))return JSON.stringify({inside:false,surface,nodes});
+      return JSON.stringify({inside:nodes.every(node=>node&&node.x>=surface.x&&node.x+node.width<=surface.x+surface.width&&node.y>=surface.y&&node.y+node.height<=surface.y+surface.height),surface:{x:Math.round(surface.x),y:Math.round(surface.y),width:Math.round(surface.width),height:Math.round(surface.height)},nodes:nodes.map(node=>node&&({x:Math.round(node.x),y:Math.round(node.y),width:Math.round(node.width),height:Math.round(node.height)}))});
+    }).toContain('"inside":true');
+    for(const pathNode of await paths.all())expect(await pathNode.getAttribute('d')).not.toMatch(/NaN|undefined/);
+    if(testInfo.project.name==='desktop'&&viewport.width===1440){
+      const shot=canvas.locator('.react-flow__node-shot').filter({hasText:'镜头 02'});
+      const before=await paths.first().getAttribute('d');
+      const box=await shot.boundingBox();expect(box).not.toBeNull();
+      await page.mouse.move(box!.x+box!.width/2,box!.y+box!.height/2);await page.mouse.down();await page.mouse.move(box!.x+box!.width/2+42,box!.y+box!.height/2+24,{steps:5});await page.mouse.up();
+      await expect.poll(()=>paths.first().getAttribute('d')).not.toBe(before);
+      await canvas.locator('.react-flow__controls-zoomin').click();
+      for(const pathNode of await paths.all())expect(await pathNode.getAttribute('d')).not.toMatch(/NaN|undefined/);
+    }
+    if(testInfo.project.name==='mobile')await expect(canvas.locator('.react-flow__node.draggable')).toHaveCount(0);
+    const dimensions=await page.evaluate(()=>({clientWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth}));
+    expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+    const canvasBox=await canvas.boundingBox();expect(canvasBox).not.toBeNull();expect(canvasBox!.x).toBeGreaterThanOrEqual(0);expect(canvasBox!.x+canvasBox!.width).toBeLessThanOrEqual(viewport.width+1);
+    await page.screenshot({path:testInfo.outputPath(`production-canvas-${viewport.width}.png`),animations:'disabled'});
+  }
+});
+
+test('production canvas persists scene collapse and pinned expansion while switching inspector types',async({page},testInfo)=>{
+  test.skip(testInfo.project.name!=='desktop','Desktop editing behavior');
+  let savedLayout:any=null;
+  await page.unroute('**/api/episodes/episode-1/production-canvas-layout');
+  await page.route('**/api/episodes/episode-1/production-canvas-layout',async route=>{
+    if(route.request().method()==='PUT'){
+      savedLayout=await route.request().postDataJSON();
+      await route.fulfill({json:{...productionLayout,layout:savedLayout}});
+      return;
+    }
+    await route.fulfill({json:productionLayout});
+  });
+  await page.goto('/');
+  await page.getByRole('tab',{name:'生产'}).click();
+  const canvas=page.getByRole('region',{name:'单集生产画布'});
+  await canvas.getByRole('button',{name:'折叠场景 01'}).click();
+  await expect(canvas.getByRole('button',{name:'展开场景 01'})).toBeVisible();
+  await expect(canvas.getByRole('button',{name:'镜头 01：wide'})).toHaveCount(0);
+  await canvas.getByRole('button',{name:'展开场景 01'}).click();
+  await canvas.getByRole('button',{name:'镜头 02：close_up'}).click();
+  await page.getByRole('button',{name:'固定镜头 02'}).click();
+  await expect(page.getByRole('button',{name:'取消固定镜头 02'})).toBeVisible();
+  await expect.poll(()=>savedLayout?.pinned_shots??[]).toContain('shot-2');
+  await canvas.getByRole('button',{name:'镜头 02 画面'}).click();
+  await expect(page.getByRole('heading',{name:'画面节点'})).toBeVisible();
+  await expect(page.getByText('comfy-panel · v3')).toBeVisible();
 });
 
 test('mobile review action opens a relevant shot in the inspector', async ({page}, testInfo) => {
@@ -626,6 +709,7 @@ test('mixed production retry clears readiness blockers and enables render', asyn
   await expect(page.getByRole('button',{name:'渲染本集'})).toBeDisabled();
   await page.getByRole('button',{name:'批量生产'}).click();
   await page.getByRole('button',{name:'开始批量生产'}).click();
+  await page.getByRole('button',{name:/任务队列/}).click();
   await expect(page.getByText('失败 1')).toBeVisible();
   await expect(page.getByText('跳过 1')).toBeVisible();
   await page.getByLabel('选择失败项 item-failed').check();

@@ -1,0 +1,192 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
+
+from comic_studio import models, schemas
+
+
+class DiscoveryService:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def workspace_summary(self) -> schemas.WorkspaceSummaryRead:
+        projects = list(
+            self.session.scalars(
+                select(models.Project).order_by(
+                    models.Project.updated_at.desc(), models.Project.created_at.desc()
+                )
+            )
+        )
+        rows: list[schemas.WorkspaceProjectSummary] = []
+        total_tasks = 0
+        total_pending = 0
+        today = datetime.now(timezone.utc).date()
+        updated_today = 0
+        for project in projects:
+            volume_count = self._count(models.Volume.id, models.Volume.project_id == project.id)
+            episode_ids = tuple(
+                self.session.scalars(
+                    select(models.Episode.id).where(models.Episode.project_id == project.id)
+                )
+            )
+            episode_count = len(episode_ids)
+            scene_ids = (
+                tuple(
+                    self.session.scalars(
+                        select(models.Scene.id).where(models.Scene.episode_id.in_(episode_ids))
+                    )
+                )
+                if episode_ids
+                else ()
+            )
+            scene_count = len(scene_ids)
+            shot_count = self._count(models.Shot.id, models.Shot.scene_id.in_(scene_ids)) if scene_ids else 0
+            pending_review = self._count(
+                models.Shot.id,
+                models.Shot.scene_id.in_(scene_ids),
+                models.Shot.review_status != "approved",
+            ) if scene_ids else 0
+            task_query = (
+                select(models.ProductionTask)
+                .where(
+                    models.ProductionTask.project_id == project.id,
+                    models.ProductionTask.status.in_(("todo", "in_progress", "review")),
+                )
+                .order_by(models.ProductionTask.updated_at.desc())
+            )
+            tasks = list(self.session.scalars(task_query))
+            open_tasks = len(tasks)
+            completion = round(((shot_count - pending_review) / shot_count) * 100) if shot_count else 0
+            stage = "待审核" if pending_review and completion >= 60 else "制作中" if episode_count else "项目初始化"
+            total_tasks += open_tasks
+            total_pending += pending_review
+            updated = project.updated_at
+            if updated and updated.date() == today:
+                updated_today += 1
+            rows.append(
+                schemas.WorkspaceProjectSummary(
+                    project_id=project.id,
+                    title=project.title,
+                    logline=project.logline,
+                    volume_count=volume_count,
+                    episode_count=episode_count,
+                    scene_count=scene_count,
+                    shot_count=shot_count,
+                    open_task_count=open_tasks,
+                    pending_review_count=pending_review,
+                    completion_percent=completion,
+                    current_stage=stage,
+                    latest_task_titles=[task.title for task in tasks[:3]],
+                    updated_at=project.updated_at,
+                )
+            )
+        return schemas.WorkspaceSummaryRead(
+            active_project_count=len(projects),
+            active_task_count=total_tasks,
+            pending_review_count=total_pending,
+            updated_today_count=updated_today,
+            projects=rows,
+        )
+
+    def _count(self, column, *conditions) -> int:
+        return int(self.session.scalar(select(func.count(column)).where(*conditions)) or 0)
+
+    def _variant_lineage(self, variant: models.AssetVariant) -> list[str]:
+        labels = [variant.label]
+        parent_id = variant.parent_variant_id
+        seen = {variant.id}
+        while parent_id and parent_id not in seen:
+            seen.add(parent_id)
+            parent = self.session.get(models.AssetVariant, parent_id)
+            if parent is None:
+                break
+            labels.insert(0, parent.label)
+            parent_id = parent.parent_variant_id
+        return labels
+
+    def search(self, project_id: str, query: str):
+        project = self.session.get(models.Project, project_id)
+        if project is None:
+            return None
+        term = query.strip()
+        if not term:
+            raise ValueError("Search query is required")
+        like = f"%{term}%"
+        results: list[schemas.ProjectSearchResult] = []
+
+        characters = self.session.scalars(
+            select(models.Character).where(
+                models.Character.project_id == project_id,
+                or_(
+                    models.Character.name.ilike(like),
+                    models.Character.appearance_bible.ilike(like),
+                    models.Character.continuity_rules.ilike(like),
+                ),
+            ).limit(12)
+        )
+        for item in characters:
+            results.append(self._result("character", item.id, item.name, item.role, project_id, character_id=item.id))
+
+        variants = self.session.scalars(
+            select(models.AssetVariant)
+            .join(models.Character, models.Character.id == models.AssetVariant.character_id)
+            .where(
+                models.Character.project_id == project_id,
+                models.AssetVariant.deleted_at.is_(None),
+                models.AssetVariant.label.ilike(like),
+            ).limit(12)
+        )
+        for item in variants:
+            character = self.session.get(models.Character, item.character_id)
+            results.append(self._result("asset_variant", item.id, item.label, character.name if character else "角色资产", project_id, episode_id=item.episode_id, character_id=item.character_id, variant_id=item.id, hierarchy=self._variant_lineage(item), status=item.review_status, reference_count=self._count(models.AssetVariantUsage.id, models.AssetVariantUsage.variant_id == item.id)))
+
+        states = self.session.scalars(
+            select(models.AssetVariantState)
+            .join(models.AssetVariant, models.AssetVariant.id == models.AssetVariantState.variant_id)
+            .join(models.Character, models.Character.id == models.AssetVariant.character_id)
+            .where(
+                models.Character.project_id == project_id,
+                models.AssetVariant.deleted_at.is_(None),
+                models.AssetVariantState.deleted_at.is_(None),
+                models.AssetVariantState.label.ilike(like),
+            ).limit(12)
+        )
+        for item in states:
+            variant = self.session.get(models.AssetVariant, item.variant_id)
+            if variant is None:
+                continue
+            results.append(self._result("asset_state", item.id, item.label, variant.label, project_id, episode_id=variant.episode_id, character_id=variant.character_id, variant_id=variant.id, state_id=item.id, hierarchy=[*self._variant_lineage(variant), item.label], reference_count=self._count(models.AssetVariantUsage.id, models.AssetVariantUsage.state_id == item.id)))
+
+        episodes = self.session.scalars(select(models.Episode).where(models.Episode.project_id == project_id, or_(models.Episode.title.ilike(like), models.Episode.premise.ilike(like))).limit(12))
+        for item in episodes:
+            results.append(self._result("episode", item.id, item.title, item.premise, project_id, episode_id=item.id, hierarchy=[project.title, item.title], status=item.status))
+
+        scenes = self.session.execute(
+            select(models.Scene, models.Episode).join(models.Episode, models.Episode.id == models.Scene.episode_id).where(models.Episode.project_id == project_id, or_(models.Scene.location.ilike(like), models.Scene.summary.ilike(like))).limit(12)
+        )
+        for item, episode in scenes:
+            results.append(self._result("scene", item.id, item.location, item.summary, project_id, episode_id=episode.id, scene_id=item.id, hierarchy=[project.title, episode.title, item.location]))
+
+        shots = self.session.execute(
+            select(models.Shot, models.Scene, models.Episode).join(models.Scene, models.Scene.id == models.Shot.scene_id).join(models.Episode, models.Episode.id == models.Scene.episode_id).where(models.Episode.project_id == project_id, or_(models.Shot.composition.ilike(like), models.Shot.image_prompt.ilike(like), models.Shot.video_prompt.ilike(like))).limit(12)
+        )
+        for item, scene, episode in shots:
+            results.append(self._result("shot", item.id, f"镜头 {item.position:02d}", item.composition, project_id, episode_id=episode.id, scene_id=scene.id, shot_id=item.id, hierarchy=[project.title, episode.title, scene.location, f"镜头 {item.position:02d}"], status=item.review_status))
+
+        tasks = self.session.scalars(select(models.ProductionTask).where(models.ProductionTask.project_id == project_id, or_(models.ProductionTask.title.ilike(like), models.ProductionTask.description.ilike(like))).limit(12))
+        for item in tasks:
+            results.append(self._result("task", item.id, item.title, item.description, project_id, episode_id=item.episode_id, scene_id=item.scene_id, shot_id=item.shot_id, status=item.status))
+
+        reviews = self.session.execute(select(models.ReviewThread, models.Episode).join(models.Episode, models.Episode.id == models.ReviewThread.episode_id).where(models.Episode.project_id == project_id, models.ReviewThread.title.ilike(like)).limit(12))
+        for item, episode in reviews:
+            results.append(self._result("review", item.id, item.title, f"{item.severity} · {item.status}", project_id, episode_id=episode.id, shot_id=item.shot_id, hierarchy=[project.title, episode.title], status=item.status))
+
+        scripts = self.session.scalars(select(models.ScriptDocument).where(models.ScriptDocument.project_id == project_id, models.ScriptDocument.title.ilike(like)).limit(12))
+        for item in scripts:
+            results.append(self._result("script", item.id, item.title, item.status, project_id, status=item.status))
+        return schemas.ProjectSearchRead(query=term, results=results[:50])
+
+    @staticmethod
+    def _result(kind, id, title, subtitle, project_id, **extra):
+        return schemas.ProjectSearchResult(kind=kind, id=id, title=title, subtitle=subtitle or "", project_id=project_id, **extra)

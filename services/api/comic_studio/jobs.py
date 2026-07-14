@@ -75,6 +75,42 @@ class JobStore:
         self.session.refresh(job)
         return job
 
+    def update_progress(
+        self,
+        job_id: str,
+        *,
+        progress: int,
+        result_metadata: dict[str, Any],
+    ) -> Job:
+        job = self.get(job_id)
+        if job is None:
+            raise KeyError(job_id)
+        if job.status != "running":
+            raise InvalidJobTransition("Only running jobs can update progress")
+        job.progress = max(0, min(99, progress))
+        job.result_metadata = redact(result_metadata)
+        self.session.commit()
+        self.session.refresh(job)
+        return job
+
+    def requeue(
+        self, job_id: str, *, preserve_result_metadata: bool = False
+    ) -> Job:
+        job = self.get(job_id)
+        if job is None:
+            raise KeyError(job_id)
+        if job.status != "failed":
+            raise InvalidJobTransition("Only failed jobs can be requeued")
+        job.status = "queued"
+        job.retry_count += 1
+        job.error = ""
+        if not preserve_result_metadata:
+            job.progress = 0
+            job.result_metadata = {}
+        self.session.commit()
+        self.session.refresh(job)
+        return job
+
     def interrupt_running(self, job_id: str) -> Job:
         job = self.get(job_id)
         if job is None or job.status != "running":

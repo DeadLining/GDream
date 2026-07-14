@@ -4,6 +4,7 @@ import {
   apiRequest,
   createScript,
   deleteScript,
+  generateCharacterReferenceSet,
   listScripts,
   patchScript,
   restoreScriptRevision,
@@ -13,6 +14,41 @@ import {
   getDirectorStage,
   updateDirectorCamera,
   uploadDirectorPreview,
+  createVolume,
+  createStoryline,
+  createStorylineEvent,
+  updateVolume,
+  updateStoryline,
+  updateStorylineEvent,
+  deleteStorylineEvent,
+  createAssetVariant,
+  createAssetVariantState,
+  updateAssetVariant,
+  deleteAssetVariant,
+  updateAssetVariantState,
+  deleteAssetVariantState,
+  createVisualAnnotation,
+  updateVisualAnnotation,
+  deleteVisualAnnotation,
+  createVisualReviewCandidate,
+  createReleaseCandidate,
+  createReviewThread,
+  getReleaseGate,
+  approveReleaseCandidate,
+  publishReleaseCandidate,
+  listReleaseCandidates,
+  rejectVisualReviewCandidate,
+  createProjectMember,
+  listProjectMembers,
+  updateProjectMember,
+  createProductionTask,
+  listProductionTasks,
+  updateProductionTask,
+  createEpisodeVersion,
+  listEpisodeVersions,
+  restoreEpisodeVersion,
+  createDeliveryPackage,
+  listDeliveryPackages,
 } from '../lib/api';
 
 describe('apiRequest', () => {
@@ -62,6 +98,34 @@ describe('apiRequest', () => {
       message: '本地 API 暂时不可用，请稍后重试',
       detail: 'api_proxy_failure',
     });
+  });
+});
+
+describe('character reference api', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('starts a character reference set through the background model runtime', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      job_id: 'job-1',
+      capability: 'image',
+      status: 'queued',
+    }), {
+      status: 202,
+      headers: {'content-type': 'application/json'},
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await generateCharacterReferenceSet('character-1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/model-runtime/image', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        target_type: 'character',
+        target_id: 'character-1',
+        mode: 'reference_set',
+        activate: true,
+      }),
+    }));
   });
 });
 
@@ -121,7 +185,7 @@ describe('director api', () => {
   });
 
   it('uploads previews as multipart without forcing a JSON content type', async () => {
-    const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
     vi.stubGlobal('fetch',fetchMock);
     const blob=new Blob(['png'],{type:'image/png'});
     await uploadDirectorPreview('camera-1',blob);
@@ -129,5 +193,147 @@ describe('director api', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBeInstanceOf(FormData);
     expect(init.headers).toBeUndefined();
+  });
+});
+
+describe('narrative structure api', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('uses project and storyline scoped creation endpoints', async () => {
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+
+    await createVolume('project-1',{title:'第二卷',summary:'深入裂缝',position:2});
+    await createStoryline('project-1',{title:'成长线',kind:'character_arc',color:'#B9473E',description:''});
+    await createStorylineEvent('line-1',{episode_id:'episode-3',scene_id:null,shot_id:null,position:3,stage:'payoff',title:'完成选择',description:'',setup_event_id:null,payoff_event_id:null,metadata:{}});
+
+    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual([
+      '/api/projects/project-1/volumes',
+      '/api/projects/project-1/storylines',
+      '/api/storylines/line-1/events',
+    ]);
+    expect(fetchMock.mock.calls.every(call=>(call[1] as RequestInit).method==='POST')).toBe(true);
+  });
+
+  it('uses narrative edit and deletion endpoints', async () => {
+    const fetchMock=vi.fn().mockImplementation(async(_path:string,init?:RequestInit)=>new Response(
+      init?.method==='DELETE'?null:JSON.stringify({}),
+      {status:init?.method==='DELETE'?204:200,headers:init?.method==='DELETE'?undefined:{'content-type':'application/json'}},
+    ));
+    vi.stubGlobal('fetch',fetchMock);
+
+    await updateVolume('volume-1',{title:'新卷名',summary:'新简介',position:2});
+    await updateStoryline('line-1',{title:'成长线',kind:'character_arc',color:'#235789',description:'跨集成长'});
+    await updateStorylineEvent('event-1',{episode_id:'episode-3',position:4,stage:'payoff',title:'完成选择',description:'回收伏笔'});
+    await deleteStorylineEvent('event-1');
+
+    expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method])).toEqual([
+      ['/api/volumes/volume-1','PATCH'],
+      ['/api/storylines/line-1','PATCH'],
+      ['/api/storyline-events/event-1','PATCH'],
+      ['/api/storyline-events/event-1','DELETE'],
+    ]);
+  });
+});
+
+describe('asset lineage and visual annotation api', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('uses lineage and review scoped creation endpoints', async () => {
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    await createAssetVariant('character-1',{kind:'episode',label:'雨夜造型',episode_id:'episode-3',parent_variant_id:'variant-1',inherited_fields:['identity'],overrides:{outfit:'雨衣'}});
+    await createAssetVariantState('variant-2',{kind:'injury',label:'左臂擦伤',overrides:{injury:'left arm abrasion'}});
+    await createVisualAnnotation('thread-1',{kind:'circle',geometry:{cx:.5,cy:.4,rx:.08,ry:.08},color:'#B9473E',label:'脸部'});
+    await createVisualReviewCandidate('thread-1',{asset_id:'asset-2',generation_metadata:{scope:'shot'}});
+    await rejectVisualReviewCandidate('candidate-1');
+    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual(['/api/characters/character-1/variants','/api/asset-variants/variant-2/states','/api/visual-review-threads/thread-1/annotations','/api/visual-review-threads/thread-1/candidates','/api/visual-review-candidates/candidate-1/reject']);
+  });
+
+  it('uses lineage update and deletion endpoints', async () => {
+    const fetchMock=vi.fn().mockImplementation(async(_path:string,init?:RequestInit)=>new Response(
+      init?.method==='DELETE'?null:JSON.stringify({}),
+      {status:init?.method==='DELETE'?204:200,headers:init?.method==='DELETE'?undefined:{'content-type':'application/json'}},
+    ));
+    vi.stubGlobal('fetch',fetchMock);
+    await updateAssetVariant('variant-1',{label:'雨夜潜行'});
+    await updateAssetVariantState('state-1',{label:'雨帽放下'});
+    await deleteAssetVariantState('state-1');
+    await deleteAssetVariant('variant-1');
+    expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method])).toEqual([
+      ['/api/asset-variants/variant-1','PATCH'],
+      ['/api/asset-variant-states/state-1','PATCH'],
+      ['/api/asset-variant-states/state-1','DELETE'],
+      ['/api/asset-variants/variant-1','DELETE'],
+    ]);
+  });
+
+  it('uses visual annotation update and deletion endpoints', async () => {
+    const fetchMock=vi.fn().mockImplementation(async(_path:string,init?:RequestInit)=>new Response(
+      init?.method==='DELETE'?null:JSON.stringify({}),
+      {status:init?.method==='DELETE'?204:200,headers:init?.method==='DELETE'?undefined:{'content-type':'application/json'}},
+    ));
+    vi.stubGlobal('fetch',fetchMock);
+    await updateVisualAnnotation('annotation-1',{label:'眉眼区域'});
+    await deleteVisualAnnotation('annotation-1');
+    expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method])).toEqual([
+      ['/api/visual-annotations/annotation-1','PATCH'],
+      ['/api/visual-annotations/annotation-1','DELETE'],
+    ]);
+  });
+});
+
+describe('operations api',()=>{
+  afterEach(()=>vi.unstubAllGlobals());
+
+  it('uses scoped collaboration, task, version, delivery, audit, and preference endpoints',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+
+    await listProjectMembers('project-1');
+    await createProjectMember('project-1',{name:'陈舟',email:'chen@example.com',role:'storyboard_artist',scope:{episode_ids:['episode-1']},capabilities:{shots:['view','edit']}});
+    await updateProjectMember('member-1',{status:'disabled'});
+    await listProductionTasks('project-1');
+    await createProductionTask('project-1',{title:'修正镜头',priority:'high',episode_id:'episode-1',scene_id:null,shot_id:'shot-1',review_thread_id:null,description:'',assignee:'陈舟',due_at:null,checklist:[]});
+    await updateProductionTask('task-1',{status:'completed'});
+    await listEpisodeVersions('episode-1');
+    await createEpisodeVersion('episode-1',{label:'审核前',source:'manual',author:'张伟'});
+    await restoreEpisodeVersion('version-1');
+    await listDeliveryPackages('episode-1');
+    await createDeliveryPackage('episode-1',{release_candidate_id:'candidate-1',preset_name:'平台包',outputs:[{kind:'landscape_video',format:'mp4',enabled:true}]});
+
+    expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method??'GET'])).toEqual([
+      ['/api/projects/project-1/members','GET'],
+      ['/api/projects/project-1/members','POST'],
+      ['/api/project-members/member-1','PATCH'],
+      ['/api/projects/project-1/tasks','GET'],
+      ['/api/projects/project-1/tasks','POST'],
+      ['/api/production-tasks/task-1','PATCH'],
+      ['/api/episodes/episode-1/versions','GET'],
+      ['/api/episodes/episode-1/versions','POST'],
+      ['/api/episode-versions/version-1/restore','POST'],
+      ['/api/episodes/episode-1/delivery-packages','GET'],
+      ['/api/episodes/episode-1/delivery-packages','POST'],
+    ]);
+  });
+});
+
+describe('release publication api',()=>{
+  afterEach(()=>vi.unstubAllGlobals());
+  it('uses release candidate gate, approve, and publish endpoints',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    await createReleaseCandidate('episode-1',{version:'V1',render_path:'projects/p/e/final.mp4',qc_snapshot:{}});
+    await listReleaseCandidates('episode-1');
+    await getReleaseGate('release-1');
+    await approveReleaseCandidate('release-1');
+    await publishReleaseCandidate('release-1',{platform:'internal_master',idempotency_key:'episode-1:release-1:internal_master'});
+    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual(['/api/episodes/episode-1/release-candidates','/api/episodes/episode-1/release-candidates','/api/release-candidates/release-1/gate','/api/release-candidates/release-1/approve','/api/release-candidates/release-1/publish']);
+  });
+  it('creates a time-linked final review thread',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    await createReviewThread('episode-1',{shot_id:'shot-2',timecode_seconds:3,severity:'major',title:'芯片反光过强'});
+    expect(fetchMock).toHaveBeenCalledWith('/api/episodes/episode-1/review-threads',expect.objectContaining({method:'POST',body:JSON.stringify({shot_id:'shot-2',timecode_seconds:3,severity:'major',title:'芯片反光过强'})}));
   });
 });

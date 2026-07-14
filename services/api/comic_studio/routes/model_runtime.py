@@ -4,6 +4,8 @@ from fastapi import APIRouter, BackgroundTasks, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from comic_studio.model_runtime.contracts import (
+    AssetVariantSuggestion,
+    AssetVariantSuggestionRequest,
     Capability,
     ImageRuntimeRequest,
     RuntimeJobRead,
@@ -93,6 +95,22 @@ def text_stream(payload: TextStreamRequest, request: Request):
     )
 
 
+@router.post(
+    "/asset-variant/suggest",
+    response_model=AssetVariantSuggestion,
+)
+async def suggest_asset_variant(
+    payload: AssetVariantSuggestionRequest,
+    request: Request,
+):
+    try:
+        return await request.app.state.model_runtime.suggest_asset_variant(
+            payload.model_dump()
+        )
+    except ModelRuntimeError as error:
+        return _error_response(error)
+
+
 def _create_media_job(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -131,6 +149,7 @@ def image(
             "activate": payload.activate,
             "reference_type": payload.reference_type,
             "label": payload.label,
+            "mode": payload.mode,
         },
     )
 

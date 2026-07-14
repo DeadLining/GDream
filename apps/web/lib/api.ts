@@ -1,178 +1,25 @@
-import type {
-  Asset, DialogueLine, DialoguePatch, EpisodeCreate, EpisodeDetail, EpisodePatch,
-  EpisodeSummary, EpisodeDeletionPreview, EpisodeDeletionResult, Job, Project, ProjectCreate, ProjectDetail, ProjectPatch,
-  ProviderHealth, Shot, ShotPatch, ProductionReadiness, ProductionRun,
-  ProductionRunCreate, ProductionItem, ProviderChannelKind, ProviderChannelsRead,
-  ProviderChannelTestResult, ProviderChannelUpdate, ProviderChannelUpdateRead,
-  MockSshHost, MockSshStart, MockSshStatus,
-  ScriptImport, ScriptImportDraft, ScriptImportMode,
-  ScriptCreate, ScriptDocument, ScriptDocumentSummary, ScriptPatch, ScriptRevision,
-  CharacterReference, CharacterReferenceType, ReviewStatus,
-  ModelInvocation, ModelRuntimeHealth, ModelRuntimeJob,
-  DirectorApplyField, DirectorObject, DirectorStage, DirectorSuggestion, DirectorSuggestionKind,
-  ShotCamera, Transform,
-} from './types';
+// Auto-generated barrel re-export. API functions have been split into ./api/*.ts
+// by resource domain. This file re-exports everything so existing imports
+// (from '../lib/api' or './lib/api') continue to work without changes.
 
-export const API_BASE = '';
-
-export class ApiError extends Error {
-  constructor(message: string, public status: number, public detail: string) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...init,
-      headers: {'content-type': 'application/json', ...init?.headers},
-    });
-  } catch {
-    throw new ApiError('无法连接本地 API', 0, 'connectivity_failure');
-  }
-  if (!response.ok) {
-    const contentType = response.headers.get('content-type') ?? '';
-    const body = contentType.includes('application/json')
-      ? await response.json() as {detail?: unknown}
-      : {detail: await response.text()};
-    const detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail ?? body);
-    if (response.status === 500 && detail.trim() === 'Internal Server Error') {
-      throw new ApiError('本地 API 暂时不可用，请稍后重试', response.status, 'api_proxy_failure');
-    }
-    throw new ApiError(detail || `请求失败 (${response.status})`, response.status, detail);
-  }
-  return response.json() as Promise<T>;
-}
-
-const json = (method: string, body?: unknown): RequestInit => ({
-  method,
-  body: body === undefined ? undefined : JSON.stringify(body),
-});
-
-export const mediaUrl = (path: string) => path.startsWith('http') ? path : `${API_BASE}${path}`;
-export const listProjects = () => apiRequest<Project[]>('/api/projects');
-export const getProject = (id: string) => apiRequest<ProjectDetail>(`/api/projects/${id}`);
-export const createProject = (data: ProjectCreate) => apiRequest<Project>('/api/projects', json('POST', data));
-export const updateProject = (id: string, data: ProjectPatch) => apiRequest<Project>(`/api/projects/${id}`, json('PATCH', data));
-export const createEpisode = (projectId: string, data: EpisodeCreate) => apiRequest<EpisodeSummary>(`/api/projects/${projectId}/episodes`, json('POST', data));
-export const getEpisode = (id: string) => apiRequest<EpisodeDetail>(`/api/episodes/${id}`);
-export const updateEpisode = (id: string, data: EpisodePatch) => apiRequest<EpisodeSummary>(`/api/episodes/${id}`, json('PATCH', data));
-export const previewEpisodeDeletion=(id:string)=>apiRequest<EpisodeDeletionPreview>(`/api/episodes/${id}/deletion-preview`);
-export const deleteEpisode=(id:string)=>apiRequest<EpisodeDeletionResult>(`/api/episodes/${id}`,{method:'DELETE'});
-export const updateShot = (id: string, data: ShotPatch) => apiRequest<Shot>(`/api/shots/${id}`, json('PATCH', data));
-export const updateDialogue = (id: string, data: DialoguePatch) => apiRequest<DialogueLine>(`/api/dialogue/${id}`, json('PATCH', data));
-export const getAsset = (id: string) => apiRequest<Asset>(`/api/assets/${id}`);
-export const startPlanning = (episodeId: string) => apiRequest<Job>(`/api/episodes/${episodeId}/plan`, json('POST'));
-export const startPanelGeneration = (shotId: string, activate = true) => apiRequest<{job_id: string; status: string}>(`/api/shots/${shotId}/panels?${new URLSearchParams({activate: String(activate)})}`, json('POST'));
-export const listPanelVersions = (shotId: string) => apiRequest<Asset[]>(`/api/shots/${shotId}/panels`);
-export const activatePanel = (shotId: string, assetId: string) => apiRequest<Shot>(`/api/shots/${shotId}/panels/${assetId}/active`, json('PUT'));
-export const startVideoGeneration = (shotId:string,activate=true) => apiRequest<{job_id:string;status:string}>(`/api/shots/${shotId}/videos?${new URLSearchParams({activate:String(activate)})}`,json('POST'));
-export const listVideoVersions = (shotId:string) => apiRequest<Asset[]>(`/api/shots/${shotId}/videos`);
-export const activateVideo = (shotId:string,assetId:string) => apiRequest<Shot>(`/api/shots/${shotId}/videos/${assetId}/active`,json('PUT'));
-export const startSpeech = (dialogueId: string) => apiRequest<{job_id: string; status: string}>(`/api/dialogue/${dialogueId}/speech`, json('POST'));
-export const startRender = (episodeId: string) => apiRequest<{job_id: string; status: string}>(`/api/episodes/${episodeId}/render`, json('POST'));
-export const getJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}`);
-export const retryJob = (jobId: string) => apiRequest<Job>(`/api/jobs/${jobId}/retry`, json('POST'));
-export const getProviderHealth = () => apiRequest<ProviderHealth>('/api/providers/health');
-export const getProviderChannels = (signal?: AbortSignal) => apiRequest<ProviderChannelsRead>('/api/provider-channels', {signal});
-export const updateProviderChannel = (kind: ProviderChannelKind, update: ProviderChannelUpdate) =>
-  apiRequest<ProviderChannelUpdateRead>(`/api/provider-channels/${kind}`, json('PUT', update));
-export const testProviderChannel = (kind: ProviderChannelKind, candidate: ProviderChannelUpdate) =>
-  apiRequest<ProviderChannelTestResult>(`/api/provider-channels/${kind}/test`, json('POST', candidate));
-export const getModelRuntimeHealth = () => apiRequest<ModelRuntimeHealth>('/api/model-runtime/health');
-export const getModelRuntimeInvocations = (limit = 50) => apiRequest<ModelInvocation[]>(`/api/model-runtime/invocations?${new URLSearchParams({limit: String(limit)})}`);
-export const retryModelRuntimeJob = (jobId: string) => apiRequest<ModelRuntimeJob>(`/api/model-runtime/jobs/${jobId}/retry`, json('POST'));
-export const getMockSshHosts = (signal?: AbortSignal) => apiRequest<MockSshHost[]>('/api/mock-ssh/hosts', {signal});
-export const getMockSshStatus = (signal?: AbortSignal) => apiRequest<MockSshStatus>('/api/mock-ssh/status', {signal});
-export const startMockSsh = (data: MockSshStart) => apiRequest<MockSshStatus>('/api/mock-ssh/start', json('POST', data));
-export const stopMockSsh = () => apiRequest<MockSshStatus>('/api/mock-ssh/stop', json('POST', {}));
-export const getProductionReadiness = (episodeId:string) => apiRequest<ProductionReadiness>(`/api/episodes/${episodeId}/production-readiness`);
-export const createProductionRun = (episodeId:string,data:ProductionRunCreate) => apiRequest<ProductionRun>(`/api/episodes/${episodeId}/production-runs`,json('POST',data));
-export const getProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}`);
-export const listProductionItems = (runId:string) => apiRequest<ProductionItem[]>(`/api/production-runs/${runId}/items`);
-export const pauseProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/pause`,json('POST'));
-export const continueProductionRun = (runId:string) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/continue`,json('POST'));
-export const retryProductionRun = (runId:string,itemIds?:string[]) => apiRequest<ProductionRun>(`/api/production-runs/${runId}/retry`,json('POST',{item_ids:itemIds}));
-export const createPastedScriptImport = (projectId:string,mode:ScriptImportMode,text:string) => apiRequest<ScriptImport>(`/api/projects/${projectId}/script-imports`,json('POST',{mode,text}));
-export async function uploadScriptImport(projectId:string,mode:ScriptImportMode,file:File):Promise<ScriptImport> {
-  const form = new FormData(); form.set('mode',mode); form.set('file',file);
-  const response = await fetch(`${API_BASE}/api/projects/${projectId}/script-imports`,{method:'POST',body:form});
-  if (!response.ok) {const body=await response.json() as {detail?:unknown}; const detail=String(body.detail??'上传失败'); throw new ApiError(detail,response.status,detail);}
-  return response.json() as Promise<ScriptImport>;
-}
-export const parseScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/parse`,json('POST'));
-export const retryScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/retry`,json('POST'));
-export async function streamScriptGeneration(
-  projectId:string,
-  data:{brief:string;existing_draft:string},
-  handlers:{onChunk:(text:string)=>void;onDone:()=>void;onError?:(message:string)=>void},
-  signal?:AbortSignal,
-):Promise<void>{
-  let response:Response;
-  try{
-    response=await fetch(`${API_BASE}/api/projects/${projectId}/script-generation/stream`,{
-      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data),signal,
-    });
-  }catch(error){
-    if(error instanceof DOMException&&error.name==='AbortError')throw error;
-    throw new ApiError('无法连接本地 API',0,'connectivity_failure');
-  }
-  if(!response.ok||!response.body)throw new ApiError(`流式创作失败 (${response.status})`,response.status,'stream_failure');
-  const reader=response.body.getReader();const decoder=new TextDecoder();let buffer='';
-  const dispatch=(frame:string)=>{let event='';let dataLine='';for(const line of frame.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();if(line.startsWith('data:'))dataLine+=line.slice(5).trim();}if(!event||!dataLine)return;const payload=JSON.parse(dataLine) as {text?:string;message?:string};if(event==='chunk'&&payload.text)handlers.onChunk(payload.text);if(event==='done')handlers.onDone();if(event==='error'){const message=payload.message??'流式创作失败';handlers.onError?.(message);throw new ApiError(message,502,'provider_failure');}};
-  while(true){const {done,value}=await reader.read();buffer+=decoder.decode(value,{stream:!done}).replace(/\r\n/g,'\n');let boundary;while((boundary=buffer.indexOf('\n\n'))>=0){const frame=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);if(frame.trim())dispatch(frame);}if(done)break;}
-  if(buffer.trim())dispatch(buffer);
-}
-export const updateScriptImportDraft = (id:string,draft:ScriptImportDraft) => apiRequest<ScriptImport>(`/api/script-imports/${id}/draft`,json('PATCH',draft));
-export const confirmScriptImport = (id:string) => apiRequest<ScriptImport>(`/api/script-imports/${id}/confirm`,json('POST',{}));
-export const listScripts=(projectId:string)=>apiRequest<ScriptDocumentSummary[]>(`/api/projects/${projectId}/scripts`);
-export const getScript=(id:string)=>apiRequest<ScriptDocument>(`/api/scripts/${id}`);
-export const createScript=(projectId:string,data:ScriptCreate)=>apiRequest<ScriptDocument>(`/api/projects/${projectId}/scripts`,json('POST',data));
-export const patchScript=(id:string,data:ScriptPatch)=>apiRequest<ScriptDocument>(`/api/scripts/${id}`,json('PATCH',data));
-export const finalizeScript=(id:string)=>apiRequest<ScriptDocument>(`/api/scripts/${id}/finalize`,json('POST'));
-export const listScriptRevisions=(id:string)=>apiRequest<ScriptRevision[]>(`/api/scripts/${id}/revisions`);
-export const restoreScriptRevision=(id:string,revisionId:string)=>apiRequest<ScriptDocument>(`/api/scripts/${id}/revisions/${revisionId}/restore`,json('POST'));
-export const parseScript=(id:string)=>apiRequest<ScriptImport>(`/api/scripts/${id}/parse`,json('POST'));
-export async function deleteScript(id:string):Promise<void>{
-  let response:Response;
-  try{response=await fetch(`${API_BASE}/api/scripts/${id}`,{method:'DELETE'});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
-  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=typeof body.detail==='string'?body.detail:JSON.stringify(body.detail??body);throw new ApiError(detail||`请求失败 (${response.status})`,response.status,detail);}
-}
-export async function uploadScript(projectId:string,title:string,file:File):Promise<ScriptDocument>{
-  const form=new FormData();form.set('title',title);form.set('file',file);
-  let response:Response;
-  try{response=await fetch(`${API_BASE}/api/projects/${projectId}/scripts/upload`,{method:'POST',body:form});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
-  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'上传失败');throw new ApiError(detail,response.status,detail);}
-  return response.json() as Promise<ScriptDocument>;
-}
-export async function streamDocumentScript(scriptId:string,data:{brief:string;expected_revision_id:string},handlers:{onChunk:(event:{text:string;revision_id:string;persisted_length:number})=>void;onDone:(event:{revision_id:string})=>void;onError?:(message:string)=>void},signal?:AbortSignal):Promise<void>{
-  let response:Response;
-  try{response=await fetch(`${API_BASE}/api/scripts/${scriptId}/generation/stream`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data),signal});}catch(error){if(error instanceof DOMException&&error.name==='AbortError')throw error;throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
-  if(!response.ok||!response.body){const detail=response.status===409?'revision_conflict':'stream_failure';throw new ApiError(`流式创作失败 (${response.status})`,response.status,detail);}
-  const reader=response.body.getReader();const decoder=new TextDecoder();let buffer='';
-  const dispatch=(frame:string)=>{let event='';let dataLine='';for(const line of frame.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();if(line.startsWith('data:'))dataLine+=line.slice(5).trim();}if(!event||!dataLine)return;const payload=JSON.parse(dataLine) as {text?:string;message?:string;revision_id?:string;persisted_length?:number};if(event==='chunk'&&payload.text&&payload.revision_id)handlers.onChunk({text:payload.text,revision_id:payload.revision_id,persisted_length:payload.persisted_length??0});if(event==='done'&&payload.revision_id)handlers.onDone({revision_id:payload.revision_id});if(event==='error'){const message=payload.message??'流式创作失败';handlers.onError?.(message);throw new ApiError(message,502,'provider_failure');}};
-  while(true){const {done,value}=await reader.read();buffer+=decoder.decode(value,{stream:!done}).replace(/\r\n/g,'\n');let boundary;while((boundary=buffer.indexOf('\n\n'))>=0){const frame=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);if(frame.trim())dispatch(frame);}if(done)break;}if(buffer.trim())dispatch(buffer);
-}
-export const listCharacterReferences = (id:string) => apiRequest<CharacterReference[]>(`/api/characters/${id}/references`);
-export async function uploadCharacterReference(id:string,type:CharacterReferenceType,file:File,label=''):Promise<CharacterReference>{const form=new FormData();form.set('reference_type',type);form.set('label',label);form.set('file',file);const response=await fetch(`${API_BASE}/api/characters/${id}/references/upload`,{method:'POST',body:form});if(!response.ok){const body=await response.json() as {detail?:unknown};throw new ApiError(String(body.detail??'上传失败'),response.status,String(body.detail??''));}return response.json() as Promise<CharacterReference>;}
-export const generateCharacterReference=(id:string,type:CharacterReferenceType,label='')=>apiRequest<CharacterReference>(`/api/characters/${id}/references/generate`,json('POST',{reference_type:type,label}));
-export const updateCharacterReference=(id:string,data:{label?:string;review_status?:ReviewStatus})=>apiRequest<CharacterReference>(`/api/character-references/${id}`,json('PATCH',data));
-export const activateCharacterReference=(characterId:string,referenceId:string)=>apiRequest<CharacterReference>(`/api/characters/${characterId}/references/${referenceId}/active`,json('PUT'));
-
-export const createDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`,json('POST'));
-export const getDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`);
-export const createDirectorObject=(stageId:string,expectedVersion:number,object:{kind:DirectorObject['kind'];source_type:DirectorObject['source_type'];label:string;transform?:Transform;appearance?:Record<string,unknown>;metadata?:Record<string,unknown>;visible?:boolean})=>apiRequest<DirectorObject>(`/api/director-stages/${stageId}/objects`,json('POST',{expected_version:expectedVersion,object}));
-export const updateDirectorObject=(objectId:string,expectedVersion:number,object:Partial<Pick<DirectorObject,'label'|'transform'|'appearance'|'metadata'|'visible'>>)=>apiRequest<DirectorObject>(`/api/director-objects/${objectId}`,json('PATCH',{expected_version:expectedVersion,object}));
-export async function deleteDirectorObject(objectId:string,expectedVersion:number):Promise<void>{await apiRequest(`/api/director-objects/${objectId}`,json('DELETE',{expected_version:expectedVersion}));}
-export const updateDirectorCamera=(stageId:string,shotId:string,expectedVersion:number,camera:Partial<Omit<ShotCamera,'id'|'stage_id'|'shot_id'|'version'|'preview_asset_id'>>)=>apiRequest<ShotCamera>(`/api/director-stages/${stageId}/shots/${shotId}/camera`,json('PUT',{expected_version:expectedVersion,camera}));
-export const createDirectorSuggestion=(stageId:string,shotId:string|null,kind:DirectorSuggestionKind)=>apiRequest<DirectorSuggestion>(`/api/director-stages/${stageId}/suggestions`,json('POST',{shot_id:shotId,kind}));
-export const applyDirectorSuggestionToShot=(stageId:string,shotId:string,suggestionId:string,fields:DirectorApplyField[])=>apiRequest<Shot>(`/api/director-stages/${stageId}/shots/${shotId}/apply-to-shot`,json('POST',{suggestion_id:suggestionId,fields}));
-export async function uploadDirectorPreview(cameraId:string,preview:Blob):Promise<Asset>{
-  const form=new FormData();form.set('file',preview,'preview.png');
-  let response:Response;
-  try{response=await fetch(`${API_BASE}/api/director-cameras/${cameraId}/preview`,{method:'POST',body:form});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
-  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'预览上传失败');throw new ApiError(detail,response.status,detail);}
-  return response.json() as Promise<Asset>;
-}
+export * from './api/core';
+export * from './api/project';
+export * from './api/storyline';
+export * from './api/episode';
+export * from './api/shot';
+export * from './api/provider';
+export * from './api/model-runtime';
+export * from './api/mock-ssh';
+export * from './api/production';
+export * from './api/script-import';
+export * from './api/script';
+export * from './api/chapter';
+export * from './api/character';
+export * from './api/asset-variant-ai';
+export * from './api/visual-review';
+export * from './api/review-publish';
+export * from './api/team';
+export * from './api/workspace';
+export * from './api/director';
+export * from './api/skill';
+export * from './api/portability';

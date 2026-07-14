@@ -42,6 +42,18 @@ class FakeRuntime:
             "reloaded_at": "2026-07-12T00:00:00Z",
         }
 
+    async def suggest_asset_variant(self, payload):
+        self.suggestion_payload = payload
+        return {
+            "kind": "episode",
+            "label": "第 01 集唐代造型",
+            "summary": "保留身份特征，替换为唐代书生服装。",
+            "inherited_fields": ["identity", "face"],
+            "overrides": {"outfit": "唐代书生服装"},
+            "state_kind": None,
+            "assistant_message": "建议创建为集级变体。",
+        }
+
 
 def test_image_runtime_returns_normalized_accepted_job(client):
     runtime = FakeRuntime()
@@ -59,6 +71,71 @@ def test_image_runtime_returns_normalized_accepted_job(client):
         "status": "queued",
     }
     assert runtime.created[0] is Capability.IMAGE
+
+
+def test_character_reference_set_mode_is_passed_to_runtime(client):
+    runtime = FakeRuntime()
+    client.app.state.model_runtime = runtime
+
+    response = client.post(
+        "/api/model-runtime/image",
+        json={
+            "target_type": "character",
+            "target_id": "c1",
+            "mode": "reference_set",
+        },
+    )
+
+    assert response.status_code == 202
+    assert runtime.created == (
+        Capability.IMAGE,
+        "character",
+        "c1",
+        {
+            "activate": True,
+            "reference_type": "primary",
+            "label": "",
+            "mode": "reference_set",
+        },
+    )
+
+
+def test_character_reference_set_mode_rejects_shot_target(client):
+    client.app.state.model_runtime = FakeRuntime()
+
+    response = client.post(
+        "/api/model-runtime/image",
+        json={
+            "target_type": "shot",
+            "target_id": "s1",
+            "mode": "reference_set",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_asset_variant_suggestion_returns_a_structured_ai_draft(client):
+    runtime = FakeRuntime()
+    client.app.state.model_runtime = runtime
+
+    response = client.post(
+        "/api/model-runtime/asset-variant/suggest",
+        json={
+            "character_id": "c1",
+            "episode_id": "e1",
+            "message": "第一集换成唐代书生服装，保持脸型。",
+            "character": {"name": "林夏", "appearance_bible": "黑色风衣"},
+            "episode": {"title": "雨夜危机"},
+            "conversation": [],
+            "annotations": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["kind"] == "episode"
+    assert response.json()["overrides"] == {"outfit": "唐代书生服装"}
+    assert runtime.suggestion_payload["message"] == "第一集换成唐代书生服装，保持脸型。"
 
 
 def test_runtime_error_uses_stable_error_envelope(client):

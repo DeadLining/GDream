@@ -66,4 +66,34 @@ describe('Storyboard', () => {
     expect(onSelect).toHaveBeenCalledWith(shots[1]);
     expect(screen.queryByRole('button', {name: /生成画面/})).not.toBeInTheDocument();
   });
+
+  it('opens the 3D director canvas for the selected shot', async () => {
+    const onOpenDirector = vi.fn();
+    render(<Storyboard episode={episode} selectedId="shot-2" onSelect={vi.fn()} onPlan={vi.fn()} onOpenDirector={onOpenDirector} job={null}/>);
+
+    await userEvent.click(screen.getByRole('button', {name: '打开 3D 导演台'}));
+
+    expect(onOpenDirector).toHaveBeenCalledWith('shot-2');
+  });
+
+  it('renders tail-frame continuity links between shots', () => {
+    const linkedEpisode: EpisodeDetail = {
+      ...episode,
+      scenes: episode.scenes.map(scene => ({
+        ...scene,
+        shots: scene.shots.map((shot, index) =>
+          index === 1
+            ? {...shot, previous_shot_tail_asset_id: 'asset-1'}
+            : index === 0
+              ? {...shot, active_panel_asset_id: 'asset-1'}
+              : shot
+        ),
+      })),
+    };
+    render(<Storyboard episode={linkedEpisode} selectedId={null} onSelect={vi.fn()} onPlan={vi.fn()} job={null}/>);
+
+    const source = screen.getByRole('button', {name: /镜头 1/});
+    expect(source).toHaveClass('tail-source');
+    expect(screen.getByRole('button', {name: /镜头 2/})).toHaveTextContent('尾帧');
+  });
 });

@@ -52,3 +52,98 @@ def test_video_stage_queues_eligible_shots_and_skips_missing_panels(client):
     items = client.get(f"/api/production-runs/{response.json()['id']}/items").json()
     assert [(item['target_id'],item['status']) for item in items] == [(ready_shot,'queued'),(missing_shot,'skipped')]
     assert response.json()['regenerate_videos'] is True
+
+
+def test_create_shot_group_run_only_snapshots_selected_shots(client):
+    episode_id, ready_shot, missing_shot, ready_line, missing_line = seed_mixed_episode(client)
+
+    response = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels", "speech"], "shot_ids": [missing_shot]},
+    )
+
+    assert response.status_code == 202
+    run = response.json()
+    assert run["scope_type"] == "shot_group"
+    assert run["shot_ids"] == [missing_shot]
+    items = client.get(f"/api/production-runs/{run['id']}/items").json()
+    # Only the selected shot (missing_shot) and its dialogue line are snapshotted.
+    assert [item["target_id"] for item in items] == [missing_shot, missing_line]
+    assert run["total_items"] == 2
+
+
+def test_episode_run_conflict_does_not_block_non_overlapping_shot_group_run(client):
+    episode_id, ready_shot, missing_shot, _, _ = seed_mixed_episode(client)
+
+    # Episode-scope run already active.
+    first = client.post(f"/api/episodes/{episode_id}/production-runs", json={"stages": ["panels"]})
+    assert first.status_code == 202
+
+    # Shot-group run targeting a non-overlapping shot is allowed.
+    group = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels"], "shot_ids": [missing_shot]},
+    )
+    assert group.status_code == 202
+    assert group.json()["scope_type"] == "shot_group"
+
+
+def test_shot_group_run_rejects_overlapping_shot(client):
+    episode_id, ready_shot, missing_shot, _, _ = seed_mixed_episode(client)
+
+    first = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels"], "shot_ids": [ready_shot, missing_shot]},
+    )
+    assert first.status_code == 202
+
+    # Overlap on ready_shot -> 409.
+    second = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels"], "shot_ids": [ready_shot]},
+    )
+    assert second.status_code == 409
+
+
+def test_episode_scope_run_still_mutually_exclusive(client):
+    episode_id, _, _, _, _ = seed_mixed_episode(client)
+
+    first = client.post(f"/api/episodes/{episode_id}/production-runs", json={"stages": ["panels"]})
+    assert first.status_code == 202
+
+    second = client.post(f"/api/episodes/{episode_id}/production-runs", json={"stages": ["panels"]})
+    assert second.status_code == 409
+
+
+def seed_grid_episode(client):
+    with client.app.state.session_factory() as session:
+        project = models.Project(title="Grid test", logline="x", story_bible="x", visual_style="comic")
+        episode = models.Episode(project=project, title="Grid ep", premise="x", target_duration_seconds=60)
+        scene = models.Scene(episode=episode, position=1, location="street", summary="chase", estimated_duration_seconds=8)
+        shots = [
+            models.Shot(scene=scene, position=i, shot_type="wide", duration_seconds=2, composition=f"shot-{i}", image_prompt=f"prompt-{i}")
+            for i in range(1, 6)
+        ]
+        session.add_all(shots); session.flush()
+        session.commit()
+        return episode.id, [shot.id for shot in shots]
+
+
+def test_grid_mode_groups_shots_by_scene_in_chunks_of_four(client):
+    episode_id, shot_ids = seed_grid_episode(client)
+
+    response = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels"], "panel_generation_mode": "grid"},
+    )
+
+    assert response.status_code == 202
+    run = response.json()
+    assert run["panel_generation_mode"] == "grid"
+    items = client.get(f"/api/production-runs/{run['id']}/items").json()
+    assert len(items) == 2
+    assert items[0]["target_type"] == "grid_panel"
+    assert items[0]["target_id"] == ",".join(shot_ids[:4])
+    assert items[1]["target_type"] == "grid_panel"
+    assert items[1]["target_id"] == shot_ids[4]
+    assert all(item["status"] == "queued" for item in items)
