@@ -39,6 +39,28 @@ def test_camera_update_rejects_stale_version(db_session):
     assert error.value.latest_version==2
 
 
+def test_camera_object_overrides_are_scoped_and_cleaned_when_object_is_deleted(db_session):
+    scene=_scene(db_session);service=DirectorStageService(db_session);stage=service.get_or_create_stage(scene.id)
+    created=service.create_object(stage.id,1,DirectorObjectCreate(kind="character",source_type="placeholder",label="林夏"))
+    camera=stage.shot_cameras[0]
+    overridden=service.update_camera(stage.id,camera.shot_id,camera.version,ShotCameraPatch(object_overrides={created.id:{"transform":{"position":[2,0,0],"rotation":[0,0,0],"scale":[1,1,1]},"visible":False}}))
+    assert overridden.object_overrides[created.id]["transform"]["position"]==[2.0,0.0,0.0]
+    assert overridden.object_overrides[created.id]["visible"] is False
+
+    service.delete_object(created.id,2)
+
+    assert service.get_stage(stage.id).shot_cameras[0].object_overrides=={}
+
+
+def test_camera_object_overrides_reject_objects_from_another_stage(db_session):
+    first_scene=_scene(db_session);service=DirectorStageService(db_session);first=service.get_or_create_stage(first_scene.id)
+    second_scene=_scene(db_session);second=service.get_or_create_stage(second_scene.id)
+    foreign=service.create_object(second.id,1,DirectorObjectCreate(kind="prop",source_type="placeholder",label="外部道具"))
+    camera=first.shot_cameras[0]
+    with pytest.raises(ValueError,match="director_object_not_in_stage"):
+        service.update_camera(first.id,camera.shot_id,camera.version,ShotCameraPatch(object_overrides={foreign.id:{"visible":False}}))
+
+
 def test_update_delete_and_restore_stage_objects(db_session):
     scene=_scene(db_session);service=DirectorStageService(db_session);stage=service.get_or_create_stage(scene.id)
     created=service.create_object(stage.id,1,DirectorObjectCreate(kind="primitive",source_type="placeholder",label="箱子"))
