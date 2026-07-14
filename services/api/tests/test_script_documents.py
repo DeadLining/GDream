@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from comic_studio import models
 from comic_studio.services.script_documents import (
+    ScriptAlreadyExists,
     ScriptDocumentHasEpisodes,
     ScriptDocumentService,
     ScriptRevisionConflict,
@@ -149,19 +150,18 @@ def test_script_import_episode_links_confirmed_episode_to_revision(db_session):
     assert link.episode == episode
 
 
-def test_script_document_service_creates_and_lists_latest_first(db_session):
+def test_script_document_service_allows_only_one_script_per_project(db_session):
     project = _project(db_session)
     service = ScriptDocumentService(db_session)
 
     first = service.create(project.id, "第一份", "paste", "第一集", "paste")
-    second = service.create(project.id, "第二份", "ai", "第二集", "ai")
 
-    assert [item.id for item in service.list_for_project(project.id)] == [
-        second.id,
-        first.id,
-    ]
-    assert second.current_revision_id is not None
-    assert second.revisions[0].status == "working"
+    with pytest.raises(ScriptAlreadyExists):
+        service.create(project.id, "第二份", "ai", "第二集", "ai")
+
+    assert [item.id for item in service.list_for_project(project.id)] == [first.id]
+    assert first.current_revision_id is not None
+    assert first.revisions[0].status == "working"
 
 
 def test_script_document_service_saves_with_optimistic_checksum(db_session):
@@ -290,6 +290,13 @@ def test_script_document_routes_create_list_save_restore_and_delete(client):
     script_id = created["id"]
     original_revision = created["current_revision"]
 
+    duplicate = client.post(
+        f"/api/projects/{project['id']}/scripts",
+        json={"title": "第二份", "source_type": "ai", "content": "重复"},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "Project already has a script"
+
     listed = client.get(f"/api/projects/{project['id']}/scripts")
     assert listed.status_code == 200
     assert listed.json()[0]["id"] == script_id
@@ -355,6 +362,23 @@ def test_script_upload_route_retains_original_file(client):
     )
 
     assert response.status_code == 201
+    script_id = response.json()["id"]
     revision = response.json()["current_revision"]
+    assert revision["status"] == "finalized"
     assert revision["original_filename"] == "story.txt"
     assert revision["source_file_path"].endswith(".txt")
+
+    replacement = client.post(
+        f"/api/projects/{project['id']}/scripts/upload",
+        data={"title": "上传剧本"},
+        files={"file": ("story-v2.txt", "第二版：黎明".encode(), "text/plain")},
+    )
+
+    assert replacement.status_code == 201
+    assert replacement.json()["id"] == script_id
+    assert replacement.json()["revision_count"] == 2
+    assert replacement.json()["current_revision"]["revision_number"] == 2
+    assert replacement.json()["current_revision"]["content"] == "第二版：黎明"
+    assert replacement.json()["current_revision"]["creation_method"] == "upload"
+    listed = client.get(f"/api/projects/{project['id']}/scripts").json()
+    assert [item["id"] for item in listed] == [script_id]
