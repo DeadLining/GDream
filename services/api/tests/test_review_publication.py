@@ -1,7 +1,9 @@
+from pathlib import Path
+
 from comic_studio import models
 
 
-def _ready_episode(client):
+def _ready_episode(client, *, video_ready=True):
     project=client.post("/api/projects",json={"title":"终审作品","logline":"发布","story_bible":"一致性","visual_style":"comic","aspect_ratio":"9:16"}).json()
     episode=client.post(f"/api/projects/{project['id']}/episodes",json={"title":"第一集","premise":"完成制作","target_duration_seconds":60}).json()
     with client.app.state.session_factory() as session:
@@ -9,9 +11,24 @@ def _ready_episode(client):
         session.add(scene);session.flush()
         asset=models.Asset(project_id=project["id"],kind="panel",local_path="panel.png",media_type="image/png",provider="test",model="test",request_metadata={},checksum="panel",review_status="approved")
         session.add(asset);session.flush()
-        shot=models.Shot(scene_id=scene.id,position=1,shot_type="wide",duration_seconds=8,composition="完成镜头",camera_motion="static",character_state={},image_prompt="done",negative_prompt="",active_panel_asset_id=asset.id,review_status="approved",render_status="completed")
+        video=models.Asset(project_id=project["id"],kind="video",local_path="video.mp4",media_type="video/mp4",provider="test",model="test",request_metadata={},checksum="video",review_status="approved")
+        session.add(video);session.flush()
+        shot=models.Shot(scene_id=scene.id,position=1,shot_type="wide",duration_seconds=8,composition="完成镜头",camera_motion="static",character_state={},image_prompt="done",negative_prompt="",active_panel_asset_id=asset.id,active_video_asset_id=video.id if video_ready else None,review_status="approved",render_status="completed")
         session.add(shot);session.commit()
         return project,episode,shot.id
+
+
+def _register_render(client, project_id, episode_id, *, overall_pass=True, name="final"):
+    relative_path=f"projects/{project_id}/episodes/{episode_id}/renders/{name}.mp4"
+    output=Path(client.app.state.settings.data_root)/relative_path
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_bytes(b"render")
+    with client.app.state.session_factory() as session:
+        job=models.Job(operation="render_episode",target_type="episode",target_id=episode_id,status="succeeded",progress=100,request_payload={},result_metadata={"episode_id":episode_id,"output_path":relative_path})
+        session.add(job);session.flush()
+        session.add(models.RenderReviewRecord(episode_id=episode_id,job_id=job.id,render_path=str(output),ffprobe_json={},black_frame_positions=[] if overall_pass else [1.0],silence_ranges=[],subtitle_present=True,overall_pass=overall_pass,findings=[] if overall_pass else [{"code":"black_frames","severity":"critical"}]))
+        session.commit()
+    return relative_path
 
 
 def test_publish_gate_requires_resolved_critical_threads_and_is_idempotent(client):
@@ -27,9 +44,10 @@ def test_publish_gate_requires_resolved_critical_threads_and_is_idempotent(clien
         json={"author_kind":"user","content":"请恢复主设定脸型。"},
     )
     assert message.status_code==201
+    render_path=_register_render(client,_project["id"],episode["id"])
     candidate=client.post(
         f"/api/episodes/{episode['id']}/release-candidates",
-        json={"version":"V1","render_path":"projects/p/episodes/e/renders/final.mp4","qc_snapshot":{"black_frames":0}},
+        json={"version":"V1","render_path":render_path,"qc_snapshot":{"black_frames":0}},
     )
     assert candidate.status_code==201
     candidate=candidate.json()
@@ -69,11 +87,12 @@ def test_review_thread_rejects_shot_from_another_episode(client):
 
 
 def test_release_candidates_can_be_listed_in_version_order(client):
-    _project,episode,_shot_id=_ready_episode(client)
+    project,episode,_shot_id=_ready_episode(client)
     for version in ("V2","V1"):
+        render_path=_register_render(client,project["id"],episode["id"],name=version)
         response=client.post(
             f"/api/episodes/{episode['id']}/release-candidates",
-            json={"version":version,"render_path":f"projects/p/{version}.mp4","qc_snapshot":{}},
+            json={"version":version,"render_path":render_path,"qc_snapshot":{}},
         )
         assert response.status_code==201
 
@@ -88,3 +107,41 @@ def test_release_candidate_list_rejects_unknown_episode(client):
 
     assert response.status_code==404
     assert response.json()["detail"]=="Episode not found"
+
+
+def test_release_candidate_rejects_a_path_without_successful_render_provenance(client):
+    project,episode,_shot_id=_ready_episode(client)
+    relative_path=f"projects/{project['id']}/episodes/{episode['id']}/renders/unproven.mp4"
+    output=Path(client.app.state.settings.data_root)/relative_path
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_bytes(b"not produced by a render job")
+
+    response=client.post(f"/api/episodes/{episode['id']}/release-candidates",json={"version":"V1","render_path":relative_path,"qc_snapshot":{}})
+
+    assert response.status_code==422
+    assert response.json()["detail"]=="Render path must come from a successful episode render"
+
+
+def test_release_gate_uses_server_qc_and_blocks_failed_render_review(client):
+    project,episode,_shot_id=_ready_episode(client)
+    render_path=_register_render(client,project["id"],episode["id"],overall_pass=False)
+
+    response=client.post(f"/api/episodes/{episode['id']}/release-candidates",json={"version":"V1","render_path":render_path,"qc_snapshot":{"overall_pass":True}})
+
+    assert response.status_code==201
+    candidate=response.json()
+    assert candidate["qc_snapshot"]["overall_pass"] is False
+    assert client.get(f"/api/release-candidates/{candidate['id']}/gate").json()["ready"] is False
+    assert client.post(f"/api/release-candidates/{candidate['id']}/approve").status_code==409
+
+
+def test_release_gate_requires_active_videos_for_every_shot(client):
+    project,episode,_shot_id=_ready_episode(client,video_ready=False)
+    render_path=_register_render(client,project["id"],episode["id"])
+    candidate=client.post(f"/api/episodes/{episode['id']}/release-candidates",json={"version":"V1","render_path":render_path,"qc_snapshot":{}}).json()
+
+    gate=client.get(f"/api/release-candidates/{candidate['id']}/gate").json()
+
+    assert gate["ready"] is False
+    assert gate["production_ready"] is False
+    assert gate["production_blockers"]["missing_videos"]

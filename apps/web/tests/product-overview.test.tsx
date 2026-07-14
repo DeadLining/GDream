@@ -30,6 +30,19 @@ describe('ProductOverview', () => {
     expect(onOpenEpisode).toHaveBeenCalledWith('episode-1');
   });
 
+  it('keeps unassigned episodes visible and opens the selected episode from the primary action', async () => {
+    const unassigned = {...project.episodes[0], id: 'episode-2', title: '未归卷第二集'};
+    const multiEpisodeProject = {...project, episodes: [project.episodes[0], unassigned]};
+    const selectedEpisode: EpisodeDetail = {...unassigned, scenes: []};
+    const onOpenEpisode = vi.fn();
+
+    render(<ProductOverview project={multiEpisodeProject} episode={selectedEpisode} readiness={null} volumes={volumes} storylines={storylines} onOpenEpisode={onOpenEpisode} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
+
+    expect(screen.getByText('未归卷第二集')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', {name: '进入制作'}));
+    expect(onOpenEpisode).toHaveBeenCalledWith('episode-2');
+  });
+
   it('creates the next volume from the work overview', async () => {
     const onCreateVolume = vi.fn().mockResolvedValue(undefined);
     render(<ProductOverview project={project} episode={episode} readiness={readiness} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()} onCreateVolume={onCreateVolume}/>);
