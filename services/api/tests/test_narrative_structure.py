@@ -68,6 +68,102 @@ def test_volume_rejects_duplicate_position(client):
     assert response.json()["detail"] == "Volume position already exists"
 
 
+def test_episode_can_move_between_volumes_and_back_to_unassigned(client):
+    project = _project(client, "跨卷调度")
+    first_volume = client.post(
+        f"/api/projects/{project['id']}/volumes",
+        json={"title": "第一卷", "summary": "", "position": 1},
+    ).json()
+    second_volume = client.post(
+        f"/api/projects/{project['id']}/volumes",
+        json={"title": "第二卷", "summary": "", "position": 2},
+    ).json()
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "游离剧集", "premise": "等待归卷", "target_duration_seconds": 60},
+    ).json()
+
+    assigned = client.put(
+        f"/api/episodes/{episode['id']}/volume",
+        json={"volume_id": first_volume["id"]},
+    )
+    moved = client.put(
+        f"/api/episodes/{episode['id']}/volume",
+        json={"volume_id": second_volume["id"]},
+    )
+    unassigned = client.put(
+        f"/api/episodes/{episode['id']}/volume",
+        json={"volume_id": None},
+    )
+
+    assert assigned.status_code == 200
+    assert assigned.json()["volume_id"] == first_volume["id"]
+    assert assigned.json()["position"] == 1
+    assert moved.status_code == 200
+    assert moved.json()["volume_id"] == second_volume["id"]
+    assert moved.json()["position"] == 1
+    assert unassigned.status_code == 200
+    assert unassigned.json()["volume_id"] is None
+    assert unassigned.json()["position"] == 1
+    volumes = client.get(f"/api/projects/{project['id']}/volumes").json()
+    assert [volume["episodes"] for volume in volumes] == [[], []]
+
+
+def test_episode_move_rejects_volume_from_another_project(client):
+    owner = _project(client, "剧集所属作品")
+    other = _project(client, "其他作品")
+    episode = client.post(
+        f"/api/projects/{owner['id']}/episodes",
+        json={"title": "本作品剧集", "premise": "不能越界", "target_duration_seconds": 60},
+    ).json()
+    foreign_volume = client.post(
+        f"/api/projects/{other['id']}/volumes",
+        json={"title": "外部卷", "summary": "", "position": 1},
+    ).json()
+
+    response = client.put(
+        f"/api/episodes/{episode['id']}/volume",
+        json={"volume_id": foreign_volume["id"]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Volume must belong to the episode project"
+
+
+def test_deleting_volume_returns_episodes_to_unassigned_in_stable_order(client):
+    project = _project(client, "删除篇章")
+    existing = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "原未归卷", "premise": "保留首位", "target_duration_seconds": 60},
+    ).json()
+    volume = client.post(
+        f"/api/projects/{project['id']}/volumes",
+        json={"title": "待删除卷", "summary": "", "position": 1},
+    ).json()
+    for position, title in ((1, "卷内第一集"), (2, "卷内第二集")):
+        response = client.post(
+            f"/api/volumes/{volume['id']}/episodes",
+            json={
+                "title": title,
+                "premise": "删除后回归",
+                "target_duration_seconds": 60,
+                "position": position,
+            },
+        )
+        assert response.status_code == 201
+
+    deleted = client.delete(f"/api/volumes/{volume['id']}")
+
+    assert deleted.status_code == 204
+    assert client.get(f"/api/projects/{project['id']}/volumes").json() == []
+    loaded = client.get(f"/api/projects/{project['id']}").json()
+    assert [(item["title"], item["position"]) for item in loaded["episodes"]] == [
+        (existing["title"], 1),
+        ("卷内第一集", 2),
+        ("卷内第二集", 3),
+    ]
+
+
 def test_storyline_tracks_events_across_episodes(client):
     project = _project(client, "跨集伏笔")
     episode_ids = []

@@ -79,4 +79,43 @@ describe('ProductOverview', () => {
       title:'裂缝觉醒',summary:'稳定排序后的第一篇章',position:2,
     });
   });
+
+  it('renders every volume separately and moves episodes across volume boundaries', async () => {
+    const secondEpisode = {...project.episodes[0], id:'episode-2', title:'深入裂缝', volume_id:'volume-2', position:1};
+    const unassignedEpisode = {...project.episodes[0], id:'episode-3', title:'卷外余波', volume_id:null, position:1};
+    const multiVolumeProject = {...project, episodes:[project.episodes[0], secondEpisode, unassignedEpisode]};
+    const multiVolumes:Volume[] = [
+      volumes[0],
+      {id:'volume-2',project_id:'project-1',position:2,title:'迷雾深处',summary:'第二卷',created_at:'',updated_at:'',episodes:[secondEpisode]},
+    ];
+    const onMoveEpisode = vi.fn().mockResolvedValue(undefined);
+
+    render(<ProductOverview project={multiVolumeProject} episode={episode} readiness={readiness} volumes={multiVolumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()} onMoveEpisode={onMoveEpisode}/>);
+
+    expect(screen.getByRole('heading',{name:'裂缝初现'})).toBeVisible();
+    expect(screen.getByRole('heading',{name:'迷雾深处'})).toBeVisible();
+    expect(screen.getByRole('heading',{name:'未归卷剧集'})).toBeVisible();
+    expect(screen.getByText('深入裂缝')).toBeVisible();
+    expect(screen.getByText('卷外余波')).toBeVisible();
+
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'剧集 深入裂缝 所属卷'}),'volume-1');
+    expect(onMoveEpisode).toHaveBeenCalledWith('episode-2','volume-1');
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'剧集 卷外余波 所属卷'}),'volume-2');
+    expect(onMoveEpisode).toHaveBeenCalledWith('episode-3','volume-2');
+  });
+
+  it('edits and deletes any selected volume', async () => {
+    const secondVolume:Volume = {id:'volume-2',project_id:'project-1',position:2,title:'迷雾深处',summary:'第二卷',created_at:'',updated_at:'',episodes:[]};
+    const onUpdateVolume=vi.fn().mockResolvedValue(undefined);
+    const onDeleteVolume=vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+
+    render(<ProductOverview project={project} episode={episode} readiness={readiness} volumes={[...volumes,secondVolume]} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()} onUpdateVolume={onUpdateVolume} onDeleteVolume={onDeleteVolume}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'编辑卷 迷雾深处'}));
+    expect(screen.getByRole('textbox',{name:'卷标题'})).toHaveValue('迷雾深处');
+    await userEvent.click(screen.getByRole('button',{name:'关闭卷表单'}));
+    await userEvent.click(screen.getByRole('button',{name:'删除卷 迷雾深处'}));
+    expect(onDeleteVolume).toHaveBeenCalledWith('volume-2');
+  });
 });

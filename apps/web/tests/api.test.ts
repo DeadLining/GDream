@@ -15,9 +15,11 @@ import {
   updateDirectorCamera,
   uploadDirectorPreview,
   createVolume,
+  deleteVolume,
   createStoryline,
   createStorylineEvent,
   updateVolume,
+  moveEpisodeToVolume,
   updateStoryline,
   updateStorylineEvent,
   deleteStorylineEvent,
@@ -225,12 +227,18 @@ describe('narrative structure api', () => {
     vi.stubGlobal('fetch',fetchMock);
 
     await updateVolume('volume-1',{title:'新卷名',summary:'新简介',position:2});
+    await moveEpisodeToVolume('episode-1','volume-2');
+    await moveEpisodeToVolume('episode-1',null);
+    await deleteVolume('volume-1');
     await updateStoryline('line-1',{title:'成长线',kind:'character_arc',color:'#235789',description:'跨集成长'});
     await updateStorylineEvent('event-1',{episode_id:'episode-3',position:4,stage:'payoff',title:'完成选择',description:'回收伏笔'});
     await deleteStorylineEvent('event-1');
 
     expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method])).toEqual([
       ['/api/volumes/volume-1','PATCH'],
+      ['/api/episodes/episode-1/volume','PUT'],
+      ['/api/episodes/episode-1/volume','PUT'],
+      ['/api/volumes/volume-1','DELETE'],
       ['/api/storylines/line-1','PATCH'],
       ['/api/storyline-events/event-1','PATCH'],
       ['/api/storyline-events/event-1','DELETE'],
