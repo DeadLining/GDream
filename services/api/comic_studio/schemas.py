@@ -674,14 +674,58 @@ class ShotRead(BaseModel):
 
 
 class ShotPatch(PatchModel):
+    shot_type: str | None = Field(default=None, min_length=1, max_length=80)
     duration_seconds: float | None = Field(default=None, gt=0, le=30)
     composition: str | None = Field(default=None, min_length=1)
     camera_motion: str | None = Field(default=None, min_length=1, max_length=80)
+    character_state: dict | None = None
     image_prompt: str | None = Field(default=None, min_length=1)
     negative_prompt: str | None = None
     review_status: ReviewStatus | None = None
     video_prompt: str | None = None
     negative_video_prompt: str | None = None
+
+
+class ShotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    shot_type: str = Field(min_length=1, max_length=80)
+    duration_seconds: float = Field(gt=0, le=30)
+    composition: str = Field(min_length=1)
+    camera_motion: str = Field(default="static", min_length=1, max_length=80)
+    character_state: dict = Field(default_factory=dict)
+    image_prompt: str = Field(min_length=1)
+    negative_prompt: str = ""
+    video_prompt: str = ""
+    negative_video_prompt: str = ""
+
+
+class SceneCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    location: str = Field(min_length=1, max_length=200)
+    time_of_day: str = Field(default="", max_length=80)
+    summary: str = Field(min_length=1)
+    continuity_state: dict = Field(default_factory=dict)
+    estimated_duration_seconds: float = Field(gt=0, le=1800)
+
+
+class ScenePatch(PatchModel):
+    location: str | None = Field(default=None, min_length=1, max_length=200)
+    time_of_day: str | None = Field(default=None, max_length=80)
+    summary: str | None = Field(default=None, min_length=1)
+    continuity_state: dict | None = None
+    estimated_duration_seconds: float | None = Field(default=None, gt=0, le=1800)
+
+
+class StructureOrderUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ids: list[str] = Field(min_length=1, max_length=10000)
+
+
+class StructureMutationRead(BaseModel):
+    episode_id: str
+    resource_id: str
+    affected_shot_ids: list[str]
+    invalidated_stages: list[Literal["panels", "videos"]]
 
 
 class SceneRead(BaseModel):

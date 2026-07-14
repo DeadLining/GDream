@@ -44,3 +44,7 @@ export type EpisodeCreate = Pick<EpisodeSummary, 'title' | 'premise' | 'target_d
 export type EpisodePatch = Partial<EpisodeCreate>;
 export type ShotPatch = Partial<Pick<Shot, 'duration_seconds' | 'composition' | 'camera_motion' | 'image_prompt' | 'negative_prompt' | 'video_prompt' | 'negative_video_prompt' | 'review_status' | 'previous_shot_tail_asset_id'>>;
 export type DialoguePatch = Partial<Pick<DialogueLine, 'character_id' | 'text' | 'subtitle_text' | 'emotion' | 'performance_instruction' | 'start_seconds'>>;
+export type SceneCreate=Pick<Scene,'location'|'time_of_day'|'summary'|'continuity_state'|'estimated_duration_seconds'>;
+export type ScenePatch=Partial<SceneCreate>;
+export type StructureShotCreate=Pick<Shot,'shot_type'|'duration_seconds'|'composition'|'camera_motion'|'character_state'|'image_prompt'|'negative_prompt'>&Pick<Shot,'video_prompt'|'negative_video_prompt'>;
+export type StructureMutation={episode_id:string;resource_id:string;affected_shot_ids:string[];invalidated_stages:Array<'panels'|'videos'>};

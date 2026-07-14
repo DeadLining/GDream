@@ -6,6 +6,7 @@ export * from './api/core';
 export * from './api/project';
 export * from './api/storyline';
 export * from './api/episode';
+export * from './api/scene-structure';
 export * from './api/shot';
 export * from './api/provider';
 export * from './api/model-runtime';

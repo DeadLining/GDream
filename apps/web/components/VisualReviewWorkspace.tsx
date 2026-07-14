@@ -1,10 +1,11 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {ArrowRight, Check, Circle, GitCompareArrows, MessageSquareText, MousePointer2, PenLine, RectangleHorizontal, Sparkles, Trash2} from 'lucide-react';
+import {Check, Circle, GitCompareArrows, MessageSquareText, MousePointer2, PenLine, RectangleHorizontal, Sparkles, Trash2} from 'lucide-react';
 import {acceptVisualReviewCandidate,createVisualAnnotation,createVisualReviewMessage,createVisualReviewThread,deleteVisualAnnotation,getAsset,listVisualReviewThreads,mediaUrl,rejectVisualReviewCandidate,startVisualReviewGeneration,updateVisualAnnotation,updateVisualReviewThread} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import type {EpisodeDetail,VisualReviewThread} from '../lib/types';
+import {ReviewVersionStrip} from './ReviewVersionStrip';
 
 type Scope = 'shot' | 'episode' | 'master';
 type AnnotationTool = 'select' | 'circle' | 'rectangle' | 'path';
@@ -71,7 +72,7 @@ export function VisualReviewWorkspace({episode, selectedShotId, onSelectShot}: {
       <div className="review-canvas" aria-label="审阅画布">
         {panelUrl ? <div className="review-image-stage"><img src={panelUrl} alt={selected.shot.composition}/><div className="review-annotation-layer" aria-label="图片标注层" onPointerDown={beginAnnotation} onPointerMove={moveAnnotation} onPointerUp={event=>void finishAnnotation(event)}>{thread?.annotations.map((item,index)=>{const geometry=item.geometry as Record<string,number>;const style=item.kind==='circle'?{left:`${(geometry.cx-geometry.rx)*100}%`,top:`${(geometry.cy-geometry.ry)*100}%`,width:`${geometry.rx*200}%`,height:`${geometry.ry*200}%`}:item.kind==='rectangle'?{left:`${geometry.x*100}%`,top:`${geometry.y*100}%`,width:`${geometry.width*100}%`,height:`${geometry.height*100}%`}:undefined;return <button type="button" key={item.id} className={`annotation-pin annotation-${item.kind} ${annotation?.id===item.id?'active':''}`} aria-label={`标注 ${String(index+1).padStart(2,'0')} ${item.label}`} style={style} onPointerDown={event=>event.stopPropagation()} onClick={()=>setAnnotationId(item.id)}>{String(index+1).padStart(2,'0')}</button>;})}</div></div> : <div className="review-canvas-empty"><span>当前镜头尚无画面</span></div>}
       </div>
-      <footer className="review-version-strip"><div><span>版本记录</span><strong>V4 当前</strong></div>{['V1','V2','V3','V4 当前','V5 候选'].map(version => <button key={version} className={version.startsWith('V5') ? 'candidate' : version.startsWith('V4') ? 'current' : ''}><span>{panelUrl ? <img src={panelUrl} alt=""/> : null}</span><small>{version}</small></button>)}<ArrowRight size={16}/></footer>
+      <ReviewVersionStrip shotId={selected.shot.id} activeAssetId={selected.shot.active_panel_asset_id} candidateAssetIds={thread?.candidates.filter(candidate=>candidate.status==='ready').map(candidate=>candidate.asset_id)??[]}/>
     </section>
 
     <aside className="review-conversation">

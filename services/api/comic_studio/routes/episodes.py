@@ -9,6 +9,11 @@ from comic_studio.jobs import JobStore
 from comic_studio.repositories import EpisodeRepository
 from comic_studio.services.planning import PlanningService
 from comic_studio.services.episode_deletion import EpisodeDeletionImpact, EpisodeDeletionService
+from comic_studio.services.scene_structure import (
+    SceneStructureConflictError,
+    SceneStructureReferenceError,
+    SceneStructureService,
+)
 
 
 router = APIRouter(tags=["episodes"])
@@ -94,10 +99,137 @@ def update_episode(
 
 @router.patch("/api/shots/{shot_id}", response_model=schemas.ShotRead)
 def update_shot(shot_id: str, data: schemas.ShotPatch, session: SessionDependency):
-    shot = EpisodeRepository(session).update_shot(shot_id, data)
+    try:
+        shot = SceneStructureService(session).update_shot(shot_id, data)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SceneStructureReferenceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if shot is None:
         raise HTTPException(status_code=404, detail="Shot not found")
     return shot
+
+
+def _structure_response(result) -> schemas.StructureMutationRead:
+    return schemas.StructureMutationRead(
+        episode_id=result.episode_id,
+        resource_id=result.resource_id,
+        affected_shot_ids=list(result.affected_shot_ids),
+        invalidated_stages=list(result.invalidated_stages),
+    )
+
+
+@router.post(
+    "/api/episodes/{episode_id}/scenes",
+    response_model=schemas.StructureMutationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_scene(
+    episode_id: str, data: schemas.SceneCreate, session: SessionDependency
+):
+    try:
+        result = SceneStructureService(session).create_scene(episode_id, data)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    return _structure_response(result)
+
+
+@router.patch(
+    "/api/scenes/{scene_id}", response_model=schemas.StructureMutationRead
+)
+def update_scene(scene_id: str, data: schemas.ScenePatch, session: SessionDependency):
+    try:
+        result = SceneStructureService(session).update_scene(scene_id, data)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    return _structure_response(result)
+
+
+@router.delete(
+    "/api/scenes/{scene_id}", response_model=schemas.StructureMutationRead
+)
+def delete_scene(scene_id: str, request: Request, session: SessionDependency):
+    try:
+        result = SceneStructureService(
+            session, request.app.state.settings.data_root
+        ).delete_scene(scene_id)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    return _structure_response(result)
+
+
+@router.put(
+    "/api/episodes/{episode_id}/scene-order",
+    response_model=schemas.StructureMutationRead,
+)
+def reorder_scenes(
+    episode_id: str, data: schemas.StructureOrderUpdate, session: SessionDependency
+):
+    try:
+        result = SceneStructureService(session).reorder_scenes(episode_id, data.ids)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SceneStructureReferenceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    return _structure_response(result)
+
+
+@router.post(
+    "/api/scenes/{scene_id}/shots",
+    response_model=schemas.StructureMutationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_shot(scene_id: str, data: schemas.ShotCreate, session: SessionDependency):
+    try:
+        result = SceneStructureService(session).create_shot(scene_id, data)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SceneStructureReferenceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    return _structure_response(result)
+
+
+@router.delete(
+    "/api/shots/{shot_id}", response_model=schemas.StructureMutationRead
+)
+def delete_shot(shot_id: str, request: Request, session: SessionDependency):
+    try:
+        result = SceneStructureService(
+            session, request.app.state.settings.data_root
+        ).delete_shot(shot_id)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Shot not found")
+    return _structure_response(result)
+
+
+@router.put(
+    "/api/scenes/{scene_id}/shot-order",
+    response_model=schemas.StructureMutationRead,
+)
+def reorder_shots(
+    scene_id: str, data: schemas.StructureOrderUpdate, session: SessionDependency
+):
+    try:
+        result = SceneStructureService(session).reorder_shots(scene_id, data.ids)
+    except SceneStructureConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SceneStructureReferenceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    return _structure_response(result)
 
 
 @router.patch("/api/dialogue/{dialogue_id}", response_model=schemas.DialogueRead)

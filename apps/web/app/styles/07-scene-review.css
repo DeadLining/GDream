@@ -13,6 +13,28 @@
 .scene-beats, .scene-continuity { margin-top: var(--space-5); }.scene-beats > header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-line); }.scene-beats h2, .scene-continuity h2 { margin: 0; font-size: var(--fs-lg); }.scene-beats header p, .scene-continuity > p { margin: var(--space-1) 0 0; color: var(--color-muted); font-size: var(--fs-sm); }.scene-beats header > span { color: var(--color-muted); font-size: var(--fs-xs); }
 .scene-beat-track { position: relative; padding-top: var(--space-2); }.scene-beat-track::before { position: absolute; top: var(--space-2); bottom: 0; left: 19px; width: 1px; background: var(--color-line); content: ''; }.scene-beat { position: relative; min-height: 66px; display: grid; grid-template-columns: 38px minmax(0, 1fr) var(--control-h-md); align-items: center; gap: var(--space-2); border-bottom: 1px solid var(--color-line-soft); }.scene-beat-index { z-index: 1; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--color-line-strong); border-radius: var(--radius-circle); background: var(--color-surface); color: var(--color-muted); font-size: var(--fs-xs); }.scene-beat strong { display: block; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-base); white-space: nowrap; }.scene-beat p { margin: var(--space-1) 0 0; color: var(--color-muted); font-size: var(--fs-xs); }.scene-beat button { width: var(--control-h-md); height: var(--control-h-md); display: grid; grid-template-columns: 1fr 1fr; place-items: center; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; }
 .scene-continuity dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-2); }.scene-continuity dl div { padding: var(--space-2); border-left: 3px solid var(--color-info); background: var(--color-info-bg); }.scene-continuity dt { color: var(--color-muted); font-size: var(--fs-xs); }.scene-continuity dd { margin: var(--space-1) 0 0; font-size: var(--fs-base); }.scene-workspace-empty { display: grid; place-items: center; text-align: center; }
+.scene-rail-item { position: relative; display: grid; grid-template-columns: minmax(0,1fr) auto; border: 1px solid transparent; border-left: 3px solid transparent; border-radius: var(--radius-sm); }
+.scene-rail-item.active { border-color: var(--color-line); border-left-color: var(--color-accent-strong); background: var(--color-surface); }
+.scene-rail-item > button { min-width: 0; min-height: 58px; display: grid; grid-template-columns: 28px minmax(0,1fr); gap: var(--space-2); border: 0; background: transparent; padding: var(--space-2); text-align: left; cursor: pointer; }
+.scene-rail-item > button strong,.scene-rail-item > button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scene-rail-item > span { display: grid; align-content: center; gap: 2px; padding-right: 4px; }
+.scene-rail-item > span button,.scene-add,.scene-header-actions button,.scene-beat-actions button,.scene-impact button,.scene-structure-form button { min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); cursor: pointer; }
+.scene-add { width: 100%; margin-top: var(--space-2); }
+.scene-document-header { display: grid; grid-template-columns: minmax(0,1fr) auto auto; }
+.scene-header-actions { display: flex; gap: 4px; }
+.scene-impact { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-warning); background: var(--color-warning-bg); font-size: var(--fs-sm); }
+.scene-structure-error { margin: 0 0 var(--space-3); color: var(--color-danger); }
+.scene-structure-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-line); background: var(--color-surface-subtle); }
+.scene-structure-form label { display: grid; gap: 4px; color: var(--color-muted); font-size: var(--fs-xs); }
+.scene-structure-form input,.scene-structure-form textarea,.scene-structure-form select { min-width: 0; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); padding: 7px 8px; color: var(--color-ink); }
+.scene-structure-form textarea { min-height: 68px; resize: vertical; }
+.scene-structure-form > div { grid-column: 1/-1; display: flex; justify-content: flex-end; gap: var(--space-2); }
+.scene-beats > header > button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); padding: 7px 9px; }
+.scene-beat { grid-template-columns: 38px minmax(0,1fr) auto; }
+.scene-beat-actions { display: flex; gap: 3px; }
+.scene-beat-actions button { width: 30px; height: 30px; grid-template-columns: 1fr; }
+.scene-beat-actions button:last-child { width: 42px; grid-template-columns: 1fr 1fr; }
+.shot-structure-form { grid-column: 2/-1; margin: var(--space-2) 0; }
 
 /* Visual annotation and conversational review */
 .visual-review-workspace { height: 100%; min-width: 0; min-height: 0; display: grid; grid-template-columns: 180px minmax(360px, 1fr) 350px; background: var(--dark-bg); }
@@ -35,4 +57,3 @@
   .scene-workspace { grid-template-columns: 1fr; overflow: auto; }.scene-rail { display: flex; gap: var(--space-1); overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--color-line); }.scene-rail > header { display: none; }.scene-rail > button { flex: 0 0 150px; }.scene-document { overflow: visible; }.scene-document-header { display: grid; }.scene-metadata { display: flex; flex-wrap: wrap; }
   .visual-review-workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(520px, 1fr) auto; overflow: auto; }.review-shot-rail { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); border-right: 0; border-bottom: 1px solid var(--color-line); }.review-shot-rail > header { display: none; }.annotation-list { grid-column: 1 / -1; display: flex; margin-top: 0; overflow-x: auto; }.annotation-list > span { display: none; }.annotation-list button { flex: 0 0 180px; }.review-conversation { border-top: 1px solid var(--color-line); border-left: 0; }
 }
-

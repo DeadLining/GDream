@@ -1,4 +1,5 @@
 from comic_studio import models
+from comic_studio.production import ProductionStore
 
 
 def _seed_structure(client):
@@ -204,3 +205,21 @@ def test_scene_structure_supports_create_reorder_and_delete(client):
         for scene in client.get(f"/api/episodes/{episode_id}").json()["scenes"]
         for shot in scene["shots"]
     }
+
+
+def test_scene_structure_rejects_mutation_while_production_is_active(client):
+    episode_id, scene_id, _second_id, _shot_a, _shot_b, _shot_c = _seed_structure(client)
+    with client.app.state.session_factory() as session:
+        ProductionStore(session).create_run(
+            episode_id,
+            stages=["panels"],
+            concurrency=1,
+        )
+
+    response = client.patch(
+        f"/api/scenes/{scene_id}",
+        json={"summary": "不应在生产中修改"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Cannot edit scene structure while production is active"
