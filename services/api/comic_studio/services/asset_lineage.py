@@ -156,6 +156,10 @@ class AssetLineageService:
             raise AssetLineageReferenceError(
                 "Shot must belong to the character project"
             )
+        if variant.episode_id and variant.episode_id != shot.scene.episode_id:
+            raise AssetLineageReferenceError(
+                "Episode variant must belong to the shot episode"
+            )
         if data.state_id:
             state = self.session.get(models.AssetVariantState, data.state_id)
             if state is None or state.deleted_at is not None or state.variant_id != variant.id:

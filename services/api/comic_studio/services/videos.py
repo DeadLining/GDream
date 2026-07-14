@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
 from comic_studio.assets import AssetStore
+from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
 class VideoService:
@@ -35,6 +36,9 @@ class VideoService:
         panel = self.session.get(models.Asset, shot.active_panel_asset_id)
         if panel is None or panel.kind != f"panel:{shot.id}":
             raise ValueError("active_panel_invalid")
+        compiled = ShotInputCompiler(self.session).compile(
+            shot.id, usage_kinds={"video", "reference"}
+        )
         path = (self.assets.data_root / panel.local_path).resolve()
         if self.assets.data_root not in path.parents:
             raise ValueError("Asset path escaped data root")
@@ -50,6 +54,7 @@ class VideoService:
                     f"Avoid: {shot.negative_video_prompt}"
                     if shot.negative_video_prompt
                     else "",
+                    compiled.prompt_constraints,
                 ],
             )
         )
@@ -78,6 +83,8 @@ class VideoService:
                 "provider_task_id": task_id,
                 "source_panel_id": panel.id,
                 "duration": duration,
+                "input_snapshot": compiled.snapshot,
+                "input_snapshot_hash": compiled.snapshot_hash,
             },
             duration_seconds=duration,
             activate=activate,

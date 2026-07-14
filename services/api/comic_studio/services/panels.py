@@ -7,6 +7,7 @@ from comic_studio import models
 from comic_studio.assets import AssetStore
 from comic_studio.providers.gpt_image import GPTImageProvider
 from comic_studio.services.grid_split import split_grid_image
+from comic_studio.services.shot_inputs import ShotInputCompiler
 from comic_studio.services.skill_loader import get_skill_loader
 
 
@@ -46,14 +47,21 @@ class PanelService:
             raise KeyError(shot_ids)
         project = shots[0].scene.episode.project
         scene = shots[0].scene
+        compiled_inputs = [
+            ShotInputCompiler(self.session).compile(
+                shot.id, usage_kinds={"panel", "reference"}
+            )
+            for shot in shots
+        ]
         present_character_ids: set[str] = set()
-        for shot in shots:
+        for shot, compiled in zip(shots, compiled_inputs):
             present_character_ids.update(
                 key for key in shot.character_state if isinstance(key, str)
             )
             present_character_ids.update(
                 line.character_id for line in shot.dialogue if line.character_id is not None
             )
+            present_character_ids.update(compiled.character_ids)
         reference_assets: list[models.Asset] = []
         if present_character_ids:
             references = list(
@@ -92,7 +100,15 @@ class PanelService:
                     asset = self.session.get(models.Asset, reference.asset_id)
                     if asset is not None:
                         reference_assets.append(asset)
-            reference_assets = reference_assets[:4]
+        for asset_id in dict.fromkeys(
+            asset_id
+            for compiled in compiled_inputs
+            for asset_id in compiled.reference_asset_ids
+        ):
+            asset = self.session.get(models.Asset, asset_id)
+            if asset is not None and asset.id not in {item.id for item in reference_assets}:
+                reference_assets.append(asset)
+        reference_assets = reference_assets[:4]
         character_by_id = {character.id: character for character in project.characters}
         character_rules = "\n".join(
             f"- {character.name}: {character.appearance_bible}. "
@@ -116,8 +132,18 @@ class PanelService:
             style_prefix = loader.get_prefix(style_id)
             style_negative = loader.get_negative(style_id)
         panel_descriptions = "\n".join(
-            f"{index}. Shot: {shot.composition}. {shot.image_prompt}"
-            for index, shot in enumerate(shots, start=1)
+            "\n".join(
+                filter(
+                    None,
+                    [
+                        f"{index}. Shot: {shot.composition}. {shot.image_prompt}",
+                        compiled.prompt_constraints,
+                    ],
+                )
+            )
+            for index, (shot, compiled) in enumerate(
+                zip(shots, compiled_inputs), start=1
+            )
         )
         negative_constraints = self._combine_negative(
             ", ".join(dict.fromkeys(shot.negative_prompt for shot in shots if shot.negative_prompt)),
@@ -157,6 +183,8 @@ class PanelService:
                     "size": "1024x1536",
                     "grid": True,
                     "reference_asset_ids": [asset.id for asset in reference_assets],
+                    "input_snapshot": compiled_inputs[shots.index(shot)].snapshot,
+                    "input_snapshot_hash": compiled_inputs[shots.index(shot)].snapshot_hash,
                 },
                 activate=activate,
             )
@@ -180,11 +208,14 @@ class PanelService:
         if shot is None:
             raise KeyError(shot_id)
         project = shot.scene.episode.project
+        compiled = ShotInputCompiler(self.session).compile(
+            shot.id, usage_kinds={"panel", "reference"}
+        )
         present_character_ids = {
             key for key in shot.character_state if isinstance(key, str)
         } | {
             line.character_id for line in shot.dialogue if line.character_id is not None
-        }
+        } | set(compiled.character_ids)
         reference_assets: list[models.Asset] = []
         if present_character_ids:
             references = list(
@@ -225,7 +256,11 @@ class PanelService:
                     asset = self.session.get(models.Asset, reference.asset_id)
                     if asset is not None:
                         reference_assets.append(asset)
-            reference_assets = reference_assets[:4]
+        for asset_id in compiled.reference_asset_ids:
+            asset = self.session.get(models.Asset, asset_id)
+            if asset is not None and asset.id not in {item.id for item in reference_assets}:
+                reference_assets.append(asset)
+        reference_assets = reference_assets[:4]
         from comic_studio.services.art_style_loader import get_art_style_loader
 
         character_rules = "\n".join(
@@ -252,6 +287,8 @@ class PanelService:
         )
         if style_prefix:
             prompt = f"Style: {style_prefix}.\n\n{prompt}"
+        if compiled.prompt_constraints:
+            prompt = f"{prompt}\n\n{compiled.prompt_constraints}"
         tail_asset = self._tail_frame_asset(shot)
         if tail_asset is not None:
             # Make the prompt explicitly call out the continuity anchor.
@@ -280,6 +317,8 @@ class PanelService:
                     *(["tail:" + tail_asset.id] if tail_asset is not None else []),
                     *[asset.id for asset in reference_assets],
                 ],
+                "input_snapshot": compiled.snapshot,
+                "input_snapshot_hash": compiled.snapshot_hash,
             },
             activate=activate,
         )
