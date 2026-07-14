@@ -81,7 +81,7 @@ export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; c
     </section>
     <section className="inspector-section dialogue-section" aria-labelledby="dialogue-heading">
       <div className="section-heading-row"><h3 id="dialogue-heading">对白与配音</h3><span>{shot.dialogue.length} 条对白</span></div>
-      {shot.dialogue.length ? shot.dialogue.map(line => <DialogueEditor key={line.id} line={line} characters={characters}/>) : <p className="section-empty">此镜头没有对白</p>}
+      {shot.dialogue.length ? shot.dialogue.map(line => <DialogueEditor key={line.id} line={line} characters={characters} onLineUpdated={updated=>onShotUpdated?.({...shot,dialogue:shot.dialogue.map(item=>item.id===updated.id?updated:item)})}/>) : <p className="section-empty">此镜头没有对白</p>}
     </section>
     <div className="model-note"><Sparkles size={16}/><span>图像由 <strong>gpt-image-2</strong> 生成</span></div>
   </aside>;

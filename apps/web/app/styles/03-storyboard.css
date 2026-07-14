@@ -35,7 +35,7 @@
 .dialogue-editor { margin-top: 0; padding: 0 0 15px; border-top: 0; }.dialogue-editor + .dialogue-editor { padding-top: 15px; border-top: 1px dashed var(--line); }
 .dialogue-copy { display: grid; gap: 9px; }.dialogue-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 4px; }.dialogue-actions .primary-action { color: white; }
 .dialogue-actions .dialogue-primary-action { border-color: var(--accent-strong); background: var(--accent-strong); color: #fff; }.dialogue-actions .dialogue-primary-action:disabled { opacity: .55; }
+.dialogue-save-status { margin:8px 0 0; font-size:11px; }.dialogue-save-status.success { color:var(--green); }.dialogue-save-status.error { color:#a72e26; }
 .dialogue-editor audio { height: 34px; }
 @media (max-width: 899px) { .shots-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }.shot-media { aspect-ratio: 4 / 5; }.inspector { padding-bottom: 42px; } }
 @media (max-width: 360px) { .shots-grid { grid-template-columns: 1fr; }.inspector-actions, .inline-fields { grid-template-columns: 1fr; } }
-
