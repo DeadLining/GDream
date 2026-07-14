@@ -54,7 +54,15 @@ def _seed_project(session, data_root: Path) -> str:
         local_path="assets/panel-1.png", media_type="image/png",
         provider="test", model="test", checksum="a" * 64,
     )
-    session.add(asset)
+    library_asset = models.LibraryAsset(
+        project_id=project.id,
+        kind="scene",
+        name="雨夜巷道",
+        description="重庆雨夜的主场景",
+        tags=["雨夜", "巷道"],
+        asset_metadata={"time_of_day": "night"},
+    )
+    session.add_all([asset, library_asset])
     session.commit()
     return project.id
 
@@ -81,6 +89,7 @@ def test_export_writes_valid_zip_with_manifest(db_session, tmp_path):
         assert database["project"]["title"] == "夜行"
         assert len(database["characters"]) == 1
         assert len(database["dialogue_lines"]) == 1
+        assert database["library_assets"][0]["name"] == "雨夜巷道"
         # Asset binary packed.
         assert any(name.startswith("assets/") for name in names)
         assert zf.read("assets/" + "a" * 64) == b"\x89PNG\r\n\x1a\nfake-png-bytes"
@@ -118,6 +127,9 @@ def test_import_round_trip_preserves_structure(db_session, tmp_path):
     # Character preserved.
     assert len(new_project.characters) == 1
     assert new_project.characters[0].name == "林深"
+    assert len(new_project.library_assets) == 1
+    assert new_project.library_assets[0].name == "雨夜巷道"
+    assert new_project.library_assets[0].asset_metadata == {"time_of_day": "night"}
 
 
 def test_import_rejects_wrong_schema(db_session, tmp_path):
