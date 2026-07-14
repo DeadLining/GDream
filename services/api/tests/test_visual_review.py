@@ -1,4 +1,9 @@
+import asyncio
+
 from comic_studio import models
+from comic_studio.model_runtime.contracts import Capability
+from comic_studio.providers.gpt_image import ImageResult
+from comic_studio.services.visual_review import VisualReviewService
 
 
 def _graph(client):
@@ -31,12 +36,12 @@ def _graph(client):
         )
         session.add(shot);session.flush()
         source = models.Asset(
-            project_id=project["id"], kind="panel", local_path="source.png",
+            project_id=project["id"], kind=f"panel:{shot.id}", local_path="source.png",
             media_type="image/png", provider="test", model="test",
             request_metadata={}, checksum="source", review_status="draft",
         )
         candidate = models.Asset(
-            project_id=project["id"], kind="panel", local_path="candidate.png",
+            project_id=project["id"], kind=f"panel:{shot.id}", local_path="candidate.png",
             media_type="image/png", provider="test", model="test",
             request_metadata={}, parent_asset_id=source.id, checksum="candidate",
             review_status="draft",
@@ -89,6 +94,93 @@ def test_visual_review_persists_annotation_conversation_and_candidate(client):
     assert client.get(f"/api/episodes/{loaded['episode_id']}").json()["scenes"][0]["shots"][0]["active_panel_asset_id"]==candidate_id
 
 
+def test_visual_review_generation_uses_thread_feedback_and_registers_candidate(client):
+    _project,shot_id,source_id,_candidate_id=_graph(client)
+    source_path=client.app.state.settings.data_root/"source.png"
+    source_path.parent.mkdir(parents=True,exist_ok=True)
+    source_path.write_bytes(b"source-image")
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"表情调整","modification_scope":"episode"},
+    ).json()
+    client.post(
+        f"/api/visual-review-threads/{thread['id']}/annotations",
+        json={"kind":"circle","geometry":{"cx":0.42,"cy":0.31,"rx":0.12,"ry":0.08},"color":"#B9473E","label":"眉眼区域"},
+    )
+    client.post(
+        f"/api/visual-review-threads/{thread['id']}/messages",
+        json={"author_kind":"user","content":"降低惊恐感，但不要改变脸型。"},
+    )
+
+    class Provider:
+        model="review-image"
+        prompt=""
+        references=[]
+
+        async def edit(self,prompt,references,size="1024x1536",quality="auto"):
+            self.prompt=prompt
+            self.references=references
+            return ImageResult(b"candidate-image",media_type="image/png")
+
+        async def generate(self,*_args,**_kwargs):
+            raise AssertionError("review generation must use the source asset")
+
+    provider=Provider()
+    with client.app.state.session_factory() as session:
+        candidate=asyncio.run(
+            VisualReviewService(session).generate_candidate(
+                thread["id"],client.app.state.settings.data_root,provider
+            )
+        )
+        assert candidate is not None
+        candidate_id=candidate.id
+        asset_id=candidate.asset_id
+
+    assert "降低惊恐感，但不要改变脸型" in provider.prompt
+    assert "眉眼区域" in provider.prompt
+    assert '\"cx\": 0.42' in provider.prompt
+    assert "episode" in provider.prompt
+    assert provider.references==[(b"source-image","image/png")]
+    with client.app.state.session_factory() as session:
+        candidate=session.get(models.VisualReviewCandidate,candidate_id)
+        asset=session.get(models.Asset,asset_id)
+        assert candidate.thread_id==thread["id"]
+        assert asset.kind==f"panel:{shot_id}"
+        assert asset.request_metadata["visual_review"]["source_asset_id"]==source_id
+        assert asset.request_metadata["visual_review"]["modification_scope"]=="episode"
+
+
+def test_visual_review_generate_endpoint_creates_thread_scoped_image_job(client):
+    _project,shot_id,source_id,_candidate_id=_graph(client)
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"定向修改","modification_scope":"shot"},
+    ).json()
+
+    class Job:
+        id="job-review"
+        status="queued"
+
+    class Runtime:
+        created=None
+
+        def create_media_job(self,capability,target_type,target_id,payload):
+            self.created=(capability,target_type,target_id,payload)
+            return Job()
+
+        async def run_media_job(self,_job_id):
+            return None
+
+    runtime=Runtime()
+    client.app.state.model_runtime=runtime
+
+    response=client.post(f"/api/visual-review-threads/{thread['id']}/generate")
+
+    assert response.status_code==202
+    assert response.json()=={"job_id":"job-review","capability":"image","status":"queued"}
+    assert runtime.created==(Capability.IMAGE,"visual_review",thread["id"],{"activate":False})
+
+
 def test_visual_annotation_rejects_geometry_outside_normalized_canvas(client):
     _project,shot_id,source_id,_candidate_id=_graph(client)
     thread=client.post(
@@ -125,6 +217,115 @@ def test_visual_review_rejects_asset_from_another_project(client):
 
     assert response.status_code==422
     assert response.json()["detail"]=="Source asset must belong to the shot project"
+
+
+def test_visual_review_rejects_candidate_generated_for_another_shot(client):
+    _project,shot_id,source_id,_candidate_id=_graph(client)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        other_shot=models.Shot(
+            scene_id=shot.scene_id,position=2,shot_type="wide",duration_seconds=4,
+            composition="另一个镜头",camera_motion="static",character_state={},
+            image_prompt="other",negative_prompt="",
+        )
+        session.add(other_shot);session.flush()
+        other_asset=models.Asset(
+            project_id=shot.scene.episode.project_id,kind=f"panel:{other_shot.id}",
+            local_path="other-shot.png",media_type="image/png",provider="test",
+            model="test",request_metadata={},checksum="other-shot",review_status="draft",
+        )
+        session.add(other_asset);session.commit();other_asset_id=other_asset.id
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"错误镜头候选","modification_scope":"shot"},
+    ).json()
+
+    response=client.post(
+        f"/api/visual-review-threads/{thread['id']}/candidates",
+        json={"asset_id":other_asset_id,"generation_metadata":{}},
+    )
+
+    assert response.status_code==422
+    assert response.json()["detail"]=="Candidate asset must be a panel for the review shot"
+
+
+def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(client):
+    project,shot_id,source_id,candidate_id=_graph(client)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        character=models.Character(
+            project_id=project["id"],name="林夏",role="主角",appearance_bible="短发",
+            personality="冷静",continuity_rules="保持脸型",negative_constraints="",
+            voice_speaker="v1",
+        )
+        session.add(character);session.flush()
+        shot.character_state={character.id:{}}
+        other_shot=models.Shot(
+            scene_id=shot.scene_id,position=2,shot_type="medium",duration_seconds=4,
+            composition="林夏继续调查",camera_motion="static",
+            character_state={character.id:{}},image_prompt="investigate",negative_prompt="",
+        )
+        session.add(other_shot);session.commit();other_shot_id=other_shot.id
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"降低惊恐感","modification_scope":"episode"},
+    ).json()
+    candidate=client.post(
+        f"/api/visual-review-threads/{thread['id']}/candidates",
+        json={"asset_id":candidate_id,"generation_metadata":{}},
+    ).json()
+
+    accepted=client.post(f"/api/visual-review-candidates/{candidate['id']}/accept")
+
+    assert accepted.status_code==200
+    metadata=accepted.json()["generation_metadata"]["acceptance"]
+    assert metadata["scope"]=="episode"
+    assert set(metadata["affected_shot_ids"])=={shot_id,other_shot_id}
+    assert len(metadata["variant_ids"])==1
+    with client.app.state.session_factory() as session:
+        variant=session.get(models.AssetVariant,metadata["variant_ids"][0])
+        assert variant.kind=="episode"
+        assert variant.episode_id==thread["episode_id"]
+        assert variant.usages[0].shot_id==shot_id
+        assert variant.usages[0].asset_id==candidate_id
+
+
+def test_master_scope_acceptance_creates_new_master_version_and_impact(client):
+    project,shot_id,source_id,candidate_id=_graph(client)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        character=models.Character(
+            project_id=project["id"],name="林夏",role="主角",appearance_bible="短发",
+            personality="冷静",continuity_rules="保持脸型",negative_constraints="",
+            voice_speaker="v1",
+        )
+        session.add(character);session.flush()
+        shot.character_state={character.id:{}}
+        existing=models.AssetVariant(
+            character_id=character.id,kind="master",label="林夏主设定 V1",
+            inherited_fields=[],overrides={},version=1,review_status="approved",
+        )
+        session.add(existing);session.commit()
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"更新主设定表情","modification_scope":"master"},
+    ).json()
+    candidate=client.post(
+        f"/api/visual-review-threads/{thread['id']}/candidates",
+        json={"asset_id":candidate_id,"generation_metadata":{}},
+    ).json()
+
+    accepted=client.post(f"/api/visual-review-candidates/{candidate['id']}/accept")
+
+    assert accepted.status_code==200
+    metadata=accepted.json()["generation_metadata"]["acceptance"]
+    assert metadata["scope"]=="master"
+    assert metadata["affected_episode_ids"]==[thread["episode_id"]]
+    with client.app.state.session_factory() as session:
+        revision=session.get(models.AssetVariant,metadata["variant_ids"][0])
+        assert revision.kind=="master"
+        assert revision.version==2
+        assert revision.id!=existing.id
 
 
 def test_visual_review_candidate_can_be_rejected(client):
