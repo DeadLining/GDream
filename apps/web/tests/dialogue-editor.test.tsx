@@ -1,3 +1,4 @@
+import {useState} from 'react';
 import {cleanup,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
@@ -55,6 +56,16 @@ describe('DialogueEditor',()=>{
     expect(screen.getByRole('button',{name:'生成配音'})).toBeDisabled();
     expect(mocks.updateDialogue).toHaveBeenCalledTimes(1);
     pending.resolve(line);
+    expect(await screen.findByText('对白已保存')).toBeVisible();
+  });
+
+  it('keeps the saved status visible after the parent accepts the updated line',async()=>{
+    mocks.updateDialogue.mockResolvedValue({...line,text:'已保存对白'});
+    function Harness(){const [current,setCurrent]=useState(line);return <DialogueEditor line={current} characters={[character]} onLineUpdated={setCurrent}/>;}
+    render(<Harness/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'保存对白'}));
+
     expect(await screen.findByText('对白已保存')).toBeVisible();
   });
 });
