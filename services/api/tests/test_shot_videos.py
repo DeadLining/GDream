@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from comic_studio import models
 from comic_studio.assets import AssetStore
 from comic_studio.services.videos import VideoService
 from tests.test_panel_versions import seed_shot
@@ -69,6 +70,59 @@ def test_requires_approved_shot_and_active_panel(db_session, tmp_path):
     db_session.commit()
     with pytest.raises(ValueError, match="shot_not_approved"):
         asyncio.run(VideoService(db_session, tmp_path, Provider()).generate(shot.id))
+
+
+def test_video_generation_compiles_bound_variant_and_state(db_session, tmp_path):
+    project, shot, _panel = _eligible(db_session, tmp_path)
+    character = models.Character(
+        project_id=project.id,
+        name="林夏",
+        role="主角",
+        appearance_bible="黑色长发",
+        personality="冷静",
+        continuity_rules="保持脸型",
+        voice_speaker="v1",
+    )
+    db_session.add(character)
+    db_session.flush()
+    variant = models.AssetVariant(
+        character_id=character.id,
+        episode_id=shot.scene.episode_id,
+        kind="episode",
+        label="雨夜造型",
+        inherited_fields=[],
+        overrides={"outfit": "深色雨衣"},
+        review_status="approved",
+    )
+    db_session.add(variant)
+    db_session.flush()
+    state = models.AssetVariantState(
+        variant_id=variant.id,
+        kind="expression",
+        label="警惕",
+        overrides={"eyes": "目光收紧"},
+    )
+    db_session.add(state)
+    db_session.flush()
+    db_session.add(
+        models.AssetVariantUsage(
+            variant_id=variant.id,
+            state_id=state.id,
+            shot_id=shot.id,
+            usage_kind="video",
+        )
+    )
+    db_session.commit()
+    provider = Provider()
+
+    asset = asyncio.run(VideoService(db_session, tmp_path, provider).generate(shot.id))
+
+    assert "深色雨衣" in provider.prompt
+    assert "目光收紧" in provider.prompt
+    snapshot = asset.request_metadata["input_snapshot"]
+    assert snapshot["asset_bindings"][0]["variant_id"] == variant.id
+    assert snapshot["asset_bindings"][0]["state_id"] == state.id
+    assert len(asset.request_metadata["input_snapshot_hash"]) == 64
 
 
 def test_video_api_job_lists_and_activates_versions(client):

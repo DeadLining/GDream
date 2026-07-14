@@ -260,3 +260,99 @@ def test_generate_panel_injects_previous_shot_tail_frame(db_session, tmp_path):
     assert provider.references[0] == (PNG, "image/png")
     assert "tail frame" in provider.prompt.lower()
     assert asset.request_metadata["reference_asset_ids"][0] == f"tail:{tail.id}"
+
+
+def test_generate_panel_compiles_bound_variant_state_and_director_input(
+    db_session, tmp_path
+):
+    project, shot = seed_shot(db_session)
+    character = models.Character(
+        project_id=project.id,
+        name="林夏",
+        role="主角",
+        appearance_bible="黑色长发",
+        personality="冷静",
+        continuity_rules="保持脸型",
+        voice_speaker="v1",
+    )
+    db_session.add(character)
+    db_session.flush()
+    shot.character_state = {character.id: {}}
+    reference, _asset = asyncio.run(
+        CharacterReferenceService(db_session, tmp_path).generate(
+            character.id,
+            "primary",
+            label="正面",
+            provider=FakeImageProvider(),
+        )
+    )
+    reference.review_status = "approved"
+    CharacterReferenceService(db_session, tmp_path).activate(character.id, reference.id)
+    master = models.AssetVariant(
+        character_id=character.id,
+        kind="master",
+        label="作品主设定",
+        inherited_fields=[],
+        overrides={"identity": "狭长脸型"},
+        review_status="approved",
+    )
+    db_session.add(master)
+    db_session.flush()
+    variant = models.AssetVariant(
+        character_id=character.id,
+        episode_id=shot.scene.episode_id,
+        parent_variant_id=master.id,
+        kind="episode",
+        label="雨夜造型",
+        inherited_fields=["identity"],
+        overrides={"outfit": "深色雨衣"},
+        review_status="approved",
+    )
+    db_session.add(variant)
+    db_session.flush()
+    state = models.AssetVariantState(
+        variant_id=variant.id,
+        kind="injury",
+        label="左眉受伤",
+        overrides={"injury": "左眉新鲜伤痕"},
+    )
+    db_session.add(state)
+    db_session.flush()
+    db_session.add(
+        models.AssetVariantUsage(
+            variant_id=variant.id,
+            state_id=state.id,
+            shot_id=shot.id,
+            usage_kind="panel",
+        )
+    )
+    stage = models.DirectorStage(scene_id=shot.scene_id, environment={"weather": "rain"})
+    db_session.add(stage)
+    db_session.flush()
+    db_session.add(
+        models.ShotCamera(
+            stage_id=stage.id,
+            shot_id=shot.id,
+            focal_length_mm=85,
+            shot_size="close_up",
+            camera_motion="static",
+        )
+    )
+    db_session.commit()
+
+    class Provider(FakeImageProvider):
+        async def edit(self, prompt, references, size="1024x1536", quality="auto"):
+            self.prompt = prompt
+            return ImageResult(PNG, media_type="image/png")
+
+    provider = Provider()
+    asset = asyncio.run(PanelService(db_session, tmp_path, provider).generate_panel(shot.id))
+
+    assert "深色雨衣" in provider.prompt
+    assert "左眉新鲜伤痕" in provider.prompt
+    assert "85mm" in provider.prompt
+    snapshot = asset.request_metadata["input_snapshot"]
+    assert snapshot["asset_bindings"][0]["variant_id"] == variant.id
+    assert snapshot["asset_bindings"][0]["state_id"] == state.id
+    assert snapshot["director"]["camera"]["focal_length_mm"] == 85
+    assert len(asset.request_metadata["input_snapshot_hash"]) == 64

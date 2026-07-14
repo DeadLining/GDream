@@ -173,6 +173,32 @@ def test_asset_variant_rejects_episode_from_another_project(client):
     assert response.json()["detail"] == "Episode must belong to the character project"
 
 
+def test_episode_variant_usage_rejects_a_shot_from_another_episode(client):
+    project = _project(client, "集级变体归属")
+    character = _character(client, project["id"], "林默")
+    source_episode = _episode(client, project["id"], "第一集")
+    other_episode = _episode(client, project["id"], "第二集")
+    other_shot_id = _shot(client, other_episode["id"])
+    variant = client.post(
+        f"/api/characters/{character['id']}/variants",
+        json={
+            "kind": "episode",
+            "label": "第一集造型",
+            "episode_id": source_episode["id"],
+            "inherited_fields": [],
+            "overrides": {"outfit": "第一集外套"},
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/asset-variants/{variant['id']}/usages",
+        json={"shot_id": other_shot_id, "usage_kind": "panel"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Episode variant must belong to the shot episode"
+
+
 def test_asset_lineage_updates_variants_and_states_with_version_increments(client):
     project = _project(client, "谱系编辑")
     character = _character(client, project["id"], "林默")
