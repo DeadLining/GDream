@@ -101,4 +101,22 @@ describe('AssetLineageCanvas', () => {
     await userEvent.click(screen.getByRole('button',{name:'删除变体'}));
     expect(onDeleteVariant).toHaveBeenCalledWith('v3');
   });
+
+  it('binds a selected state to a shot for downstream panel generation', async () => {
+    const onLoadEpisodeShots=vi.fn().mockResolvedValue([
+      {id:'shot-7',label:'镜头 07 · 左眉伤痕特写'},
+    ]);
+    const onCreateUsage=vi.fn().mockResolvedValue(undefined);
+    render(<AssetLineageCanvas character={character} references={[reference]} variants={variants} episodes={[{id:'e3',project_id:'p1',title:'第三集',premise:'',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''}]} onLoadEpisodeShots={onLoadEpisodeShots} onCreateUsage={onCreateUsage}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'警惕'}));
+    await userEvent.click(screen.getByRole('button',{name:'绑定到镜头'}));
+    expect(onLoadEpisodeShots).toHaveBeenCalledWith('e3');
+    await userEvent.selectOptions(await screen.findByRole('combobox',{name:'目标镜头'}),'shot-7');
+    await userEvent.click(screen.getByRole('button',{name:'保存镜头绑定'}));
+
+    expect(onCreateUsage).toHaveBeenCalledWith('v2',{
+      state_id:'st1',shot_id:'shot-7',usage_kind:'panel',
+    });
+  });
 });
