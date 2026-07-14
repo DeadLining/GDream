@@ -1,9 +1,9 @@
 'use client';
 
-import {ArrowLeft,Check,CheckCircle2,ChevronRight,Circle,GitBranch,ImageIcon,MessageSquareText,MousePointer2,Plus,Search,Send,Sparkles} from 'lucide-react';
-import {useEffect,useMemo,useState,type ReactNode} from 'react';
+import {ArrowLeft,Check,CheckCircle2,ChevronRight,Circle,GitBranch,ImageIcon,MessageSquareText,MousePointer2,Pencil,Plus,Search,Send,Sparkles,Trash2} from 'lucide-react';
+import {useEffect,useMemo,useState,type FormEvent,type ReactNode} from 'react';
 import {mediaUrl,suggestAssetVariant,type AssetVariantSuggestion} from '../../lib/api';
-import type {AssetVariant,AssetVariantState,Character,CharacterReference,CharacterReferenceType,EpisodeSummary} from '../../lib/types';
+import type {AssetVariant,AssetVariantState,Character,CharacterReference,CharacterReferenceType,EpisodeSummary,LibraryAsset,LibraryAssetCreate,LibraryAssetKind,LibraryAssetPatch} from '../../lib/types';
 
 const referenceLabels:Record<CharacterReferenceType,string>={primary:'主参考',front:'正面',three_quarter:'四分之三',side:'侧面',back:'背面',expression:'表情',outfit:'服装'};
 const stateLabels:Record<AssetVariantState['kind'],string>={expression:'表情',outfit:'服装',injury:'伤势',age:'年龄',custom:'自定义'};
@@ -14,28 +14,63 @@ const imageFor=(references:CharacterReference[],type?:CharacterReferenceType)=>{
 export type AssetWorkspaceView='catalog'|'master'|'variant'|'lineage';
 type CharacterDetailTab='master'|'references'|'variant'|'lineage';
 
-export function AssetCatalogView({characters,character,references,variants,onSelect,onOpen}:{characters:Character[];character:Character;references:CharacterReference[];variants:AssetVariant[];onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void}){
+const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>={
+  scene:{label:'场景',description:'管理地点、时间、氛围和连续性设定。'},
+  prop:{label:'道具',description:'管理关键物件、手持物和剧情线索。'},
+  costume:{label:'服装',description:'管理作品级服装方案和造型说明。'},
+  sound:{label:'声音',description:'管理环境音、效果音和声音设计说明。'},
+};
+
+export function AssetCatalogView({characters,character,references,variants,libraryAssets=[],libraryError='',onSelect,onOpen,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];libraryAssets?:LibraryAsset[];libraryError?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void}){
   const [filter,setFilter]=useState<'all'|'variants'|'pending'>('all');
+  const [category,setCategory]=useState<'character'|LibraryAssetKind>('character');
+  const [query,setQuery]=useState('');
+  const [selectedLibraryId,setSelectedLibraryId]=useState('');
+  const [formMode,setFormMode]=useState<'create'|'edit'|null>(null);
+  const [assetName,setAssetName]=useState('');
+  const [assetDescription,setAssetDescription]=useState('');
+  const [assetTags,setAssetTags]=useState('');
+  const [assetBusy,setAssetBusy]=useState(false);
+  const [assetError,setAssetError]=useState('');
   const selectedImage=imageFor(references);
   const episodeVariants=variants.filter(item=>item.kind==='episode');
   const pending=references.filter(item=>item.review_status!=='approved').length+variants.filter(item=>item.review_status!=='approved').length;
-  const filtered=characters.filter(item=>filter==='all'||item.id===character.id);
+  const normalizedQuery=query.trim().toLocaleLowerCase();
+  const filtered=characters.filter(item=>(filter==='all'||item.id===character?.id)&&(!normalizedQuery||`${item.name} ${item.role}`.toLocaleLowerCase().includes(normalizedQuery)));
+  const categoryAssets=category==='character'?[]:libraryAssets.filter(item=>item.kind===category);
+  const visibleLibraryAssets=categoryAssets.filter(item=>!normalizedQuery||`${item.name} ${item.description} ${item.tags.join(' ')}`.toLocaleLowerCase().includes(normalizedQuery));
+  const selectedLibrary=visibleLibraryAssets.find(item=>item.id===selectedLibraryId)??visibleLibraryAssets[0]??null;
+  const categories:(['character',string]|[LibraryAssetKind,string])[]=[['character','角色资产'],...Object.entries(libraryCategory).map(([kind,item])=>[kind as LibraryAssetKind,item.label] as [LibraryAssetKind,string])];
+  const selectCategory=(next:'character'|LibraryAssetKind)=>{setCategory(next);setQuery('');setFormMode(null);setAssetError('');if(next!=='character')setSelectedLibraryId(libraryAssets.find(item=>item.kind===next)?.id??'');};
+  const openCreate=()=>{setFormMode('create');setAssetName('');setAssetDescription('');setAssetTags('');setAssetError('');};
+  const openEdit=()=>{if(!selectedLibrary)return;setFormMode('edit');setAssetName(selectedLibrary.name);setAssetDescription(selectedLibrary.description);setAssetTags(selectedLibrary.tags.join(', '));setAssetError('');};
+  const saveLibraryAsset=async(event:FormEvent)=>{event.preventDefault();if(category==='character'||!assetName.trim()||assetBusy)return;const data={kind:category,name:assetName.trim(),description:assetDescription.trim(),tags:assetTags.split(/[,，]/).map(item=>item.trim()).filter(Boolean),metadata:formMode==='edit'?selectedLibrary?.metadata??{}:{}};setAssetBusy(true);setAssetError('');try{if(formMode==='edit'&&selectedLibrary&&onUpdateLibraryAsset)await onUpdateLibraryAsset(selectedLibrary.id,data);else if(formMode==='create'&&onCreateLibraryAsset)await onCreateLibraryAsset(data);setFormMode(null);}catch(cause){setAssetError(cause instanceof Error?cause.message:'保存资产失败');}finally{setAssetBusy(false);}};
+  const removeLibraryAsset=async()=>{if(!selectedLibrary||!onDeleteLibraryAsset||assetBusy||!window.confirm(`删除资产「${selectedLibrary.name}」？`))return;setAssetBusy(true);setAssetError('');try{await onDeleteLibraryAsset(selectedLibrary.id);setSelectedLibraryId('');}catch(cause){setAssetError(cause instanceof Error?cause.message:'删除资产失败');}finally{setAssetBusy(false);}};
+
+  const sidebar=<aside className="asset-catalog-sidebar"><h2>工作区</h2>{categories.map(([kind,label])=>{const count=kind==='character'?characters.length:libraryAssets.filter(item=>item.kind===kind).length;return <button type="button" key={kind} aria-label={`${label} ${count}`} className={category===kind?'active':''} onClick={()=>selectCategory(kind)}><span>{label}</span><b>{count}</b></button>;})}</aside>;
+
+  if(category!=='character'){
+    const details=libraryCategory[category];
+    return <main className="character-workspace asset-library-page asset-catalog-page"><div className="asset-catalog-layout">
+      {sidebar}
+      <section className="asset-catalog-content library-asset-content"><header><div><h1>{details.label}资产</h1><p>{details.description}</p></div><div className="asset-catalog-header-actions"><label className="asset-search"><Search size={15}/><span className="sr-only">搜索资产</span><input type="search" aria-label="搜索资产" placeholder="搜索名称、描述或标签" value={query} onChange={event=>setQuery(event.target.value)}/></label><button type="button" onClick={openCreate}><Plus size={15}/>新建{details.label}</button></div></header>
+        {formMode&&<form aria-label={`${formMode==='edit'?'编辑':'新建'}${details.label}资产`} className="library-asset-form" onSubmit={saveLibraryAsset}><label>资产名称<input aria-label="资产名称" value={assetName} onChange={event=>setAssetName(event.target.value)} autoFocus/></label><label>资产描述<textarea aria-label="资产描述" value={assetDescription} onChange={event=>setAssetDescription(event.target.value)}/></label><label>资产标签<input aria-label="资产标签" value={assetTags} onChange={event=>setAssetTags(event.target.value)} placeholder="使用逗号分隔"/></label>{assetError&&<p role="alert">{assetError}</p>}<div><button type="button" onClick={()=>setFormMode(null)}>取消</button><button className="primary-action" type="submit" disabled={!assetName.trim()||assetBusy}>{assetBusy?'正在保存':'保存资产'}</button></div></form>}
+        {!formMode&&(assetError||libraryError)&&<p className="form-error" role="alert">{assetError||libraryError}</p>}
+        <div className="asset-card-grid">{visibleLibraryAssets.map(item=><button type="button" className={`asset-catalog-card library-asset-card ${item.id===selectedLibrary?.id?'selected':''}`} key={item.id} aria-label={`${item.name} ${details.label}`} onClick={()=>setSelectedLibraryId(item.id)}><span className="asset-card-media"><span className="asset-card-placeholder">{item.name.slice(0,1)}</span><i>{details.label}</i></span><span className="asset-card-body"><strong>{item.name}</strong><small>{item.description||'尚未填写描述'}</small><span className="library-asset-tags">{item.tags.length?item.tags.join(' · '):'无标签'}</span></span></button>)}</div>
+        {!visibleLibraryAssets.length&&!formMode&&<p className="asset-catalog-empty">{query?'没有匹配的资产。':`尚未创建${details.label}资产。`}</p>}
+      </section>
+      <aside className="asset-catalog-inspector library-asset-inspector">{selectedLibrary?<><header><div><h2>{selectedLibrary.name}</h2><span>{details.label}资产</span></div><strong>已入库</strong></header><dl><div><dt>资产类型</dt><dd>{details.label}</dd></div><div><dt>标签</dt><dd>{selectedLibrary.tags.join('、')||'无'}</dd></div><div><dt>更新时间</dt><dd>{selectedLibrary.updated_at||'刚刚'}</dd></div></dl><section><h3>设定说明</h3><p>{selectedLibrary.description||'尚未填写描述。'}</p></section><footer><button type="button" onClick={openEdit}><Pencil size={15}/>编辑资产</button><button type="button" onClick={()=>void removeLibraryAsset()} disabled={assetBusy}><Trash2 size={15}/>删除资产</button></footer></>:<p className="asset-catalog-empty">选择一个资产查看详情。</p>}</aside>
+    </div></main>;
+  }
 
   return <main className="character-workspace asset-library-page asset-catalog-page">
     <div className="asset-catalog-layout">
-      <aside className="asset-catalog-sidebar">
-        <h2>工作区</h2>
-        <button className="active"><span>角色资产</span><b>{characters.length}</b></button>
-        <button disabled><span>场景</span><b>0</b></button>
-        <button disabled><span>道具</span><b>0</b></button>
-        <button disabled><span>服装</span><b>0</b></button>
-        <button disabled><span>声音</span><b>0</b></button>
-      </aside>
+      {sidebar}
 
       <section className="asset-catalog-content">
         <header>
           <div><h1>作品资产库</h1><p>管理作品级主设定、集级变体与审核状态。</p></div>
-          <label className="asset-search"><Search size={15}/><span className="sr-only">搜索资产</span><input placeholder="搜索资产名称"/></label>
+          <label className="asset-search"><Search size={15}/><span className="sr-only">搜索资产</span><input type="search" aria-label="搜索资产" placeholder="搜索资产名称" value={query} onChange={event=>setQuery(event.target.value)}/></label>
         </header>
         <div className="asset-catalog-filters">
           <button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>主设定</button>
@@ -44,7 +79,7 @@ export function AssetCatalogView({characters,character,references,variants,onSel
         </div>
         <div className="asset-card-grid">
           {filtered.map(item=>{
-            const current=item.id===character.id;
+            const current=item.id===character?.id;
             const image=current?selectedImage:null;
             const visible=filter!=='variants'||current&&episodeVariants.length>0;
             const pendingVisible=filter!=='pending'||current&&pending>0;
@@ -57,13 +92,13 @@ export function AssetCatalogView({characters,character,references,variants,onSel
         </div>
       </section>
 
-      <aside className="asset-catalog-inspector">
+      {character?<aside className="asset-catalog-inspector">
         <header><div><h2>{character.name}</h2><span>{character.role}</span></div><strong>{statusLabel(variants.find(item=>item.kind==='master')?.review_status??'draft')}</strong></header>
         <dl><div><dt>资产类型</dt><dd>角色</dd></div><div><dt>主设定</dt><dd>MASTER v{variants.find(item=>item.kind==='master')?.version??1}</dd></div><div><dt>集级变体</dt><dd>{episodeVariants.length}</dd></div><div><dt>状态数量</dt><dd>{episodeVariants.reduce((total,item)=>total+item.states.length,0)}</dd></div></dl>
         <div className="asset-inspector-tabs"><button className="active">主设定</button><button onClick={()=>onOpen('variant')}>集级变体</button><button onClick={()=>onOpen('lineage')}>引用</button></div>
         <section className="asset-lineage-preview"><h3>继承谱系</h3><div><span className="lineage-preview-root">{character.name}<small>主设定</small></span><ChevronRight size={16}/><span className="lineage-preview-branches">{episodeVariants.slice(0,2).map(item=><button key={item.id} onClick={()=>onOpen('variant')}>{item.label}</button>)}</span></div></section>
         <footer><button onClick={()=>onOpen('lineage')}><GitBranch size={15}/>打开谱系</button><button className="primary-action" onClick={()=>onOpen('variant')}><Plus size={15}/>创建变体</button></footer>
-      </aside>
+      </aside>:<aside className="asset-catalog-inspector"><p className="asset-catalog-empty">尚未创建角色，可以先管理其他作品资产。</p></aside>}
     </div>
   </main>;
 }

@@ -24,3 +24,4 @@ export * from './api/workspace';
 export * from './api/director';
 export * from './api/skill';
 export * from './api/portability';
+export * from './api/library-asset';

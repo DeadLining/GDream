@@ -895,6 +895,35 @@ class AssetRead(BaseModel):
     created_at: datetime
 
 
+LibraryAssetKind = Literal["scene", "prop", "costume", "sound"]
+LibraryAssetTag = Annotated[str, Field(min_length=1, max_length=80)]
+
+
+class LibraryAssetCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: LibraryAssetKind
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=20000)
+    tags: list[LibraryAssetTag] = Field(default_factory=list, max_length=50)
+    metadata: dict = Field(default_factory=dict)
+
+
+class LibraryAssetPatch(PatchModel):
+    kind: LibraryAssetKind | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=20000)
+    tags: list[LibraryAssetTag] | None = Field(default=None, max_length=50)
+    metadata: dict | None = None
+
+
+class LibraryAssetRead(LibraryAssetCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
 ReferenceType = Literal["primary", "front", "three_quarter", "side", "back", "expression", "outfit"]
 
 

@@ -67,7 +67,7 @@ def _alembic_head() -> str:
     Hard-coded rather than read at runtime so the export does not require a
     live alembic context. Update this constant when bumping the migration head.
     """
-    return "20260714_18"
+    return "20260719_27"
 
 
 def _row_to_dict(instance: object) -> dict[str, Any]:
@@ -79,6 +79,20 @@ def _row_to_dict(instance: object) -> dict[str, Any]:
 def _serialize_project_tree(project: models.Project) -> dict[str, Any]:
     """Walk the project's core relationships and produce grouped dicts."""
     characters = [_row_to_dict(c) for c in project.characters]
+    library_assets = [
+        {
+            "id": asset.id,
+            "project_id": asset.project_id,
+            "kind": asset.kind,
+            "name": asset.name,
+            "description": asset.description,
+            "tags": asset.tags,
+            "metadata": asset.asset_metadata,
+            "created_at": asset.created_at,
+            "updated_at": asset.updated_at,
+        }
+        for asset in project.library_assets
+    ]
     episodes: list[dict[str, Any]] = []
     scenes: list[dict[str, Any]] = []
     shots: list[dict[str, Any]] = []
@@ -95,6 +109,7 @@ def _serialize_project_tree(project: models.Project) -> dict[str, Any]:
     return {
         "project": _row_to_dict(project),
         "characters": characters,
+        "library_assets": library_assets,
         "episodes": episodes,
         "scenes": scenes,
         "shots": shots,
@@ -130,6 +145,7 @@ class ProjectPortabilityService:
             .where(models.Project.id == project_id)
             .options(
                 selectinload(models.Project.characters),
+                selectinload(models.Project.library_assets),
                 selectinload(models.Project.episodes)
                 .selectinload(models.Episode.scenes)
                 .selectinload(models.Scene.shots)
@@ -227,6 +243,7 @@ class ProjectPortabilityService:
         id_maps: dict[str, dict[str, str]] = {
             "project": {},
             "character": {},
+            "library_asset": {},
             "episode": {},
             "scene": {},
             "shot": {},
@@ -255,6 +272,20 @@ class ProjectPortabilityService:
             language=old_project.get("language", "Chinese"),
         )
         self.session.add(project)
+        self.session.flush()
+
+        # Project-level scene, prop, costume, and sound catalog entries.
+        for row in database.get("library_assets", []):
+            library_asset = models.LibraryAsset(
+                id=remap("library_asset", row["id"]),
+                project_id=new_project_id,
+                kind=row.get("kind", "scene"),
+                name=row.get("name", ""),
+                description=row.get("description", ""),
+                tags=row.get("tags", []),
+                asset_metadata=row.get("metadata", {}),
+            )
+            self.session.add(library_asset)
         self.session.flush()
 
         # Characters.

@@ -47,6 +47,9 @@ class Project(Base):
     volumes: Mapped[list[Volume]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="Volume.position"
     )
+    library_assets: Mapped[list[LibraryAsset]] = relationship(
+        back_populates="project", cascade="all, delete-orphan", order_by="LibraryAsset.created_at"
+    )
     storylines: Mapped[list[Storyline]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="Storyline.created_at"
     )
@@ -68,6 +71,31 @@ class Volume(Base):
     episodes: Mapped[list[Episode]] = relationship(
         back_populates="volume", order_by="Episode.position"
     )
+
+
+class LibraryAsset(Base):
+    __tablename__ = "library_assets"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "kind", "name", name="uq_library_asset_project_kind_name"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    asset_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    project: Mapped[Project] = relationship(back_populates="library_assets")
 
 
 class Storyline(Base):

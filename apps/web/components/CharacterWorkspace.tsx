@@ -4,20 +4,24 @@ import {Check,ImagePlus,LoaderCircle,RefreshCw,Sparkles} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
 import {
   activateCharacterReference,
+  createLibraryAsset,
   createAssetVariant,
   createAssetVariantState,
   createAssetVariantUsage,
+  deleteLibraryAsset,
   deleteAssetVariant,
   deleteAssetVariantState,
   generateCharacterReferenceSet,
   getEpisodeProductionGraph,
   listCharacterReferences,
+  listLibraryAssets,
   listAssetVariants,
   mediaUrl,
   retryModelRuntimeJob,
   updateAssetVariant,
   updateAssetVariantState,
   updateCharacterReference,
+  updateLibraryAsset,
   uploadCharacterReference,
 } from '../lib/api';
 import {pollJob} from '../lib/jobs';
@@ -27,6 +31,9 @@ import type {
   CharacterReferenceSetMetadata,
   CharacterReferenceType,
   AssetVariant,
+  LibraryAsset,
+  LibraryAssetCreate,
+  LibraryAssetPatch,
   Job,
   EpisodeSummary,
 } from '../lib/types';
@@ -45,16 +52,20 @@ const types:Array<[CharacterReferenceType,string]>=[
 const labels=Object.fromEntries(types) as Record<CharacterReferenceType,string>;
 const setMetadata=(job:Job|null)=>job?.result_metadata as Partial<CharacterReferenceSetMetadata>|undefined;
 
-export function CharacterWorkspace({characters,episodes=[]}:{characters:Character[];episodes?:EpisodeSummary[]}){
+export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[]}){
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
   const [filter,setFilter]=useState<CharacterReferenceType>('primary');
   const [assetData,setAssetData]=useState<{characterId:string;references:CharacterReference[];variants:AssetVariant[]}>({characterId:'',references:[],variants:[]});
+  const [libraryAssets,setLibraryAssets]=useState<LibraryAsset[]>([]);
+  const [libraryError,setLibraryError]=useState('');
   const [error,setError]=useState('');
   const [generating,setGenerating]=useState(false);
   const [currentJob,setCurrentJob]=useState<Job|null>(null);
   const completedCount=useRef(0);
   const loadRequest=useRef(0);
+  const libraryLoadRequest=useRef(0);
+  const resolvedProjectId=projectId??characters[0]?.project_id??'';
   const character=characters.find(item=>item.id===selected)??characters[0];
   const dataMatchesCharacter=assetData.characterId===character?.id;
   const references=dataMatchesCharacter?assetData.references:[];
@@ -74,7 +85,31 @@ export function CharacterWorkspace({characters,episodes=[]}:{characters:Characte
   };
   useEffect(()=>{if(character)void load(character.id);},[character?.id]);
 
-  if(!character)return <main className="character-workspace center-state"><h1>作品资产库</h1><p>导入剧本或新建角色后管理参考图。</p></main>;
+  const reloadLibraryAssets=async()=>{
+    if(!resolvedProjectId){setLibraryAssets([]);return;}
+    const request=++libraryLoadRequest.current;
+    try{
+      const nextAssets=await listLibraryAssets(resolvedProjectId);
+      if(request!==libraryLoadRequest.current)return;
+      setLibraryAssets(nextAssets);
+      setLibraryError('');
+    }catch(cause){
+      if(request!==libraryLoadRequest.current)return;
+      setLibraryError(cause instanceof Error?cause.message:'加载作品资产失败');
+    }
+  };
+  useEffect(()=>{void reloadLibraryAssets();},[resolvedProjectId]);
+
+  const addLibraryAsset=async(data:LibraryAssetCreate)=>{
+    if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建资产');
+    await createLibraryAsset(resolvedProjectId,data);
+    await reloadLibraryAssets();
+  };
+  const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
+  const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();};
+  const catalog=<AssetCatalogView characters={characters} character={character??null} references={references} variants={variants} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset}/>;
+
+  if(!character)return catalog;
 
   const upload=async(file:File|null)=>{
     if(!file)return;
@@ -163,5 +198,5 @@ export function CharacterWorkspace({characters,episodes=[]}:{characters:Characte
     onOpen={setView}
   />;
 
-  return <AssetCatalogView characters={characters} character={character} references={references} variants={variants} onSelect={setSelected} onOpen={setView}/>;
+  return catalog;
 }

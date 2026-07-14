@@ -8,6 +8,13 @@ export type Asset = {
   model: string; generation_attempt: number; review_status: string; width: number | null;
   height: number | null; duration_seconds: number | null; created_at: string;
 };
+export type LibraryAssetKind='scene'|'prop'|'costume'|'sound';
+export type LibraryAsset={
+  id:string;project_id:string;kind:LibraryAssetKind;name:string;description:string;
+  tags:string[];metadata:Record<string,unknown>;created_at:string;updated_at:string;
+};
+export type LibraryAssetCreate=Pick<LibraryAsset,'kind'|'name'|'description'|'tags'|'metadata'>;
+export type LibraryAssetPatch=Partial<LibraryAssetCreate>;
 export type Job = {
   id: string; operation: string; target_type: string; target_id: string; status: JobStatus;
   progress: number; result_metadata: Record<string, unknown>; error: string; retry_count: number;
