@@ -235,6 +235,12 @@ def test_visual_review_rejects_candidate_generated_for_another_shot(client):
             model="test",request_metadata={},checksum="other-shot",review_status="draft",
         )
         session.add(other_asset);session.commit();other_asset_id=other_asset.id
+    wrong_source=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":other_asset_id,"title":"错误镜头来源","modification_scope":"shot"},
+    )
+    assert wrong_source.status_code==422
+    assert wrong_source.json()["detail"]=="Source asset must be a panel for the review shot"
     thread=client.post(
         f"/api/shots/{shot_id}/visual-review-threads",
         json={"source_asset_id":source_id,"title":"错误镜头候选","modification_scope":"shot"},

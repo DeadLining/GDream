@@ -1,4 +1,6 @@
-from sqlalchemy import select
+from pathlib import Path
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 from pydantic import ValidationError
 
@@ -28,6 +30,10 @@ class VisualReviewService:
             if asset is None or asset.project_id != self._shot_project_id(shot):
                 raise VisualReviewReferenceError(
                     "Source asset must belong to the shot project"
+                )
+            if asset.kind != f"panel:{shot.id}":
+                raise VisualReviewReferenceError(
+                    "Source asset must be a panel for the review shot"
                 )
         thread = models.VisualReviewThread(
             episode_id=shot.scene.episode.id,
@@ -131,6 +137,10 @@ class VisualReviewService:
             raise VisualReviewReferenceError(
                 "Candidate asset must belong to the shot project"
             )
+        if asset.kind != f"panel:{thread.shot_id}":
+            raise VisualReviewReferenceError(
+                "Candidate asset must be a panel for the review shot"
+            )
         candidate = models.VisualReviewCandidate(
             thread_id=thread.id, status="ready", **data.model_dump()
         )
@@ -138,6 +148,167 @@ class VisualReviewService:
         self.session.commit()
         self.session.refresh(candidate)
         return candidate
+
+    async def generate_candidate(self, thread_id: str, data_root: Path, provider):
+        thread = self.session.get(models.VisualReviewThread, thread_id)
+        if thread is None:
+            return None
+        shot = thread.shot
+        source = (
+            self.session.get(models.Asset, thread.source_asset_id)
+            if thread.source_asset_id
+            else None
+        )
+        if source is not None and (
+            source.project_id != self._shot_project_id(shot)
+            or source.kind != f"panel:{shot.id}"
+        ):
+            raise VisualReviewReferenceError(
+                "Source asset must be a panel for the review shot"
+            )
+        review_context = {
+            "thread_id": thread.id,
+            "source_asset_id": thread.source_asset_id,
+            "modification_scope": thread.modification_scope,
+            "annotations": [
+                {"kind": item.kind, "geometry": item.geometry, "label": item.label}
+                for item in thread.annotations
+            ],
+            "messages": [
+                {"author_kind": item.author_kind, "content": item.content}
+                for item in thread.messages
+            ],
+            "locked": ["identity", "outfit", "composition"],
+        }
+        from comic_studio.services.panels import PanelService
+
+        asset = await PanelService(self.session, data_root, provider).generate_panel(
+            shot.id, activate=False, review_context=review_context
+        )
+        candidate = models.VisualReviewCandidate(
+            thread_id=thread.id,
+            asset_id=asset.id,
+            status="ready",
+            generation_metadata={
+                "scope": thread.modification_scope,
+                "locked": review_context["locked"],
+                "source_asset_id": thread.source_asset_id,
+            },
+        )
+        self.session.add(candidate)
+        self.session.commit()
+        self.session.refresh(candidate)
+        return candidate
+
+    def _scope_revisions(
+        self, thread: models.VisualReviewThread, asset: models.Asset
+    ) -> dict:
+        shot = thread.shot
+        character_ids = {
+            key
+            for key in shot.character_state
+            if isinstance(key, str)
+            and self.session.get(models.Character, key) is not None
+        }
+        character_ids.update(
+            line.character_id
+            for line in shot.dialogue
+            if line.character_id is not None
+        )
+        if thread.modification_scope == "shot" or not character_ids:
+            return {
+                "scope": thread.modification_scope,
+                "variant_ids": [],
+                "usage_ids": [],
+                "affected_shot_ids": [shot.id],
+                "affected_episode_ids": [thread.episode_id],
+            }
+
+        conditions = [
+            models.Episode.project_id == self._shot_project_id(shot)
+        ]
+        if thread.modification_scope == "episode":
+            conditions.append(models.Episode.id == thread.episode_id)
+        all_shots = list(
+            self.session.scalars(
+                select(models.Shot)
+                .join(models.Scene)
+                .join(models.Episode)
+                .where(*conditions)
+            )
+        )
+        affected = [
+            item
+            for item in all_shots
+            if character_ids.intersection(
+                key for key in item.character_state if isinstance(key, str)
+            )
+        ]
+        variant_ids: list[str] = []
+        usage_ids: list[str] = []
+        for character_id in sorted(character_ids):
+            kind = thread.modification_scope
+            version_conditions = [
+                models.AssetVariant.character_id == character_id,
+                models.AssetVariant.kind == kind,
+            ]
+            if kind == "episode":
+                version_conditions.append(
+                    models.AssetVariant.episode_id == thread.episode_id
+                )
+            version = (
+                self.session.scalar(
+                    select(func.max(models.AssetVariant.version)).where(
+                        *version_conditions
+                    )
+                )
+                or 0
+            ) + 1
+            parent_id = None
+            if kind == "episode":
+                parent_id = self.session.scalar(
+                    select(models.AssetVariant.id)
+                    .where(
+                        models.AssetVariant.character_id == character_id,
+                        models.AssetVariant.kind == "master",
+                        models.AssetVariant.deleted_at.is_(None),
+                    )
+                    .order_by(models.AssetVariant.version.desc())
+                    .limit(1)
+                )
+            variant = models.AssetVariant(
+                character_id=character_id,
+                episode_id=thread.episode_id if kind == "episode" else None,
+                parent_variant_id=parent_id,
+                kind=kind,
+                label=f"{thread.title} V{version}",
+                inherited_fields=["identity", "face", "hair", "body", "outfit"],
+                overrides={},
+                version=version,
+                review_status="approved",
+            )
+            self.session.add(variant)
+            self.session.flush()
+            usage = models.AssetVariantUsage(
+                variant_id=variant.id,
+                shot_id=shot.id,
+                asset_id=asset.id,
+                usage_kind="panel",
+            )
+            self.session.add(usage)
+            self.session.flush()
+            variant_ids.append(variant.id)
+            usage_ids.append(usage.id)
+        affected_shots = affected or [shot]
+        return {
+            "scope": thread.modification_scope,
+            "variant_ids": variant_ids,
+            "usage_ids": usage_ids,
+            "affected_shot_ids": sorted({item.id for item in affected_shots}),
+            "affected_episode_ids": sorted(
+                {item.scene.episode_id for item in affected_shots}
+            ),
+        }
 
     def accept_candidate(self, candidate_id: str):
         candidate = self.session.get(models.VisualReviewCandidate, candidate_id)
@@ -152,6 +323,10 @@ class VisualReviewService:
             raise VisualReviewReferenceError(
                 "Candidate asset must belong to the shot project"
             )
+        if asset.kind != f"panel:{shot.id}":
+            raise VisualReviewReferenceError(
+                "Candidate asset must be a panel for the review shot"
+            )
         for other in thread.candidates:
             if other.id != candidate.id and other.status == "ready":
                 other.status = "rejected"
@@ -160,6 +335,10 @@ class VisualReviewService:
         asset.review_status = "approved"
         shot.active_panel_asset_id = asset.id
         shot.review_status = "draft"
+        candidate.generation_metadata = {
+            **candidate.generation_metadata,
+            "acceptance": self._scope_revisions(thread, asset),
+        }
         self.session.commit()
         self.session.refresh(candidate)
         return candidate

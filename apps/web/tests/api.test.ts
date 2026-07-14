@@ -32,6 +32,7 @@ import {
   updateVisualAnnotation,
   deleteVisualAnnotation,
   createVisualReviewCandidate,
+  startVisualReviewGeneration,
   createReleaseCandidate,
   createReviewThread,
   getReleaseGate,
@@ -248,8 +249,9 @@ describe('asset lineage and visual annotation api', () => {
     await createAssetVariantUsage('variant-2',{state_id:'state-1',shot_id:'shot-7',usage_kind:'panel'});
     await createVisualAnnotation('thread-1',{kind:'circle',geometry:{cx:.5,cy:.4,rx:.08,ry:.08},color:'#B9473E',label:'脸部'});
     await createVisualReviewCandidate('thread-1',{asset_id:'asset-2',generation_metadata:{scope:'shot'}});
+    await startVisualReviewGeneration('thread-1');
     await rejectVisualReviewCandidate('candidate-1');
-    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual(['/api/characters/character-1/variants','/api/asset-variants/variant-2/states','/api/asset-variants/variant-2/usages','/api/visual-review-threads/thread-1/annotations','/api/visual-review-threads/thread-1/candidates','/api/visual-review-candidates/candidate-1/reject']);
+    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual(['/api/characters/character-1/variants','/api/asset-variants/variant-2/states','/api/asset-variants/variant-2/usages','/api/visual-review-threads/thread-1/annotations','/api/visual-review-threads/thread-1/candidates','/api/visual-review-threads/thread-1/generate','/api/visual-review-candidates/candidate-1/reject']);
   });
 
   it('uses lineage update and deletion endpoints', async () => {

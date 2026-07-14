@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from comic_studio import schemas
+from comic_studio import models, schemas
 from comic_studio.db import get_session
+from comic_studio.model_runtime.contracts import Capability, RuntimeJobRead
 from comic_studio.services.visual_review import (
     VisualReviewReferenceError,
     VisualReviewService,
@@ -118,6 +119,28 @@ def add_message(
     if message is None:
         raise HTTPException(404, "Visual review thread not found")
     return message
+
+
+@router.post(
+    "/api/visual-review-threads/{thread_id}/generate",
+    response_model=RuntimeJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def generate_candidate(
+    thread_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    session: SessionDependency,
+):
+    if session.get(models.VisualReviewThread, thread_id) is None:
+        raise HTTPException(404, "Visual review thread not found")
+    job = request.app.state.model_runtime.create_media_job(
+        Capability.IMAGE, "visual_review", thread_id, {"activate": False}
+    )
+    background_tasks.add_task(request.app.state.model_runtime.run_media_job, job.id)
+    return RuntimeJobRead(
+        job_id=job.id, capability=Capability.IMAGE, status=job.status
+    )
 
 
 @router.post(

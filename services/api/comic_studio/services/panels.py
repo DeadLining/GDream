@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from sqlalchemy import select
@@ -192,7 +193,11 @@ class PanelService:
         return assets
 
     async def generate_panel(
-        self, shot_id: str, *, activate: bool = False
+        self,
+        shot_id: str,
+        *,
+        activate: bool = False,
+        review_context: dict | None = None,
     ) -> models.Asset:
         statement = (
             select(models.Shot)
@@ -289,15 +294,41 @@ class PanelService:
             prompt = f"Style: {style_prefix}.\n\n{prompt}"
         if compiled.prompt_constraints:
             prompt = f"{prompt}\n\n{compiled.prompt_constraints}"
+        if review_context:
+            annotations = json.dumps(
+                review_context.get("annotations", []),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            messages = "\n".join(
+                f"- {item['author_kind']}: {item['content']}"
+                for item in review_context.get("messages", [])
+            )
+            prompt = (
+                f"{prompt}\n\nVisual review revision instructions:\n"
+                f"- Modification scope: {review_context['modification_scope']}\n"
+                f"- Source asset: {review_context.get('source_asset_id') or 'none'}\n"
+                "- Locked constraints: identity, outfit, composition\n"
+                f"- Annotations (normalized canvas geometry): {annotations}\n"
+                f"- Review conversation:\n{messages or '- no additional message'}"
+            )
         tail_asset = self._tail_frame_asset(shot)
         if tail_asset is not None:
             # Make the prompt explicitly call out the continuity anchor.
             prompt = f"{prompt}\n\nContinuity: continue the visual from the previous shot's tail frame (reference image 1)."
+        review_source = None
+        if review_context and review_context.get("source_asset_id"):
+            review_source = self.session.get(
+                models.Asset, review_context["source_asset_id"]
+            )
         reference_inputs = []
+        if review_source is not None:
+            reference_inputs.append(self._asset_to_input(review_source))
         if tail_asset is not None:
             reference_inputs.append(self._asset_to_input(tail_asset))
         for asset in reference_assets:
-            reference_inputs.append(self._asset_to_input(asset))
+            if review_source is None or asset.id != review_source.id:
+                reference_inputs.append(self._asset_to_input(asset))
         result = (
             await self.provider.edit(prompt, reference_inputs, "1024x1536")
             if reference_inputs
@@ -319,6 +350,7 @@ class PanelService:
                 ],
                 "input_snapshot": compiled.snapshot,
                 "input_snapshot_hash": compiled.snapshot_hash,
+                **({"visual_review": review_context} if review_context else {}),
             },
             activate=activate,
         )

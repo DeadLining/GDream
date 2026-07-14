@@ -30,6 +30,7 @@ from comic_studio.services.character_reference_sets import (
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
 from comic_studio.services.videos import VideoService
+from comic_studio.services.visual_review import VisualReviewService
 
 
 provider_testing_client_factory = default_client_factory
@@ -252,6 +253,20 @@ class ModelRuntimeService:
     ):
         provider = self.adapters.create(Capability.IMAGE)
         with self.session_factory() as session:
+            if target_type == "visual_review":
+                candidate = await VisualReviewService(session).generate_candidate(
+                    target_id, self.data_root, provider
+                )
+                if candidate is None:
+                    raise KeyError(target_id)
+                asset = session.get(models.Asset, candidate.asset_id)
+                return {
+                    "capability": Capability.IMAGE.value,
+                    "asset_id": asset.id,
+                    "candidate_id": candidate.id,
+                    "thread_id": candidate.thread_id,
+                    "media_url": f"/media/{asset.local_path}",
+                }
             if target_type == "shot":
                 return await PanelService(
                     session, self.data_root, provider

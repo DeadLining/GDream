@@ -98,6 +98,12 @@
 .review-canvas[aria-label="审阅画布"] { cursor: crosshair; }
 .review-canvas .annotation-pin { pointer-events: auto; transform: translate(-50%,-50%); background: var(--accent-strong); cursor: pointer; }
 .review-canvas .annotation-pin.active { outline: 3px solid color-mix(in srgb, var(--focus) 45%, transparent); outline-offset: 2px; }
+.review-image-stage { position: relative; display: inline-grid; max-width: 100%; max-height: 100%; box-shadow: var(--shadow-lg); }
+.review-image-stage > img { grid-area: 1 / 1; max-width: 100%; max-height: 100%; display: block; object-fit: contain; }
+.review-annotation-layer { position: absolute; inset: 0; touch-action: none; }
+.review-annotation-layer .annotation-pin { transform: none; min-width: 24px; min-height: 24px; border: 2px solid var(--accent-strong); background: color-mix(in srgb, var(--accent-strong) 18%, transparent); color: #fff; }
+.review-annotation-layer .annotation-circle { border-radius: 50%; }
+.review-annotation-layer .annotation-rectangle { border-radius: 2px; }
 .review-annotation-editor { display: grid; gap: 7px; margin-bottom: 10px; padding: 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-subtle); }
 .review-annotation-editor label { display: grid; gap: 5px; color: var(--muted-strong); font-size: 10px; font-weight: 700; }
 .review-annotation-editor input { width: 100%; min-width: 0; height: 32px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 0 8px; color: var(--ink); }
@@ -320,5 +326,4 @@
 .portability-warning-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
 .portability-warning-list li { display: inline-flex; align-items: center; gap: 5px; color: #705b24; font-size: 11px; overflow-wrap: anywhere; }
 @media (max-width: 800px) { .portability-actions { grid-template-columns: 1fr; } }
-
 
