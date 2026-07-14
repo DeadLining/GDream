@@ -15,7 +15,7 @@ export function DirectorCanvas({objects,camera,selectedObjectId,mode,onTransform
       <ambientLight intensity={0.85}/><directionalLight castShadow position={[4,7,5]} intensity={1.4}/>
       <gridHelper args={[24,24,'#66808a','#40545c']}/>
       <mesh receiveShadow rotation={[-Math.PI/2,0,0]}><planeGeometry args={[24,24]}/><shadowMaterial opacity={0.18}/></mesh>
-      {objects.map(object=><DirectorObject key={object.id} object={object} selected={object.id===selectedObjectId} editable={editable&&mode==='world'} onTransform={transform=>onTransform(object.id,transform)}/>)}
+      {objects.map(object=><DirectorObject key={object.id} object={object} selected={object.id===selectedObjectId} editable={editable} onTransform={transform=>onTransform(object.id,transform)}/>)}
       <OrbitControls enabled={mode==='world'} target={camera.target} makeDefault/>
     </Canvas>
     <div className="director-frame-guide" aria-hidden="true"/>

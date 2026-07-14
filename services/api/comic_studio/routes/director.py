@@ -96,6 +96,7 @@ def restore_director_revision(stage_id:str,revision_id:str,data:DirectorVersionR
 def update_shot_camera(stage_id:str,shot_id:str,data:ShotCameraUpdateRequest,session:SessionDependency):
     try:return DirectorStageService(session).update_camera(stage_id,shot_id,data.expected_version,data.camera)
     except KeyError as exc:raise HTTPException(status_code=404,detail="Director camera not found") from exc
+    except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
     except DirectorVersionConflict as exc:raise _conflict(exc) from exc
 
 

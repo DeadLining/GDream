@@ -106,7 +106,11 @@ class DirectorStageService:
         if item is None:raise KeyError(object_id)
         stage=self.get_stage(item.stage_id)
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
-        self._record_revision(stage);self.session.delete(item);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit()
+        self._record_revision(stage)
+        for camera in stage.shot_cameras:
+            if object_id in camera.object_overrides:
+                camera.object_overrides={key:value for key,value in camera.object_overrides.items() if key!=object_id}
+        self.session.delete(item);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit()
 
     def list_revisions(self,stage_id:str)->list[models.DirectorRevision]:
         if self.session.get(models.DirectorStage,stage_id) is None:raise KeyError(stage_id)
@@ -128,6 +132,9 @@ class DirectorStageService:
         stage=self.get_stage(stage_id);camera=next((item for item in stage.shot_cameras if item.shot_id==shot_id),None)
         if camera is None:raise KeyError(shot_id)
         if camera.version!=expected_version:raise DirectorVersionConflict(camera.version)
+        if patch.object_overrides is not None:
+            stage_object_ids={item.id for item in stage.objects}
+            if any(object_id not in stage_object_ids for object_id in patch.object_overrides):raise ValueError("director_object_not_in_stage")
         self._record_revision(stage,camera=camera)
         for key,value in patch.model_dump(exclude_none=True).items():setattr(camera,key,value)
         camera.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(camera);return camera

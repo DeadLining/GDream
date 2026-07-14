@@ -44,6 +44,11 @@ class DirectorStagePatch(StrictDirectorModel):
     environment:dict|None=None
 
 
+class DirectorObjectOverride(StrictDirectorModel):
+    transform:Transform|None=None
+    visible:bool|None=None
+
+
 class ShotCameraPatch(StrictDirectorModel):
     position:list[float]|None=None
     target:list[float]|None=None
@@ -54,7 +59,7 @@ class ShotCameraPatch(StrictDirectorModel):
     shot_size:str|None=None
     camera_motion:str|None=None
     framing_guides:dict|None=None
-    object_overrides:dict|None=None
+    object_overrides:dict[str,DirectorObjectOverride]|None=None
 
     @field_validator("position","target","rotation")
     @classmethod

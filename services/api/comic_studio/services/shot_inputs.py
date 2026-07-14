@@ -245,23 +245,32 @@ class ShotInputCompiler:
     def _director_snapshot(shot: models.Shot) -> dict[str, Any]:
         camera = shot.director_camera
         stage = camera.stage if camera is not None else None
-        return {
-            "stage_id": stage.id if stage is not None else None,
-            "stage_version": stage.version if stage is not None else None,
-            "environment": stage.environment if stage is not None else {},
-            "objects": [
+        overrides = camera.object_overrides if camera is not None else {}
+        objects = []
+        for item in (stage.objects if stage is not None else []):
+            override = overrides.get(item.id, {})
+            if not isinstance(override, dict):
+                override = {}
+            visible = override.get("visible", item.visible)
+            if not visible:
+                continue
+            objects.append(
                 {
                     "id": item.id,
                     "kind": item.kind,
                     "source_type": item.source_type,
                     "source_id": item.source_id,
                     "label": item.label,
-                    "transform": item.transform,
+                    "transform": override.get("transform", item.transform),
                     "appearance": item.appearance,
-                    "visible": item.visible,
+                    "visible": visible,
                 }
-                for item in (stage.objects if stage is not None else [])
-            ],
+            )
+        return {
+            "stage_id": stage.id if stage is not None else None,
+            "stage_version": stage.version if stage is not None else None,
+            "environment": stage.environment if stage is not None else {},
+            "objects": objects,
             "camera": (
                 {
                     "id": camera.id,
