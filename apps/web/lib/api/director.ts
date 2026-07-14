@@ -2,12 +2,14 @@
 // Do not edit manually; regenerate via the split script if api.ts changes.
 
 import { API_BASE, ApiError, apiRequest, json } from './core';
-import type { Asset, DirectorApplyField, DirectorObject, DirectorStage, DirectorSuggestion, DirectorSuggestionKind, Shot, ShotCamera } from '../types';
+import type { Asset, DirectorApplyField, DirectorAsset, DirectorObject, DirectorStage, DirectorSuggestion, DirectorSuggestionKind, Shot, ShotCamera } from '../types';
 import type { Transform } from '../types';
 
 export const createDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`,json('POST'));
 export const getDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`);
-export const createDirectorObject=(stageId:string,expectedVersion:number,object:{kind:DirectorObject['kind'];source_type:DirectorObject['source_type'];label:string;transform?:Transform;appearance?:Record<string,unknown>;metadata?:Record<string,unknown>;visible?:boolean})=>apiRequest<DirectorObject>(`/api/director-stages/${stageId}/objects`,json('POST',{expected_version:expectedVersion,object}));
+export const createDirectorObject=(stageId:string,expectedVersion:number,object:{kind:DirectorObject['kind'];source_type:DirectorObject['source_type'];source_id?:string|null;label:string;transform?:Transform;appearance?:Record<string,unknown>;metadata?:Record<string,unknown>;visible?:boolean})=>apiRequest<DirectorObject>(`/api/director-stages/${stageId}/objects`,json('POST',{expected_version:expectedVersion,object}));
+export const getDirectorAssets=(stageId:string)=>apiRequest<DirectorAsset[]>(`/api/director-stages/${stageId}/assets`);
+export const syncDirectorAssets=(stageId:string,expectedVersion:number,assetKeys:string[])=>apiRequest<DirectorStage>(`/api/director-stages/${stageId}/assets/sync`,json('POST',{expected_version:expectedVersion,asset_keys:assetKeys}));
 export const updateDirectorObject=(objectId:string,expectedVersion:number,object:Partial<Pick<DirectorObject,'label'|'transform'|'appearance'|'metadata'|'visible'>>)=>apiRequest<DirectorObject>(`/api/director-objects/${objectId}`,json('PATCH',{expected_version:expectedVersion,object}));
 export async function deleteDirectorObject(objectId:string,expectedVersion:number):Promise<void>{await apiRequest(`/api/director-objects/${objectId}`,json('DELETE',{expected_version:expectedVersion}));}
 export const updateDirectorCamera=(stageId:string,shotId:string,expectedVersion:number,camera:Partial<Omit<ShotCamera,'id'|'stage_id'|'shot_id'|'version'|'preview_asset_id'>>)=>apiRequest<ShotCamera>(`/api/director-stages/${stageId}/shots/${shotId}/camera`,json('PUT',{expected_version:expectedVersion,camera}));

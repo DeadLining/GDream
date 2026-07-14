@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 
 from comic_studio import models,schemas
 from comic_studio.db import get_session
-from comic_studio.director import DirectorObjectCreateRequest,DirectorObjectRead,DirectorObjectUpdateRequest,DirectorRevisionRead,DirectorStageRead,DirectorStageUpdateRequest,DirectorSuggestionApplyRequest,DirectorSuggestionCreateRequest,DirectorSuggestionRead,DirectorVersionRequest,ShotCameraRead,ShotCameraUpdateRequest
+from comic_studio.director import DirectorAssetRead,DirectorAssetSyncRequest,DirectorObjectCreateRequest,DirectorObjectRead,DirectorObjectUpdateRequest,DirectorRevisionRead,DirectorStageRead,DirectorStageUpdateRequest,DirectorSuggestionApplyRequest,DirectorSuggestionCreateRequest,DirectorSuggestionRead,DirectorVersionRequest,ShotCameraRead,ShotCameraUpdateRequest
 from comic_studio.providers.base import ProviderError
 from comic_studio.routes.assets import asset_response
+from comic_studio.services.director_assets import DirectorAssetCatalogService
 from comic_studio.services.director_previews import DirectorPreviewError,DirectorPreviewService
 from comic_studio.services.director_stages import DirectorStageService,DirectorVersionConflict
 from comic_studio.services.director_suggestions import DirectorSuggestionService
@@ -34,6 +35,20 @@ def get_director_stage(scene_id:str,session:SessionDependency):
     stage=session.scalar(select(models.DirectorStage).where(models.DirectorStage.scene_id==scene_id))
     if stage is None:raise HTTPException(status_code=404,detail="Director stage not found")
     return DirectorStageService(session).get_stage(stage.id)
+
+
+@router.get("/api/director-stages/{stage_id}/assets",response_model=list[DirectorAssetRead])
+def list_director_assets(stage_id:str,session:SessionDependency):
+    try:return DirectorAssetCatalogService(session).list(stage_id)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage not found") from exc
+
+
+@router.post("/api/director-stages/{stage_id}/assets/sync",response_model=DirectorStageRead)
+def sync_director_assets(stage_id:str,data:DirectorAssetSyncRequest,session:SessionDependency):
+    try:return DirectorStageService(session).sync_assets(stage_id,data.expected_version,data.asset_keys)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage not found") from exc
+    except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
+    except DirectorVersionConflict as exc:raise _conflict(exc) from exc
 
 
 @router.post("/api/director-stages/{stage_id}/objects",response_model=DirectorObjectRead,status_code=status.HTTP_201_CREATED)

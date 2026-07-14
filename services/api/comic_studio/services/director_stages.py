@@ -50,6 +50,41 @@ class DirectorStageService:
         created=models.DirectorObject(stage_id=stage.id,kind=data.kind,source_type=data.source_type,source_id=data.source_id,label=data.label,position=len(stage.objects)+1,transform=data.transform.model_dump(),appearance=data.appearance,object_metadata=data.metadata,visible=data.visible)
         self.session.add(created);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(created);return created
 
+    def sync_assets(self,stage_id:str,expected_version:int,asset_keys:list[str])->models.DirectorStage:
+        from comic_studio.services.director_assets import DirectorAssetCatalogService
+
+        stage=self.get_stage(stage_id)
+        if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
+        catalog_service=DirectorAssetCatalogService(self.session)
+        catalog={item.key:item for item in catalog_service.definitions(stage_id)}
+        unknown=[key for key in asset_keys if key not in catalog]
+        if unknown:raise ValueError(f"unknown_director_asset:{unknown[0]}")
+        selected=[catalog[key] for key in dict.fromkeys(asset_keys)]
+        existing={item.object_metadata.get("catalog_key"):item for item in stage.objects if item.object_metadata.get("catalog_key")}
+        environment=catalog_service.environment(stage)
+        changed=stage.environment!=environment
+        for definition in selected:
+            metadata={**definition.metadata,"catalog_key":definition.key}
+            current=existing.get(definition.key)
+            if current is None:
+                changed=True
+                continue
+            desired={"kind":definition.kind,"source_type":definition.source_type,"source_id":definition.source_id,"label":definition.label,"appearance":definition.appearance,"object_metadata":metadata}
+            if any(getattr(current,key)!=value for key,value in desired.items()):changed=True
+        if not changed:return stage
+        self._record_revision(stage)
+        stage.environment=environment
+        next_position=max((item.position for item in stage.objects),default=0)+1
+        for definition in selected:
+            metadata={**definition.metadata,"catalog_key":definition.key}
+            current=existing.get(definition.key)
+            if current is None:
+                self.session.add(models.DirectorObject(stage_id=stage.id,kind=definition.kind,source_type=definition.source_type,source_id=definition.source_id,label=definition.label,position=next_position,transform=definition.transform,appearance=definition.appearance,object_metadata=metadata,visible=True))
+                next_position+=1
+                continue
+            current.kind=definition.kind;current.source_type=definition.source_type;current.source_id=definition.source_id;current.label=definition.label;current.appearance=definition.appearance;current.object_metadata=metadata
+        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
+
     def update_stage(self,stage_id:str,expected_version:int,patch:DirectorStagePatch)->models.DirectorStage:
         stage=self.get_stage(stage_id)
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)

@@ -23,7 +23,7 @@ class Transform(StrictDirectorModel):
 
 class DirectorObjectCreate(StrictDirectorModel):
     kind:Literal["character","prop","background","light","primitive"]
-    source_type:Literal["placeholder","character_reference","asset","model"]
+    source_type:Literal["placeholder","character_reference","scene_context","asset","model"]
     source_id:str|None=None
     label:str=Field(min_length=1,max_length=160)
     transform:Transform=Transform()
@@ -83,6 +83,22 @@ class ShotCameraRead(BaseModel):
 class DirectorStageRead(BaseModel):
     model_config=ConfigDict(from_attributes=True)
     id:str;scene_id:str;version:int;environment:dict;objects:list[DirectorObjectRead];shot_cameras:list[ShotCameraRead]
+
+
+class DirectorAssetRead(StrictDirectorModel):
+    key:str
+    kind:Literal["character","prop","background"]
+    source_type:Literal["character_reference","scene_context","asset","model"]
+    source_id:str
+    asset_id:str|None=None
+    label:str
+    media_url:str|None=None
+    metadata:dict={}
+
+
+class DirectorAssetSyncRequest(StrictDirectorModel):
+    expected_version:int=Field(ge=1)
+    asset_keys:list[str]
 
 
 class DirectorObjectCreateRequest(StrictDirectorModel):

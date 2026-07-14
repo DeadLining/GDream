@@ -160,11 +160,24 @@ class ShotInputCompiler:
             prompt_lines.append(
                 "- Director camera: "
                 f"{camera['shot_size']}, {self._format_number(camera['focal_length_mm'])}mm, "
-                f"motion {camera['camera_motion']}"
+                f"motion {camera['camera_motion']}, "
+                f"camera position {self._format_vector(camera['position'])}, "
+                f"target {self._format_vector(camera['target'])}"
             )
         if director["environment"]:
             prompt_lines.append(
                 f"- Director environment: {self._format_mapping(director['environment'])}"
+            )
+        for item in director["objects"]:
+            if not item["visible"]:
+                continue
+            transform = item["transform"]
+            prompt_lines.append(
+                f"- Director object: {item['kind']} {item['label']}; "
+                f"source {item['source_type']}:{item['source_id'] or 'none'}; "
+                f"position {self._format_vector(transform.get('position', [0, 0, 0]))}; "
+                f"rotation {self._format_vector(transform.get('rotation', [0, 0, 0]))}; "
+                f"scale {self._format_vector(transform.get('scale', [1, 1, 1]))}"
             )
         prompt_constraints = (
             "Bound production inputs:\n" + "\n".join(prompt_lines)
@@ -286,3 +299,9 @@ class ShotInputCompiler:
     @staticmethod
     def _format_number(value: float) -> str:
         return str(int(value)) if float(value).is_integer() else str(value)
+
+    @classmethod
+    def _format_vector(cls, value: Any) -> str:
+        if not isinstance(value, (list, tuple)):
+            return "[]"
+        return "[" + ", ".join(cls._format_number(item) for item in value) + "]"

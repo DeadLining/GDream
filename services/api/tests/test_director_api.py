@@ -181,6 +181,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     synced_stage = synced.json()
     assert synced_stage["environment"]["location"] == "天台"
     assert {item["kind"] for item in synced_stage["objects"]} == {"background", "character", "prop"}
+    assert [item["position"] for item in synced_stage["objects"]] == [1, 2, 3]
     synced_character = next(item for item in synced_stage["objects"] if item["kind"] == "character")
     assert synced_character["appearance"]["image_url"].endswith("/primary.png")
     assert synced_character["metadata"]["asset_id"] == asset_id
