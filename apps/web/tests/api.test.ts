@@ -53,6 +53,10 @@ import {
   restoreEpisodeVersion,
   createDeliveryPackage,
   listDeliveryPackages,
+  createLibraryAsset,
+  deleteLibraryAsset,
+  listLibraryAssets,
+  updateLibraryAsset,
 } from '../lib/api';
 
 describe('apiRequest', () => {
@@ -102,6 +106,31 @@ describe('apiRequest', () => {
       message: '本地 API 暂时不可用，请稍后重试',
       detail: 'api_proxy_failure',
     });
+  });
+});
+
+describe('project library asset api',()=>{
+  afterEach(()=>vi.unstubAllGlobals());
+
+  it('uses project-scoped catalog CRUD endpoints',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async(_path:string,init?:RequestInit)=>new Response(
+      init?.method==='DELETE'?null:JSON.stringify([]),
+      {status:init?.method==='DELETE'?204:200,headers:init?.method==='DELETE'?undefined:{'content-type':'application/json'}},
+    ));
+    vi.stubGlobal('fetch',fetchMock);
+    const body={kind:'scene' as const,name:'雨夜天台',description:'霓虹雨夜',tags:['雨夜'],metadata:{}};
+
+    await listLibraryAssets('project-1');
+    await createLibraryAsset('project-1',body);
+    await updateLibraryAsset('asset-1',{name:'暴雨天台'});
+    await deleteLibraryAsset('asset-1');
+
+    expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit|undefined)?.method??'GET'])).toEqual([
+      ['/api/projects/project-1/library-assets','GET'],
+      ['/api/projects/project-1/library-assets','POST'],
+      ['/api/library-assets/asset-1','PATCH'],
+      ['/api/library-assets/asset-1','DELETE'],
+    ]);
   });
 });
 
