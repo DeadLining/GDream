@@ -31,6 +31,10 @@ it('opens real asset categories, reports counts, and searches their records',asy
   await user.type(screen.getByRole('searchbox',{name:'搜索资产'}),'雨夜');
   expect(screen.getByRole('button',{name:/雨夜天台/})).toBeVisible();
   expect(screen.queryByRole('button',{name:/地下车库/})).not.toBeInTheDocument();
+
+  await user.clear(screen.getByRole('searchbox',{name:'搜索资产'}));
+  await user.type(screen.getByRole('searchbox',{name:'搜索资产'}),'地下');
+  expect(screen.getByRole('heading',{name:'地下车库'})).toBeVisible();
 });
 
 it('creates, edits, and deletes a project library asset',async()=>{
@@ -62,4 +66,3 @@ it('creates, edits, and deletes a project library asset',async()=>{
   await user.click(screen.getByRole('button',{name:'删除资产'}));
   expect(onDelete).toHaveBeenCalledWith('la3');
 });
-
