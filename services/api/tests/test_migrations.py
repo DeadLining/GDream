@@ -1,12 +1,24 @@
 from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
+import pytest
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from comic_studio.db import run_migrations
 
 
 def _database_url(path: Path) -> str:
     return f"sqlite:///{path}"
+
+
+def _alembic_config(database_url: str) -> Config:
+    api_root = Path(__file__).resolve().parents[1]
+    config = Config(str(api_root / "alembic.ini"))
+    config.set_main_option("script_location", str(api_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+    return config
 
 
 def _create_legacy_database(path: Path) -> None:
@@ -189,3 +201,69 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
     assert "active_video_asset_id" in {
         column["name"] for column in inspector.get_columns("shots")
     }
+
+
+def test_single_script_migration_merges_duplicate_documents_and_adds_constraint(tmp_path):
+    database_path = tmp_path / "duplicate-scripts.db"
+    database_url = _database_url(database_path)
+    config = _alembic_config(database_url)
+    command.upgrade(config, "20260717_24")
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(text("""
+            INSERT INTO projects (
+                id, title, logline, story_bible, visual_style,
+                aspect_ratio, language, created_at, updated_at
+            ) VALUES (
+                'project-1', 'Project', 'logline', 'bible', 'ink',
+                '9:16', 'Chinese', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """))
+        connection.execute(text("""
+            INSERT INTO script_documents (
+                id, project_id, title, source_type, status,
+                current_revision_id, created_at, updated_at
+            ) VALUES
+                ('script-old', 'project-1', 'Old', 'upload', 'ready',
+                 'revision-old', '2026-01-01', '2026-01-01'),
+                ('script-current', 'project-1', 'Current', 'ai', 'draft',
+                 'revision-current', '2026-02-01', '2026-02-01')
+        """))
+        connection.execute(text("""
+            INSERT INTO script_revisions (
+                id, document_id, revision_number, status, content, checksum,
+                creation_method, original_filename, source_file_path,
+                source_media_type, generation_brief, generation_metadata, created_at
+            ) VALUES
+                ('revision-old', 'script-old', 1, 'finalized', 'old', 'old-checksum',
+                 'upload', 'old.txt', '', 'text/plain', '', '{}', '2026-01-01'),
+                ('revision-current', 'script-current', 1, 'working', 'current', 'current-checksum',
+                 'ai', '', '', '', 'brief', '{}', '2026-02-01')
+        """))
+
+    command.upgrade(config, "head")
+
+    with engine.connect() as connection:
+        documents = connection.execute(text(
+            "SELECT id, current_revision_id FROM script_documents WHERE project_id='project-1'"
+        )).all()
+        revisions = connection.execute(text(
+            "SELECT document_id, revision_number, content FROM script_revisions ORDER BY revision_number"
+        )).all()
+    assert documents == [("script-current", "revision-current")]
+    assert revisions == [
+        ("script-current", 1, "old"),
+        ("script-current", 2, "current"),
+    ]
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(text("""
+                INSERT INTO script_documents (
+                    id, project_id, title, source_type, status,
+                    current_revision_id, created_at, updated_at
+                ) VALUES (
+                    'script-duplicate', 'project-1', 'Duplicate', 'ai', 'draft',
+                    NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+            """))
