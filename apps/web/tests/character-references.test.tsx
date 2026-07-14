@@ -98,6 +98,11 @@ it('keeps the character master setting inside one viewport without panel scrollb
   expect(css).toMatch(/\.master-embedded-workspace\s+\.lineage-inspector\s*\{[^}]*overflow:\s*hidden[^}]*\}/s);
 });
 
+it('keeps the full asset catalog reachable on mobile',()=>{
+  const css=readAllStyles();
+  expect(css).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.workspace-grid\.mobile-characters\s+\.workspace-center\s*\{[^}]*overflow-y:\s*auto[^}]*\}/);
+});
+
 it('reviews and activates a character reference',async()=>{
   mocks.list.mockResolvedValueOnce(allReferences).mockResolvedValue([{...reference,review_status:'approved'},...allReferences.slice(1)]);
   const user=userEvent.setup();
