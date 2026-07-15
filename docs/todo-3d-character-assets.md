@@ -3,7 +3,7 @@
 ## Status
 
 - Priority: Active
-- Current state: The director uses a visible standard-humanoid skeleton and low-poly body proxy by default, supports persistent proxy body proportions plus shot-scoped pose and procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. Backgrounds may remain images.
+- Current state: The director uses visible low-poly 3D proxies by default: standard humanoid, quadruped, bird, box, cylinder, and sphere templates. It supports persistent humanoid body proportions plus shot-scoped procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. Backgrounds may remain images.
 - Shot binding traceability: Each `AssetVariantUsage` persists its effective variant, state, 3D representation and version, linked director object, resolution status, and refresh timestamp. Mutation paths refresh these bindings when lineage, models, or director objects change.
 - Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
 - Remaining boundary: AI generation currently uses one selected reference image. Rig repair, multi-view reconstruction, decimation, texture optimization, and editable state-level material or geometry overrides remain open.
@@ -87,6 +87,7 @@ Acceptance criteria:
 - [x] Define a normalized humanoid bone mapping for supported models.
 - [x] Provide a reusable pose library.
 - [x] Add an animation clip picker for the standard humanoid proxy.
+- [x] Add explicit quadruped and bird proxy templates plus reusable primitive templates for unfinished props.
 - [ ] Complete animation timeline scrubbing and explicit reset; pose application plus playback and pause are available for the standard proxy.
 - [ ] Add basic facial expression or blend-shape controls when available.
 - [ ] Add gaze target and head direction controls.
@@ -109,7 +110,7 @@ Acceptance criteria:
 - [x] Translate camera parameters and object positions into structured generation metadata.
 - [x] Continue passing approved 2D character references for identity and visual-style consistency.
 - [x] Store the director stage and representation versions used by every generated panel.
-- [ ] Mark panels stale when relevant director or character inputs change.
+- [x] Mark panels stale when relevant director or character inputs change, block stale panels from video generation and final rendering, and expose regeneration from the shot inspector.
 
 Acceptance criteria:
 
@@ -176,6 +177,6 @@ Frontend:
 - [x] Hosted fal.ai TripoSR generation plus manual upload for the first release.
 - [x] Enforce 50 MiB, 2,000,000 triangles, 1,000 nodes, 200 meshes, and 200 materials; texture-specific limits remain open.
 - [x] Standard humanoid skeleton definition and reusable pose mapping.
-- [ ] Supported non-human character policy and quadruped/bird rig templates.
+- [x] Support composition-level quadruped and bird templates selected through `proxy_rig`; final non-human skeleton mapping and imported animation clips remain deferred.
 - [ ] Whether episode variants replace complete models or primarily apply materials/accessories.
 - [x] Treat current 3D output as composition and camera guidance, not final rendered footage.
