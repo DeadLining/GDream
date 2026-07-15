@@ -160,6 +160,43 @@ def test_video_generation_compiles_bound_variant_and_state(db_session, tmp_path)
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64
 
 
+def test_video_generation_includes_bound_sound_design(db_session, tmp_path):
+    project, shot, _panel = _eligible(db_session, tmp_path)
+    sound_media = models.Asset(
+        project_id=project.id,
+        kind="library-asset-media",
+        local_path="projects/rain.wav",
+        media_type="audio/wav",
+        provider="upload",
+        model="local",
+        checksum="d" * 64,
+    )
+    db_session.add(sound_media)
+    db_session.flush()
+    sound = models.LibraryAsset(
+        project_id=project.id,
+        kind="sound",
+        name="城市雨声",
+        description="持续的雨声和远处车流",
+        tags=["环境"],
+        media_asset_id=sound_media.id,
+    )
+    db_session.add(sound)
+    db_session.flush()
+    db_session.add(
+        models.LibraryAssetSceneBinding(
+            library_asset_id=sound.id, scene_id=shot.scene_id
+        )
+    )
+    db_session.commit()
+    provider = Provider()
+
+    asset = asyncio.run(VideoService(db_session, tmp_path, provider).generate(shot.id))
+
+    assert "城市雨声" in provider.prompt
+    assert asset.request_metadata["input_snapshot"]["library_assets"][0]["id"] == sound.id
+
+
 def test_video_api_job_lists_and_activates_versions(client):
     with client.app.state.session_factory() as session:
         _, shot, _ = _eligible(session, client.app.state.settings.data_root)

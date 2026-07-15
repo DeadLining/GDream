@@ -87,3 +87,49 @@ def test_render_manifest_includes_active_video_and_keeps_panel_fallback(db_sessi
     manifest=RenderingService(db_session,tmp_path,tmp_path).build_manifest(episode.id)
     assert manifest['shots'][0]['videoPath'].endswith('projects/shot.mp4')
     assert manifest['shots'][0]['panelPath'].endswith('projects/panel.png')
+
+
+def test_render_manifest_includes_bound_scene_sound(db_session, tmp_path):
+    episode = seed_episode(db_session, tmp_path)
+    scene = episode.scenes[0]
+    sound_file = tmp_path / "projects" / "rain.wav"
+    sound_file.write_bytes(b"RIFF\x00\x00\x00\x00WAVE")
+    media = models.Asset(
+        project_id=episode.project_id,
+        kind="library-asset-media",
+        local_path="projects/rain.wav",
+        media_type="audio/wav",
+        provider="upload",
+        model="local",
+        checksum="e" * 64,
+    )
+    db_session.add(media)
+    db_session.flush()
+    sound = models.LibraryAsset(
+        project_id=episode.project_id,
+        kind="sound",
+        name="城市雨声",
+        description="环境底噪",
+        tags=["环境"],
+        asset_metadata={"volume": 0.25},
+        media_asset_id=media.id,
+    )
+    db_session.add(sound)
+    db_session.flush()
+    db_session.add(
+        models.LibraryAssetSceneBinding(
+            library_asset_id=sound.id, scene_id=scene.id
+        )
+    )
+    db_session.commit()
+
+    manifest = RenderingService(db_session, tmp_path, tmp_path).build_manifest(episode.id)
+
+    assert manifest["shots"][0]["sounds"] == [
+        {
+            "id": sound.id,
+            "name": "城市雨声",
+            "audioPath": str(sound_file),
+            "volume": 0.25,
+        }
+    ]

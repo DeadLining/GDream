@@ -340,11 +340,31 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
         description="放在角色右侧的关键线索",
         tags=["线索"],
     )
-    db_session.add_all([scene_asset, prop_asset])
+    costume_media = models.Asset(
+        project_id=project.id,
+        kind="library-asset-media",
+        local_path="projects/costume.png",
+        media_type="image/png",
+        provider="upload",
+        model="local",
+        checksum="c" * 64,
+    )
+    db_session.add(costume_media)
+    db_session.flush()
+    costume_asset = models.LibraryAsset(
+        project_id=project.id,
+        kind="costume",
+        name="黑色长风衣",
+        description="主角在本场景穿着的及膝风衣",
+        tags=["主角", "雨夜"],
+        media_asset_id=costume_media.id,
+    )
+    db_session.add_all([scene_asset, prop_asset, costume_asset])
     db_session.flush()
     db_session.add_all([
         models.LibraryAssetSceneBinding(library_asset_id=scene_asset.id, scene_id=shot.scene_id),
         models.LibraryAssetSceneBinding(library_asset_id=prop_asset.id, scene_id=shot.scene_id),
+        models.LibraryAssetSceneBinding(library_asset_id=costume_asset.id, scene_id=shot.scene_id),
     ])
     stage = models.DirectorStage(scene_id=shot.scene_id, environment={"weather": "rain"})
     db_session.add(stage)
@@ -395,10 +415,13 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
         )
     )
     db_session.commit()
+    (tmp_path / costume_media.local_path).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / costume_media.local_path).write_bytes(PNG)
 
     class Provider(FakeImageProvider):
         async def edit(self, prompt, references, size="1024x1536", quality="auto"):
             self.prompt = prompt
+            self.references = references
             return ImageResult(PNG, media_type="image/png")
 
     provider = Provider()
@@ -414,10 +437,13 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "target [0, 1, 0]" in provider.prompt
     assert "霓虹雨夜天台" in provider.prompt
     assert "银色证物箱" in provider.prompt
+    assert "黑色长风衣" in provider.prompt
+    assert (PNG, "image/png") in provider.references
     snapshot = asset.request_metadata["input_snapshot"]
     assert snapshot["asset_bindings"][0]["variant_id"] == variant.id
     assert snapshot["asset_bindings"][0]["state_id"] == state.id
     assert snapshot["director"]["camera"]["focal_length_mm"] == 85
     assert snapshot["director"]["objects"][0]["transform"]["position"] == [2, 0, 0]
-    assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id]
+    assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id, costume_asset.id]
+    assert costume_media.id in asset.request_metadata["reference_asset_ids"]
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64

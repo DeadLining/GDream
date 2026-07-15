@@ -66,3 +66,15 @@ it('creates, edits, and deletes a project library asset',async()=>{
   await user.click(screen.getByRole('button',{name:'删除资产'}));
   expect(onDelete).toHaveBeenCalledWith('la3');
 });
+
+it('uploads kind-specific media for a library asset',async()=>{
+  const user=userEvent.setup();
+  const onUpload=vi.fn().mockResolvedValue(undefined);
+  render(<AssetCatalogView characters={[character]} character={character} references={[]} variants={[]} libraryAssets={assets} onSelect={vi.fn()} onOpen={vi.fn()} onUploadLibraryAssetMedia={onUpload}/>);
+
+  await user.click(screen.getByRole('button',{name:'服装 1'}));
+  const file=new File(['png'],'coat.png',{type:'image/png'});
+  await user.upload(screen.getByLabelText('上传服装媒体'),file);
+
+  expect(onUpload).toHaveBeenCalledWith('la4',file);
+});

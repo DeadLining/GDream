@@ -31,6 +31,12 @@ describe('parseManifest', () => {
     expect(parseManifest(mixed).shots[0]).toMatchObject({videoPath:'/tmp/shot.mp4',panelPath:'/tmp/panel.png'});
   });
 
+  it('accepts scene sound tracks with bounded volume',()=>{
+    const mixed: any=structuredClone(baseManifest);
+    mixed.shots[0].sounds=[{id:'sound-1',name:'城市雨声',audioPath:'/tmp/rain.wav',volume:.25}];
+    expect(parseManifest(mixed).shots[0].sounds).toEqual(mixed.shots[0].sounds);
+  });
+
   it('rejects a shot without an approved panel', () => {
     const invalid = structuredClone(baseManifest);
     invalid.shots[0].panelPath = '';

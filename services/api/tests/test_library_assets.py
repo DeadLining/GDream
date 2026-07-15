@@ -1,3 +1,8 @@
+from io import BytesIO
+import wave
+
+from PIL import Image
+
 from comic_studio import models
 
 
@@ -14,6 +19,22 @@ def _project(client, title: str = "资产目录"):
     )
     assert response.status_code == 201
     return response.json()
+
+
+def _png() -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (8, 8), "black").save(output, format="PNG")
+    return output.getvalue()
+
+
+def _wav() -> bytes:
+    output = BytesIO()
+    with wave.open(output, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(8000)
+        audio.writeframes(b"\x00\x00" * 80)
+    return output.getvalue()
 
 
 def test_library_assets_support_project_crud_and_category_filtering(client):
@@ -161,3 +182,39 @@ def test_library_assets_bind_explicitly_to_scenes(client):
     assert [item["name"] for item in client.get(
         f"/api/scenes/{scene_id}/library-assets"
     ).json()] == ["银色证物箱"]
+
+
+def test_library_assets_accept_kind_specific_media_uploads(client):
+    project = _project(client, "资产媒体")
+
+    def create(kind: str, name: str):
+        return client.post(
+            f"/api/projects/{project['id']}/library-assets",
+            json={"kind": kind, "name": name, "description": "", "tags": [], "metadata": {}},
+        ).json()
+
+    costume = create("costume", "黑色风衣")
+    sound = create("sound", "城市雨声")
+
+    costume_upload = client.post(
+        f"/api/library-assets/{costume['id']}/media",
+        files={"file": ("coat.png", _png(), "image/png")},
+    )
+    sound_upload = client.post(
+        f"/api/library-assets/{sound['id']}/media",
+        files={"file": ("rain.wav", _wav(), "audio/wav")},
+    )
+    invalid_sound = client.post(
+        f"/api/library-assets/{sound['id']}/media",
+        files={"file": ("wrong.png", _png(), "image/png")},
+    )
+
+    assert costume_upload.status_code == 201
+    assert costume_upload.json()["media_type"] == "image/png"
+    assert costume_upload.json()["media_url"].endswith(".png")
+    assert costume_upload.json()["media_asset_id"]
+    assert sound_upload.status_code == 201
+    assert sound_upload.json()["media_type"] == "audio/wav"
+    assert sound_upload.json()["media_url"].endswith(".wav")
+    assert invalid_sound.status_code == 422
+    assert invalid_sound.json()["detail"] == "sound_asset_requires_audio"

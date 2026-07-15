@@ -60,6 +60,7 @@ import {
   bindLibraryAssetToScene,
   unbindLibraryAssetFromScene,
   updateLibraryAsset,
+  uploadLibraryAssetMedia,
 } from '../lib/api';
 
 describe('apiRequest', () => {
@@ -126,6 +127,7 @@ describe('project library asset api',()=>{
     await listLibraryAssets('project-1');
     await createLibraryAsset('project-1',body);
     await updateLibraryAsset('asset-1',{name:'暴雨天台'});
+    await uploadLibraryAssetMedia('asset-1',new Blob(['png'],{type:'image/png'}),'coat.png');
     await listSceneLibraryAssets('scene-1');
     await bindLibraryAssetToScene('scene-1','asset-1');
     await unbindLibraryAssetFromScene('scene-1','asset-1');
@@ -135,6 +137,7 @@ describe('project library asset api',()=>{
       ['/api/projects/project-1/library-assets','GET'],
       ['/api/projects/project-1/library-assets','POST'],
       ['/api/library-assets/asset-1','PATCH'],
+      ['/api/library-assets/asset-1/media','POST'],
       ['/api/scenes/scene-1/library-assets','GET'],
       ['/api/scenes/scene-1/library-assets/asset-1','PUT'],
       ['/api/scenes/scene-1/library-assets/asset-1','DELETE'],
