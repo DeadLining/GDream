@@ -279,6 +279,24 @@ def test_media_handlers_generate_all_dialogue_and_shot_outputs(tmp_path):
         assert shot.video_render_status == "completed"
 
 
+def test_episode_ai_speech_stage_generates_narration_without_character(tmp_path):
+    session_factory, data_root, episode_id, _character_id, _shot_id, dialogue_id = (
+        _seed_episode(tmp_path)
+    )
+    with session_factory() as session:
+        line = session.get(models.DialogueLine, dialogue_id)
+        line.character_id = None
+        session.commit()
+
+    runtime = FakeImageRuntime(session_factory, data_root)
+    handlers = EpisodeAIStageHandlers(session_factory, data_root, runtime)
+
+    speech = asyncio.run(handlers.speech(_context(episode_id, "speech")))
+
+    assert speech["dialogue_ids"] == [dialogue_id]
+    assert runtime.calls == [("speech", dialogue_id, {})]
+
+
 def test_release_handlers_render_review_gate_and_publish_internal_master(tmp_path):
     session_factory, data_root, episode_id, _character_id, _shot_id, _dialogue_id = (
         _seed_episode(tmp_path)
