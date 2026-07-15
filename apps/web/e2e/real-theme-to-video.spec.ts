@@ -56,7 +56,9 @@ test('@real-model given a theme, AI creates and registers a playable full episod
   await expect(page.locator('#project-switcher')).toHaveValue(result.project.id);
   await expect(page.locator('.episode-item[aria-current="page"]')).toContainText(result.episode.title);
   await page.getByRole('tab', {name: '分镜'}).click();
-  await page.getByRole('button', {name: new RegExp(`镜头 ${result.shot.position}`)}).click();
+  const selectedShot = page.locator('.shot-card[aria-pressed="true"]');
+  await expect(selectedShot).toHaveCount(1);
+  await selectedShot.click();
 
   const visibleVideo = page.locator('.video-versions video').first();
   await expect(visibleVideo).toBeVisible();
