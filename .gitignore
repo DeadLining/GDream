@@ -29,6 +29,7 @@ packages/compositor/public/jobs/
 page_image/
 
 # Runtime data (generated assets, logs)
+/.runtime/
 /data/projects/
 /data/mock-ssh.json
 /data/mock-ssh.log
