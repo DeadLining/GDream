@@ -303,6 +303,21 @@ it('uploads a GLB for a selected episode state scope',async()=>{
   expect(await screen.findByText('左臂擦伤代理')).toBeVisible();
 });
 
+it('generates a reviewable 3D candidate for the selected state scope',async()=>{
+  const candidate={id:'rep-state-ai',character_id:'c1',variant_id:'v2',state_id:'s1',asset_id:'model-state-ai',label:'AI 生成 3D 候选',format:'glb',version:3,is_active:false,review_status:'draft',model_url:'/media/injured-ai.glb',mesh_count:1,triangle_count:1800,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
+  mocks.pollJob.mockResolvedValue({...job('succeeded',{capability:'model3d',representation_id:'rep-state-ai',model_url:'/media/injured-ai.glb',review_status:'draft',is_active:false}),id:'job-3d',operation:'runtime_model3d'});
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character]}/>);
+  await user.click(await screen.findByRole('button',{name:/林夏/}));
+  await user.selectOptions(screen.getByLabelText('3D 模型作用域'),'state:s1');
+  mocks.representations.mockResolvedValue([candidate]);
+
+  await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
+
+  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith('character','c1','a2','v2','s1'));
+  expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
+});
+
 it('generates a reviewable 3D candidate from an existing character reference',async()=>{
   const candidate={id:'rep-ai',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-ai',label:'AI 生成 3D 候选',format:'glb',version:2,is_active:false,review_status:'draft',model_url:'/media/linxia-ai.glb',mesh_count:1,triangle_count:2400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
   mocks.pollJob.mockResolvedValue({...job('succeeded',{capability:'model3d',representation_id:'rep-ai',model_url:'/media/linxia-ai.glb',review_status:'draft',is_active:false}),id:'job-3d',operation:'runtime_model3d'});
