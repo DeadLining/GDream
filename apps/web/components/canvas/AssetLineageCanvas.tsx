@@ -3,6 +3,7 @@
 import {applyNodeChanges, Background, Controls, MiniMap, ReactFlow, type ReactFlowInstance} from '@xyflow/react';
 import {X} from 'lucide-react';
 import {useEffect, useMemo, useRef, useState} from 'react';
+import {normalizeAssetImpact} from '../../lib/asset-impact';
 import type {AssetImpact, AssetVariant, AssetVariantState, AssetVariantUsage, Character, CharacterReference, EpisodeSummary} from '../../lib/types';
 import {
   assetLineageNodeId,
@@ -384,7 +385,7 @@ export function AssetLineageCanvas({
     setImpactMessage('');
     setFormError('');
     try {
-      const report = await onAnalyzeImpact(impactScope());
+      const report = normalizeAssetImpact(await onAnalyzeImpact(impactScope()));
       setImpact(report);
       setImpactMode(mode);
       return report;

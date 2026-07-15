@@ -60,6 +60,7 @@ import {
   type AssetWorkspaceView,
 } from './assets/AssetLibraryViews';
 import {AssetLineageCanvas} from './canvas/AssetLineageCanvas';
+import {normalizeAssetImpact} from '../lib/asset-impact';
 import {CharacterModelPreview} from './assets/CharacterModelPreview';
 
 const types:Array<[CharacterReferenceType,string]>=[
@@ -114,7 +115,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
       setError(cause instanceof Error?cause.message:'加载失败');
     }
   };
-  const analyzeImpact=({characterId,variantId,stateId}:{characterId:string;variantId:string|null;stateId:string|null})=>stateId?getAssetVariantStateImpact(stateId):variantId?getAssetVariantImpact(variantId):getCharacterImpact(characterId);
+  const analyzeImpact=async({characterId,variantId,stateId}:{characterId:string;variantId:string|null;stateId:string|null})=>normalizeAssetImpact(await(stateId?getAssetVariantStateImpact(stateId):variantId?getAssetVariantImpact(variantId):getCharacterImpact(characterId)));
   const regenerateImpact=async(impact:AssetImpact)=>{
     let started=0;
     const errors:string[]=[];
