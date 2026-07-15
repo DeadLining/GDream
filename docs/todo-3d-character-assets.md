@@ -103,12 +103,12 @@ Acceptance criteria:
 
 ## Phase 4: Downstream Image Guidance
 
-- [ ] Include the selected character variant and state in panel-generation context.
+- [x] Include the selected character variant and state in panel-generation context.
 - [x] Capture a clean director composition preview without editor overlays.
 - [ ] Generate optional depth, silhouette, object-mask, and skeleton-pose guidance images.
 - [x] Translate camera parameters and object positions into structured generation metadata.
 - [x] Continue passing approved 2D character references for identity and visual-style consistency.
-- [ ] Store the director stage and representation versions used by every generated panel.
+- [x] Store the director stage and representation versions used by every generated panel.
 - [ ] Mark panels stale when relevant director or character inputs change.
 
 Acceptance criteria:
