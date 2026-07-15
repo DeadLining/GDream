@@ -1,9 +1,10 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {AlignCenter,ArrowDownToLine,Magnet,Move3D,Rotate3D,RotateCcw,Scaling,Trash2} from 'lucide-react';
+import {AlignCenter,ArrowDownToLine,Magnet,Move3D,Pause,Play,Rotate3D,RotateCcw,Scaling,Trash2} from 'lucide-react';
+import {DIRECTOR_ANIMATION_CLIPS} from '../../lib/director-animations';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
-import type {DirectorObject,DirectorPosePreset,DirectorTransformMode,ShotCamera,Transform,Vector3} from '../../lib/types';
+import type {DirectorAnimationClip,DirectorObject,DirectorPosePreset,DirectorTransformMode,ShotCamera,Transform,Vector3} from '../../lib/types';
 
 const transformTools=[
   {mode:'translate' as const,label:'平移对象',icon:Move3D},
@@ -57,6 +58,9 @@ export function DirectorInspector({
   onCameraChange,
   onSaveCamera,
   onPoseChange,
+  onBodyProfileChange,
+  onAnimationChange,
+  onAnimationPlayingChange,
   onShotVisibilityChange,
   onResetShotOverride,
   onDeleteObject,
@@ -75,12 +79,23 @@ export function DirectorInspector({
   onCameraChange:(value:number)=>void;
   onSaveCamera:()=>void;
   onPoseChange:(pose:DirectorPosePreset)=>void;
+  onBodyProfileChange:(key:'proxy_height'|'proxy_shoulder_width'|'proxy_body_width',value:number)=>void;
+  onAnimationChange:(clip:DirectorAnimationClip)=>void;
+  onAnimationPlayingChange:(playing:boolean)=>void;
   onShotVisibilityChange:(visible:boolean)=>void;
   onResetShotOverride:()=>void;
   onDeleteObject:()=>void;
 }){
   const pose=(typeof object?.appearance.pose_preset==='string'?object.appearance.pose_preset:'neutral') as DirectorPosePreset;
-  const poseable=Boolean(object?.kind==='character'&&object.source_type==='model'&&object.metadata.has_skeleton);
+  const animation=(typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'idle') as DirectorAnimationClip;
+  const animationPlaying=object?.appearance.animation_playing===true;
+  const proxyRig=object?.kind==='character'&&object.metadata.proxy_rig==='standard_humanoid';
+  const poseable=Boolean(object?.kind==='character'&&(proxyRig||(object.source_type==='model'&&object.metadata.has_skeleton)));
+  const bodyControls=[
+    ['proxy_height','角色身高',.75,1.3],
+    ['proxy_shoulder_width','肩宽',.7,1.35],
+    ['proxy_body_width','体型',.7,1.4],
+  ] as const;
   return <aside className="director-inspector">
     <header><strong>{object?.label??'镜头相机'}</strong></header>
     {object&&<section>
@@ -91,12 +106,19 @@ export function DirectorInspector({
         <button type="button" aria-label="网格吸附" title="网格吸附" aria-pressed={snapEnabled} onClick={()=>onSnapEnabledChange(!snapEnabled)}><Magnet size={15}/></button>
       </div>
       <TransformEditor transform={object.transform} onCommit={onObjectTransformChange}/>
-      {cameraMode&&object.kind==='character'&&object.source_type==='model'&&<>
+      {!cameraMode&&proxyRig&&<div className="director-body-profile">
+        {bodyControls.map(([key,label,min,max])=><label key={key}><span>{label}</span><input type="number" aria-label={label} min={min} max={max} step="0.05" defaultValue={typeof object.appearance[key]==='number'?object.appearance[key] as number:1} onBlur={event=>{const value=Number(event.currentTarget.value);if(Number.isFinite(value))onBodyProfileChange(key,Math.min(max,Math.max(min,value)));}}/></label>)}
+      </div>}
+      {cameraMode&&poseable&&<>
         <label htmlFor="director-pose">角色姿态</label>
-        <select id="director-pose" value={pose} disabled={!poseable} onChange={event=>onPoseChange(event.target.value as DirectorPosePreset)}>
+        <select id="director-pose" value={pose} onChange={event=>onPoseChange(event.target.value as DirectorPosePreset)}>
           {DIRECTOR_POSE_PRESETS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
       </>}
+      {cameraMode&&proxyRig&&<div className="director-animation-controls">
+        <label htmlFor="director-animation">动画片段</label>
+        <div><select id="director-animation" value={animation} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select><button type="button" className="command-button" aria-label={animationPlaying?'暂停动画':'播放动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button></div>
+      </div>}
       {cameraMode&&<>
         <label className="director-checkbox"><input type="checkbox" aria-label="本镜头显示" checked={object.visible} onChange={event=>onShotVisibilityChange(event.target.checked)}/><span>本镜头显示</span></label>
         <button className="command-button" disabled={!hasShotOverride} onClick={onResetShotOverride}><RotateCcw size={14}/>重置本镜头覆盖</button>

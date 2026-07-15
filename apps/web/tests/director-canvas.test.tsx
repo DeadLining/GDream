@@ -6,7 +6,7 @@ import {DirectorCanvas} from '../components/director/DirectorCanvas';
 import type {DirectorObject,ShotCamera} from '../lib/types';
 
 const threeCamera={position:{set:vi.fn()},rotation:{set:vi.fn()},fov:50,updateProjectionMatrix:vi.fn()};
-vi.mock('@react-three/fiber',()=>({Canvas:({children,onPointerMissed}:React.PropsWithChildren<{onPointerMissed?:()=>void}>)=> <div data-testid="r3f-canvas" onClick={()=>onPointerMissed?.()}>{children}</div>,useThree:(select:(state:{camera:typeof threeCamera})=>unknown)=>select({camera:threeCamera})}));
+vi.mock('@react-three/fiber',()=>({Canvas:({children,onPointerMissed}:React.PropsWithChildren<{onPointerMissed?:()=>void}>)=> <div data-testid="r3f-canvas" onClick={()=>onPointerMissed?.()}>{children}</div>,useFrame:vi.fn(),useThree:(select:(state:{camera:typeof threeCamera})=>unknown)=>select({camera:threeCamera})}));
 vi.mock('@react-three/drei',()=>({
   Clone:({object}:{object:{name:string}})=><div data-testid="director-model" data-name={object.name}/>,
   Image:({url}:{url:string})=><div data-testid="director-image" data-url={url}/>,

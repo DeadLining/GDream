@@ -28,9 +28,12 @@ export function applyDirectorObjectOverrides(objects:DirectorObject[],overrides:
       ...object,
       transform:override.transform??object.transform,
       visible:override.visible??object.visible,
-      appearance:override.pose_preset
-        ? {...object.appearance,pose_preset:override.pose_preset}
-        : object.appearance,
+      appearance:{
+        ...object.appearance,
+        ...(override.pose_preset?{pose_preset:override.pose_preset}:{}),
+        ...(override.animation_clip?{animation_clip:override.animation_clip}:{}),
+        ...(override.animation_playing!==undefined?{animation_playing:override.animation_playing}:{}),
+      },
     };
   });
 }
