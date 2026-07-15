@@ -9,6 +9,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
+from comic_studio.services.character_3d import (
+    Character3DRepresentationError,
+    Character3DRepresentationService,
+)
 
 
 class DuplicateLibraryAssetError(RuntimeError):
@@ -114,15 +118,35 @@ class LibraryAssetService:
             return None
         if not content:
             raise LibraryAssetMediaError("empty_media")
-        if len(content) > self.MAX_MEDIA_BYTES:
+        model_upload = Path(filename).suffix.lower() == ".glb" or content[:4] == b"glTF"
+        max_bytes = (
+            Character3DRepresentationService.MAX_BYTES
+            if model_upload
+            else self.MAX_MEDIA_BYTES
+        )
+        if len(content) > max_bytes:
             raise LibraryAssetMediaError("media_too_large")
 
         width = None
         height = None
+        request_metadata = {
+            "library_asset_id": library_asset.id,
+            "original_filename": Path(filename).name,
+        }
         if library_asset.kind == "sound":
             media_type, extension = self._audio_format(content)
             if media_type is None:
                 raise LibraryAssetMediaError("sound_asset_requires_audio")
+        elif model_upload:
+            if library_asset.kind not in {"scene", "prop"}:
+                raise LibraryAssetMediaError("asset_kind_does_not_support_glb")
+            try:
+                metrics = Character3DRepresentationService.inspect_glb(content)
+            except Character3DRepresentationError as exc:
+                raise LibraryAssetMediaError(str(exc)) from exc
+            media_type, extension = "model/gltf-binary", ".glb"
+            request_metadata["format"] = "glb"
+            request_metadata["glb_metrics"] = metrics
         else:
             try:
                 with Image.open(BytesIO(content)) as image:
@@ -143,10 +167,7 @@ class LibraryAssetService:
             media_type=media_type,
             provider="upload",
             model="local",
-            request_metadata={
-                "library_asset_id": library_asset.id,
-                "original_filename": Path(filename).name,
-            },
+            request_metadata=request_metadata,
             checksum=hashlib.sha256(content).hexdigest(),
             review_status="approved",
             width=width,
@@ -167,11 +188,17 @@ class LibraryAssetService:
             raise LibraryAssetMediaError("asset_path_escape")
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(destination.suffix + ".tmp")
-        temporary.write_bytes(content)
-        os.replace(temporary, destination)
-        media_asset.local_path = str(relative)
-        library_asset.media_asset_id = media_asset.id
-        self.session.commit()
+        try:
+            temporary.write_bytes(content)
+            os.replace(temporary, destination)
+            media_asset.local_path = str(relative)
+            library_asset.media_asset_id = media_asset.id
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            temporary.unlink(missing_ok=True)
+            destination.unlink(missing_ok=True)
+            raise
         self.session.refresh(library_asset)
         return library_asset
 

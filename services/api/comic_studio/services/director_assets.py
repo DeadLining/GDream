@@ -86,7 +86,12 @@ class DirectorAssetCatalogService:
             is_background = asset.kind == "scene"
             media = asset.media_asset
             media_is_image = media is not None and media.media_type.startswith("image/")
-            media_url = f"/media/{media.local_path}" if media_is_image else None
+            media_is_model = media is not None and media.media_type == "model/gltf-binary"
+            media_url = (
+                f"/media/{media.local_path}"
+                if media_is_image or media_is_model
+                else None
+            )
             aspect_ratio = (
                 media.width / media.height
                 if media_is_image and media.width and media.height
@@ -98,13 +103,15 @@ class DirectorAssetCatalogService:
                     kind="background" if is_background else "prop",
                     source_type="library_asset",
                     source_id=asset.id,
-                    asset_id=media.id if media_is_image else None,
+                    asset_id=media.id if media_is_image or media_is_model else None,
                     label=asset.name,
                     media_url=media_url,
                     media_type=media.media_type if media is not None else None,
                     metadata={
                         "description": asset.description,
                         "tags": asset.tags,
+                        **({"asset_id": media.id} if media_is_image or media_is_model else {}),
+                        "requires_3d_model": not is_background and not media_is_model,
                         **(asset.asset_metadata or {}),
                     },
                     transform={
@@ -118,8 +125,17 @@ class DirectorAssetCatalogService:
                     },
                     appearance=(
                         {"image_url": media_url, "aspect_ratio": aspect_ratio}
-                        if media_url
-                        else {"color": "#49636e" if is_background else "#7295a3"}
+                        if is_background and media_is_image
+                        else {"model_url": media_url}
+                        if media_is_model
+                        else {
+                            "color": "#49636e" if is_background else "#7295a3",
+                            **(
+                                {"fallback_image_url": media_url}
+                                if media_is_image and not is_background
+                                else {}
+                            ),
+                        }
                     ),
                 )
             )
@@ -277,6 +293,7 @@ class DirectorAssetCatalogService:
                             "mesh_count": representation.mesh_count,
                             "triangle_count": representation.triangle_count,
                             "has_skeleton": representation.has_skeleton,
+                            "requires_3d_model": False,
                             "appearance_bible": character.appearance_bible,
                             "continuity_rules": character.continuity_rules,
                         },
@@ -314,6 +331,7 @@ class DirectorAssetCatalogService:
                         "reference_id": reference.id,
                         "reference_type": reference.reference_type,
                         "asset_id": reference_asset.id,
+                        "requires_3d_model": True,
                         "appearance_bible": character.appearance_bible,
                         "continuity_rules": character.continuity_rules,
                     },
@@ -322,7 +340,11 @@ class DirectorAssetCatalogService:
                         "rotation": [0, 0, 0],
                         "scale": [1, 1, 1],
                     },
-                    appearance={"image_url": media_url, "aspect_ratio": aspect_ratio},
+                    appearance={
+                        "color": "#d76b4b",
+                        "fallback_image_url": media_url,
+                        "aspect_ratio": aspect_ratio,
+                    },
                 )
             )
         return result
@@ -362,7 +384,7 @@ class DirectorAssetCatalogService:
                     label=label,
                     media_url=None,
                     media_type=None,
-                    metadata=metadata,
+                    metadata={**metadata, "requires_3d_model": True},
                     transform={
                         "position": [(index + 1) * 1.1, 0, 0.8],
                         "rotation": [0, 0, 0],
