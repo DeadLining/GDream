@@ -190,6 +190,25 @@ it('opens the master setting, variant editor, and lineage from the asset catalog
   expect(screen.queryByRole('heading',{name:'资产谱系'})).not.toBeInTheDocument();
 });
 
+it('loads every character asset summary for catalog filters',async()=>{
+  const supportingCharacter={...character,id:'c2',name:'周然',role:'搭档'};
+  const masterOnly=[variants[0]];
+  const supportingVariants=[
+    {...variants[0],id:'v-c2-master',character_id:'c2'},
+    {...variants[1],id:'v-c2-episode',character_id:'c2',parent_variant_id:'v-c2-master',episode_id:'e2',label:'第二集雨衣造型'},
+  ];
+  mocks.list.mockResolvedValue([]);
+  mocks.variants.mockImplementation((id:string)=>Promise.resolve(id==='c2'?supportingVariants:masterOnly));
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character,supportingCharacter]}/>);
+
+  await waitFor(()=>expect(mocks.variants).toHaveBeenCalledWith('c2'));
+  await user.click(screen.getByRole('button',{name:'有变体'}));
+
+  expect(screen.queryByRole('button',{name:/林夏/})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:/周然/})).toBeVisible();
+});
+
 it('opens catalog lineage and variant actions inside the character detail tabs',async()=>{
   const user=userEvent.setup();
   render(<CharacterWorkspace characters={[character]} episodes={[{id:'e1',project_id:'p1',title:'雨夜危机',premise:'',target_duration_seconds:60,status:'draft',created_at:'',updated_at:''}]}/>);
