@@ -193,6 +193,17 @@ describe('DirectorWorkspace',()=>{
     await userEvent.tab();
     await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{appearance:{proxy_height:1.1,proxy_shoulder_width:1,proxy_body_width:1}}));
   });
+  it('persists an explicit 3D proxy template without losing asset metadata',async()=>{
+    const propObject={...directorObject,kind:'prop' as const,source_type:'library_asset' as const,label:'机械犬',metadata:{catalog_key:'library_asset:dog-1',requires_3d_model:true}};
+    const propStage={...stage,objects:[propObject]};
+    mocks.getDirectorStage.mockResolvedValue(propStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorObject.mockImplementation(async(_id:string,_version:number,patch:{metadata:Record<string,unknown>})=>({...propObject,metadata:patch.metadata}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByText('机械犬'));
+    expect(screen.getByLabelText('3D 代理模板')).toHaveValue('prop_box');
+    await userEvent.selectOptions(screen.getByLabelText('3D 代理模板'),'quadruped');
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{metadata:{catalog_key:'library_asset:dog-1',requires_3d_model:true,proxy_rig:'quadruped'}}));
+  });
   it('stores proxy pose and animation controls on only the selected shot',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1},metadata:{proxy_rig:'standard_humanoid'}};
     const characterStage={...stage,objects:[characterObject]};

@@ -48,6 +48,21 @@ describe('DirectorCanvas',()=>{
     }
   });
 
+  it('renders explicit quadruped, bird, and primitive 3D proxy templates',()=>{
+    const proxyObjects:DirectorObject[]=[
+      {...objects[0],id:'animal-1',label:'四足动物',metadata:{proxy_rig:'quadruped'}},
+      {...objects[0],id:'bird-1',label:'飞鸟',metadata:{proxy_rig:'bird'}},
+      {...objects[1],id:'cylinder-1',label:'立柱',metadata:{proxy_rig:'prop_cylinder'}},
+      {...objects[1],id:'sphere-1',label:'圆球',metadata:{proxy_rig:'prop_sphere'}},
+    ];
+    const view=render(<DirectorCanvas objects={proxyObjects} camera={camera} selectedObjectId={null} mode="world" onTransform={vi.fn()}/>);
+
+    expect(view.container.querySelector('[name="quadruped-rig-animal-1"]')).toBeInTheDocument();
+    expect(view.container.querySelector('[name="bird-rig-bird-1"]')).toBeInTheDocument();
+    expect(view.container.querySelector('[name="primitive-proxy-cylinder-1"]')).toHaveAttribute('data-proxy-shape','cylinder');
+    expect(view.container.querySelector('[name="primitive-proxy-sphere-1"]')).toHaveAttribute('data-proxy-shape','sphere');
+  });
+
   it('reports the persisted camera pose after camera-mode navigation',()=>{
     const onCameraChange=vi.fn();
     const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId={null} mode="camera" onTransform={vi.fn()} onCameraChange={onCameraChange}/>);
