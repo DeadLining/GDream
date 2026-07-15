@@ -2,9 +2,12 @@ import {cleanup,render,screen,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from 'vitest';
 import {AssetCatalogView} from '../components/assets/AssetLibraryViews';
-import type {Character,LibraryAsset} from '../lib/types';
+import type {AssetVariant,Character,LibraryAsset} from '../lib/types';
 
 const character:Character={id:'c1',project_id:'p1',name:'林夏',role:'主角',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:'',created_at:'',updated_at:''};
+const supportingCharacter:Character={...character,id:'c2',name:'周然',role:'搭档'};
+const approvedMaster:AssetVariant={id:'v1',character_id:'c1',episode_id:null,parent_variant_id:null,kind:'master',label:'作品主设定',inherited_fields:[],overrides:{},version:1,review_status:'approved',created_at:'',updated_at:'',states:[],usages:[]};
+const pendingEpisodeVariant:AssetVariant={...approvedMaster,id:'v2',character_id:'c2',episode_id:'e2',parent_variant_id:null,kind:'episode',label:'第二集雨衣造型',review_status:'draft'};
 const assets:LibraryAsset[]=[
   {id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},created_at:'',updated_at:''},
   {id:'la2',project_id:'p1',kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{},created_at:'',updated_at:''},
@@ -14,6 +17,34 @@ const assets:LibraryAsset[]=[
 ];
 
 afterEach(cleanup);
+
+it('filters characters using catalog data from every character',async()=>{
+  const user=userEvent.setup();
+  render(<AssetCatalogView
+    characters={[character,supportingCharacter]}
+    character={character}
+    references={[]}
+    variants={[approvedMaster]}
+    characterAssets={{
+      c1:{references:[],variants:[approvedMaster]},
+      c2:{references:[],variants:[pendingEpisodeVariant]},
+    }}
+    libraryAssets={assets}
+    onSelect={vi.fn()}
+    onOpen={vi.fn()}
+  />);
+
+  await user.click(screen.getByRole('button',{name:'有变体'}));
+  expect(screen.queryByRole('button',{name:/林夏/})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:/周然/})).toBeVisible();
+
+  await user.click(screen.getByRole('button',{name:'待审核'}));
+  expect(screen.queryByRole('button',{name:/林夏/})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:/周然/})).toBeVisible();
+
+  await user.type(screen.getByRole('searchbox',{name:'搜索资产'}),'林夏');
+  expect(screen.queryByRole('button',{name:/周然/})).not.toBeInTheDocument();
+});
 
 it('opens real asset categories, reports counts, and searches their records',async()=>{
   const user=userEvent.setup();
