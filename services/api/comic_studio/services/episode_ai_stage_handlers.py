@@ -228,10 +228,6 @@ class EpisodeAIStageHandlers:
         for dialogue_id in dialogue_ids:
             with self.session_factory() as session:
                 line = session.get(models.DialogueLine, dialogue_id)
-                if line.character_id is None:
-                    raise EpisodeAIStageNeedsReview(
-                        f"Dialogue has no character: {dialogue_id}"
-                    )
                 asset_id = (
                     line.audio_asset_id
                     if line.audio_asset_id and line.duration_seconds > 0

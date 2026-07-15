@@ -19,6 +19,8 @@ class SpeechProvider(Protocol):
 
 
 class SpeechService:
+    NARRATOR_SPEAKER = "dylan"
+
     def __init__(
         self,
         session: Session,
@@ -43,20 +45,30 @@ class SpeechService:
         line = self.session.scalar(statement)
         if line is None:
             raise KeyError(dialogue_id)
-        if line.character_id is None:
-            raise ValueError("Dialogue line has no character")
-        character = self.session.get(models.Character, line.character_id)
-        if character is None:
+        character = (
+            self.session.get(models.Character, line.character_id)
+            if line.character_id is not None
+            else None
+        )
+        if line.character_id is not None and character is None:
             raise ValueError("Dialogue character does not exist")
 
         instructions = [
             value.strip()
-            for value in (character.voice_instruction, line.performance_instruction)
+            for value in (
+                character.voice_instruction if character is not None else "",
+                line.performance_instruction,
+            )
             if value.strip()
         ]
         instruction = "；".join(instructions)
+        speaker = (
+            character.voice_speaker
+            if character is not None
+            else self.NARRATOR_SPEAKER
+        )
         audio = await self.provider.synthesize(
-            line.text, character.voice_speaker, "Chinese", instruction
+            line.text, speaker, "Chinese", instruction
         )
         project_id = line.shot.scene.episode.project_id
         asset = self.assets.register_dialogue_audio(
@@ -66,7 +78,7 @@ class SpeechService:
             provider="qwen3-tts",
             model=self.provider.model,
             request_metadata={
-                "speaker": character.voice_speaker,
+                "speaker": speaker,
                 "language": "Chinese",
                 "instruction": instruction,
                 "text": line.text,
