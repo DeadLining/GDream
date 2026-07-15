@@ -93,7 +93,7 @@ def test_get_returns_redacted_channels_and_sanitized_metadata(client):
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"llm", "image", "tts", "video", "persistence", "reloaded_at"}
+    assert set(body) == {"llm", "image", "tts", "video", "model3d", "persistence", "reloaded_at"}
     assert body["llm"]["api_key_configured"] is True
     assert body["llm"]["api_key_masked"].endswith("8adr")
     assert "api_key" not in body["llm"]

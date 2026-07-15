@@ -112,3 +112,18 @@ it('uploads kind-specific media for a library asset',async()=>{
   await user.click(screen.getByRole('button',{name:'道具 1'}));
   expect(screen.getByLabelText('上传道具媒体')).toHaveAttribute('accept',expect.stringContaining('.glb'));
 });
+
+it('generates and approves a 3D candidate for an image-backed prop',async()=>{
+  const user=userEvent.setup();
+  const onGenerate=vi.fn().mockResolvedValue({id:'job-prop',operation:'runtime_model3d',target_type:'library_asset',target_id:'la3',status:'succeeded',progress:100,result_metadata:{model_url:'/media/watch.glb',review_status:'draft',is_active:false},error:'',retry_count:0,created_at:'',updated_at:''});
+  const onApprove=vi.fn().mockResolvedValue(undefined);
+  const imageProp=assets.map(item=>item.id==='la3'?{...item,media_asset_id:'ref-watch',media_url:'/media/watch.png',media_type:'image/png'}:item);
+  render(<AssetCatalogView characters={[character]} character={character} references={[]} variants={[]} libraryAssets={imageProp} onSelect={vi.fn()} onOpen={vi.fn()} onGenerateLibraryAssetModel={onGenerate} onApproveLibraryAssetModel={onApprove}/>);
+
+  await user.click(screen.getByRole('button',{name:'道具 1'}));
+  await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
+
+  expect(onGenerate).toHaveBeenCalledWith('la3','ref-watch');
+  await user.click(await screen.findByRole('button',{name:'批准使用 3D 候选'}));
+  expect(onApprove).toHaveBeenCalledWith('job-prop');
+});

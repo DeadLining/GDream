@@ -11,6 +11,7 @@ const mocks=vi.hoisted(()=>({
   libraryAssets:vi.fn(),createLibraryAsset:vi.fn(),updateLibraryAsset:vi.fn(),deleteLibraryAsset:vi.fn(),
   suggestVariant:vi.fn(),
   representations:vi.fn(),uploadRepresentation:vi.fn(),
+  generateModel3D:vi.fn(),latestModel3D:vi.fn(),approveModel3D:vi.fn(),
   createVariant:vi.fn(),createState:vi.fn(),updateVariant:vi.fn(),updateState:vi.fn(),deleteVariant:vi.fn(),deleteState:vi.fn(),
 }));
 vi.mock('../lib/api',()=>({
@@ -25,6 +26,9 @@ vi.mock('../lib/api',()=>({
   deleteLibraryAsset:mocks.deleteLibraryAsset,
   uploadCharacterReference:mocks.upload,
   uploadCharacter3DRepresentation:mocks.uploadRepresentation,
+  generateModel3D:mocks.generateModel3D,
+  getLatestModel3DJob:mocks.latestModel3D,
+  approveModel3DJob:mocks.approveModel3D,
   generateCharacterReferenceSet:mocks.generateSet,
   updateCharacterReference:mocks.update,
   activateCharacterReference:mocks.activate,
@@ -58,6 +62,9 @@ beforeEach(()=>{
   mocks.list.mockResolvedValue(allReferences);
   mocks.variants.mockResolvedValue(variants);
   mocks.representations.mockResolvedValue([]);
+  mocks.latestModel3D.mockResolvedValue(null);
+  mocks.generateModel3D.mockResolvedValue({job_id:'job-3d',capability:'model3d',status:'queued'});
+  mocks.approveModel3D.mockResolvedValue({review_status:'approved',is_active:true});
   mocks.libraryAssets.mockResolvedValue([]);
   mocks.createCharacter.mockResolvedValue({...character,id:'c-new',name:'周然',role:'搭档'});
   mocks.updateCharacter.mockResolvedValue({...character,name:'林夏·修订',role:'调查员'});
@@ -278,6 +285,22 @@ it('uploads a GLB proxy from the character master setting',async()=>{
   await waitFor(()=>expect(mocks.uploadRepresentation).toHaveBeenCalledWith('c1',file));
   expect(await screen.findByText('林夏代理')).toBeVisible();
   expect(screen.getByText('1,200 三角面')).toBeVisible();
+});
+
+it('generates a reviewable 3D candidate from an existing character reference',async()=>{
+  const candidate={id:'rep-ai',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-ai',label:'AI 生成 3D 候选',format:'glb',version:2,is_active:false,review_status:'draft',model_url:'/media/linxia-ai.glb',mesh_count:1,triangle_count:2400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
+  mocks.pollJob.mockResolvedValue({...job('succeeded',{capability:'model3d',representation_id:'rep-ai',model_url:'/media/linxia-ai.glb',review_status:'draft',is_active:false}),id:'job-3d',operation:'runtime_model3d'});
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character]}/>);
+  await user.click(await screen.findByRole('button',{name:/林夏/}));
+  mocks.representations.mockResolvedValue([candidate]);
+
+  await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
+
+  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith('character','c1','a2'));
+  expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
+  await user.click(screen.getByRole('button',{name:'批准使用 3D 候选'}));
+  expect(mocks.approveModel3D).toHaveBeenCalledWith('job-3d');
 });
 
 it('loads every character asset summary for catalog filters',async()=>{

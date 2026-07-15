@@ -81,17 +81,20 @@ def test_discover_default_registers_all_builtin_providers():
         Capability.IMAGE,
         Capability.SPEECH,
         Capability.VIDEO,
+        Capability.MODEL_3D,
     }
     # And each maps to the expected provider class.
     from comic_studio.providers.gpt_image import GPTImageProvider
     from comic_studio.providers.minimax import MiniMaxProvider
     from comic_studio.providers.minimax_video import MiniMaxVideoProvider
     from comic_studio.providers.qwen_tts import QwenTTSProvider
+    from comic_studio.providers.fal_triposr import FalTripoSRProvider
 
     assert registry.get(Capability.TEXT) is MiniMaxProvider
     assert registry.get(Capability.IMAGE) is GPTImageProvider
     assert registry.get(Capability.SPEECH) is QwenTTSProvider
     assert registry.get(Capability.VIDEO) is MiniMaxVideoProvider
+    assert registry.get(Capability.MODEL_3D) is FalTripoSRProvider
 
 
 def test_discover_default_is_idempotent():

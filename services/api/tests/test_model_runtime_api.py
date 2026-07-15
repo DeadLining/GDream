@@ -25,6 +25,14 @@ class FakeRuntime:
     async def run_media_job(self, _job_id):
         return None
 
+    def latest_model3d_job(self, target_type, target_id):
+        self.latest_target = (target_type, target_id)
+        return FakeJob(
+            id="job-latest",
+            status="succeeded",
+            request_payload={"capability": "model3d"},
+        )
+
     async def health(self):
         return {
             "capabilities": {},
@@ -38,6 +46,7 @@ class FakeRuntime:
             "image": {"name": "Image", "enabled": True, "base_url": "https://image.example.com", "model": "image", "ssh_host": "", "api_key_configured": True, "api_key_masked": "sk-****"},
             "speech": {"name": "Speech", "enabled": False, "base_url": "http://localhost:8000", "model": "tts", "ssh_host": "", "api_key_configured": False, "api_key_masked": ""},
             "video": {"name": "Video", "enabled": False, "base_url": "https://video.example.com", "model": "video", "ssh_host": "", "api_key_configured": False, "api_key_masked": ""},
+            "model3d": {"name": "3D", "enabled": False, "base_url": "https://fal.run", "model": "fal-ai/triposr", "ssh_host": "", "api_key_configured": False, "api_key_masked": ""},
             "persistence": {"status": "saved"},
             "reloaded_at": "2026-07-12T00:00:00Z",
         }
@@ -113,6 +122,58 @@ def test_character_reference_set_mode_rejects_shot_target(client):
     )
 
     assert response.status_code == 422
+
+
+def test_model3d_runtime_queues_a_non_activating_candidate(client):
+    runtime = FakeRuntime()
+    client.app.state.model_runtime = runtime
+
+    response = client.post(
+        "/api/model-runtime/model3d",
+        json={
+            "target_type": "character",
+            "target_id": "c1",
+            "reference_asset_id": "asset-reference-1",
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "job_id": "job-1",
+        "capability": "model3d",
+        "status": "queued",
+    }
+    assert runtime.created == (
+        Capability.MODEL_3D,
+        "character",
+        "c1",
+        {"reference_asset_id": "asset-reference-1"},
+    )
+
+
+def test_model3d_runtime_rejects_unsupported_targets(client):
+    client.app.state.model_runtime = FakeRuntime()
+
+    response = client.post(
+        "/api/model-runtime/model3d",
+        json={"target_type": "shot", "target_id": "s1"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_model3d_runtime_returns_the_latest_persisted_target_job(client):
+    runtime = FakeRuntime()
+    client.app.state.model_runtime = runtime
+
+    response = client.get(
+        "/api/model-runtime/model3d/latest",
+        params={"target_type": "library_asset", "target_id": "prop-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "job-latest"
+    assert runtime.latest_target == ("library_asset", "prop-1")
 
 
 def test_asset_variant_suggestion_returns_a_structured_ai_draft(client):
@@ -191,7 +252,7 @@ def test_legacy_provider_health_delegates_to_runtime(client):
             return {
                 "capabilities": {
                     kind: {"status": "healthy", "model": kind, "host": "local", "elapsed_ms": 4, "error": None}
-                    for kind in ("text", "image", "speech", "video")
+                    for kind in ("text", "image", "speech", "video", "model3d")
                 },
                 "infrastructure": {},
                 "checked_at": "2026-07-12T00:00:00Z",

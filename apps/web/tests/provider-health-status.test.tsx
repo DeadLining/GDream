@@ -14,6 +14,7 @@ const healthy: ProviderHealth = {
   image: {status: 'ok', model: 'gpt-image-2', host: 'images.example.com', elapsed_ms: 32, check_scope: 'endpoint', error: null},
   tts: {status: 'ok', model: 'qwen3-tts', host: 'audio.example.com', elapsed_ms: 43, check_scope: 'audio', error: null},
   video: {status: 'ok', model: 'wan-video', host: 'video.example.com', elapsed_ms: 54, check_scope: 'endpoint', error: null},
+  model3d: {status: 'disabled', model: 'fal-ai/triposr', host: 'fal.run', elapsed_ms: 0, check_scope: 'model', error: null},
 };
 
 function deferred<T>() {

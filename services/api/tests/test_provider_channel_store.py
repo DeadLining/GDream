@@ -41,6 +41,13 @@ def channels_payload(**overrides):
             ssh_host="ai-comic-tts",
         ),
         "video": channel_payload(name="MiniMax Video", model="MiniMax-Hailuo-02"),
+        "model3d": channel_payload(
+            name="fal.ai TripoSR",
+            enabled=False,
+            base_url="https://fal.run",
+            model="fal-ai/triposr",
+            api_key=None,
+        ),
     }
     payload.update(overrides)
     return payload
@@ -72,6 +79,10 @@ def test_environment_settings_bootstrap_provider_channel_defaults(monkeypatch):
     assert defaults.image.api_key_value == "image-key"
     assert defaults.llm.model == "llm-model"
     assert defaults.image.model == "image-model"
+    assert defaults.model3d.name == "fal.ai TripoSR"
+    assert defaults.model3d.enabled is False
+    assert defaults.model3d.base_url == "https://fal.run"
+    assert defaults.model3d.model == "fal-ai/triposr"
     assert defaults.tts.model_dump(mode="json") == channel_payload(
         name="Qwen TTS",
         base_url="https://tts.example.com/v1",
@@ -123,6 +134,18 @@ def test_existing_json_is_authoritative_over_bootstrap_defaults(tmp_path):
 
     assert loaded.llm.name == "Saved LLM"
     assert loaded.llm.model == "saved-model"
+
+
+def test_existing_json_without_model3d_channel_loads_the_default(tmp_path):
+    path = tmp_path / "provider-channels.json"
+    saved = channels_payload()
+    saved.pop("model3d")
+    path.write_text(json.dumps(saved), encoding="utf-8")
+    defaults = make_channels()
+
+    loaded = ProviderChannelStore(path, defaults).load()
+
+    assert loaded.model3d == defaults.model3d
 
 
 @pytest.mark.parametrize(
