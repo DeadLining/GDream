@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from comic_studio import models
+from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
 def _ready_episode(client, *, video_ready=True):
@@ -9,12 +10,16 @@ def _ready_episode(client, *, video_ready=True):
     with client.app.state.session_factory() as session:
         scene=models.Scene(episode_id=episode["id"],position=1,location="主街",time_of_day="day",summary="完成",continuity_state={},estimated_duration_seconds=8)
         session.add(scene);session.flush()
-        asset=models.Asset(project_id=project["id"],kind="panel",local_path="panel.png",media_type="image/png",provider="test",model="test",request_metadata={},checksum="panel",review_status="approved")
-        session.add(asset);session.flush()
-        video=models.Asset(project_id=project["id"],kind="video",local_path="video.mp4",media_type="video/mp4",provider="test",model="test",request_metadata={},checksum="video",review_status="approved")
-        session.add(video);session.flush()
-        shot=models.Shot(scene_id=scene.id,position=1,shot_type="wide",duration_seconds=8,composition="完成镜头",camera_motion="static",character_state={},image_prompt="done",negative_prompt="",active_panel_asset_id=asset.id,active_video_asset_id=video.id if video_ready else None,review_status="approved",render_status="completed")
-        session.add(shot);session.commit()
+        shot=models.Shot(scene_id=scene.id,position=1,shot_type="wide",duration_seconds=8,composition="完成镜头",camera_motion="static",character_state={},image_prompt="done",negative_prompt="",review_status="approved",render_status="completed")
+        session.add(shot);session.flush()
+        asset=models.Asset(project_id=project["id"],kind=f"panel:{shot.id}",local_path="panel.png",media_type="image/png",provider="test",model="test",request_metadata={},checksum="panel",review_status="approved")
+        video=models.Asset(project_id=project["id"],kind=f"video:{shot.id}",local_path="video.mp4",media_type="video/mp4",provider="test",model="test",request_metadata={},checksum="video",review_status="approved")
+        session.add_all([asset,video]);session.flush()
+        shot.active_panel_asset_id=asset.id
+        shot.active_video_asset_id=video.id if video_ready else None
+        compiled=ShotInputCompiler(session).compile(shot.id,usage_kinds={"panel","reference"})
+        asset.request_metadata={"input_snapshot":compiled.snapshot,"input_snapshot_hash":compiled.snapshot_hash}
+        session.commit()
         return project,episode,shot.id
 
 

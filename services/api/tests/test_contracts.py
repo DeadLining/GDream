@@ -64,6 +64,7 @@ CONTRACTS: list[tuple[type, set[str]]] = [
             "id", "kind", "media_url", "media_type",
             "provider", "model", "generation_attempt", "review_status",
             "created_at", "duration_seconds", "height", "width",
+            "is_stale", "stale_reason",
         },
     ),
     (
