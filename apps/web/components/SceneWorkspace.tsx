@@ -2,8 +2,8 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {ArrowDown,ArrowRight,ArrowUp,Clock3,Film,MapPin,Moon,Pencil,Plus,RefreshCw,Save,Sun,Trash2,X} from 'lucide-react';
-import {createProductionRun,createScene,createStructureShot,deleteScene,deleteStructureShot,getEpisode,reorderScenes,reorderShots,updateScene,updateShot} from '../lib/api';
-import type {EpisodeDetail,SceneCreate,StructureMutation,StructureShotCreate} from '../lib/types';
+import {bindLibraryAssetToScene,createProductionRun,createScene,createStructureShot,deleteScene,deleteStructureShot,getEpisode,listLibraryAssets,listSceneLibraryAssets,reorderScenes,reorderShots,unbindLibraryAssetFromScene,updateScene,updateShot} from '../lib/api';
+import type {EpisodeDetail,LibraryAsset,SceneCreate,StructureMutation,StructureShotCreate} from '../lib/types';
 
 const timeLabel=(value:string)=>({night:'夜晚',day:'白天',dawn:'清晨',dusk:'黄昏'}[value]??(value||'未设定'));
 const emptyScene:SceneCreate={location:'',time_of_day:'day',summary:'',continuity_state:{},estimated_duration_seconds:8};
@@ -19,11 +19,26 @@ export function SceneWorkspace({episode,onOpenShot,onEpisodeChanged}:{episode:Ep
   const [sceneForm,setSceneForm]=useState<SceneCreate>(emptyScene);
   const [shotForm,setShotForm]=useState<StructureShotCreate>(emptyShot);
   const [impact,setImpact]=useState<StructureMutation|null>(null);
+  const [libraryAssets,setLibraryAssets]=useState<LibraryAsset[]>([]);
+  const [boundAssetIds,setBoundAssetIds]=useState<Set<string>>(new Set());
+  const [assetCatalogLoaded,setAssetCatalogLoaded]=useState(false);
+  const [assetBusy,setAssetBusy]=useState('');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   useEffect(()=>{setCurrent(episode);setSceneId(value=>episode.scenes.some(scene=>scene.id===value)?value:episode.scenes[0]?.id??'');},[episode]);
   const scene=current.scenes.find(item=>item.id===sceneId)??current.scenes[0];
   const dialogueCount=useMemo(()=>scene?.shots.reduce((total,shot)=>total+shot.dialogue.length,0)??0,[scene]);
+  const productionAssets=useMemo(()=>libraryAssets.filter(item=>item.kind==='scene'||item.kind==='prop'),[libraryAssets]);
+  useEffect(()=>{
+    if(!scene?.id)return;
+    let active=true;
+    setAssetCatalogLoaded(false);
+    Promise.all([listLibraryAssets(current.project_id),listSceneLibraryAssets(scene.id)])
+      .then(([catalog,bound])=>{if(active){setLibraryAssets(catalog);setBoundAssetIds(new Set(bound.map(item=>item.id)));}})
+      .catch(cause=>{if(active)setError(cause instanceof Error?cause.message:'加载生产资产失败');})
+      .finally(()=>{if(active)setAssetCatalogLoaded(true);});
+    return()=>{active=false;};
+  },[current.project_id,scene?.id]);
 
   const reload=async(result:StructureMutation)=>{const loaded=await getEpisode(current.id);setCurrent(loaded);setImpact(result.affected_shot_ids.length?result:null);await onEpisodeChanged?.();return loaded;};
   const runMutation=async(action:()=>Promise<StructureMutation>)=>{if(busy)return;setBusy(true);setError('');try{return await reload(await action());}catch(cause){setError(cause instanceof Error?cause.message:'结构修改失败');}finally{setBusy(false);}};
@@ -37,6 +52,7 @@ export function SceneWorkspace({episode,onOpenShot,onEpisodeChanged}:{episode:Ep
   const removeScene=async()=>{if(!scene||!window.confirm(`删除场景“${scene.location}”及其全部镜头？`))return;await runMutation(()=>deleteScene(scene.id));};
   const removeShot=async(id:string)=>{if(!window.confirm('删除这个镜头及其生成资产？'))return;await runMutation(()=>deleteStructureShot(id));};
   const rerun=async()=>{if(!impact||busy)return;setBusy(true);setError('');try{const stages=[] as Array<'panels'|'videos'>;if(impact.invalidated_stages.includes('panels'))stages.push('panels');if(impact.invalidated_stages.includes('videos'))stages.push('videos');await createProductionRun(current.id,{stages,concurrency:2,shot_ids:impact.affected_shot_ids,regenerate_panels:stages.includes('panels'),regenerate_speech:false,regenerate_videos:stages.includes('videos'),panel_generation_mode:'solo'});setImpact(null);}catch(cause){setError(cause instanceof Error?cause.message:'创建补跑失败');}finally{setBusy(false);}};
+  const toggleProductionAsset=async(asset:LibraryAsset,checked:boolean)=>{if(!scene||assetBusy)return;setAssetBusy(asset.id);setError('');try{if(checked)await bindLibraryAssetToScene(scene.id,asset.id);else await unbindLibraryAssetFromScene(scene.id,asset.id);setBoundAssetIds(currentIds=>{const next=new Set(currentIds);if(checked)next.add(asset.id);else next.delete(asset.id);return next;});}catch(cause){setError(cause instanceof Error?cause.message:'更新生产资产失败');}finally{setAssetBusy('');}};
 
   if(!scene)return <main className="scene-workspace scene-workspace-empty"><div><h1>尚未创建场景</h1><p>从第一个场景开始组织本集制作结构。</p><button type="button" onClick={()=>{setSceneForm(emptyScene);setAddingScene(true);}}><Plus size={15}/>新增场景</button>{addingScene&&<SceneForm value={sceneForm} onChange={setSceneForm} onSave={()=>void saveNewScene()} onCancel={()=>setAddingScene(false)} saveLabel="保存新场景"/>}</div></main>;
 
@@ -52,6 +68,7 @@ export function SceneWorkspace({episode,onOpenShot,onEpisodeChanged}:{episode:Ep
       {addingScene&&<SceneForm value={sceneForm} onChange={setSceneForm} onSave={()=>void saveNewScene()} onCancel={()=>setAddingScene(false)} saveLabel="保存新场景"/>}
       {editingScene?<SceneForm value={sceneForm} onChange={setSceneForm} onSave={()=>void saveScene()} onCancel={()=>setEditingScene(false)} saveLabel="保存场景"/>:<header className="scene-document-header"><div><span className="eyebrow">场景 {String(scene.position).padStart(2,'0')}</span><h1>{scene.location}</h1><p>{scene.summary}</p></div><div className="scene-header-actions"><button type="button" aria-label="编辑当前场景" onClick={openSceneEditor}><Pencil size={14}/></button><button type="button" aria-label="删除当前场景" onClick={()=>void removeScene()}><Trash2 size={14}/></button></div><div className="scene-metadata"><span><MapPin size={14}/>场景地点</span><span>{scene.time_of_day==='night'?<Moon size={14}/>:<Sun size={14}/>} {timeLabel(scene.time_of_day)}</span><span><Clock3 size={14}/>{scene.estimated_duration_seconds} 秒</span></div></header>}
       <section className="scene-summary-band" aria-label="场景制作摘要"><div><span>镜头</span><strong>{scene.shots.length}</strong></div><div><span>对白</span><strong>{dialogueCount}</strong></div><div><span>连续性字段</span><strong>{Object.keys(scene.continuity_state).length}</strong></div></section>
+      {assetCatalogLoaded&&<section className="scene-production-assets" aria-labelledby="scene-production-assets-heading"><header><div><h2 id="scene-production-assets-heading">生产资产</h2><p>当前场景生成和导演台使用的项目资产。</p></div><strong>{boundAssetIds.size}/{productionAssets.length}</strong></header>{productionAssets.length?<div className="scene-production-asset-list">{productionAssets.map(asset=><label key={asset.id}><input type="checkbox" aria-label={`绑定${asset.kind==='scene'?'场景':'道具'}资产 ${asset.name}`} checked={boundAssetIds.has(asset.id)} disabled={Boolean(assetBusy)} onChange={event=>void toggleProductionAsset(asset,event.target.checked)}/><span><strong>{asset.name}</strong><small>{asset.description||asset.tags.join(' · ')||'暂无描述'}</small></span><em>{asset.kind==='scene'?'场景':'道具'}</em></label>)}</div>:<p className="scene-production-assets-empty">项目资产目录中还没有场景或道具。</p>}</section>}
       <section className="scene-beats" aria-labelledby="scene-beats-heading"><header><div><h2 id="scene-beats-heading">视觉节拍</h2><p>按镜头顺序组织当前场景的表演与画面推进。</p></div><button type="button" aria-label="新增镜头" onClick={()=>{setShotForm(emptyShot);setAddingShot(true);}}><Plus size={14}/>新增镜头</button></header>
         {addingShot&&<ShotForm value={shotForm} onChange={setShotForm} onSave={()=>void saveNewShot()} onCancel={()=>setAddingShot(false)} saveLabel="保存新镜头"/>}
         <div className="scene-beat-track">{scene.shots.map((shot,index)=><article key={shot.id} className="scene-beat"><span className="scene-beat-index">{String(index+1).padStart(2,'0')}</span>{editingShotId===shot.id?<ShotForm value={shotForm} onChange={setShotForm} onSave={()=>void saveShot()} onCancel={()=>setEditingShotId('')} saveLabel="保存镜头"/>:<div><strong>{shot.composition}</strong><p>{shot.shot_type.replaceAll('_',' ')} · {shot.camera_motion.replaceAll('_',' ')} · {shot.duration_seconds}s</p></div>}<div className="scene-beat-actions"><button type="button" aria-label={`上移镜头 ${String(shot.position).padStart(2,'0')}`} disabled={index===0||busy} onClick={()=>void moveShot(index,-1)}><ArrowUp size={13}/></button><button type="button" aria-label={`下移镜头 ${String(shot.position).padStart(2,'0')}`} disabled={index===scene.shots.length-1||busy} onClick={()=>void moveShot(index,1)}><ArrowDown size={13}/></button><button type="button" aria-label={`编辑镜头 ${String(shot.position).padStart(2,'0')}`} onClick={()=>{setEditingShotId(shot.id);setShotForm({shot_type:shot.shot_type,duration_seconds:shot.duration_seconds,composition:shot.composition,camera_motion:shot.camera_motion,character_state:shot.character_state,image_prompt:shot.image_prompt,negative_prompt:shot.negative_prompt,video_prompt:shot.video_prompt??'',negative_video_prompt:shot.negative_video_prompt??''});}}><Pencil size={13}/></button><button type="button" aria-label={`删除镜头 ${String(shot.position).padStart(2,'0')}`} onClick={()=>void removeShot(shot.id)}><Trash2 size={13}/></button><button type="button" aria-label={`打开镜头 ${String(shot.position).padStart(2,'0')}`} onClick={()=>onOpenShot(shot.id)}><Film size={15}/><ArrowRight size={14}/></button></div></article>)}</div>

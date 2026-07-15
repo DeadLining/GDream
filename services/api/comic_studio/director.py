@@ -23,7 +23,7 @@ class Transform(StrictDirectorModel):
 
 class DirectorObjectCreate(StrictDirectorModel):
     kind:Literal["character","prop","background","light","primitive"]
-    source_type:Literal["placeholder","character_reference","scene_context","asset","model"]
+    source_type:Literal["placeholder","character_reference","scene_context","library_asset","asset","model"]
     source_id:str|None=None
     label:str=Field(min_length=1,max_length=160)
     transform:Transform=Transform()
@@ -93,7 +93,7 @@ class DirectorStageRead(BaseModel):
 class DirectorAssetRead(StrictDirectorModel):
     key:str
     kind:Literal["character","prop","background"]
-    source_type:Literal["character_reference","scene_context","asset","model"]
+    source_type:Literal["character_reference","scene_context","library_asset","asset","model"]
     source_id:str
     asset_id:str|None=None
     label:str

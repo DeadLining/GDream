@@ -53,6 +53,9 @@ class DirectorAssetCatalogService:
                 selectinload(models.DirectorStage.scene)
                 .selectinload(models.Scene.shots)
                 .selectinload(models.Shot.dialogue),
+                selectinload(models.DirectorStage.scene)
+                .selectinload(models.Scene.library_asset_bindings)
+                .selectinload(models.LibraryAssetSceneBinding.library_asset),
             )
             .where(models.DirectorStage.id == stage_id)
         )
@@ -61,8 +64,49 @@ class DirectorAssetCatalogService:
         scene = stage.scene
         continuity = scene.continuity_state or {}
         result = [self._scene_definition(scene)]
+        result.extend(self._library_asset_definitions(scene))
         result.extend(self._character_definitions(scene))
         result.extend(self._prop_definitions(scene, continuity.get("props")))
+        return result
+
+    @staticmethod
+    def _library_asset_definitions(
+        scene: models.Scene,
+    ) -> list[DirectorAssetDefinition]:
+        result: list[DirectorAssetDefinition] = []
+        supported = [
+            binding.library_asset
+            for binding in scene.library_asset_bindings
+            if binding.library_asset.kind in {"scene", "prop"}
+        ]
+        for index, asset in enumerate(supported):
+            is_background = asset.kind == "scene"
+            result.append(
+                DirectorAssetDefinition(
+                    key=f"library_asset:{asset.id}",
+                    kind="background" if is_background else "prop",
+                    source_type="library_asset",
+                    source_id=asset.id,
+                    asset_id=None,
+                    label=asset.name,
+                    media_url=None,
+                    metadata={
+                        "description": asset.description,
+                        "tags": asset.tags,
+                        **(asset.asset_metadata or {}),
+                    },
+                    transform={
+                        "position": (
+                            [0, 1.2, -2.2]
+                            if is_background
+                            else [(index + 1) * 1.1, 0, 0.8]
+                        ),
+                        "rotation": [0, 0, 0],
+                        "scale": [2.5, 2.5, 2.5] if is_background else [0.8, 0.8, 0.8],
+                    },
+                    appearance={"color": "#49636e" if is_background else "#7295a3"},
+                )
+            )
         return result
 
     def list(self, stage_id: str) -> list[DirectorAssetRead]:

@@ -154,6 +154,41 @@ class ShotInputCompiler:
                 f"{self._format_mapping(resolved_overrides)}"
             )
 
+        library_assets = list(
+            self.session.scalars(
+                select(models.LibraryAsset)
+                .join(models.LibraryAssetSceneBinding)
+                .where(
+                    models.LibraryAssetSceneBinding.scene_id == shot.scene_id,
+                    models.LibraryAsset.kind.in_(("scene", "prop")),
+                )
+                .order_by(
+                    models.LibraryAssetSceneBinding.created_at,
+                    models.LibraryAssetSceneBinding.id,
+                )
+            )
+        )
+        library_asset_snapshot = [
+            {
+                "id": item.id,
+                "kind": item.kind,
+                "name": item.name,
+                "description": item.description,
+                "tags": item.tags,
+                "metadata": item.asset_metadata,
+            }
+            for item in library_assets
+        ]
+        for item in library_assets:
+            details = [item.description.strip()]
+            tags = ", ".join(str(tag) for tag in item.tags if str(tag).strip())
+            if tags:
+                details.append(f"tags {tags}")
+            suffix = "; " + "; ".join(part for part in details if part) if any(details) else ""
+            prompt_lines.append(
+                f"- Bound {item.kind} asset: {item.name}{suffix}"
+            )
+
         director = self._director_snapshot(shot)
         if director["camera"]:
             camera = director["camera"]
@@ -208,6 +243,7 @@ class ShotInputCompiler:
                 "negative_video_prompt": shot.negative_video_prompt,
             },
             "asset_bindings": bindings,
+            "library_assets": library_asset_snapshot,
             "director": director,
             "reference_asset_ids": list(dict.fromkeys(reference_asset_ids)),
         }

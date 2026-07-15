@@ -67,7 +67,7 @@ def _alembic_head() -> str:
     Hard-coded rather than read at runtime so the export does not require a
     live alembic context. Update this constant when bumping the migration head.
     """
-    return "20260719_27"
+    return "20260720_28"
 
 
 def _row_to_dict(instance: object) -> dict[str, Any]:
@@ -93,6 +93,11 @@ def _serialize_project_tree(project: models.Project) -> dict[str, Any]:
         }
         for asset in project.library_assets
     ]
+    library_asset_scene_bindings = [
+        _row_to_dict(binding)
+        for asset in project.library_assets
+        for binding in asset.scene_bindings
+    ]
     episodes: list[dict[str, Any]] = []
     scenes: list[dict[str, Any]] = []
     shots: list[dict[str, Any]] = []
@@ -110,6 +115,7 @@ def _serialize_project_tree(project: models.Project) -> dict[str, Any]:
         "project": _row_to_dict(project),
         "characters": characters,
         "library_assets": library_assets,
+        "library_asset_scene_bindings": library_asset_scene_bindings,
         "episodes": episodes,
         "scenes": scenes,
         "shots": shots,
@@ -145,7 +151,9 @@ class ProjectPortabilityService:
             .where(models.Project.id == project_id)
             .options(
                 selectinload(models.Project.characters),
-                selectinload(models.Project.library_assets),
+                selectinload(models.Project.library_assets).selectinload(
+                    models.LibraryAsset.scene_bindings
+                ),
                 selectinload(models.Project.episodes)
                 .selectinload(models.Episode.scenes)
                 .selectinload(models.Scene.shots)
@@ -327,6 +335,20 @@ class ProjectPortabilityService:
                 estimated_duration_seconds=sc_row.get("estimated_duration_seconds", 0),
             )
             self.session.add(scene)
+        self.session.flush()
+
+        for row in database.get("library_asset_scene_bindings", []):
+            library_asset_id = id_maps["library_asset"].get(row["library_asset_id"])
+            scene_id = id_maps["scene"].get(row["scene_id"])
+            if library_asset_id is None or scene_id is None:
+                warnings.append("Skipped library asset scene binding with missing target")
+                continue
+            self.session.add(
+                models.LibraryAssetSceneBinding(
+                    library_asset_id=library_asset_id,
+                    scene_id=scene_id,
+                )
+            )
         self.session.flush()
 
         for sh_row in database.get("shots", []):

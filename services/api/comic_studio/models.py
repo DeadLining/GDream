@@ -96,6 +96,32 @@ class LibraryAsset(Base):
     )
 
     project: Mapped[Project] = relationship(back_populates="library_assets")
+    scene_bindings: Mapped[list[LibraryAssetSceneBinding]] = relationship(
+        back_populates="library_asset",
+        cascade="all, delete-orphan",
+        order_by="LibraryAssetSceneBinding.created_at",
+    )
+
+
+class LibraryAssetSceneBinding(Base):
+    __tablename__ = "library_asset_scene_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "library_asset_id", "scene_id", name="uq_library_asset_scene_binding"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    library_asset_id: Mapped[str] = mapped_column(
+        ForeignKey("library_assets.id", ondelete="CASCADE"), index=True
+    )
+    scene_id: Mapped[str] = mapped_column(
+        ForeignKey("scenes.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    library_asset: Mapped[LibraryAsset] = relationship(back_populates="scene_bindings")
+    scene: Mapped[Scene] = relationship(back_populates="library_asset_bindings")
 
 
 class Storyline(Base):
@@ -305,6 +331,11 @@ class Scene(Base):
     )
     director_stage: Mapped[DirectorStage | None] = relationship(
         back_populates="scene", cascade="all, delete-orphan", uselist=False
+    )
+    library_asset_bindings: Mapped[list[LibraryAssetSceneBinding]] = relationship(
+        back_populates="scene",
+        cascade="all, delete-orphan",
+        order_by="LibraryAssetSceneBinding.created_at",
     )
 
 
