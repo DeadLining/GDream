@@ -277,3 +277,65 @@ def test_media_handlers_generate_all_dialogue_and_shot_outputs(tmp_path):
         assert line.duration_seconds == 1.25
         assert shot.active_video_asset_id == videos["asset_ids"][0]
         assert shot.video_render_status == "completed"
+
+
+def test_release_handlers_render_review_gate_and_publish_internal_master(tmp_path):
+    session_factory, data_root, episode_id, _character_id, _shot_id, _dialogue_id = (
+        _seed_episode(tmp_path)
+    )
+    runtime = FakeImageRuntime(session_factory, data_root)
+
+    def render_executor(_episode_id, output_path):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 256)
+        return {"format": {"duration": "6.0"}}
+
+    def review_executor(session, render_path, reviewed_episode_id, job_id):
+        record = models.RenderReviewRecord(
+            episode_id=reviewed_episode_id,
+            job_id=job_id,
+            render_path=str(render_path),
+            ffprobe_json={"format": {"duration": "6.0"}},
+            black_frame_positions=[],
+            silence_ranges=[],
+            subtitle_present=True,
+            overall_pass=True,
+            findings=[],
+        )
+        session.add(record)
+        session.flush()
+        return record
+
+    handlers = EpisodeAIStageHandlers(
+        session_factory,
+        data_root,
+        runtime,
+        compositor_root=tmp_path / "compositor",
+        render_executor=render_executor,
+        review_executor=review_executor,
+    )
+    for stage in ("references", "panels", "panel_review", "speech", "videos"):
+        asyncio.run(getattr(handlers, stage)(_context(episode_id, stage)))
+
+    rendered = asyncio.run(handlers.rendering(_context(episode_id, "rendering")))
+    reviewed = asyncio.run(
+        handlers.quality_review(_context(episode_id, "quality_review"))
+    )
+    candidate = asyncio.run(
+        handlers.release_candidate(_context(episode_id, "release_candidate"))
+    )
+    gate = asyncio.run(handlers.release_gate(_context(episode_id, "release_gate")))
+    published = asyncio.run(handlers.published(_context(episode_id, "published")))
+
+    assert rendered["job_id"] == reviewed["job_id"]
+    assert rendered["output_path"].endswith(".mp4")
+    assert reviewed["overall_pass"] is True
+    assert candidate["candidate_id"] == gate["candidate_id"]
+    assert gate["ready"] is True
+    assert published["status"] == "published"
+    assert published["platform"] == "internal_master"
+    with session_factory() as session:
+        stored_candidate = session.get(models.ReleaseCandidate, candidate["candidate_id"])
+        publication = session.get(models.PublicationRecord, published["publication_id"])
+        assert stored_candidate.status == "published"
+        assert publication.candidate_id == stored_candidate.id
