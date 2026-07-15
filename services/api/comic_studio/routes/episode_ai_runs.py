@@ -1,4 +1,7 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from sqlalchemy.orm import Session
 
 from comic_studio import schemas
 from comic_studio.db import get_session
@@ -7,13 +10,16 @@ from comic_studio.services.episode_ai_runs import (
     EpisodeAIRunService,
     InvalidEpisodeAIRunTransition,
 )
-from typing import Annotated
-from fastapi import Depends
-from sqlalchemy.orm import Session
 
 
 router = APIRouter(tags=["episode-ai-runs"])
 SessionDependency = Annotated[Session, Depends(get_session)]
+
+
+def _schedule(request: Request, background_tasks: BackgroundTasks, run_id: str) -> None:
+    orchestrator = getattr(request.app.state, "episode_ai_orchestrator", None)
+    if orchestrator is not None:
+        background_tasks.add_task(orchestrator.run, run_id)
 
 
 @router.post(
@@ -26,13 +32,17 @@ def create_episode_ai_run(
     data: schemas.EpisodeAIRunCreate,
     response: Response,
     session: SessionDependency,
+    request: Request,
+    background_tasks: BackgroundTasks,
 ):
     try:
-        run, _created = EpisodeAIRunService(session).create(episode_id, data)
+        run, created = EpisodeAIRunService(session).create(episode_id, data)
     except EpisodeAIRunConflict as exc:
         raise HTTPException(409, "Episode already has an active AI run") from exc
     if run is None:
         raise HTTPException(404, "Episode not found")
+    if created:
+        _schedule(request, background_tasks, run.id)
     response.status_code = status.HTTP_202_ACCEPTED
     return run
 
@@ -76,8 +86,15 @@ def pause_episode_ai_run(run_id: str, session: SessionDependency):
     response_model=schemas.EpisodeAIRunRead,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def continue_episode_ai_run(run_id: str, session: SessionDependency):
-    return _transition(EpisodeAIRunService(session).resume, run_id)
+def continue_episode_ai_run(
+    run_id: str,
+    session: SessionDependency,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    run = _transition(EpisodeAIRunService(session).resume, run_id)
+    _schedule(request, background_tasks, run.id)
+    return run
 
 
 @router.post("/api/episode-ai-runs/{run_id}/cancel", response_model=schemas.EpisodeAIRunRead)
@@ -90,5 +107,12 @@ def cancel_episode_ai_run(run_id: str, session: SessionDependency):
     response_model=schemas.EpisodeAIRunRead,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def retry_episode_ai_run(run_id: str, session: SessionDependency):
-    return _transition(EpisodeAIRunService(session).retry, run_id)
+def retry_episode_ai_run(
+    run_id: str,
+    session: SessionDependency,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    run = _transition(EpisodeAIRunService(session).retry, run_id)
+    _schedule(request, background_tasks, run.id)
+    return run

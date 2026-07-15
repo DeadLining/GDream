@@ -54,6 +54,7 @@ from comic_studio.routes.character_3d import router as character_3d_router
 from comic_studio.routes.episode_ai_runs import router as episode_ai_runs_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
+from comic_studio.services.episode_ai_orchestrator import EpisodeAIOrchestrator
 from comic_studio.services.production_coordinator import ProductionCoordinator
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
@@ -177,6 +178,7 @@ def create_app(
         recover_production_runs()
         recover_script_imports()
         recover_script_generations()
+        recover_episode_ai_runs()
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
@@ -278,6 +280,11 @@ def create_app(
         return recovered
 
     app.state.recover_script_generations = recover_script_generations
+
+    def recover_episode_ai_runs():
+        return EpisodeAIOrchestrator(session_factory, {}).recover_interrupted()
+
+    app.state.recover_episode_ai_runs = recover_episode_ai_runs
 
     async def produce_panel(item):
         target_type = getattr(item, "target_type", "shot")
