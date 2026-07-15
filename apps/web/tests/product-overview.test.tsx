@@ -1,4 +1,4 @@
-import {cleanup, render, screen} from '@testing-library/react';
+import {cleanup, render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ProductOverview} from '../components/ProductOverview';
@@ -42,6 +42,47 @@ describe('ProductOverview', () => {
     expect(screen.getByText('未归卷第二集')).toBeVisible();
     await userEvent.click(screen.getByRole('button', {name: '进入制作'}));
     expect(onOpenEpisode).toHaveBeenCalledWith('episode-2');
+  });
+
+  it('uses authoritative readiness for every episode and aggregates project production stages', () => {
+    const secondEpisode = {...project.episodes[0], id: 'episode-2', title: '时间回响'};
+    const multiEpisodeProject = {...project, episodes: [project.episodes[0], secondEpisode]};
+    const readinessByEpisode: Record<string, ProductionReadiness> = {
+      'episode-1': {...readiness, blockers: {...readiness.blockers, missing_videos: ['video-a', 'video-b']}},
+      'episode-2': {
+        episode_id: 'episode-2', ready: false,
+        totals: {shots: 2, dialogue: 0},
+        ready_counts: {panels: 2, approved: 2, speech: 0, videos: 1},
+        blockers: {missing_panels: [], unapproved_shots: [], missing_speech: [], missing_videos: ['video-c']},
+      },
+    };
+
+    render(<ProductOverview project={multiEpisodeProject} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
+
+    const firstRow = screen.getByText('穿越时空').closest('[role="row"]')!;
+    const secondRow = screen.getByText('时间回响').closest('[role="row"]')!;
+    expect(within(firstRow).getByText('38%')).toBeVisible();
+    expect(within(firstRow).getByText('6 项')).toBeVisible();
+    expect(within(secondRow).getByText('100%')).toBeVisible();
+    expect(within(secondRow).getByText('1 项')).toBeVisible();
+
+    const stageRail = screen.getByLabelText('作品制作阶段');
+    expect(within(stageRail).getByText('分镜').parentElement).toHaveTextContent('67%');
+    expect(within(stageRail).getByText('生成').parentElement).toHaveTextContent('58%');
+    expect(within(stageRail).getByText('审核').parentElement).toHaveTextContent('50%');
+    expect(screen.getByText('制作阻塞').parentElement).toHaveTextContent('7');
+  });
+
+  it('marks an episode as pending when its readiness could not be loaded', () => {
+    const secondEpisode = {...project.episodes[0], id: 'episode-2', title: '状态未知'};
+    const multiEpisodeProject = {...project, episodes: [project.episodes[0], secondEpisode]};
+
+    render(<ProductOverview project={multiEpisodeProject} episode={episode} readiness={readiness} readinessByEpisode={{'episode-1': readiness}} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
+
+    const pendingRow = screen.getByText('状态未知').closest('[role="row"]')!;
+    expect(within(pendingRow).getByText('待获取')).toBeVisible();
+    expect(within(pendingRow).getByText('--')).toBeVisible();
+    expect(within(pendingRow).queryByText('18%')).not.toBeInTheDocument();
   });
 
   it('creates the next volume from the work overview', async () => {

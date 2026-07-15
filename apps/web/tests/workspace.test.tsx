@@ -351,6 +351,40 @@ describe('Workspace', () => {
     expect(screen.getByRole('button', {name: /^01.*失窃的雨夜/})).toHaveAttribute('aria-current', 'page');
   });
 
+  it('loads production readiness for every episode in the project', async () => {
+    const secondEpisode = {...projectDetail.episodes[0], id: 'episode-2', title: '第二集'};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue({...projectDetail, episodes: [projectDetail.episodes[0], secondEpisode]});
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProductionReadiness.mockImplementation((id: string) => Promise.resolve({...readiness, episode_id: id}));
+
+    render(<Workspace/>);
+
+    await screen.findByRole('heading', {name: '失窃的雨夜'});
+    await waitFor(() => {
+      expect(mocks.getProductionReadiness).toHaveBeenCalledWith('episode-1');
+      expect(mocks.getProductionReadiness).toHaveBeenCalledWith('episode-2');
+    });
+  });
+
+  it('preserves successful project readiness when another episode request fails', async () => {
+    const secondEpisode = {...projectDetail.episodes[0], id: 'episode-2', title: '第二集'};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue({...projectDetail, episodes: [projectDetail.episodes[0], secondEpisode]});
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProductionReadiness.mockImplementation((id: string) => id === 'episode-2'
+      ? Promise.reject(new Error('readiness offline'))
+      : Promise.resolve(readiness));
+
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button', {name: '作品总览'}));
+
+    const firstRow = screen.getAllByText('失窃的雨夜').map(item => item.closest('[role="row"]')).find(Boolean)!;
+    const secondRow = screen.getAllByText('第二集').map(item => item.closest('[role="row"]')).find(Boolean)!;
+    expect(within(firstRow).getByText('50%')).toBeVisible();
+    expect(within(secondRow).getByText('待获取')).toBeVisible();
+  });
+
   it('opens the real model center and confirms leaving dirty channel changes', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
@@ -677,6 +711,39 @@ describe('Workspace', () => {
     expect(selector).toHaveValue('episode-b');
     expect(screen.getByRole('heading', {name: '剧集 B'})).toBeVisible();
     expect(localStorage.getItem('ai-comic-episode')).toBe('episode-b');
+  });
+
+  it('does not let stale project readiness overwrite the current project summary', async () => {
+    const projectA = {...project, id: 'project-a', title: '项目 A'};
+    const projectB = {...project, id: 'project-b', title: '项目 B'};
+    const episodeA = {...projectDetail.episodes[0], id: 'episode-a', project_id: 'project-a', title: '剧集 A'};
+    const episodeB = {...projectDetail.episodes[0], id: 'episode-b', project_id: 'project-b', title: '剧集 B'};
+    const detailA = {...projectDetail, ...projectA, episodes: [episodeA]};
+    const detailB = {...projectDetail, ...projectB, episodes: [episodeB]};
+    const staleReadiness = deferred<ProductionReadiness>();
+    mocks.listProjects.mockResolvedValue([projectA, projectB]);
+    mocks.getProject.mockImplementation((id: string) => Promise.resolve(id === 'project-a' ? detailA : detailB));
+    mocks.getEpisode.mockImplementation((id: string) => Promise.resolve({...plannedEpisode, ...(id === 'episode-a' ? episodeA : episodeB)}));
+    mocks.getProductionReadiness.mockImplementation((id: string) => id === 'episode-b'
+      ? staleReadiness.promise
+      : Promise.resolve({...readiness, episode_id: 'episode-a'}));
+    localStorage.setItem('ai-comic-project', 'project-a');
+
+    render(<Workspace/>);
+    await screen.findAllByRole('combobox', {name: '选择项目'});
+    const selector = document.querySelector<HTMLSelectElement>('.project-switcher')!;
+    await userEvent.selectOptions(selector, 'project-b');
+    await waitFor(() => expect(selector).toHaveValue('project-b'));
+    await userEvent.selectOptions(selector, 'project-a');
+    await waitFor(() => expect(selector).toHaveValue('project-a'));
+    await userEvent.click(screen.getByRole('button', {name: '作品总览'}));
+
+    staleReadiness.resolve({...readiness, episode_id: 'episode-b', ready_counts: {panels: 0, approved: 0, speech: 0}});
+    await act(async () => {await staleReadiness.promise;});
+
+    expect(screen.getByRole('heading', {name: '项目 A'})).toBeVisible();
+    const currentRow = screen.getAllByText('剧集 A').map(item => item.closest('[role="row"]')).find(Boolean)!;
+    expect(within(currentRow).getByText('50%')).toBeVisible();
   });
 
   it('supports roving keyboard navigation across workspace tabs', async () => {
