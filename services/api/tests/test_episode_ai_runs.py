@@ -175,3 +175,55 @@ def test_episode_ai_run_service_rejects_duplicate_active_run(db_session):
         assert str(exc) == "active_run"
     else:
         raise AssertionError("Expected an active-run conflict")
+
+
+def test_episode_ai_run_routes_schedule_create_continue_and_retry_once(client):
+    episode = _episode(client)
+    calls = []
+
+    class FakeOrchestrator:
+        async def run(self, run_id):
+            calls.append(run_id)
+
+    client.app.state.episode_ai_orchestrator = FakeOrchestrator()
+    payload = {"idempotency_key": "scheduled-run"}
+
+    created = client.post(f"/api/episodes/{episode['id']}/ai-runs", json=payload)
+    repeated = client.post(f"/api/episodes/{episode['id']}/ai-runs", json=payload)
+    run_id = created.json()["id"]
+    assert created.status_code == 202
+    assert repeated.status_code == 202
+    assert calls == [run_id]
+
+    assert client.post(f"/api/episode-ai-runs/{run_id}/pause").status_code == 200
+    assert client.post(f"/api/episode-ai-runs/{run_id}/continue").status_code == 202
+    assert calls == [run_id, run_id]
+
+    with client.app.state.session_factory() as session:
+        service = EpisodeAIRunService(session)
+        service.start_current(run_id)
+        service.fail_current(run_id, "temporary provider failure")
+    assert client.post(f"/api/episode-ai-runs/{run_id}/retry").status_code == 202
+    assert calls == [run_id, run_id, run_id]
+
+
+def test_app_recovery_marks_interrupted_episode_ai_run_retryable(client):
+    episode = _episode(client)
+    with client.app.state.session_factory() as session:
+        service = EpisodeAIRunService(session)
+        run, _created = service.create(
+            episode["id"],
+            schemas.EpisodeAIRunCreate(idempotency_key="startup-recovery"),
+        )
+        service.start_current(run.id)
+
+    recovered = client.app.state.recover_episode_ai_runs()
+
+    assert recovered == [run.id]
+    response = client.get(f"/api/episode-ai-runs/{run.id}")
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["stages"][2]["output_metadata"] == {
+        "error_code": "api_interrupted",
+        "retryable": True,
+    }
