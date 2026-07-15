@@ -20,4 +20,8 @@ describe('review publish layout CSS',()=>{
     expect(css).toMatch(/\.review-publish-workspace\s+\.review-row\s*\{[^}]*overflow:\s*hidden/s);
     expect(css).toMatch(/\.review-publish-workspace\s+\.review-shot-context\s+small\s*\{[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s);
   });
+
+  it('keeps the mobile timeline playhead narrow',()=>{
+    expect(css).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.review-timeline\s*>\s*\.timeline-playhead\s*\{[^}]*min-width:\s*0[^}]*width:\s*2px/s);
+  });
 });
