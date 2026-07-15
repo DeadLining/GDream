@@ -1,5 +1,7 @@
 import asyncio
+from io import BytesIO
 
+from PIL import Image
 from comic_studio import models
 from comic_studio.model_runtime.contracts import Capability
 from comic_studio.providers.gpt_image import ImageResult
@@ -91,14 +93,27 @@ def test_visual_review_persists_annotation_conversation_and_candidate(client):
     accepted=client.post(f"/api/visual-review-candidates/{candidate.json()['id']}/accept")
     assert accepted.status_code==200
     assert accepted.json()["status"]=="accepted"
-    assert client.get(f"/api/episodes/{loaded['episode_id']}").json()["scenes"][0]["shots"][0]["active_panel_asset_id"]==candidate_id
+    accepted_shot=client.get(f"/api/episodes/{loaded['episode_id']}").json()["scenes"][0]["shots"][0]
+    assert accepted_shot["active_panel_asset_id"]==candidate_id
+    assert accepted_shot["review_status"]=="approved"
+    production_shot=client.get(f"/api/episodes/{loaded['episode_id']}/production-graph").json()["shots"][0]
+    assert production_shot["active_panel_asset_id"]==candidate_id
+    assert production_shot["review_status"]=="approved"
 
 
 def test_visual_review_generation_uses_thread_feedback_and_registers_candidate(client):
     _project,shot_id,source_id,_candidate_id=_graph(client)
     source_path=client.app.state.settings.data_root/"source.png"
     source_path.parent.mkdir(parents=True,exist_ok=True)
-    source_path.write_bytes(b"source-image")
+    source_image=Image.new("RGB",(320,240),"white")
+    source_buffer=BytesIO()
+    source_image.save(source_buffer,format="PNG")
+    source_content=source_buffer.getvalue()
+    source_path.write_bytes(source_content)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        shot.previous_shot_tail_asset_id=source_id
+        session.commit()
     thread=client.post(
         f"/api/shots/{shot_id}/visual-review-threads",
         json={"source_asset_id":source_id,"title":"表情调整","modification_scope":"episode"},
@@ -140,7 +155,15 @@ def test_visual_review_generation_uses_thread_feedback_and_registers_candidate(c
     assert "眉眼区域" in provider.prompt
     assert '\"cx\": 0.42' in provider.prompt
     assert "episode" in provider.prompt
-    assert provider.references==[(b"source-image","image/png")]
+    assert len(provider.references)==1
+    annotated_content,annotated_media_type,max_dimension=provider.references[0]
+    assert annotated_media_type=="image/png"
+    assert max_dimension==1024
+    assert annotated_content!=source_content
+    with Image.open(BytesIO(annotated_content)) as annotated:
+        annotated.load()
+        assert annotated.size==(320,240)
+        assert any(red>180 and green<120 and blue<120 for red,green,blue in annotated.convert("RGB").getdata())
     with client.app.state.session_factory() as session:
         candidate=session.get(models.VisualReviewCandidate,candidate_id)
         asset=session.get(models.Asset,asset_id)
@@ -148,6 +171,7 @@ def test_visual_review_generation_uses_thread_feedback_and_registers_candidate(c
         assert asset.kind==f"panel:{shot_id}"
         assert asset.request_metadata["visual_review"]["source_asset_id"]==source_id
         assert asset.request_metadata["visual_review"]["modification_scope"]=="episode"
+        assert asset.request_metadata["visual_review"]["annotated_reference"] is True
 
 
 def test_visual_review_generate_endpoint_creates_thread_scoped_image_job(client):
@@ -289,11 +313,19 @@ def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(cli
     assert set(metadata["affected_shot_ids"])=={shot_id,other_shot_id}
     assert len(metadata["variant_ids"])==1
     with client.app.state.session_factory() as session:
+        from comic_studio.services.shot_inputs import ShotInputCompiler
+
         variant=session.get(models.AssetVariant,metadata["variant_ids"][0])
         assert variant.kind=="episode"
         assert variant.episode_id==thread["episode_id"]
-        assert variant.usages[0].shot_id==shot_id
-        assert variant.usages[0].asset_id==candidate_id
+        assert {usage.shot_id for usage in variant.usages}=={shot_id,other_shot_id}
+        assert {usage.usage_kind for usage in variant.usages}=={"reference"}
+        assert {usage.asset_id for usage in variant.usages}=={candidate_id}
+        compiled=ShotInputCompiler(session).compile(
+            other_shot_id,usage_kinds={"panel","reference"}
+        )
+        assert candidate_id in compiled.reference_asset_ids
+        assert compiled.snapshot["asset_bindings"][0]["variant_id"]==variant.id
 
 
 def test_master_scope_acceptance_creates_new_master_version_and_impact(client):
@@ -332,6 +364,7 @@ def test_master_scope_acceptance_creates_new_master_version_and_impact(client):
         assert revision.kind=="master"
         assert revision.version==2
         assert revision.id!=existing.id
+        assert revision.parent_variant_id==existing.id
 
 
 def test_visual_review_candidate_can_be_rejected(client):

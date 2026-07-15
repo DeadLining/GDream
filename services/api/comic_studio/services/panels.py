@@ -10,6 +10,7 @@ from comic_studio.providers.gpt_image import GPTImageProvider
 from comic_studio.services.grid_split import split_grid_image
 from comic_studio.services.shot_inputs import ShotInputCompiler
 from comic_studio.services.skill_loader import get_skill_loader
+from comic_studio.services.visual_review_markup import render_visual_review_markup
 
 
 class PanelService:
@@ -313,7 +314,9 @@ class PanelService:
                 f"- Review conversation:\n{messages or '- no additional message'}"
             )
         tail_asset = self._tail_frame_asset(shot)
-        if tail_asset is not None:
+        if tail_asset is not None and not (
+            review_context and review_context.get("source_asset_id")
+        ):
             # Make the prompt explicitly call out the continuity anchor.
             prompt = f"{prompt}\n\nContinuity: continue the visual from the previous shot's tail frame (reference image 1)."
         review_source = None
@@ -322,12 +325,27 @@ class PanelService:
                 models.Asset, review_context["source_asset_id"]
             )
         reference_inputs = []
+        annotated_reference = False
         if review_source is not None:
-            reference_inputs.append(self._asset_to_input(review_source))
-        if tail_asset is not None:
-            reference_inputs.append(self._asset_to_input(tail_asset))
-        for asset in reference_assets:
-            if review_source is None or asset.id != review_source.id:
+            review_input = self._asset_to_input(review_source)
+            if review_context and (
+                review_context.get("annotations") or review_context.get("messages")
+            ):
+                review_input = (
+                    render_visual_review_markup(
+                        review_input[0],
+                        review_context.get("annotations", []),
+                        review_context.get("messages", []),
+                    ),
+                    "image/png",
+                    1024,
+                )
+                annotated_reference = True
+            reference_inputs.append(review_input)
+        if review_source is None:
+            if tail_asset is not None:
+                reference_inputs.append(self._asset_to_input(tail_asset))
+            for asset in reference_assets:
                 reference_inputs.append(self._asset_to_input(asset))
         result = (
             await self.provider.edit(prompt, reference_inputs, "1024x1536")
@@ -344,13 +362,26 @@ class PanelService:
             request_metadata={
                 "prompt": prompt,
                 "size": "1024x1536",
-                "reference_asset_ids": [
-                    *(["tail:" + tail_asset.id] if tail_asset is not None else []),
-                    *[asset.id for asset in reference_assets],
-                ],
+                "reference_asset_ids": (
+                    []
+                    if review_source is not None
+                    else [
+                        *(["tail:" + tail_asset.id] if tail_asset is not None else []),
+                        *[asset.id for asset in reference_assets],
+                    ]
+                ),
                 "input_snapshot": compiled.snapshot,
                 "input_snapshot_hash": compiled.snapshot_hash,
-                **({"visual_review": review_context} if review_context else {}),
+                **(
+                    {
+                        "visual_review": {
+                            **review_context,
+                            "annotated_reference": annotated_reference,
+                        }
+                    }
+                    if review_context
+                    else {}
+                ),
             },
             activate=activate,
         )

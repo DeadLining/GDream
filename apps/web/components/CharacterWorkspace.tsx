@@ -1,6 +1,6 @@
 'use client';
 
-import {Check,ImagePlus,LoaderCircle,Pencil,RefreshCw,Sparkles,Trash2} from 'lucide-react';
+import {Box,Check,ImagePlus,LoaderCircle,Pencil,RefreshCw,Sparkles,Trash2} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
 import {
   activateCharacterReference,
@@ -16,6 +16,7 @@ import {
   generateCharacterReferenceSet,
   getEpisodeProductionGraph,
   listCharacterReferences,
+  listCharacter3DRepresentations,
   listLibraryAssets,
   listAssetVariants,
   mediaUrl,
@@ -26,6 +27,7 @@ import {
   updateCharacter,
   updateLibraryAsset,
   uploadCharacterReference,
+  uploadCharacter3DRepresentation,
   uploadLibraryAssetMedia,
 } from '../lib/api';
 import {pollJob} from '../lib/jobs';
@@ -50,6 +52,7 @@ import {
   type AssetWorkspaceView,
 } from './assets/AssetLibraryViews';
 import {AssetLineageCanvas} from './canvas/AssetLineageCanvas';
+import {CharacterModelPreview} from './assets/CharacterModelPreview';
 
 const types:Array<[CharacterReferenceType,string]>=[
   ['primary','主参考'],['front','正面'],['three_quarter','四分之三'],
@@ -79,15 +82,16 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const character=workspaceCharacters.find(item=>item.id===selected)??workspaceCharacters[0];
   const references=character?assetData[character.id]?.references??[]:[];
   const variants=character?assetData[character.id]?.variants??[]:[];
+  const representations=character?assetData[character.id]?.representations??[]:[];
   const characterIds=workspaceCharacters.map(item=>item.id).join('|');
 
   const load=async(id:string)=>{
     const request=(loadRequests.current[id]??0)+1;
     loadRequests.current[id]=request;
     try{
-      const [nextReferences,nextVariants]=await Promise.all([listCharacterReferences(id),listAssetVariants(id)]);
+      const [nextReferences,nextVariants,nextRepresentations]=await Promise.all([listCharacterReferences(id),listAssetVariants(id),listCharacter3DRepresentations(id)]);
       if(request!==loadRequests.current[id])return;
-      setAssetData(current=>({...current,[id]:{references:nextReferences,variants:nextVariants}}));
+      setAssetData(current=>({...current,[id]:{references:nextReferences,variants:nextVariants,representations:nextRepresentations}}));
       setError('');
     }catch(cause){
       if(request!==loadRequests.current[id])return;
@@ -130,6 +134,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     try{await uploadCharacterReference(character.id,filter,file);await load(character.id);}
     catch(cause){setError(cause instanceof Error?cause.message:'上传失败');}
   };
+  const uploadModel=async(file:File|null)=>{if(!file)return;try{await uploadCharacter3DRepresentation(character.id,file);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'3D 模型上传失败');}};
   const follow=async(jobId:string)=>{
     const finished=await pollJob(jobId,{
       onUpdate:(job)=>{
@@ -200,6 +205,8 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     {error&&<div className="form-error reference-set-error" role="alert"><span>{error}</span>{canRetry&&<button onClick={retry} disabled={generating}><RefreshCw size={14}/>继续未完成项</button>}</div>}
     <div className="reference-grid">{visible.map(reference=>{const label=reference.label||labels[reference.reference_type];const editing=editingReferenceId===reference.id;return <article key={reference.id} className={reference.is_active?'active':''}><img src={mediaUrl(reference.asset.media_url)} alt={`${character.name}${label}`}/><div>{editing?<><input aria-label="参考图名称" value={editingReferenceLabel} onChange={event=>setEditingReferenceLabel(event.target.value)}/><button aria-label="保存参考图名称" onClick={()=>void renameReference(reference)}><Check size={14}/></button></>:<span>{label}</span>}<small>{reference.review_status==='approved'?'已批准':'待审核'}{reference.is_active?' · 使用中':''}</small></div><div className="reference-commands">{reference.review_status!=='approved'&&<button onClick={()=>approve(reference)}><Check size={14}/>批准</button>}{reference.review_status==='approved'&&!reference.is_active&&<button onClick={()=>activate(reference)}>设为使用</button>}<button aria-label={`重命名${label}`} onClick={()=>{setEditingReferenceId(reference.id);setEditingReferenceLabel(label);}}><Pencil size={14}/></button><button aria-label={`删除${label}`} title={reference.is_active?'使用中的参考图不能删除':'删除参考图'} disabled={reference.is_active} onClick={()=>void removeReference(reference)}><Trash2 size={14}/></button></div></article>;})}</div>
   </section>;
+  const activeRepresentation=representations.find(item=>item.is_active)??representations[0]??null;
+  const modelManager=<section className="character-model-section"><header><div><strong>3D 导演代理</strong><small>GLB · 构图与机位参考</small></div><label>上传 GLB<input aria-label="上传角色 3D 模型" type="file" accept=".glb,model/gltf-binary" onChange={event=>void uploadModel(event.target.files?.[0]??null)}/></label></header>{activeRepresentation?<><CharacterModelPreview url={activeRepresentation.model_url}/><div className="character-model-meta"><strong>{activeRepresentation.label}</strong><span>{activeRepresentation.triangle_count.toLocaleString()} 三角面</span><span>{activeRepresentation.has_skeleton?'含骨骼':'静态代理'}</span></div></>:<div className="character-model-empty"><Box size={24}/><span>尚未上传角色 GLB</span></div>}</section>;
 
   if(view!=='catalog')return <CharacterMasterView
     characters={workspaceCharacters}
@@ -209,6 +216,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     referenceManager={referenceManager}
     variantWorkspace={<AssetVariantEditorView embedded character={character} references={references} variants={variants} episodes={episodes} onOpen={setView} onCreateVariant={addEpisodeVariant} onCreateState={addState}/>}
     lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState} onLoadEpisodeShots={loadEpisodeShots} onCreateUsage={addUsage}/>}
+    modelManager={modelManager}
     initialTab={view==='variant'?'variant':view==='lineage'?'lineage':'master'}
     onSelect={setSelected}
     onOpen={setView}

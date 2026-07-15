@@ -21,6 +21,7 @@ class DirectorAssetDefinition:
     asset_id: str | None
     label: str
     media_url: str | None
+    media_type: str | None
     metadata: dict[str, Any]
     transform: dict[str, list[float]]
     appearance: dict[str, Any]
@@ -34,6 +35,7 @@ class DirectorAssetDefinition:
             asset_id=self.asset_id,
             label=self.label,
             media_url=self.media_url,
+            media_type=self.media_type,
             metadata=self.metadata,
         )
 
@@ -99,6 +101,7 @@ class DirectorAssetCatalogService:
                     asset_id=media.id if media_is_image else None,
                     label=asset.name,
                     media_url=media_url,
+                    media_type=media.media_type if media is not None else None,
                     metadata={
                         "description": asset.description,
                         "tags": asset.tags,
@@ -148,6 +151,7 @@ class DirectorAssetCatalogService:
             asset_id=None,
             label=f"{scene.location}{time_label}",
             media_url=None,
+            media_type=None,
             metadata={
                 "summary": scene.summary,
                 "time_of_day": scene.time_of_day,
@@ -195,6 +199,23 @@ class DirectorAssetCatalogService:
         by_character: dict[str, list[models.CharacterReference]] = {}
         for reference in references:
             by_character.setdefault(reference.character_id, []).append(reference)
+        representations = list(
+            self.session.scalars(
+                select(models.Character3DRepresentation)
+                .options(selectinload(models.Character3DRepresentation.asset))
+                .where(
+                    models.Character3DRepresentation.character_id.in_(characters),
+                    models.Character3DRepresentation.is_active.is_(True),
+                    models.Character3DRepresentation.review_status == "approved",
+                    models.Character3DRepresentation.variant_id.is_(None),
+                    models.Character3DRepresentation.state_id.is_(None),
+                )
+                .order_by(models.Character3DRepresentation.version.desc())
+            )
+        )
+        by_character_representation = {
+            item.character_id: item for item in representations
+        }
         result: list[DirectorAssetDefinition] = []
         for index, character in enumerate(characters.values()):
             candidates = by_character.get(character.id, [])
@@ -207,28 +228,92 @@ class DirectorAssetCatalogService:
                 ),
                 None,
             )
-            if reference is None:
+            representation = by_character_representation.get(character.id)
+            if reference is None and representation is None:
                 continue
-            asset = self.session.get(models.Asset, reference.asset_id)
-            if asset is None or not asset.media_type.startswith("image/"):
+            reference_asset = (
+                self.session.get(models.Asset, reference.asset_id) if reference else None
+            )
+            if reference_asset is not None and not reference_asset.media_type.startswith("image/"):
+                reference_asset = None
+            fallback_url = (
+                f"/media/{reference_asset.local_path}" if reference_asset else None
+            )
+            aspect_ratio = (
+                reference_asset.width / reference_asset.height
+                if reference_asset and reference_asset.width and reference_asset.height
+                else 0.75
+            )
+            if representation is not None:
+                model_url = f"/media/{representation.asset.local_path}"
+                minimum = representation.bounds.get("min")
+                maximum = representation.bounds.get("max")
+                height = (
+                    float(maximum[1]) - float(minimum[1])
+                    if isinstance(minimum, list)
+                    and isinstance(maximum, list)
+                    and len(minimum) == 3
+                    and len(maximum) == 3
+                    else 0
+                )
+                model_scale = 1.8 / height if height > 0 else 1.0
+                model_offset_y = -float(minimum[1]) * model_scale if height > 0 else 0
+                result.append(
+                    DirectorAssetDefinition(
+                        key=f"character:{character.id}:representation:{representation.id}",
+                        kind="character",
+                        source_type="model",
+                        source_id=representation.id,
+                        asset_id=representation.asset_id,
+                        label=character.name,
+                        media_url=model_url,
+                        media_type="model/gltf-binary",
+                        metadata={
+                            "character_id": character.id,
+                            "role": character.role,
+                            "representation_id": representation.id,
+                            "representation_version": representation.version,
+                            "asset_id": representation.asset_id,
+                            "mesh_count": representation.mesh_count,
+                            "triangle_count": representation.triangle_count,
+                            "has_skeleton": representation.has_skeleton,
+                            "appearance_bible": character.appearance_bible,
+                            "continuity_rules": character.continuity_rules,
+                        },
+                        transform={
+                            "position": [(index - (len(characters) - 1) / 2) * 1.2, 0, 0],
+                            "rotation": [0, 0, 0],
+                            "scale": [1, 1, 1],
+                        },
+                        appearance={
+                            "model_url": model_url,
+                            "model_scale": model_scale,
+                            "model_offset_y": model_offset_y,
+                            "fallback_image_url": fallback_url,
+                            "aspect_ratio": aspect_ratio,
+                        },
+                    )
+                )
                 continue
-            aspect_ratio = asset.width / asset.height if asset.width and asset.height else 0.75
-            media_url = f"/media/{asset.local_path}"
+            if reference_asset is None:
+                continue
+            media_url = fallback_url
             result.append(
                 DirectorAssetDefinition(
                     key=f"character:{character.id}:{reference.id}",
                     kind="character",
                     source_type="character_reference",
                     source_id=character.id,
-                    asset_id=asset.id,
+                    asset_id=reference_asset.id,
                     label=character.name,
                     media_url=media_url,
+                    media_type=reference_asset.media_type,
                     metadata={
                         "character_id": character.id,
                         "role": character.role,
                         "reference_id": reference.id,
                         "reference_type": reference.reference_type,
-                        "asset_id": asset.id,
+                        "asset_id": reference_asset.id,
                         "appearance_bible": character.appearance_bible,
                         "continuity_rules": character.continuity_rules,
                     },
@@ -276,6 +361,7 @@ class DirectorAssetCatalogService:
                     asset_id=None,
                     label=label,
                     media_url=None,
+                    media_type=None,
                     metadata=metadata,
                     transform={
                         "position": [(index + 1) * 1.1, 0, 0.8],

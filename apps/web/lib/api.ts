@@ -25,3 +25,4 @@ export * from './api/director';
 export * from './api/skill';
 export * from './api/portability';
 export * from './api/library-asset';
+export * from './api/prompt-suggestion';

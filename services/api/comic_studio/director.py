@@ -98,6 +98,7 @@ class DirectorAssetRead(StrictDirectorModel):
     asset_id:str|None=None
     label:str
     media_url:str|None=None
+    media_type:str|None=None
     metadata:dict={}
 
 

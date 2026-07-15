@@ -44,8 +44,8 @@ vi.mock('../lib/api', () => ({
   listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
   listVisualReviewThreads:mocks.listVisualReviewThreads,updateVisualReviewThread:mocks.updateVisualReviewThread,createVisualReviewMessage:mocks.createVisualReviewMessage,createVisualReviewThread:mocks.createVisualReviewThread,acceptVisualReviewCandidate:mocks.acceptVisualReviewCandidate,
   listReviewThreads:mocks.listReviewThreads,createReviewMessage:mocks.createReviewMessage,updateReviewThread:mocks.updateReviewThread,listReleaseCandidates:mocks.listReleaseCandidates,
-  mediaUrl: (path: string) => path,
   listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,
+  mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
 
@@ -134,7 +134,7 @@ function TabsHarness() {
 }
 
 function RejectedTabsHarness() {
-  return <WorkspaceTabs value="visual-review" onChange={() => false}/>;
+  return <WorkspaceTabs value="production" onChange={() => false}/>;
 }
 
 describe('Workspace', () => {
@@ -152,9 +152,9 @@ describe('Workspace', () => {
     mocks.listVisualReviewThreads.mockResolvedValue([]);
     mocks.listReviewThreads.mockResolvedValue([]);
     mocks.listReleaseCandidates.mockResolvedValue([]);
-    mocks.getAsset.mockResolvedValue({id: 'asset-2', kind: 'panel', media_url: '/media/panel.png', media_type: 'image/png', provider: 'test', model: 'test', generation_attempt: 1, review_status: 'approved', width: 1024, height: 1536, duration_seconds: null, created_at: ''});
     mocks.listLibraryAssets.mockResolvedValue([]);
     mocks.listSceneLibraryAssets.mockResolvedValue([]);
+    mocks.getAsset.mockResolvedValue({id: 'asset-2', kind: 'panel', media_url: '/media/panel.png', media_type: 'image/png', provider: 'test', model: 'test', generation_attempt: 1, review_status: 'approved', width: 1024, height: 1536, duration_seconds: null, created_at: ''});
     mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
     mocks.listProductionItems.mockResolvedValue([]);
@@ -405,8 +405,13 @@ describe('Workspace', () => {
     await userEvent.click(screen.getByRole('tab', {name: '生产'}));
     expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
 
-    await userEvent.click(screen.getByRole('tab', {name: '视觉审阅'}));
+    expect(screen.queryByRole('tab', {name: '视觉审阅'})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', {name: '概览'}));
+    await userEvent.click(screen.getByRole('button', {name: '处理阻塞项'}));
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected','true');
     expect(screen.getByRole('heading', {name: '创建圈点后开始对话'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'返回生产画布'}));
+    expect(screen.getByRole('heading', {name: '剧集生产队列'})).toBeVisible();
     expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', {name: '审核发布'}));
@@ -499,14 +504,14 @@ describe('Workspace', () => {
     expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
   });
 
-  it('keeps the five production stages in one scroll-safe mobile row', () => {
-    render(<WorkspaceTabs value="overview" onChange={() => true} mobile areas={['overview', 'scene', 'storyboard', 'production', 'visual-review']}/>);
+  it('keeps the four production stages and inspector in one scroll-safe mobile row', () => {
+    render(<WorkspaceTabs value="overview" onChange={() => true} mobile areas={['overview', 'scene', 'storyboard', 'production', 'inspector']}/>);
     expect(screen.getAllByRole('tab')).toHaveLength(5);
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile\s*\{[^}]*flex:\s*0 0 44px[^}]*width:\s*100%[^}]*overflow-x:\s*auto/);
     expect(workspaceStyles).toMatch(/\.workspace-tabs-mobile button\s*\{[^}]*flex:\s*1 0 20%/);
   });
 
-  it('opens the first relevant blocker in the mobile inspector from the review action', async () => {
+  it('opens the first relevant blocker in the mobile production review from the review action', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => mediaController(true).media));
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
@@ -515,13 +520,13 @@ describe('Workspace', () => {
 
     await userEvent.click(await screen.findByRole('button', {name: '处理阻塞项'}));
 
-    expect(screen.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('heading', {name: '镜头 1'})).toBeVisible();
-    expect(screen.getByLabelText('审核状态')).toHaveValue('draft');
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button',{name:'返回生产画布'})).toBeVisible();
+    expect(screen.getByText('本集生产 / 镜头 01 / 视觉审阅')).toBeVisible();
     expect(screen.queryByRole('tab', {name: '审核'})).not.toBeInTheDocument();
   });
 
-  it('keeps a valid mobile overview tab when review has no relevant shot', async () => {
+  it('opens the selected shot in mobile production review when there is no blocker', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => mediaController(true).media));
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
@@ -531,7 +536,8 @@ describe('Workspace', () => {
 
     await userEvent.click(await screen.findByRole('button', {name: '处理阻塞项'}));
 
-    expect(screen.getByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button',{name:'返回生产画布'})).toBeVisible();
     expect(screen.getAllByRole('tab').some(tab => tab.getAttribute('aria-selected') === 'true')).toBe(true);
   });
 
@@ -626,7 +632,7 @@ describe('Workspace', () => {
     expect(screen.queryByRole('tab', {name: '检查器'})).not.toBeInTheDocument();
   });
 
-  it('preserves visual review when the viewport switches from desktop to mobile', async () => {
+  it('keeps visual review inside the selected production stage across viewport changes', async () => {
     const viewport = mediaController(false);
     vi.stubGlobal('matchMedia', vi.fn(() => viewport.media));
     mocks.listProjects.mockResolvedValue([project]);
@@ -634,11 +640,13 @@ describe('Workspace', () => {
     mocks.getEpisode.mockResolvedValue(plannedEpisode);
     render(<Workspace />);
 
-    await userEvent.click(await screen.findByRole('tab', {name: '视觉审阅'}));
-    expect(screen.getByRole('tab', {name: '视觉审阅'})).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(await screen.findByRole('button', {name: '处理阻塞项'}));
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button',{name:'返回生产画布'})).toBeVisible();
     act(() => viewport.setMatches(true));
 
-    expect(screen.getByRole('tab', {name: '审阅'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', {name: '审阅'})).not.toBeInTheDocument();
   });
 
   it('keeps the latest episode when an older request resolves last', async () => {
@@ -688,14 +696,14 @@ describe('Workspace', () => {
     expect(storyboard).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.keyboard('{End}');
-    expect(screen.getByRole('tab', {name: '视觉审阅'})).toHaveFocus();
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveFocus();
     await userEvent.keyboard('{Home}');
     expect(overview).toHaveFocus();
   });
 
   it('keeps selected tab focus when guarded click or keyboard navigation is rejected', async () => {
     render(<RejectedTabsHarness/>);
-    const settings = screen.getByRole('tab', {name: '视觉审阅'});
+    const settings = screen.getByRole('tab', {name: '生产'});
     const overview = screen.getByRole('tab', {name: '概览'});
     settings.focus();
 

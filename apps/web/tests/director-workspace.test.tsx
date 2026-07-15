@@ -23,6 +23,15 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getAllByRole('button',{name:'添加占位物'})[0]);
     await waitFor(()=>expect(mocks.createDirectorObject).toHaveBeenCalledWith('stage-1',1,expect.objectContaining({label:'新道具'})));
   });
+  it('returns to the production canvas when embedded as a production subview',async()=>{
+    const onBackToProduction=vi.fn();
+    mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()} onBackToProduction={onBackToProduction}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'返回生产画布'}));
+
+    expect(onBackToProduction).toHaveBeenCalledTimes(1);
+  });
   it('keeps transform drag disabled on mobile',async()=>{
     mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile onSelectShot={vi.fn()}/>);
@@ -69,13 +78,14 @@ describe('DirectorWorkspace',()=>{
   it('lists available production assets and synchronizes them into the stage',async()=>{
     const assets=[
       {key:'scene:scene-1',kind:'background',source_type:'scene_context',source_id:'scene-1',asset_id:null,label:'天台 · night',media_url:null,metadata:{summary:'对峙'}},
-      {key:'character:char-1:ref-1',kind:'character',source_type:'character_reference',source_id:'char-1',asset_id:'asset-1',label:'林夏',media_url:'/media/linxia.png',metadata:{role:'侦探'}},
+      {key:'character:char-1:ref-1',kind:'character',source_type:'model',source_id:'representation-1',asset_id:'asset-1',label:'林夏',media_url:'/media/linxia.glb',media_type:'model/gltf-binary',metadata:{role:'侦探'}},
     ] as const;
     const synced={...stage,version:2,environment:{location:'天台'},objects:[{id:'object-1',stage_id:'stage-1',kind:'character',source_type:'character_reference',source_id:'char-1',label:'林夏',position:1,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{image_url:'/media/linxia.png'},metadata:{catalog_key:'character:char-1:ref-1'},visible:true}]};
     mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue(assets);mocks.syncDirectorAssets.mockResolvedValue(synced);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
     expect(await screen.findByText('林夏')).toBeVisible();
     expect(screen.getByText('天台 · night')).toBeVisible();
+    expect(screen.getByText('3D 模型')).toBeVisible();
     await userEvent.click(screen.getByRole('button',{name:'同步场景资产'}));
     await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,assets.map(item=>item.key)));
     expect(await screen.findByText('已同步 1 / 2')).toBeVisible();

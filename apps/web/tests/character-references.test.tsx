@@ -10,11 +10,13 @@ const mocks=vi.hoisted(()=>({
   retry:vi.fn(),pollJob:vi.fn(),variants:vi.fn(),
   libraryAssets:vi.fn(),createLibraryAsset:vi.fn(),updateLibraryAsset:vi.fn(),deleteLibraryAsset:vi.fn(),
   suggestVariant:vi.fn(),
+  representations:vi.fn(),uploadRepresentation:vi.fn(),
   createVariant:vi.fn(),createState:vi.fn(),updateVariant:vi.fn(),updateState:vi.fn(),deleteVariant:vi.fn(),deleteState:vi.fn(),
 }));
 vi.mock('../lib/api',()=>({
   listCharacterReferences:mocks.list,
   listAssetVariants:mocks.variants,
+  listCharacter3DRepresentations:mocks.representations,
   createCharacter:mocks.createCharacter,
   updateCharacter:mocks.updateCharacter,
   listLibraryAssets:mocks.libraryAssets,
@@ -22,6 +24,7 @@ vi.mock('../lib/api',()=>({
   updateLibraryAsset:mocks.updateLibraryAsset,
   deleteLibraryAsset:mocks.deleteLibraryAsset,
   uploadCharacterReference:mocks.upload,
+  uploadCharacter3DRepresentation:mocks.uploadRepresentation,
   generateCharacterReferenceSet:mocks.generateSet,
   updateCharacterReference:mocks.update,
   activateCharacterReference:mocks.activate,
@@ -37,6 +40,7 @@ vi.mock('../lib/api',()=>({
   mediaUrl:(path:string)=>path,
 }));
 vi.mock('../lib/jobs',()=>({pollJob:mocks.pollJob}));
+vi.mock('../components/assets/CharacterModelPreview',()=>({CharacterModelPreview:({url}:{url:string})=><div data-testid="character-model-preview" data-url={url}/>}));
 
 const character={id:'c1',project_id:'p1',name:'林夏',role:'主角',appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'银色耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:'',created_at:'',updated_at:''};
 const reference={id:'r1',character_id:'c1',reference_type:'primary' as const,label:'主参考',position:0,is_active:false,review_status:'draft' as const,created_at:'',asset:{id:'a1',kind:'character-reference',media_url:'/media/a.png',media_type:'image/png',provider:'upload',model:'local',generation_attempt:1,review_status:'draft',width:1,height:1,duration_seconds:null,created_at:''}};
@@ -53,6 +57,7 @@ beforeEach(()=>{
   vi.clearAllMocks();
   mocks.list.mockResolvedValue(allReferences);
   mocks.variants.mockResolvedValue(variants);
+  mocks.representations.mockResolvedValue([]);
   mocks.libraryAssets.mockResolvedValue([]);
   mocks.createCharacter.mockResolvedValue({...character,id:'c-new',name:'周然',role:'搭档'});
   mocks.updateCharacter.mockResolvedValue({...character,name:'林夏·修订',role:'调查员'});
@@ -253,6 +258,22 @@ it('opens the master setting, variant editor, and lineage from the asset catalog
   expect(screen.getByRole('heading',{name:'角色列表'})).toBeVisible();
   expect(screen.getByLabelText('谱系画布工具栏')).toBeVisible();
   expect(screen.queryByRole('heading',{name:'资产谱系'})).not.toBeInTheDocument();
+});
+
+it('uploads a GLB proxy from the character master setting',async()=>{
+  const representation={id:'rep-1',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-1',label:'林夏代理',format:'glb',version:1,is_active:true,review_status:'approved',model_url:'/media/linxia.glb',mesh_count:1,triangle_count:1200,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
+  mocks.uploadRepresentation.mockResolvedValue(representation);
+  mocks.representations.mockResolvedValueOnce([]).mockResolvedValue([representation]);
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character]}/>);
+  await user.click(await screen.findByRole('button',{name:/林夏/}));
+  const file=new File([new Uint8Array([1,2,3])],'linxia.glb',{type:'model/gltf-binary'});
+
+  await user.upload(screen.getByLabelText('上传角色 3D 模型'),file);
+
+  await waitFor(()=>expect(mocks.uploadRepresentation).toHaveBeenCalledWith('c1',file));
+  expect(await screen.findByText('林夏代理')).toBeVisible();
+  expect(screen.getByText('1,200 三角面')).toBeVisible();
 });
 
 it('loads every character asset summary for catalog filters',async()=>{

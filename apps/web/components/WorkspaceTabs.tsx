@@ -8,7 +8,6 @@ const desktopTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'scene', label: '场景'},
   {value: 'storyboard', label: '分镜'},
   {value: 'production', label: '生产'},
-  {value: 'visual-review', label: '视觉审阅'},
 ];
 
 const mobileTabs: Array<{value: WorkArea; label: string}> = [
@@ -16,7 +15,6 @@ const mobileTabs: Array<{value: WorkArea; label: string}> = [
   {value: 'scene', label: '场景'},
   {value: 'storyboard', label: '分镜'},
   {value: 'production', label: '生产'},
-  {value: 'visual-review', label: '审阅'},
   {value: 'inspector', label: '检查器'},
 ];
 

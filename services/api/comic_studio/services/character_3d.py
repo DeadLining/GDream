@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import struct
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session, selectinload
+
+from comic_studio import models
+
+
+class Character3DRepresentationError(ValueError):
+    pass
+
+
+class Character3DRepresentationService:
+    MAX_BYTES = 50 * 1024 * 1024
+    MAX_NODES = 1000
+    MAX_MESHES = 200
+    MAX_MATERIALS = 200
+    MAX_TRIANGLES = 2_000_000
+    JSON_CHUNK = 0x4E4F534A
+
+    def __init__(self, session: Session, data_root: Path):
+        self.session = session
+        self.data_root = data_root.resolve()
+
+    def list(self, character_id: str):
+        if self.session.get(models.Character, character_id) is None:
+            raise KeyError(character_id)
+        return list(
+            self.session.scalars(
+                select(models.Character3DRepresentation)
+                .options(selectinload(models.Character3DRepresentation.asset))
+                .where(models.Character3DRepresentation.character_id == character_id)
+                .order_by(models.Character3DRepresentation.version.desc())
+            )
+        )
+
+    def upload(self, character_id: str, content: bytes, *, label: str = ""):
+        character = self.session.get(models.Character, character_id)
+        if character is None:
+            raise KeyError(character_id)
+        document = self._validate_glb(content)
+        metrics = self._metrics(document)
+        version = (
+            self.session.scalar(
+                select(func.max(models.Character3DRepresentation.version)).where(
+                    models.Character3DRepresentation.character_id == character_id
+                )
+            )
+            or 0
+        ) + 1
+        asset = models.Asset(
+            project_id=character.project_id,
+            kind=f"character-3d:{character_id}",
+            local_path="",
+            media_type="model/gltf-binary",
+            provider="upload",
+            model="local-glb",
+            request_metadata={"character_id": character_id, "format": "glb"},
+            generation_attempt=version,
+            checksum=hashlib.sha256(content).hexdigest(),
+            review_status="approved",
+        )
+        self.session.add(asset)
+        self.session.flush()
+        relative = (
+            Path("projects")
+            / character.project_id
+            / "characters"
+            / character_id
+            / "3d"
+            / f"{asset.id}.glb"
+        )
+        destination = (self.data_root / relative).resolve()
+        if self.data_root not in destination.parents:
+            raise Character3DRepresentationError("asset_path_escape")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_suffix(".glb.tmp")
+        temporary.write_bytes(content)
+        os.replace(temporary, destination)
+        asset.local_path = str(relative)
+        self.session.execute(
+            update(models.Character3DRepresentation)
+            .where(models.Character3DRepresentation.character_id == character_id)
+            .values(is_active=False)
+        )
+        representation = models.Character3DRepresentation(
+            character_id=character_id,
+            asset_id=asset.id,
+            label=label.strip()[:160] or f"{character.name} 3D 代理 V{version}",
+            format="glb",
+            version=version,
+            is_active=True,
+            review_status="approved",
+            **metrics,
+        )
+        self.session.add(representation)
+        self.session.commit()
+        return self.get(representation.id)
+
+    def get(self, representation_id: str):
+        representation = self.session.scalar(
+            select(models.Character3DRepresentation)
+            .options(selectinload(models.Character3DRepresentation.asset))
+            .where(models.Character3DRepresentation.id == representation_id)
+        )
+        if representation is None:
+            raise KeyError(representation_id)
+        return representation
+
+    @classmethod
+    def _validate_glb(cls, content: bytes) -> dict[str, Any]:
+        if not content:
+            raise Character3DRepresentationError("empty_glb")
+        if len(content) > cls.MAX_BYTES:
+            raise Character3DRepresentationError("glb_too_large")
+        if len(content) < 20:
+            raise Character3DRepresentationError("invalid_glb")
+        magic, version, total_length = struct.unpack_from("<4sII", content, 0)
+        if magic != b"glTF" or version != 2 or total_length != len(content):
+            raise Character3DRepresentationError("invalid_glb")
+        offset = 12
+        document = None
+        while offset + 8 <= len(content):
+            chunk_length, chunk_type = struct.unpack_from("<II", content, offset)
+            offset += 8
+            end = offset + chunk_length
+            if end > len(content):
+                raise Character3DRepresentationError("invalid_glb")
+            if chunk_type == cls.JSON_CHUNK and document is None:
+                try:
+                    document = json.loads(content[offset:end].rstrip(b"\x00 ").decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise Character3DRepresentationError("invalid_glb_json") from exc
+            offset = end
+        if offset != len(content) or not isinstance(document, dict):
+            raise Character3DRepresentationError("invalid_glb")
+        if str(document.get("asset", {}).get("version")) != "2.0":
+            raise Character3DRepresentationError("unsupported_glb_version")
+        resources = [*document.get("buffers", []), *document.get("images", [])]
+        if any(isinstance(item, dict) and item.get("uri") for item in resources):
+            raise Character3DRepresentationError("glb_external_resources_not_allowed")
+        return document
+
+    @classmethod
+    def _metrics(cls, document: dict[str, Any]) -> dict[str, Any]:
+        nodes = document.get("nodes", [])
+        meshes = document.get("meshes", [])
+        materials = document.get("materials", [])
+        accessors = document.get("accessors", [])
+        if len(nodes) > cls.MAX_NODES or len(meshes) > cls.MAX_MESHES:
+            raise Character3DRepresentationError("glb_too_complex")
+        if len(materials) > cls.MAX_MATERIALS:
+            raise Character3DRepresentationError("glb_too_complex")
+        triangle_count = 0
+        bounds_min: list[float] | None = None
+        bounds_max: list[float] | None = None
+        for mesh in meshes:
+            for primitive in mesh.get("primitives", []) if isinstance(mesh, dict) else []:
+                accessor_index = primitive.get("indices")
+                if isinstance(accessor_index, int) and accessor_index < len(accessors):
+                    triangle_count += int(accessors[accessor_index].get("count", 0)) // 3
+                position_index = primitive.get("attributes", {}).get("POSITION")
+                if isinstance(position_index, int) and position_index < len(accessors):
+                    accessor = accessors[position_index]
+                    minimum, maximum = accessor.get("min"), accessor.get("max")
+                    if (
+                        isinstance(minimum, list)
+                        and isinstance(maximum, list)
+                        and len(minimum) == 3
+                        and len(maximum) == 3
+                    ):
+                        bounds_min = minimum if bounds_min is None else [min(a, b) for a, b in zip(bounds_min, minimum)]
+                        bounds_max = maximum if bounds_max is None else [max(a, b) for a, b in zip(bounds_max, maximum)]
+        if triangle_count > cls.MAX_TRIANGLES:
+            raise Character3DRepresentationError("glb_too_complex")
+        bounds = {"min": bounds_min, "max": bounds_max} if bounds_min and bounds_max else {}
+        return {
+            "bounds": bounds,
+            "mesh_count": len(meshes),
+            "triangle_count": triangle_count,
+            "material_count": len(materials),
+            "has_skeleton": bool(document.get("skins")),
+            "representation_metadata": {
+                "node_count": len(nodes),
+                "animation_count": len(document.get("animations", [])),
+            },
+        }

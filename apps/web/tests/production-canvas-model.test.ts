@@ -27,11 +27,50 @@ describe('production canvas graph',()=>{
 
   it('expands media nodes only for the selected shot',()=>{
     const graph=buildProductionCanvasGraph(fixture,{selectedShotId:'shot-2'});
-    expect(graph.nodes.some(node=>node.id==='panel:shot-2:panel-2')).toBe(true);
-    expect(graph.nodes.some(node=>node.id.startsWith('panel:shot-1:'))).toBe(false);
-    expect(graph.nodes.find(node=>node.id==='panel:shot-2:panel-2')?.data.mediaUrl).toBe('/media/panel-2.png');
-    expect(graph.nodes.find(node=>node.id==='speech:shot-2')?.data.statusLabel).toBe('1 / 2');
-    expect(graph.nodes.find(node=>node.id==='speech:shot-2')?.data.complete).toBe(false);
+    expect(graph.nodes.some(node=>node.id==='director:shot-2')).toBe(true);
+    expect(graph.nodes.some(node=>node.id==='panel-render:shot-2:panel-2')).toBe(true);
+    expect(graph.nodes.some(node=>node.id==='dialogue:shot-2')).toBe(true);
+    expect(graph.nodes.some(node=>node.id==='tts:shot-2')).toBe(true);
+    expect(graph.nodes.some(node=>node.id==='visual-review:shot-2')).toBe(true);
+    expect(graph.nodes.some(node=>node.id.startsWith('panel-render:shot-1:'))).toBe(false);
+    expect(graph.nodes.find(node=>node.id==='panel-render:shot-2:panel-2')?.data.mediaUrl).toBe('/media/panel-2.png');
+    expect(graph.nodes.find(node=>node.id==='tts:shot-2')?.data.statusLabel).toBe('1 / 2');
+    expect(graph.nodes.find(node=>node.id==='tts:shot-2')?.data.complete).toBe(false);
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({source:'shot:shot-2',target:'panel-render:shot-2:panel-2',type:'dependency',sourceHandle:'production-main',targetHandle:'production-main'}),
+      expect.objectContaining({source:'shot:shot-2',target:'director:shot-2',type:'dependency',sourceHandle:'director-branch',targetHandle:'production-main',data:expect.objectContaining({lineStyle:'dashed'})}),
+      expect.objectContaining({source:'director:shot-2',target:'panel-render:shot-2:panel-2',type:'dependency',sourceHandle:'production-main',targetHandle:'director-branch',data:expect.objectContaining({lineStyle:'dashed'})}),
+    ]));
+    expect(graph.nodes.find(node=>node.id==='director:shot-2')?.data).toEqual(expect.objectContaining({optional:true,statusLabel:'可选'}));
+    expect(graph.edges.some(edge=>edge.source==='dialogue:shot-2'&&edge.target==='tts:shot-2')).toBe(true);
+  });
+
+  it('locks review and video behind their real prerequisites',()=>{
+    const graph=buildProductionCanvasGraph(fixture,{selectedShotId:'shot-3'});
+    const review=graph.nodes.find(node=>node.id==='visual-review:shot-3');
+    const video=graph.nodes.find(node=>node.id==='video-render:shot-3');
+    const reviewEdge=graph.edges.find(edge=>edge.source==='panel-render:shot-3:pending'&&edge.target==='visual-review:shot-3');
+    const videoEdge=graph.edges.find(edge=>edge.source==='visual-review:shot-3'&&edge.target==='video-render:shot-3');
+
+    expect(review?.data).toEqual(expect.objectContaining({blocked:true,blockedReason:'请先生成分镜画面',statusLabel:'等待画面'}));
+    expect(video?.data).toEqual(expect.objectContaining({blocked:true,blockedReason:'请先生成分镜画面',statusLabel:'已锁定'}));
+    expect(reviewEdge).toEqual(expect.objectContaining({type:'blocked',data:expect.objectContaining({lineStyle:'dashed'})}));
+    expect(videoEdge).toEqual(expect.objectContaining({type:'blocked',data:expect.objectContaining({lineStyle:'dashed'})}));
+  });
+
+  it('unlocks video only after visual review approval',()=>{
+    const approved:EpisodeProductionGraph={
+      ...fixture,
+      shots:fixture.shots.map(shot=>shot.id==='shot-2'?{...shot,review_status:'approved'}:shot),
+    };
+    const graph=buildProductionCanvasGraph(approved,{selectedShotId:'shot-2'});
+    const review=graph.nodes.find(node=>node.id==='visual-review:shot-2');
+    const video=graph.nodes.find(node=>node.id==='video-render:shot-2');
+    const edge=graph.edges.find(item=>item.source==='visual-review:shot-2'&&item.target==='video-render:shot-2');
+
+    expect(review?.data).toEqual(expect.objectContaining({blocked:false,statusLabel:'已通过'}));
+    expect(video?.data).toEqual(expect.objectContaining({blocked:false,blockedReason:null,statusLabel:'待生成'}));
+    expect(edge).toEqual(expect.objectContaining({type:'dependency',data:expect.objectContaining({lineStyle:'solid'})}));
   });
 
   it('collapses a scene without changing the peer hierarchy of other scenes',()=>{
@@ -58,7 +97,7 @@ describe('production canvas graph',()=>{
   it('highlights the complete connected production chain',()=>{
     const graph=buildProductionCanvasGraph(fixture,{selectedShotId:'shot-2'});
     const highlighted=highlightProductionGraph(graph.nodes,graph.edges,'shot:shot-2');
-    expect(highlighted.nodes.find(node=>node.id==='review:shot-2')?.data.dimmed).toBe(false);
+    expect(highlighted.nodes.find(node=>node.id==='visual-review:shot-2')?.data.dimmed).toBe(false);
     expect(highlighted.nodes.find(node=>node.id==='shot:shot-3')?.data.dimmed).toBe(true);
   });
 

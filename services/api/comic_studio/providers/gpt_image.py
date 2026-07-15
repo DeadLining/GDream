@@ -15,13 +15,15 @@ class ImageResult:
     media_type: str = "image/png"
 
 
-def prepare_edit_reference(content: bytes, media_type: str) -> tuple[bytes, str]:
+def prepare_edit_reference(
+    content: bytes, media_type: str, *, max_dimension: int = 256
+) -> tuple[bytes, str]:
     try:
         with Image.open(BytesIO(content)) as image:
             image.load()
-            if max(image.size) <= 256:
+            if max(image.size) <= max_dimension:
                 return content, media_type
-            image.thumbnail((256, 256), Image.Resampling.LANCZOS)
+            image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
             output = BytesIO()
             image.convert("RGB").save(output, format="JPEG", quality=88, optimize=True)
             return output.getvalue(), "image/jpeg"
@@ -118,13 +120,20 @@ class GPTImageProvider:
     async def edit(
         self,
         prompt: str,
-        references: list[tuple[bytes, str]],
+        references: list[tuple[bytes, str] | tuple[bytes, str, int]],
         size: str = "1024x1536",
         quality: str = "low",
     ) -> ImageResult:
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(base_url=self.base_url, timeout=600)
-        prepared = [prepare_edit_reference(content, media_type) for content, media_type in references]
+        prepared = [
+            prepare_edit_reference(
+                reference[0],
+                reference[1],
+                max_dimension=reference[2] if len(reference) == 3 else 256,
+            )
+            for reference in references
+        ]
         files = [
             ("image[]", (f"reference-{index}", content, media_type))
             for index, (content, media_type) in enumerate(prepared, start=1)

@@ -4,8 +4,14 @@ import {useRef} from 'react';
 import {Image as DreiImage,TransformControls} from '@react-three/drei';
 import type {Group} from 'three';
 import type {DirectorObject as DirectorObjectDto,Transform} from '../../lib/types';
+import {GlbModel} from '../shared/GlbModel';
 
 function Placeholder({object}:{object:DirectorObjectDto}){
+  const modelUrl=typeof object.appearance.model_url==='string'?object.appearance.model_url:'';
+  const modelScale=typeof object.appearance.model_scale==='number'?object.appearance.model_scale:1;
+  const modelOffsetY=typeof object.appearance.model_offset_y==='number'?object.appearance.model_offset_y:0;
+  const proxy=object.kind==='character'?<mesh castShadow position={[0,0.9,0]}><capsuleGeometry args={[0.32,1.15,8,16]}/><meshStandardMaterial color="#d76b4b"/></mesh>:<mesh castShadow receiveShadow position={[0,0.5,0]}><boxGeometry args={[1,1,1]}/><meshStandardMaterial color="#5b8ca8"/></mesh>;
+  if(modelUrl)return <GlbModel url={modelUrl} scale={modelScale} offsetY={modelOffsetY} fallback={proxy}/>;
   const imageUrl=typeof object.appearance.image_url==='string'?object.appearance.image_url:'';
   if(imageUrl){const aspect=typeof object.appearance.aspect_ratio==='number'?object.appearance.aspect_ratio:.75;return <DreiImage url={imageUrl} position={[0,1,0]} scale={[aspect*1.8,1.8]} transparent toneMapped={false}/>;}
   const color=typeof object.appearance.color==='string'?object.appearance.color:object.kind==='character'?'#d76b4b':'#5b8ca8';

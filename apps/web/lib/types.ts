@@ -17,3 +17,4 @@ export * from './types/team';
 export * from './types/workspace';
 export * from './types/skill';
 export * from './types/portability';
+export * from './types/prompt-suggestion';

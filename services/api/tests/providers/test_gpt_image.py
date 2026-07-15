@@ -79,6 +79,22 @@ def test_large_edit_reference_is_downscaled_to_256_pixels():
     assert media_type == "image/jpeg"
 
 
+def test_high_detail_edit_reference_can_keep_1024_pixels():
+    from io import BytesIO
+    from PIL import Image
+
+    source = BytesIO()
+    Image.new("RGB", (512, 1024), "white").save(source, format="PNG")
+
+    content, media_type = prepare_edit_reference(
+        source.getvalue(), "image/png", max_dimension=1024
+    )
+
+    with Image.open(BytesIO(content)) as prepared:
+        assert prepared.size == (512, 1024)
+    assert media_type == "image/png"
+
+
 @pytest.mark.anyio
 async def test_edit_reports_unsupported_endpoint():
     def handler(request: httpx.Request) -> httpx.Response:

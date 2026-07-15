@@ -61,8 +61,10 @@ class DirectorStageService:
         if unknown:raise ValueError(f"unknown_director_asset:{unknown[0]}")
         selected=[catalog[key] for key in dict.fromkeys(asset_keys)]
         existing={item.object_metadata.get("catalog_key"):item for item in stage.objects if item.object_metadata.get("catalog_key")}
+        selected_keys={item.key for item in selected}
+        stale=[item for key,item in existing.items() if key not in selected_keys]
         environment=catalog_service.environment(stage)
-        changed=stage.environment!=environment
+        changed=stage.environment!=environment or bool(stale)
         for definition in selected:
             metadata={**definition.metadata,"catalog_key":definition.key}
             current=existing.get(definition.key)
@@ -74,6 +76,12 @@ class DirectorStageService:
         if not changed:return stage
         self._record_revision(stage)
         stage.environment=environment
+        stale_ids={item.id for item in stale}
+        for camera in stage.shot_cameras:
+            if stale_ids.intersection(camera.object_overrides):
+                camera.object_overrides={key:value for key,value in camera.object_overrides.items() if key not in stale_ids}
+        for item in stale:self.session.delete(item)
+        self.session.flush()
         next_position=max((item.position for item in stage.objects),default=0)+1
         for definition in selected:
             metadata={**definition.metadata,"catalog_key":definition.key}

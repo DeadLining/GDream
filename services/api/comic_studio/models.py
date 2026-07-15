@@ -196,6 +196,11 @@ class Character(Base):
     variants: Mapped[list[AssetVariant]] = relationship(
         back_populates="character", cascade="all, delete-orphan", order_by="AssetVariant.created_at"
     )
+    representations_3d: Mapped[list[Character3DRepresentation]] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan",
+        order_by="Character3DRepresentation.version",
+    )
 
 
 class AssetVariant(Base):
@@ -858,6 +863,45 @@ class CharacterReference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     character: Mapped[Character] = relationship(back_populates="references")
+
+
+class Character3DRepresentation(Base):
+    __tablename__ = "character_3d_representations"
+    __table_args__ = (
+        UniqueConstraint("character_id", "version", name="uq_character_3d_version"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    character_id: Mapped[str] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"), index=True
+    )
+    variant_id: Mapped[str | None] = mapped_column(
+        ForeignKey("asset_variants.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    state_id: Mapped[str | None] = mapped_column(
+        ForeignKey("asset_variant_states.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    asset_id: Mapped[str] = mapped_column(
+        ForeignKey("assets.id", ondelete="RESTRICT"), index=True
+    )
+    label: Mapped[str] = mapped_column(String(160))
+    format: Mapped[str] = mapped_column(String(16), default="glb")
+    version: Mapped[int] = mapped_column(Integer)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    review_status: Mapped[str] = mapped_column(String(32), default="approved", index=True)
+    bounds: Mapped[dict] = mapped_column(JSON, default=dict)
+    mesh_count: Mapped[int] = mapped_column(Integer, default=0)
+    triangle_count: Mapped[int] = mapped_column(Integer, default=0)
+    material_count: Mapped[int] = mapped_column(Integer, default=0)
+    has_skeleton: Mapped[bool] = mapped_column(Boolean, default=False)
+    representation_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    character: Mapped[Character] = relationship(back_populates="representations_3d")
+    asset: Mapped[Asset] = relationship(foreign_keys=[asset_id])
 
 
 class ProductionRun(Base):

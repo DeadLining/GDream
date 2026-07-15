@@ -3,7 +3,7 @@
 import {ArrowLeft,Check,CheckCircle2,ChevronRight,Circle,GitBranch,ImageIcon,MessageSquareText,MousePointer2,Pencil,Plus,Search,Send,Sparkles,Trash2} from 'lucide-react';
 import {useEffect,useMemo,useState,type FormEvent,type ReactNode} from 'react';
 import {mediaUrl,suggestAssetVariant,type AssetVariantSuggestion} from '../../lib/api';
-import type {AssetVariant,AssetVariantState,Character,CharacterReference,CharacterReferenceType,EpisodeSummary,LibraryAsset,LibraryAssetCreate,LibraryAssetKind,LibraryAssetPatch} from '../../lib/types';
+import type {AssetVariant,AssetVariantState,Character,Character3DRepresentation,CharacterReference,CharacterReferenceType,EpisodeSummary,LibraryAsset,LibraryAssetCreate,LibraryAssetKind,LibraryAssetPatch} from '../../lib/types';
 
 const referenceLabels:Record<CharacterReferenceType,string>={primary:'主参考',front:'正面',three_quarter:'四分之三',side:'侧面',back:'背面',expression:'表情',outfit:'服装'};
 const stateLabels:Record<AssetVariantState['kind'],string>={expression:'表情',outfit:'服装',injury:'伤势',age:'年龄',custom:'自定义'};
@@ -12,7 +12,7 @@ const firstReference=(references:CharacterReference[],type?:CharacterReferenceTy
 const imageFor=(references:CharacterReference[],type?:CharacterReferenceType)=>{const reference=firstReference(references,type);return reference?mediaUrl(reference.asset.media_url):null;};
 
 export type AssetWorkspaceView='catalog'|'master'|'variant'|'lineage';
-export type CharacterAssetCatalogData={references:CharacterReference[];variants:AssetVariant[]};
+export type CharacterAssetCatalogData={references:CharacterReference[];variants:AssetVariant[];representations?:Character3DRepresentation[]};
 export type CharacterDraft=Pick<Character,'name'|'role'|'appearance_bible'|'personality'|'continuity_rules'|'negative_constraints'|'voice_speaker'|'voice_instruction'>;
 type CharacterDetailTab='master'|'references'|'variant'|'lineage';
 
@@ -127,7 +127,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
   </main>;
 }
 
-export function CharacterMasterView({characters,character,references,variants,referenceManager,variantWorkspace,lineageWorkspace,initialTab='master',onSelect,onOpen}:{characters:Character[];character:Character;references:CharacterReference[];variants:AssetVariant[];referenceManager:ReactNode;variantWorkspace:ReactNode;lineageWorkspace:ReactNode;initialTab?:Exclude<CharacterDetailTab,'references'>;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void}){
+export function CharacterMasterView({characters,character,references,variants,referenceManager,variantWorkspace,lineageWorkspace,modelManager,initialTab='master',onSelect,onOpen}:{characters:Character[];character:Character;references:CharacterReference[];variants:AssetVariant[];referenceManager:ReactNode;variantWorkspace:ReactNode;lineageWorkspace:ReactNode;modelManager:ReactNode;initialTab?:Exclude<CharacterDetailTab,'references'>;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void}){
   const [tab,setTab]=useState<CharacterDetailTab>(initialTab);
   const master=variants.find(item=>item.kind==='master');
   const episodeVariants=variants.filter(item=>item.kind==='episode');
@@ -148,7 +148,7 @@ export function CharacterMasterView({characters,character,references,variants,re
         <button className={tab==='lineage'?'active':''} onClick={()=>setTab('lineage')}>使用记录</button>
       </nav>
       {tab==='references'?referenceManager:tab==='variant'?<div className="master-embedded-workspace">{variantWorkspace}</div>:tab==='lineage'?<div className="master-embedded-workspace">{lineageWorkspace}</div>:<>
-        <div className="master-image-grid">{slots.map(([label,type])=>{const image=imageFor(references,type);return <article key={label}><span>{label}</span>{image?<img src={image} alt={`${character.name}${label}`}/>:<div><ImageIcon size={20}/><small>尚无图片</small></div>}</article>;})}</div>
+        <div className="master-visual-assets"><div className="master-image-grid">{slots.map(([label,type])=>{const image=imageFor(references,type);return <article key={label}><span>{label}</span>{image?<img src={image} alt={`${character.name}${label}`}/>:<div><ImageIcon size={20}/><small>尚无图片</small></div>}</article>;})}</div>{modelManager}</div>
         <section className="identity-bible"><h2>设定档案 (Identity Bible)</h2><div><article><span>身份与外观</span><p>{character.appearance_bible||'尚未填写角色外观设定。'}</p></article><article><span>性格</span><p>{character.personality||'尚未填写角色性格。'}</p></article><article><span>连续性规则</span><p>{character.continuity_rules||'尚未填写连续性规则。'}</p></article><article><span>禁止漂移</span><p>{character.negative_constraints||'尚未填写禁止项。'}</p></article></div></section>
       </>}
     </section>

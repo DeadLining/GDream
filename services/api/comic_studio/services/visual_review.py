@@ -214,6 +214,7 @@ class VisualReviewService:
             line.character_id
             for line in shot.dialogue
             if line.character_id is not None
+            and self.session.get(models.Character, line.character_id) is not None
         )
         if thread.modification_scope == "shot" or not character_ids:
             return {
@@ -237,13 +238,27 @@ class VisualReviewService:
                 .where(*conditions)
             )
         )
-        affected = [
-            item
-            for item in all_shots
-            if character_ids.intersection(
-                key for key in item.character_state if isinstance(key, str)
+        def shot_character_ids(item: models.Shot) -> set[str]:
+            ids = {
+                key
+                for key in item.character_state
+                if isinstance(key, str) and key in character_ids
+            }
+            ids.update(
+                line.character_id
+                for line in item.dialogue
+                if line.character_id in character_ids
             )
-        ]
+            return ids
+
+        affected_by_character = {
+            character_id: [
+                item
+                for item in all_shots
+                if character_id in shot_character_ids(item)
+            ]
+            for character_id in character_ids
+        }
         variant_ids: list[str] = []
         usage_ids: list[str] = []
         for character_id in sorted(character_ids):
@@ -264,18 +279,16 @@ class VisualReviewService:
                 )
                 or 0
             ) + 1
-            parent_id = None
-            if kind == "episode":
-                parent_id = self.session.scalar(
-                    select(models.AssetVariant.id)
-                    .where(
-                        models.AssetVariant.character_id == character_id,
-                        models.AssetVariant.kind == "master",
-                        models.AssetVariant.deleted_at.is_(None),
-                    )
-                    .order_by(models.AssetVariant.version.desc())
-                    .limit(1)
+            parent_id = self.session.scalar(
+                select(models.AssetVariant.id)
+                .where(
+                    models.AssetVariant.character_id == character_id,
+                    models.AssetVariant.kind == "master",
+                    models.AssetVariant.deleted_at.is_(None),
                 )
+                .order_by(models.AssetVariant.version.desc())
+                .limit(1)
+            )
             variant = models.AssetVariant(
                 character_id=character_id,
                 episode_id=thread.episode_id if kind == "episode" else None,
@@ -289,17 +302,23 @@ class VisualReviewService:
             )
             self.session.add(variant)
             self.session.flush()
-            usage = models.AssetVariantUsage(
-                variant_id=variant.id,
-                shot_id=shot.id,
-                asset_id=asset.id,
-                usage_kind="panel",
-            )
-            self.session.add(usage)
-            self.session.flush()
+            character_shots = affected_by_character[character_id] or [shot]
+            for affected_shot in character_shots:
+                usage = models.AssetVariantUsage(
+                    variant_id=variant.id,
+                    shot_id=affected_shot.id,
+                    asset_id=asset.id,
+                    usage_kind="reference",
+                )
+                self.session.add(usage)
+                self.session.flush()
+                usage_ids.append(usage.id)
             variant_ids.append(variant.id)
-            usage_ids.append(usage.id)
-        affected_shots = affected or [shot]
+        affected_shots = [
+            item
+            for shots in affected_by_character.values()
+            for item in shots
+        ] or [shot]
         return {
             "scope": thread.modification_scope,
             "variant_ids": variant_ids,
@@ -334,7 +353,7 @@ class VisualReviewService:
         thread.status = "resolved"
         asset.review_status = "approved"
         shot.active_panel_asset_id = asset.id
-        shot.review_status = "draft"
+        shot.review_status = "approved"
         candidate.generation_metadata = {
             **candidate.generation_metadata,
             "acceptance": self._scope_revisions(thread, asset),

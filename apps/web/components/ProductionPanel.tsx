@@ -16,6 +16,7 @@ import {
 import {pollProductionRun} from '../lib/production';
 import type {EpisodeProductionGraph,ProductionCanvasLayout,ProductionItem, ProductionReadiness, ProductionRun, ProductionStage} from '../lib/types';
 import {ProductionCanvas} from './production-canvas/ProductionCanvas';
+import type {ProductionMediaMode} from './production-canvas/ProductionMediaWorkspace';
 import {ProductionRunControls} from './production-canvas/ProductionRunControls';
 import {ShotGroupRerun} from './production-canvas/ShotGroupRerun';
 import {ProductionTaskDrawer} from './production-canvas/ProductionTaskDrawer';
@@ -24,12 +25,22 @@ export function ProductionPanel({
   episodeId,
   onSelectTarget,
   onSelectCanvasShot,
+  onOpenVisualReview,
+  onOpenDirector,
+  onOpenDialogue,
+  onOpenMedia,
   onReadiness,
+  refreshKey,
 }: {
   episodeId: string;
   onSelectTarget: (id: string) => void;
   onSelectCanvasShot?: (id: string) => void;
+  onOpenVisualReview?: (id: string) => void;
+  onOpenDirector?: (id: string) => void;
+  onOpenDialogue?: (id: string) => void;
+  onOpenMedia?: (id: string, mode: ProductionMediaMode) => void;
   onReadiness?: (ready: boolean) => void;
+  refreshKey?: number;
 }) {
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
   const [stages, setStages] = useState<ProductionStage[]>(['panels', 'speech']);
@@ -59,6 +70,7 @@ export function ProductionPanel({
   const startingRef = useRef(false);
   const sessionRef = useRef({generation: 0, controller: new AbortController()});
   const layoutSaveRef=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const externalRefreshRef=useRef(refreshKey);
 
   const isCurrent = (generation: number, signal: AbortSignal) => sessionRef.current.generation === generation && !signal.aborted;
   const refreshReadiness = async (id: string, generation: number, signal: AbortSignal) => {
@@ -124,6 +136,8 @@ export function ProductionPanel({
     }
     return () => {controller.abort();if(layoutSaveRef.current)clearTimeout(layoutSaveRef.current);};
   }, [episodeId]);
+
+  useEffect(()=>{if(refreshKey===undefined||refreshKey===externalRefreshRef.current)return;externalRefreshRef.current=refreshKey;const {generation,controller}=sessionRef.current;void Promise.all([refreshReadiness(episodeId,generation,controller.signal),loadCanvas(episodeId,generation,controller.signal)]).catch(cause=>{if(isCurrent(generation,controller.signal))setCanvasError(cause instanceof Error?cause.message:'生产画布刷新失败');});},[refreshKey]);
 
   const start = async () => {
     if (startingRef.current) return;
@@ -234,7 +248,7 @@ export function ProductionPanel({
       </div>}
     </header>
     <div className="production-canvas-stage">
-      {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
+      {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onOpenVisualReview={onOpenVisualReview} onOpenDirector={onOpenDirector} onOpenDialogue={onOpenDialogue} onOpenMedia={onOpenMedia} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
       <ShotGroupRerun selectedShotIds={selectedCanvasShotIds} starting={rerunStarting} error={rerunError} onSubmit={stages=>void startShotGroupRerun(stages)}/>
       <ProductionRunControls open={configOpen} onOpenChange={setConfigOpen} stages={stages} setStages={setStages} concurrency={concurrency} setConcurrency={setConcurrency}
         regenerate={{panels:regenPanels,speech:regenSpeech,videos:regenVideos}} setRegenerate={next=>{setRegenPanels(next.panels);setRegenSpeech(next.speech);setRegenVideos(next.videos);}}

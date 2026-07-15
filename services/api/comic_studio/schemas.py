@@ -958,6 +958,28 @@ class CharacterReferenceRead(BaseModel):
     asset: AssetRead
 
 
+class Character3DRepresentationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    character_id: str
+    variant_id: str | None
+    state_id: str | None
+    asset_id: str
+    label: str
+    format: Literal["glb"]
+    version: int
+    is_active: bool
+    review_status: ReviewStatus
+    model_url: str
+    mesh_count: int
+    triangle_count: int
+    material_count: int
+    has_skeleton: bool
+    bounds: dict
+    created_at: datetime
+    updated_at: datetime
+
+
 ProductionStage = Literal["panels", "speech", "videos"]
 
 

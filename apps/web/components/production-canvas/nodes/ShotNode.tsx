@@ -7,6 +7,8 @@ export function ShotNode({data}:{data:any}){
     <span className="production-node-title"><strong>镜头 {String(data.position).padStart(2,'0')}</strong><small>{data.duration_seconds}s</small></span>
     <span className="production-node-meta">{data.shot_type}</span>
     <span className="production-stage-indicators" aria-label="生产阶段"><i className={data.active_panel_asset_id?'done':''} title="画面"/><i className={data.dialogue_count&&data.speech_ready_count===data.dialogue_count?'done':''} title="配音"/><i className={data.active_video_asset_id?'done':''} title="视频"/><i className={data.review_status==='approved'?'done':''} title="审核"/></span>
-    <Handle type="source" position={Position.Right}/>
+    <Handle id="production-main" type="source" position={Position.Right} style={{top:'32%'}}/>
+    <Handle id="director-branch" type="source" position={Position.Right} style={{top:'54%'}}/>
+    <Handle id="dialogue-branch" type="source" position={Position.Right} style={{top:'76%'}}/>
   </button>;
 }
