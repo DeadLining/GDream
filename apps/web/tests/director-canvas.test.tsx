@@ -18,8 +18,9 @@ vi.mock('@react-three/drei',()=>({
 const camera:ShotCamera={id:'camera-1',stage_id:'stage-1',shot_id:'shot-1',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:50,near:.1,far:1000,shot_size:'medium',camera_motion:'static',framing_guides:{},object_overrides:{},preview_asset_id:null};
 const objects:DirectorObject[]=[
   {id:'character-1',stage_id:'stage-1',kind:'character',source_type:'character_reference',source_id:'char-1',label:'林夏',position:1,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{image_url:'/media/linxia.png',aspect_ratio:.75},metadata:{asset_id:'asset-1'},visible:true},
-  {id:'prop-1',stage_id:'stage-1',kind:'prop',source_type:'model',source_id:'missing.glb',label:'箱子',position:2,transform:{position:[1,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{},metadata:{},visible:true},
+  {id:'prop-1',stage_id:'stage-1',kind:'prop',source_type:'library_asset',source_id:'prop-image',label:'箱子',position:2,transform:{position:[1,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{image_url:'/media/box.png'},metadata:{requires_3d_model:true},visible:true},
   {id:'character-3d',stage_id:'stage-1',kind:'character',source_type:'model',source_id:'representation-1',label:'林夏 3D',position:3,transform:{position:[-1,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{model_url:'/media/linxia.glb',model_scale:1.2,model_offset_y:.1},metadata:{asset_id:'model-asset-1'},visible:true},
+  {id:'background-1',stage_id:'stage-1',kind:'background',source_type:'library_asset',source_id:'background-image',label:'雨夜天台',position:4,transform:{position:[0,1,-2],rotation:[0,0,0],scale:[2,2,2]},appearance:{image_url:'/media/rooftop.png',aspect_ratio:1.5},metadata:{},visible:true},
 ];
 
 describe('DirectorCanvas',()=>{
@@ -31,7 +32,8 @@ describe('DirectorCanvas',()=>{
     expect(ui.getByTestId('r3f-canvas')).toBeInTheDocument();
     expect(view.container.querySelector('[name="director-object-character-1"]')).toBeInTheDocument();
     expect(view.container.querySelector('[name="director-object-prop-1"]')).toBeInTheDocument();
-    expect(ui.getByTestId('director-image')).toHaveAttribute('data-url','/media/linxia.png');
+    expect(ui.getAllByTestId('director-image')).toHaveLength(1);
+    expect(ui.getByTestId('director-image')).toHaveAttribute('data-url','/media/rooftop.png');
     expect(ui.getByTestId('director-model')).toHaveAttribute('data-name','/media/linxia.glb');
     expect(ui.getByTestId('transform-controls')).toBeInTheDocument();
     expect(ui.getByTestId('orbit')).toHaveAttribute('data-enabled','true');

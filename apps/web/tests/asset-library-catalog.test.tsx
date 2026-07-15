@@ -108,4 +108,7 @@ it('uploads kind-specific media for a library asset',async()=>{
   await user.upload(screen.getByLabelText('上传服装媒体'),file);
 
   expect(onUpload).toHaveBeenCalledWith('la4',file);
+
+  await user.click(screen.getByRole('button',{name:'道具 1'}));
+  expect(screen.getByLabelText('上传道具媒体')).toHaveAttribute('accept',expect.stringContaining('.glb'));
 });

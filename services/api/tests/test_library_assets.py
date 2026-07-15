@@ -4,6 +4,7 @@ import wave
 from PIL import Image
 
 from comic_studio import models
+from tests.test_character_3d_representations import _glb
 
 
 def _project(client, title: str = "资产目录"):
@@ -194,6 +195,7 @@ def test_library_assets_accept_kind_specific_media_uploads(client):
         ).json()
 
     costume = create("costume", "黑色风衣")
+    prop = create("prop", "银色怀表")
     sound = create("sound", "城市雨声")
 
     costume_upload = client.post(
@@ -208,6 +210,10 @@ def test_library_assets_accept_kind_specific_media_uploads(client):
         f"/api/library-assets/{sound['id']}/media",
         files={"file": ("wrong.png", _png(), "image/png")},
     )
+    prop_model_upload = client.post(
+        f"/api/library-assets/{prop['id']}/media",
+        files={"file": ("watch.glb", _glb(), "model/gltf-binary")},
+    )
 
     assert costume_upload.status_code == 201
     assert costume_upload.json()["media_type"] == "image/png"
@@ -218,3 +224,22 @@ def test_library_assets_accept_kind_specific_media_uploads(client):
     assert sound_upload.json()["media_url"].endswith(".wav")
     assert invalid_sound.status_code == 422
     assert invalid_sound.json()["detail"] == "sound_asset_requires_audio"
+    assert prop_model_upload.status_code == 201
+    assert prop_model_upload.json()["media_type"] == "model/gltf-binary"
+    assert prop_model_upload.json()["media_url"].endswith(".glb")
+
+
+def test_library_asset_rejects_invalid_prop_glb(client):
+    project = _project(client, "道具模型校验")
+    prop = client.post(
+        f"/api/projects/{project['id']}/library-assets",
+        json={"kind": "prop", "name": "损坏道具", "description": "", "tags": [], "metadata": {}},
+    ).json()
+
+    response = client.post(
+        f"/api/library-assets/{prop['id']}/media",
+        files={"file": ("broken.glb", b"not-a-glb", "model/gltf-binary")},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid_glb"

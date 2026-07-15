@@ -3,6 +3,7 @@ import pytest
 from comic_studio import models
 from comic_studio.director import DirectorObjectCreate, DirectorObjectPatch, DirectorStagePatch, ShotCameraPatch, Transform
 from comic_studio.services.director_stages import DirectorStageService, DirectorVersionConflict
+from tests.test_character_3d_representations import _glb
 
 
 def _scene(session):
@@ -203,6 +204,12 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
         character_id = character.id
         asset_id = asset.id
 
+    prop_upload = client.post(
+        f"/api/library-assets/{prop_asset.id}/media",
+        files={"file": ("watch.glb", _glb(), "model/gltf-binary")},
+    )
+    assert prop_upload.status_code == 201
+
     stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
     catalog_response = client.get(f"/api/director-stages/{stage['id']}/assets")
 
@@ -217,6 +224,8 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     library_items = [item for item in catalog if item["source_type"] == "library_asset"]
     assert {item["label"] for item in library_items} == {"霓虹雨夜天台", "银色怀表"}
     assert {item["source_id"] for item in library_items} == {scene_asset.id, prop_asset.id}
+    prop_item = next(item for item in library_items if item["source_id"] == prop_asset.id)
+    assert prop_item["media_type"] == "model/gltf-binary"
 
     synced = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",
@@ -229,8 +238,24 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     assert {item["kind"] for item in synced_stage["objects"]} == {"background", "character", "prop"}
     assert len(synced_stage["objects"]) == 5
     synced_character = next(item for item in synced_stage["objects"] if item["kind"] == "character")
-    assert synced_character["appearance"]["image_url"].endswith("/primary.png")
+    assert "image_url" not in synced_character["appearance"]
+    assert synced_character["appearance"]["fallback_image_url"].endswith("/primary.png")
+    assert synced_character["metadata"]["requires_3d_model"] is True
     assert synced_character["metadata"]["asset_id"] == asset_id
+    non_background = [
+        item for item in synced_stage["objects"] if item["kind"] != "background"
+    ]
+    assert all("image_url" not in item["appearance"] for item in non_background)
+    synced_prop = next(
+        item
+        for item in non_background
+        if item["source_type"] == "library_asset"
+        and item["source_id"] == prop_asset.id
+    )
+    assert synced_prop["appearance"]["model_url"].endswith(".glb")
+    assert synced_prop["metadata"]["requires_3d_model"] is False
+    placeholders = [item for item in non_background if item["id"] != synced_prop["id"]]
+    assert all(item["metadata"]["requires_3d_model"] is True for item in placeholders)
 
     repeated = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",
