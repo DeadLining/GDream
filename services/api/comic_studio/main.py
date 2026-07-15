@@ -51,6 +51,7 @@ from comic_studio.routes.image_proxy import router as image_proxy_router
 from comic_studio.routes.library_assets import router as library_assets_router
 from comic_studio.routes.prompt_suggestions import router as prompt_suggestions_router
 from comic_studio.routes.character_3d import router as character_3d_router
+from comic_studio.routes.episode_ai_runs import router as episode_ai_runs_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
 from comic_studio.services.production_coordinator import ProductionCoordinator
@@ -341,6 +342,7 @@ def create_app(
     app.include_router(library_assets_router)
     app.include_router(prompt_suggestions_router)
     app.include_router(character_3d_router)
+    app.include_router(episode_ai_runs_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

@@ -957,6 +957,54 @@ class ProductionItem(Base):
     run: Mapped[ProductionRun] = relationship(back_populates="items")
 
 
+class EpisodeAIRun(Base):
+    __tablename__ = "episode_ai_runs"
+    __table_args__ = (
+        UniqueConstraint("episode_id", "idempotency_key", name="uq_episode_ai_run_idempotency"),
+        UniqueConstraint("episode_id", "active_slot", name="uq_episode_ai_run_active_slot"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    episode_id: Mapped[str] = mapped_column(ForeignKey("episodes.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    current_stage: Mapped[str] = mapped_column(String(40), default="references", index=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    automation_policy: Mapped[dict] = mapped_column(JSON, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    active_slot: Mapped[str | None] = mapped_column(String(16), default="active", nullable=True)
+    pause_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    stages: Mapped[list[EpisodeAIRunStage]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="EpisodeAIRunStage.position",
+    )
+
+
+class EpisodeAIRunStage(Base):
+    __tablename__ = "episode_ai_run_stages"
+    __table_args__ = (UniqueConstraint("run_id", "stage", name="uq_episode_ai_run_stage"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("episode_ai_runs.id", ondelete="CASCADE"), index=True)
+    stage: Mapped[str] = mapped_column(String(40), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    input_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    output_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    run: Mapped[EpisodeAIRun] = relationship(back_populates="stages")
+
+
 class ProjectMember(Base):
     __tablename__ = "project_members"
     __table_args__ = (UniqueConstraint("project_id", "email", name="uq_project_member_email"),)
