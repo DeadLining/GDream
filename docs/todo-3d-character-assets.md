@@ -86,7 +86,7 @@ Acceptance criteria:
 - [ ] Detect and describe skeletons and animation clips during upload processing.
 - [x] Define a normalized humanoid bone mapping for supported models.
 - [x] Provide a reusable pose library.
-- [x] Add an animation clip picker for the standard humanoid proxy.
+- [x] Add an animation clip picker for humanoid, quadruped, and bird proxies.
 - [x] Add explicit quadruped and bird proxy templates plus reusable primitive templates for unfinished props.
 - [ ] Complete animation timeline scrubbing and explicit reset; pose application plus playback and pause are available for the standard proxy.
 - [ ] Add basic facial expression or blend-shape controls when available.

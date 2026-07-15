@@ -202,7 +202,7 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(await screen.findByText('机械犬'));
     expect(screen.getByLabelText('3D 代理模板')).toHaveValue('prop_box');
     await userEvent.selectOptions(screen.getByLabelText('3D 代理模板'),'quadruped');
-    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{metadata:{catalog_key:'library_asset:dog-1',requires_3d_model:true,proxy_rig:'quadruped'}}));
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{metadata:{catalog_key:'library_asset:dog-1',requires_3d_model:false,proxy_rig:'quadruped',full_model_optional:true}}));
   });
   it('stores proxy pose and animation controls on only the selected shot',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1},metadata:{proxy_rig:'standard_humanoid'}};
