@@ -340,3 +340,47 @@ def test_character_model_upload_cleans_file_when_commit_fails(
 
     assert list(tmp_path.rglob("*.glb")) == []
     assert list(tmp_path.rglob("*.tmp")) == []
+
+
+def test_character_model_upload_keeps_validated_scope_metadata_authoritative(
+    db_session, tmp_path
+):
+    project = models.Project(
+        title="3D metadata",
+        logline="Keep validated ownership metadata",
+        story_bible="Story",
+        visual_style="comic",
+    )
+    character = models.Character(
+        project=project,
+        name="Lin Xia",
+        role="Lead",
+        appearance_bible="teal jacket",
+        personality="calm",
+        continuity_rules="same face",
+        voice_speaker="v1",
+    )
+    db_session.add(project)
+    db_session.commit()
+
+    representation = Character3DRepresentationService(
+        db_session, tmp_path
+    ).upload(
+        character.id,
+        _glb(),
+        request_metadata={
+            "character_id": "spoofed-character",
+            "variant_id": "spoofed-variant",
+            "state_id": "spoofed-state",
+            "source": "test",
+        },
+    )
+    asset = db_session.get(models.Asset, representation.asset_id)
+
+    assert asset.request_metadata == {
+        "source": "test",
+        "character_id": character.id,
+        "format": "glb",
+        "variant_id": None,
+        "state_id": None,
+    }
