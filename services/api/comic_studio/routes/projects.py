@@ -31,6 +31,17 @@ def get_project(project_id: str, session: SessionDependency):
     return project
 
 
+@router.get(
+    "/{project_id}/overview-metrics",
+    response_model=schemas.ProjectOverviewMetrics,
+)
+def get_project_overview_metrics(project_id: str, session: SessionDependency):
+    metrics = ProjectRepository(session).overview_metrics(project_id)
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return metrics
+
+
 @router.patch("/{project_id}", response_model=schemas.ProjectRead)
 def update_project(
     project_id: str, data: schemas.ProjectPatch, session: SessionDependency

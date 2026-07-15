@@ -1,10 +1,10 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {createEpisode,createProject,createVolume,deleteEpisode,deleteVolume,getEpisode,getProductionReadiness,getProject,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
+import {createEpisode,createProject,createVolume,deleteEpisode,deleteVolume,getEpisode,getProductionReadiness,getProject,getProjectOverviewMetrics,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
-import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,Shot,Storyline,Volume} from '../lib/types';
+import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,Shot,Storyline,Volume} from '../lib/types';
 import {AppToolbar, type GlobalSection} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
 import {CreateProjectDialog} from './CreateProjectDialog';
@@ -39,6 +39,7 @@ export function Workspace() {
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [volumes,setVolumes]=useState<Volume[]>([]);
   const [storylines,setStorylines]=useState<Storyline[]>([]);
+  const [overviewMetrics,setOverviewMetrics]=useState<ProjectOverviewMetrics|null>(null);
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
   const [readinessByEpisode,setReadinessByEpisode]=useState<Record<string,ProductionReadiness>>({});
@@ -109,13 +110,14 @@ export function Workspace() {
   };
 
   const loadProjectForRequest = async (id: string, request: number) => {
-    const [loaded,loadedVolumes,loadedStorylines] = await Promise.all([getProject(id),listVolumes(id),listStorylines(id)]);
+    const [loaded,loadedVolumes,loadedStorylines,loadedOverviewMetrics] = await Promise.all([getProject(id),listVolumes(id),listStorylines(id),getProjectOverviewMetrics(id).catch(()=>null)]);
     if (navigationRequest.current !== request) return;
     const readinessRequests=loaded.episodes.map(item=>[item.id,getProductionReadiness(item.id)] as const);
     const projectReadinessRequest=Promise.allSettled(readinessRequests.map(([,pending])=>pending));
     setProject(loaded);
     setVolumes(loadedVolumes);
     setStorylines(loadedStorylines);
+    setOverviewMetrics(loadedOverviewMetrics);
     setReadinessByEpisode({});
     localStorage.setItem('ai-comic-project', id);
     const preferred = localStorage.getItem('ai-comic-episode');
@@ -153,6 +155,7 @@ export function Workspace() {
       setProject(null);
       setVolumes([]);
       setStorylines([]);
+      setOverviewMetrics(null);
       setEpisode(null);
       setReadiness(null);
       setReadinessByEpisode({});
@@ -255,7 +258,7 @@ export function Workspace() {
   const productionDialogueShot=productionDialogueShotId?shots.find(shot=>shot.id===productionDialogueShotId)??null:null;
   const productionMediaShot=productionMedia?shots.find(shot=>shot.id===productionMedia.shotId)??null:null;
   let center;
-  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
+  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} metrics={overviewMetrics} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
   else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (workArea === 'characters' && project) center = <CharacterWorkspace projectId={project.id} characters={project.characters} episodes={project.episodes} onCharactersChanged={()=>loadProject(project.id)}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;

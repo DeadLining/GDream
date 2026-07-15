@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
@@ -41,6 +41,63 @@ class ProjectRepository:
             .where(models.Project.id == project_id)
         )
         return self.session.scalar(statement)
+
+    def overview_metrics(
+        self, project_id: str
+    ) -> schemas.ProjectOverviewMetrics | None:
+        if self.session.get(models.Project, project_id) is None:
+            return None
+        scene_count = self.session.scalar(
+            select(func.count(models.Scene.id))
+            .select_from(models.Scene)
+            .join(models.Episode, models.Scene.episode_id == models.Episode.id)
+            .where(models.Episode.project_id == project_id)
+        ) or 0
+        current_script_status = self.session.scalar(
+            select(models.ScriptRevision.status)
+            .select_from(models.ScriptDocument)
+            .join(
+                models.ScriptRevision,
+                models.ScriptRevision.id == models.ScriptDocument.current_revision_id,
+            )
+            .where(models.ScriptDocument.project_id == project_id)
+        )
+        character_total = self.session.scalar(
+            select(func.count(models.Character.id)).where(
+                models.Character.project_id == project_id
+            )
+        ) or 0
+        ready_characters = self.session.scalar(
+            select(func.count(func.distinct(models.Character.id)))
+            .select_from(models.Character)
+            .join(
+                models.CharacterReference,
+                models.CharacterReference.character_id == models.Character.id,
+            )
+            .where(
+                models.Character.project_id == project_id,
+                models.CharacterReference.is_active.is_(True),
+                models.CharacterReference.review_status == "approved",
+            )
+        ) or 0
+        library_asset_total = self.session.scalar(
+            select(func.count(models.LibraryAsset.id)).where(
+                models.LibraryAsset.project_id == project_id
+            )
+        ) or 0
+        ready_library_assets = self.session.scalar(
+            select(func.count(models.LibraryAsset.id)).where(
+                models.LibraryAsset.project_id == project_id,
+                models.LibraryAsset.media_asset_id.is_not(None),
+            )
+        ) or 0
+        return schemas.ProjectOverviewMetrics(
+            project_id=project_id,
+            scene_count=scene_count,
+            script_locked=current_script_status == "finalized",
+            asset_total=character_total + library_asset_total,
+            asset_ready=ready_characters + ready_library_assets,
+        )
 
     def create_character(
         self, project_id: str, data: schemas.CharacterCreate

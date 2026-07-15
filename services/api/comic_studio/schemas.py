@@ -864,6 +864,14 @@ class ProjectDetail(ProjectRead):
     episodes: list[EpisodeRead] = []
 
 
+class ProjectOverviewMetrics(BaseModel):
+    project_id: str
+    scene_count: int
+    script_locked: bool
+    asset_total: int
+    asset_ready: int
+
+
 class EpisodeDetail(EpisodeRead):
     scenes: list[SceneRead] = []
 

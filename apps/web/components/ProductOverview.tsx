@@ -2,15 +2,16 @@
 
 import {useState} from 'react';
 import {AlertTriangle, ArrowRight, BookOpenText, Boxes, Clapperboard, Clock3, Library, Pencil, Plus, Trash2, Users, X} from 'lucide-react';
-import type {EpisodeDetail, EpisodeSummary, ProductionReadiness, ProjectDetail, Storyline, Volume} from '../lib/types';
+import type {EpisodeDetail, EpisodeSummary, ProductionReadiness, ProjectDetail, ProjectOverviewMetrics, Storyline, Volume} from '../lib/types';
 
 const statusLabel = (status: string) => ({planned: '已规划', draft: '草稿', completed: '已完成'}[status] ?? status);
 
-export function ProductOverview({project, episode, readiness, readinessByEpisode, volumes, storylines, onOpenEpisode, onOpenScript, onOpenAssets, onCreateVolume, onUpdateVolume, onDeleteVolume, onMoveEpisode}: {
+export function ProductOverview({project, episode, readiness, readinessByEpisode, metrics, volumes, storylines, onOpenEpisode, onOpenScript, onOpenAssets, onCreateVolume, onUpdateVolume, onDeleteVolume, onMoveEpisode}: {
   project: ProjectDetail;
   episode: EpisodeDetail | null;
   readiness: ProductionReadiness | null;
   readinessByEpisode?: Record<string, ProductionReadiness>;
+  metrics?: ProjectOverviewMetrics | null;
   volumes: Volume[];
   storylines: Storyline[];
   onOpenEpisode: (episodeId: string) => void;
@@ -31,7 +32,7 @@ export function ProductOverview({project, episode, readiness, readinessByEpisode
   const [episodeBusyId,setEpisodeBusyId]=useState<string|null>(null);
   const [deletingVolumeId,setDeletingVolumeId]=useState<string|null>(null);
   const [operationError,setOperationError]=useState('');
-  const totalScenes = episode?.scenes.length ?? 0;
+  const totalScenes = metrics?.scene_count ?? null;
   const totalShots = readiness?.totals.shots ?? episode?.scenes.reduce((total, scene) => total + scene.shots.length, 0) ?? 0;
   const assignedEpisodes = volumes.flatMap(volume => volume.episodes);
   const assignedEpisodeIds = new Set(assignedEpisodes.map(item => item.id));
@@ -52,6 +53,8 @@ export function ProductOverview({project, episode, readiness, readinessByEpisode
   const storyboardProgress=percentage(projectTotals.panels,projectTotals.shots);
   const generationProgress=percentage(projectTotals.panels+projectTotals.approved,projectTotals.shots*2);
   const reviewProgress=percentage(projectTotals.approved,projectTotals.shots);
+  const scriptProgress=metrics?metrics.script_locked?100:0:null;
+  const assetProgress=metrics?metrics.asset_total?Math.round(metrics.asset_ready/metrics.asset_total*100):0:null;
   const closeVolumeForm=()=>{setVolumeForm(false);setEditingVolumeId(null);setVolumeError('');};
   const openCreateVolume=()=>{setEditingVolumeId(null);setVolumeTitle('');setVolumeSummary('');setVolumePosition(String(Math.max(0,...volumes.map(item=>item.position))+1));setVolumeError('');setVolumeForm(true);};
   const openEditVolume=(volume:Volume)=>{setEditingVolumeId(volume.id);setVolumeTitle(volume.title);setVolumeSummary(volume.summary);setVolumePosition(String(volume.position));setVolumeError('');setVolumeForm(true);};
@@ -76,12 +79,12 @@ export function ProductOverview({project, episode, readiness, readinessByEpisode
     <header className="product-overview-header">
       <div className="project-cover"><Clapperboard size={24}/></div>
       <div className="product-overview-title"><span>当前作品</span><h1>{project.title}</h1><p>{project.logline}</p></div>
-      <div className="project-summary-metrics"><span><BookOpenText size={14}/><strong>{volumes.length}</strong> 卷</span><span><Clapperboard size={14}/><strong>{project.episodes.length}</strong> 集</span><span><Boxes size={14}/><strong>{totalScenes}</strong> 场</span><span><Users size={14}/><strong>{project.characters.length}</strong> 角色</span></div>
+      <div className="project-summary-metrics"><span><BookOpenText size={14}/><strong>{volumes.length}</strong> 卷</span><span><Clapperboard size={14}/><strong>{project.episodes.length}</strong> 集</span><span><Boxes size={14}/><strong>{totalScenes??'--'}</strong> 场</span><span><Users size={14}/><strong>{project.characters.length}</strong> 角色</span></div>
       <button className="primary-action" type="button" disabled={!primaryEpisodeId} onClick={() => primaryEpisodeId && onOpenEpisode(primaryEpisodeId)}>进入制作<ArrowRight size={15}/></button>
     </header>
 
     <section className="project-stage-rail" aria-label="作品制作阶段">
-      {[['剧本锁定', 100], ['资产准备', project.characters.length ? 70 : 0], ['分镜', storyboardProgress], ['生成', generationProgress], ['审核', reviewProgress]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value===null?'--':`${value}%`}</strong><progress max="100" value={value===null?0:Number(value)}/></div>)}
+      {[['剧本锁定', scriptProgress], ['资产准备', assetProgress], ['分镜', storyboardProgress], ['生成', generationProgress], ['审核', reviewProgress]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value===null?'--':`${value}%`}</strong><progress max="100" value={value===null?0:Number(value)}/></div>)}
     </section>
 
     <div className="product-overview-grid">

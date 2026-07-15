@@ -18,6 +18,7 @@ export type Project = {
   aspect_ratio: AspectRatio; language: string; created_at: string; updated_at: string;
 };
 export type ProjectDetail = Project & {characters: Character[]; episodes: EpisodeSummary[]};
+export type ProjectOverviewMetrics={project_id:string;scene_count:number;script_locked:boolean;asset_total:number;asset_ready:number};
 export type DialogueLine = {
   id: string; character_id: string | null; position: number; text: string;
   subtitle_text: string; emotion: string; performance_instruction: string;
