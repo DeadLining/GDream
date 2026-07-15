@@ -531,3 +531,41 @@
   object-fit: contain;
   object-position: center;
 }
+.review-preview-toolbar {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+.review-preview-modes { display: flex; gap: 2px; }
+.review-preview-toolbar button,
+.review-preview-toolbar select,
+.review-preview-toolbar a {
+  min-height: 30px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  padding: 0 9px;
+  font-size: var(--fs-xs);
+}
+.review-preview-toolbar button.active { border-color: var(--color-accent); background: var(--color-accent-bg); color: var(--color-accent-strong); font-weight: 700; }
+.review-preview-toolbar select { min-width: 0; margin-left: auto; }
+.review-preview-toolbar a { display: inline-flex; align-items: center; gap: 5px; color: var(--color-ink); text-decoration: none; white-space: nowrap; }
+.review-message-history { display: grid; gap: 5px; margin: 0 10px 8px 42px; }
+.review-message-history p { margin: 0; padding: 6px 8px; border-left: 2px solid var(--color-line-strong); background: var(--color-surface-subtle); color: var(--color-text); font-size: var(--fs-xs); line-height: 1.45; overflow-wrap: anywhere; }
+.review-message-history span { display: block; margin-bottom: 2px; color: var(--color-muted); font-size: 10px; font-weight: 700; }
+.review-action-status { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--color-success-bg); color: var(--color-success-strong); font-size: var(--fs-xs); }
+.publish-gate .publish-candidate { background: var(--color-surface-subtle) !important; color: var(--color-ink) !important; }
+.publish-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: var(--space-4); }
+.publish-actions .approve-publish { margin-top: 0 !important; }
+.generate-preview { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--color-accent-strong); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-accent-strong); font-size: var(--fs-sm); font-weight: 700; }
+.generate-preview:disabled { border-color: var(--color-line); color: var(--color-muted); background: var(--color-surface-subtle); cursor: not-allowed; }
+@media (max-width: 700px) {
+  .review-preview-toolbar { flex-wrap: wrap; }
+  .review-preview-toolbar select { order: 3; width: 100%; margin-left: 0; }
+  .publish-actions { grid-template-columns: 1fr; }
+}
