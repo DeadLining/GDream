@@ -1,17 +1,17 @@
 import React from 'react';
 import {Group} from 'three';
-import {cleanup,render,within} from '@testing-library/react';
+import {cleanup,fireEvent,render,within} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {DirectorCanvas} from '../components/director/DirectorCanvas';
 import type {DirectorObject,ShotCamera} from '../lib/types';
 
 const threeCamera={position:{set:vi.fn()},rotation:{set:vi.fn()},fov:50,updateProjectionMatrix:vi.fn()};
-vi.mock('@react-three/fiber',()=>({Canvas:({children}:React.PropsWithChildren)=> <div data-testid="r3f-canvas">{children}</div>,useThree:(select:(state:{camera:typeof threeCamera})=>unknown)=>select({camera:threeCamera})}));
+vi.mock('@react-three/fiber',()=>({Canvas:({children,onPointerMissed}:React.PropsWithChildren<{onPointerMissed?:()=>void}>)=> <div data-testid="r3f-canvas" onClick={()=>onPointerMissed?.()}>{children}</div>,useThree:(select:(state:{camera:typeof threeCamera})=>unknown)=>select({camera:threeCamera})}));
 vi.mock('@react-three/drei',()=>({
   Clone:({object}:{object:{name:string}})=><div data-testid="director-model" data-name={object.name}/>,
   Image:({url}:{url:string})=><div data-testid="director-image" data-url={url}/>,
   OrbitControls:({enabled,onEnd}:{enabled:boolean;onEnd?:(event:unknown)=>void})=><button data-testid="orbit" data-enabled={String(enabled)} onClick={()=>onEnd?.({target:{object:{position:{x:2,y:3,z:4},rotation:{x:.1,y:.2,z:.3}},target:{x:0,y:1,z:0}}})}>移动镜头</button>,
-  TransformControls:({children,mode}:React.PropsWithChildren<{mode:string}>)=><div data-testid="transform-controls" data-mode={mode}>{children}</div>,
+  TransformControls:({children,mode,translationSnap,rotationSnap,scaleSnap,onObjectChange,onMouseUp}:React.PropsWithChildren<{mode:string;translationSnap?:number|null;rotationSnap?:number|null;scaleSnap?:number|null;onObjectChange?:()=>void;onMouseUp?:()=>void}>)=><div data-testid="transform-controls" data-mode={mode} data-translation-snap={translationSnap??''} data-rotation-snap={rotationSnap??''} data-scale-snap={scaleSnap??''} onClick={()=>{const current=document.querySelector('[name="director-object-character-1"]') as unknown as {position:{x:number;y:number;z:number};rotation:{x:number;y:number;z:number};scale:{x:number;y:number;z:number}};current.position={x:1,y:0,z:0};current.rotation={x:0,y:.2,z:0};current.scale={x:1,y:1,z:1};onObjectChange?.();current.position={x:2,y:0,z:0};onObjectChange?.();onMouseUp?.();}}>{children}</div>,
   useGLTF:(url:string)=>{const scene=new Group();scene.name=url;return {scene};},
 }));
 
@@ -49,5 +49,30 @@ describe('DirectorCanvas',()=>{
   it('passes the selected transform mode to the object controls',()=>{
     const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" transformMode="rotate" onTransform={vi.fn()}/>);
     expect(within(view.container).getByTestId('transform-controls')).toHaveAttribute('data-mode','rotate');
+  });
+
+  it('selects objects from the canvas and clears selection on empty space',()=>{
+    const onSelectObject=vi.fn();
+    const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId={null} mode="world" onSelectObject={onSelectObject} onTransform={vi.fn()}/>);
+    fireEvent.click(view.container.querySelector('[name="director-object-character-1"]') as Element);
+    expect(onSelectObject).toHaveBeenLastCalledWith('character-1');
+    fireEvent.click(within(view.container).getByTestId('r3f-canvas'));
+    expect(onSelectObject).toHaveBeenLastCalledWith(null);
+  });
+
+  it('configures translation, rotation, and scale snapping',()=>{
+    const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" snapEnabled onTransform={vi.fn()}/>);
+    const controls=within(view.container).getByTestId('transform-controls');
+    expect(controls).toHaveAttribute('data-translation-snap','0.25');
+    expect(controls).toHaveAttribute('data-rotation-snap',String(Math.PI/12));
+    expect(controls).toHaveAttribute('data-scale-snap','0.1');
+  });
+
+  it('commits only the final transform when a drag ends',()=>{
+    const onTransform=vi.fn();
+    const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" onTransform={onTransform}/>);
+    fireEvent.click(within(view.container).getByTestId('transform-controls'));
+    expect(onTransform).toHaveBeenCalledTimes(1);
+    expect(onTransform).toHaveBeenCalledWith('character-1',{position:[2,0,0],rotation:[0,.2,0],scale:[1,1,1]});
   });
 });

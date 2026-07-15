@@ -67,8 +67,13 @@ test('3D director renders, captures preview, and applies selected AI fields',asy
   const pixelVariance=()=>page.locator('canvas').evaluate(canvas=>{const copy=document.createElement('canvas');copy.width=160;copy.height=100;const context=copy.getContext('2d',{willReadFrequently:true});if(!context)return 0;context.drawImage(canvas as HTMLCanvasElement,0,0,copy.width,copy.height);const pixels=context.getImageData(0,0,copy.width,copy.height).data;let min=765,max=0;for(let index=0;index<pixels.length;index+=16){const value=pixels[index]+pixels[index+1]+pixels[index+2];min=Math.min(min,value);max=Math.max(max,value);}return max-min;});
   await expect.poll(pixelVariance,{timeout:10000}).toBeGreaterThan(6);
   if(testInfo.project.name==='desktop'){
+    const canvas=page.locator('canvas');const initialBox=await canvas.boundingBox();expect(initialBox).not.toBeNull();
+    await canvas.click({position:{x:initialBox!.width*.5,y:initialBox!.height*.62}});
+    await expect(page.locator('.director-inspector header strong')).toHaveText('林夏');
+    await canvas.click({position:{x:initialBox!.width*.06,y:initialBox!.height*.08}});
+    await expect(page.locator('.director-inspector header strong')).toHaveText('镜头相机');
     await page.getByRole('button',{name:'镜头',exact:true}).click();
-    const canvas=page.locator('canvas');const box=await canvas.boundingBox();expect(box).not.toBeNull();
+    const box=await canvas.boundingBox();expect(box).not.toBeNull();
     await page.mouse.move(box!.x+box!.width*.55,box!.y+box!.height*.45);await page.mouse.down();await page.mouse.move(box!.x+box!.width*.68,box!.y+box!.height*.38,{steps:8});await page.mouse.up();
     await page.getByRole('button',{name:'保存相机',exact:true}).click();
     await expect.poll(()=>cameraWrites.length).toBe(1);
@@ -77,12 +82,20 @@ test('3D director renders, captures preview, and applies selected AI fields',asy
     await page.getByRole('button',{name:'林夏',exact:true}).click();
     await page.getByRole('button',{name:'旋转对象'}).click();
     await expect(page.getByRole('button',{name:'旋转对象'})).toHaveAttribute('aria-pressed','true');
+    await page.getByRole('button',{name:'网格吸附'}).click();
+    await expect(page.getByRole('button',{name:'网格吸附'})).toHaveAttribute('aria-pressed','true');
     await page.getByLabel('角色姿态').selectOption('action');
     await expect.poll(()=>cameraWrites.length).toBe(2);
     expect(cameraWrites[1].camera.object_overrides['object-1'].pose_preset).toBe('action');
     await page.getByRole('button',{name:'对象落地'}).click();
     await expect.poll(()=>cameraWrites.length).toBe(3);
     expect(cameraWrites[2].camera.object_overrides['object-1']).toEqual(expect.objectContaining({pose_preset:'action',transform:expect.objectContaining({position:[0,0,0]})}));
+    await page.getByRole('button',{name:'撤销对象变换'}).click();
+    await expect.poll(()=>cameraWrites.length).toBe(4);
+    expect(cameraWrites[3].camera.object_overrides['object-1']).toEqual({pose_preset:'action'});
+    await page.getByRole('button',{name:'重做对象变换'}).click();
+    await expect.poll(()=>cameraWrites.length).toBe(5);
+    expect(cameraWrites[4].camera.object_overrides['object-1']).toEqual(expect.objectContaining({pose_preset:'action',transform:expect.objectContaining({position:[0,0,0]})}));
   }
   await page.getByRole('button',{name:'保存相机预览'}).click();await expect.poll(()=>previewUploads).toBe(1);
   await page.getByRole('button',{name:'AI构图建议'}).click();await expect(page.getByRole('dialog',{name:'AI 导演建议'})).toBeVisible();await page.getByLabel('运镜').uncheck();await page.getByRole('button',{name:'应用选中字段'}).click();await expect.poll(()=>appliedFields).toEqual(['composition']);
