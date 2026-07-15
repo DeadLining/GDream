@@ -26,14 +26,18 @@ SCRIPT_IMPORT_SYSTEM_PROMPT = """You are the script import engine for a Chinese 
 Return one JSON object only using the supplied strict schema. Convert prose into ordered episodes,
 scenes, shots, and dialogue when needed. Give every draft character and episode a stable draft_id.
 Dialogue must reference a supplied character draft_id or be explicitly marked as narration. Preserve
-story meaning, expose uncertainty through warnings, and do not use Markdown fences."""
+story meaning. Each shot character_state must be an object keyed only by declared character draft_id
+values; use an empty object when no character state is needed, never semantic keys such as expression
+or pose. Expose uncertainty through warnings, and do not use Markdown fences."""
 
 SCRIPT_GENERATION_SYSTEM_PROMPT = """You are the lead writer and storyboard planner for a serialized
 Chinese dynamic comic studio. Return one JSON object only using the supplied strict import schema.
 Create coherent new episodes, scenes, shots, and dialogue from the complete project canon. Preserve
 established character constraints and continuity, and avoid duplicating existing episodes. Give every
 draft character and episode a stable draft_id. Dialogue must reference a supplied character draft_id
-or be explicitly marked as narration. Expose uncertainty through warnings and do not use Markdown fences."""
+or be explicitly marked as narration. Each shot character_state must be an object keyed only by declared
+character draft_id values; use an empty object when no character state is needed, never semantic keys such
+as expression or pose. Expose uncertainty through warnings and do not use Markdown fences."""
 
 READABLE_SCRIPT_SYSTEM_PROMPT = """You are the lead writer for a Chinese dynamic-comic studio.
 Write a readable Chinese dynamic-comic script, not JSON. Use clear episode, scene, action, speaker,

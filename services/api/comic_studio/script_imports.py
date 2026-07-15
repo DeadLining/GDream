@@ -98,6 +98,12 @@ class ScriptImportDraft(StrictDraftModel):
         for episode in self.episodes:
             for scene in episode.scenes:
                 for shot in scene.shots:
+                    unknown_state_ids = set(shot.character_state) - known
+                    if unknown_state_ids:
+                        raise ValueError(
+                            "unknown character_state draft_id: "
+                            + ", ".join(sorted(unknown_state_ids))
+                        )
                     for line in shot.dialogue:
                         if line.speaker_draft_id is not None and line.speaker_draft_id not in known:
                             raise ValueError(
