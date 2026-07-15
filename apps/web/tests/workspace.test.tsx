@@ -50,6 +50,7 @@ vi.mock('../lib/api', () => ({
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
+vi.mock('../components/ScriptLibrary',()=>({ScriptLibrary:({initialView,initialStorylineId,onConfirmed}:{initialView?:string;initialStorylineId?:string;onConfirmed:()=>void})=><main><h1>{initialView==='storyline'?'故事线画布':'剧本与版本'}</h1>{initialStorylineId&&<span>聚焦故事线 {initialStorylineId}</span>}<button onClick={onConfirmed}>模拟剧本状态变化</button></main>}));
 
 const project: Project = {
   id: 'project-1', title: '霓虹夜行', logline: '寻找记忆', story_bible: '近未来重庆',
@@ -394,6 +395,25 @@ describe('Workspace', () => {
     const stageRail=screen.getByLabelText('作品制作阶段');
     expect(within(stageRail).getByText('剧本锁定').parentElement).toHaveTextContent('--');
     expect(within(stageRail).getByText('资产准备').parentElement).toHaveTextContent('--');
+  });
+
+  it('opens an overview storyline in the script workspace and refreshes metrics after script changes', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.listStorylines.mockResolvedValue([{id:'line-1',project_id:'project-1',title:'芯片来源',kind:'mystery',color:'#B9473E',description:'跨集谜团',created_at:'',updated_at:'',events:[]}]);
+    mocks.getProjectOverviewMetrics
+      .mockResolvedValueOnce({project_id:'project-1',scene_count:1,script_locked:false,asset_total:0,asset_ready:0})
+      .mockResolvedValueOnce({project_id:'project-1',scene_count:1,script_locked:true,asset_total:0,asset_ready:0});
+
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'作品总览'}));
+    await userEvent.click(screen.getByRole('button',{name:/芯片来源/}));
+
+    expect(screen.getByRole('heading',{name:'故事线画布'})).toBeVisible();
+    expect(screen.getByText('聚焦故事线 line-1')).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'模拟剧本状态变化'}));
+    await waitFor(()=>expect(mocks.getProjectOverviewMetrics).toHaveBeenCalledTimes(2));
   });
 
   it('preserves successful project readiness when another episode request fails', async () => {

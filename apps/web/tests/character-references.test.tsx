@@ -79,7 +79,8 @@ it('manages project asset catalogs even before the project has characters',async
   mocks.libraryAssets.mockResolvedValueOnce([{id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},created_at:'',updated_at:''}]).mockResolvedValue([]);
   mocks.createLibraryAsset.mockResolvedValue({id:'la2',project_id:'p1',kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{},created_at:'',updated_at:''});
   const user=userEvent.setup();
-  render(<CharacterWorkspace projectId="p1" characters={[]}/>);
+  const onMetricsChanged=vi.fn();
+  render(<CharacterWorkspace projectId="p1" characters={[]} onMetricsChanged={onMetricsChanged}/>);
 
   await waitFor(()=>expect(mocks.libraryAssets).toHaveBeenCalledWith('p1'));
   await user.click(await screen.findByRole('button',{name:'场景 1'}));
@@ -91,6 +92,7 @@ it('manages project asset catalogs even before the project has characters',async
   await user.type(screen.getByRole('textbox',{name:'资产标签'}),'室内');
   await user.click(screen.getByRole('button',{name:'保存资产'}));
   expect(mocks.createLibraryAsset).toHaveBeenCalledWith('p1',{kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{}});
+  expect(onMetricsChanged).toHaveBeenCalledTimes(1);
 });
 
 it('creates and edits characters from the asset catalog',async()=>{
@@ -176,13 +178,15 @@ it('keeps the full asset catalog reachable on mobile',()=>{
 it('reviews and activates a character reference',async()=>{
   mocks.list.mockResolvedValueOnce(allReferences).mockResolvedValue([{...reference,review_status:'approved'},...allReferences.slice(1)]);
   const user=userEvent.setup();
-  render(<CharacterWorkspace characters={[character]}/>);
+  const onMetricsChanged=vi.fn();
+  render(<CharacterWorkspace characters={[character]} onMetricsChanged={onMetricsChanged}/>);
   await user.click(await screen.findByRole('button',{name:/林夏/}));
   await user.click(screen.getByRole('button',{name:'参考集'}));
   await user.click(await screen.findByRole('button',{name:/批准/}));
   await waitFor(()=>expect(mocks.update).toHaveBeenCalledWith('r1',{review_status:'approved'}));
   await user.click(await screen.findByRole('button',{name:'设为使用'}));
   expect(mocks.activate).toHaveBeenCalledWith('c1','r1');
+  expect(onMetricsChanged).toHaveBeenCalledTimes(1);
 });
 
 it('starts one complete reference set independent of the selected filter',async()=>{

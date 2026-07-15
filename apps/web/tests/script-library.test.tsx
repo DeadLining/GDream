@@ -54,7 +54,8 @@ it('offers only upload and AI generation when the project has no script',async()
 });
 
 it('saves a draft explicitly and then creates an immutable version',async()=>{
-  render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
+  const onConfirmed=vi.fn();
+  render(<ScriptLibrary projectId="p1" onConfirmed={onConfirmed}/>);
   const editor=await screen.findByLabelText('剧本正文');
   fireEvent.change(editor,{target:{value:'第二版'}});
   expect(mocks.patch).not.toHaveBeenCalled();
@@ -62,6 +63,7 @@ it('saves a draft explicitly and then creates an immutable version',async()=>{
   await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('s1',{content:'第二版',expected_checksum:'old'}));
   await userEvent.click(screen.getByRole('button',{name:'创建版本'}));
   expect(mocks.finalize).toHaveBeenCalledWith('s1');
+  expect(onConfirmed).toHaveBeenCalledTimes(1);
 });
 
 it('renames and deletes the selected script',async()=>{
@@ -101,4 +103,12 @@ it('opens the storyline canvas without replacing the script document',async()=>{
   expect(screen.getByRole('button',{name:'海螺发光'})).toBeVisible();
   await userEvent.click(screen.getByRole('button',{name:'文档编辑'}));
   expect(screen.getByLabelText('剧本正文')).toHaveValue('第一集');
+});
+
+it('opens directly on a storyline selected from the work overview',async()=>{
+  render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()} initialView="storyline" initialStorylineId="l1"/>);
+
+  expect(await screen.findByRole('heading',{name:'故事线画布'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'真实时间裂缝'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'海螺发光'})).toBeVisible();
 });

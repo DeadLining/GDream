@@ -31,6 +31,15 @@ describe('ProductOverview', () => {
     expect(onOpenEpisode).toHaveBeenCalledWith('episode-1');
   });
 
+  it('opens a selected storyline instead of rendering an inert summary card', async () => {
+    const onOpenStoryline=vi.fn();
+    render(<ProductOverview project={project} episode={episode} readiness={readiness} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenStoryline={onOpenStoryline} onOpenAssets={vi.fn()}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:/怀表来源/}));
+
+    expect(onOpenStoryline).toHaveBeenCalledWith('line-1');
+  });
+
   it('renders script, asset, and scene metrics from authoritative project data', () => {
     const metrics: ProjectOverviewMetrics = {
       project_id: project.id,
