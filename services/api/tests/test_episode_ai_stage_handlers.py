@@ -47,6 +47,8 @@ def _seed_episode(tmp_path):
             premise="发现线索",
             target_duration_seconds=30,
         )
+        session.add_all([project, character, episode])
+        session.flush()
         scene = models.Scene(
             episode=episode,
             position=1,
@@ -64,9 +66,20 @@ def _seed_episode(tmp_path):
             image_prompt="cinematic station platform",
             negative_prompt="text, watermark",
         )
-        session.add_all([character, shot])
+        session.add(shot)
+        session.flush()
+        dialogue = models.DialogueLine(
+            shot=shot,
+            character_id=character.id,
+            position=1,
+            text="这里有人来过。",
+            subtitle_text="这里有人来过。",
+            emotion="alert",
+            performance_instruction="压低声音",
+        )
+        session.add(dialogue)
         session.commit()
-        return session_factory, data_root, episode.id, character.id, shot.id
+        return session_factory, data_root, episode.id, character.id, shot.id, dialogue.id
 
 
 class FakeImageRuntime:
@@ -128,6 +141,60 @@ class FakeImageRuntime:
             session.commit()
             return asset
 
+    async def execute_speech(self, dialogue_id):
+        self.calls.append(("speech", dialogue_id, {}))
+        with self.session_factory() as session:
+            line = session.get(models.DialogueLine, dialogue_id)
+            project_id = line.shot.scene.episode.project_id
+            relative = f"projects/{project_id}/audio/{dialogue_id}/speech.wav"
+            asset = models.Asset(
+                project_id=project_id,
+                kind=f"dialogue:{dialogue_id}",
+                local_path=relative,
+                media_type="audio/wav",
+                provider="qwen3-tts",
+                model="Qwen3-TTS",
+                request_metadata={"text": line.text, "speaker": "Chelsie"},
+                checksum="speech-checksum",
+                duration_seconds=1.25,
+            )
+            session.add(asset)
+            session.flush()
+            line.audio_asset_id = asset.id
+            line.duration_seconds = 1.25
+            self._write(relative, b"RIFF" + b"\x00" * 128)
+            session.commit()
+            return asset
+
+    async def execute_video(self, shot_id, activate):
+        self.calls.append(("video", shot_id, {"activate": activate}))
+        with self.session_factory() as session:
+            shot = session.get(models.Shot, shot_id)
+            project_id = shot.scene.episode.project_id
+            relative = f"projects/{project_id}/videos/{shot_id}/video.mp4"
+            asset = models.Asset(
+                project_id=project_id,
+                kind=f"video:{shot_id}",
+                local_path=relative,
+                media_type="video/mp4",
+                provider="wan-local",
+                model="Wan2.2-TI2V-5B",
+                request_metadata={
+                    "prompt": shot.video_prompt,
+                    "source_panel_id": shot.active_panel_asset_id,
+                },
+                parent_asset_id=shot.active_panel_asset_id,
+                checksum="video-checksum",
+                duration_seconds=6,
+            )
+            session.add(asset)
+            session.flush()
+            shot.active_video_asset_id = asset.id
+            shot.video_render_status = "completed"
+            self._write(relative, b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 128)
+            session.commit()
+            return asset
+
     def _write(self, relative, content):
         destination = self.data_root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -144,7 +211,9 @@ def _context(episode_id: str, stage: str) -> EpisodeAIStageContext:
 
 
 def test_image_handlers_generate_validate_and_approve_episode_assets(tmp_path):
-    session_factory, data_root, episode_id, character_id, shot_id = _seed_episode(tmp_path)
+    session_factory, data_root, episode_id, character_id, shot_id, _dialogue_id = (
+        _seed_episode(tmp_path)
+    )
     runtime = FakeImageRuntime(session_factory, data_root)
     handlers = EpisodeAIStageHandlers(session_factory, data_root, runtime)
 
@@ -171,7 +240,9 @@ def test_image_handlers_generate_validate_and_approve_episode_assets(tmp_path):
 
 
 def test_panel_review_blocks_missing_active_panel(tmp_path):
-    session_factory, data_root, episode_id, _character_id, shot_id = _seed_episode(tmp_path)
+    session_factory, data_root, episode_id, _character_id, shot_id, _dialogue_id = (
+        _seed_episode(tmp_path)
+    )
     handlers = EpisodeAIStageHandlers(
         session_factory,
         data_root,
@@ -180,3 +251,29 @@ def test_panel_review_blocks_missing_active_panel(tmp_path):
 
     with pytest.raises(EpisodeAIStageNeedsReview, match=shot_id):
         asyncio.run(handlers.panel_review(_context(episode_id, "panel_review")))
+
+
+def test_media_handlers_generate_all_dialogue_and_shot_outputs(tmp_path):
+    session_factory, data_root, episode_id, _character_id, shot_id, dialogue_id = (
+        _seed_episode(tmp_path)
+    )
+    runtime = FakeImageRuntime(session_factory, data_root)
+    handlers = EpisodeAIStageHandlers(session_factory, data_root, runtime)
+    asyncio.run(handlers.references(_context(episode_id, "references")))
+    asyncio.run(handlers.panels(_context(episode_id, "panels")))
+    asyncio.run(handlers.panel_review(_context(episode_id, "panel_review")))
+
+    speech = asyncio.run(handlers.speech(_context(episode_id, "speech")))
+    videos = asyncio.run(handlers.videos(_context(episode_id, "videos")))
+
+    assert speech["dialogue_ids"] == [dialogue_id]
+    assert len(speech["asset_ids"]) == 1
+    assert videos["shot_ids"] == [shot_id]
+    assert len(videos["asset_ids"]) == 1
+    with session_factory() as session:
+        line = session.get(models.DialogueLine, dialogue_id)
+        shot = session.get(models.Shot, shot_id)
+        assert line.audio_asset_id == speech["asset_ids"][0]
+        assert line.duration_seconds == 1.25
+        assert shot.active_video_asset_id == videos["asset_ids"][0]
+        assert shot.video_render_status == "completed"
