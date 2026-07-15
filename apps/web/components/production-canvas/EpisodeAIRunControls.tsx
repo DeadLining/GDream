@@ -29,6 +29,17 @@ const STAGES:Array<{id:EpisodeAIStageName;label:string}>=[
 
 const ACTIVE=new Set(['queued','running']);
 const storageKey=(episodeId:string)=>`ai-comic-episode-ai-${episodeId}`;
+const friendlyError=(value:string)=>{
+  if(!value)return '';
+  if(value.includes('Episode has no shots'))return '本集还没有分镜，请先解析剧本或创建镜头';
+  if(value.includes('missing_character_reference'))return '角色参考图未就绪，请进入角色设定补齐主参考';
+  if(value.includes('Dialogue has no character'))return '对白尚未绑定角色，请先完善对白角色';
+  if(value.includes('Shot is not ready for video'))return '镜头画面尚未审核通过，请先处理画面审核';
+  if(value.includes('Episode render quality review failed'))return '整集质检未通过，请查看审核发布中的质检结果';
+  if(value.includes('Release gate is blocked'))return '发布门禁未通过，请处理未完成素材或关键审核项';
+  if(value.includes('Compositor root is not configured'))return '本地合成服务未配置，请检查 Compositor 设置';
+  return value;
+};
 const sleep=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{
   const timer=setTimeout(resolve,ms);
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});
@@ -121,8 +132,8 @@ export function EpisodeAIRunControls({episodeId,onCompleted}:{episodeId:string;o
       <div><span style={{width:`${run.progress}%`}}/></div><b>{run.progress}%</b>
     </div>
     <ol className="episode-ai-stages">
-      {STAGES.map(item=>{const stage=run.stages.find(value=>value.stage===item.id);return <li key={item.id} className={`stage-${stage?.status??'pending'}`} title={stage?.error||item.label}><i>{stage?.status==='succeeded'||stage?.status==='skipped'?<Check size={11}/>:stage?.status==='running'?<Loader2 className="spin" size={11}/>:null}</i><span>{item.label}</span></li>;})}
+      {STAGES.map(item=>{const stage=run.stages.find(value=>value.stage===item.id);return <li key={item.id} className={`stage-${stage?.status??'pending'}`} title={friendlyError(stage?.error??'')||item.label}><i>{stage?.status==='succeeded'||stage?.status==='skipped'?<Check size={11}/>:stage?.status==='running'?<Loader2 className="spin" size={11}/>:null}</i><span>{item.label}</span></li>;})}
     </ol>
-    {(run.error||error)&&<p className="episode-ai-error" role="alert">{error||run.error}</p>}
+    {(run.error||error)&&<p className="episode-ai-error" role="alert">{friendlyError(error||run.error)}</p>}
   </section>;
 }
