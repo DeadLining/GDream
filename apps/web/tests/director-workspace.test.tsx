@@ -131,6 +131,17 @@ describe('DirectorWorkspace',()=>{
     await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenLastCalledWith('object-1',2,{transform:{position:[2.5,0,0],rotation:[0,Math.PI/2,0],scale:[1,1,1]}}));
     expect(screen.getByRole('button',{name:'撤销对象变换'})).toBeEnabled();
   });
+  it('preserves untouched transform axes when committing a precise input',async()=>{
+    const preciseObject={...directorObject,transform:{...directorObject.transform,rotation:[0,.123456,0] as [number,number,number]}};
+    const preciseStage={...stage,objects:[preciseObject]};
+    mocks.getDirectorStage.mockResolvedValue(preciseStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorObject.mockImplementation(async(_id:string,_version:number,patch:{transform:typeof preciseObject.transform})=>({...preciseObject,transform:patch.transform}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'方块'}));
+    const positionX=screen.getByRole('spinbutton',{name:'位置 X'});
+    await userEvent.clear(positionX);await userEvent.type(positionX,'2');await userEvent.tab();
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{transform:{...preciseObject.transform,position:[2,0,0]}}));
+  });
   it('undoes a shot transform without removing the existing pose override',async()=>{
     const elevatedObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',transform:{...directorObject.transform,position:[1,2,3] as [number,number,number]},metadata:{has_skeleton:true}};
     const posedCamera={...stage.shot_cameras[0],object_overrides:{'object-1':{pose_preset:'action' as const}}};
