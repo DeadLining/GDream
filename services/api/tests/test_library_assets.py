@@ -1,3 +1,6 @@
+from comic_studio import models
+
+
 def _project(client, title: str = "资产目录"):
     response = client.post(
         "/api/projects",
@@ -100,3 +103,61 @@ def test_library_asset_rejects_duplicate_name_and_invalid_references(client):
     assert invalid_kind.status_code == 422
     assert missing_project.status_code == 404
 
+
+def test_library_assets_bind_explicitly_to_scenes(client):
+    project = _project(client, "场景绑定")
+    other_project = _project(client, "其他项目")
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "第一集", "premise": "进入主场景", "target_duration_seconds": 60},
+    ).json()
+    with client.app.state.session_factory() as session:
+        scene = models.Scene(
+            episode_id=episode["id"],
+            position=1,
+            location="雨夜天台",
+            summary="主角与反派对峙",
+            estimated_duration_seconds=12,
+        )
+        session.add(scene)
+        session.commit()
+        scene_id = scene.id
+
+    def create_asset(project_id, kind, name):
+        response = client.post(
+            f"/api/projects/{project_id}/library-assets",
+            json={"kind": kind, "name": name, "description": name, "tags": [], "metadata": {}},
+        )
+        assert response.status_code == 201
+        return response.json()
+
+    scene_asset = create_asset(project["id"], "scene", "霓虹天台")
+    prop_asset = create_asset(project["id"], "prop", "银色证物箱")
+    foreign_asset = create_asset(other_project["id"], "prop", "外部道具")
+
+    assert client.put(
+        f"/api/scenes/{scene_id}/library-assets/{scene_asset['id']}"
+    ).status_code == 204
+    assert client.put(
+        f"/api/scenes/{scene_id}/library-assets/{prop_asset['id']}"
+    ).status_code == 204
+    assert client.put(
+        f"/api/scenes/{scene_id}/library-assets/{scene_asset['id']}"
+    ).status_code == 204
+
+    bound = client.get(f"/api/scenes/{scene_id}/library-assets")
+    assert bound.status_code == 200
+    assert [item["name"] for item in bound.json()] == ["霓虹天台", "银色证物箱"]
+
+    foreign = client.put(
+        f"/api/scenes/{scene_id}/library-assets/{foreign_asset['id']}"
+    )
+    assert foreign.status_code == 409
+    assert foreign.json()["detail"] == "Library asset and scene must belong to the same project"
+
+    assert client.delete(
+        f"/api/scenes/{scene_id}/library-assets/{scene_asset['id']}"
+    ).status_code == 204
+    assert [item["name"] for item in client.get(
+        f"/api/scenes/{scene_id}/library-assets"
+    ).json()] == ["银色证物箱"]

@@ -56,6 +56,9 @@ import {
   createLibraryAsset,
   deleteLibraryAsset,
   listLibraryAssets,
+  listSceneLibraryAssets,
+  bindLibraryAssetToScene,
+  unbindLibraryAssetFromScene,
   updateLibraryAsset,
 } from '../lib/api';
 
@@ -123,12 +126,18 @@ describe('project library asset api',()=>{
     await listLibraryAssets('project-1');
     await createLibraryAsset('project-1',body);
     await updateLibraryAsset('asset-1',{name:'暴雨天台'});
+    await listSceneLibraryAssets('scene-1');
+    await bindLibraryAssetToScene('scene-1','asset-1');
+    await unbindLibraryAssetFromScene('scene-1','asset-1');
     await deleteLibraryAsset('asset-1');
 
     expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit|undefined)?.method??'GET'])).toEqual([
       ['/api/projects/project-1/library-assets','GET'],
       ['/api/projects/project-1/library-assets','POST'],
       ['/api/library-assets/asset-1','PATCH'],
+      ['/api/scenes/scene-1/library-assets','GET'],
+      ['/api/scenes/scene-1/library-assets/asset-1','PUT'],
+      ['/api/scenes/scene-1/library-assets/asset-1','DELETE'],
       ['/api/library-assets/asset-1','DELETE'],
     ]);
   });

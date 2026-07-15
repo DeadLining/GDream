@@ -1,10 +1,10 @@
 import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {SceneWorkspace} from '../components/SceneWorkspace';
 import type {EpisodeDetail} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({updateScene:vi.fn(),createShot:vi.fn(),reorderScenes:vi.fn(),getEpisode:vi.fn(),createRun:vi.fn()}));
+const mocks=vi.hoisted(()=>({updateScene:vi.fn(),createShot:vi.fn(),reorderScenes:vi.fn(),getEpisode:vi.fn(),createRun:vi.fn(),listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindAsset:vi.fn(),unbindAsset:vi.fn()}));
 vi.mock('../lib/api',()=>({
   updateScene:mocks.updateScene,
   createScene:vi.fn(),
@@ -16,6 +16,10 @@ vi.mock('../lib/api',()=>({
   updateShot:vi.fn(),
   getEpisode:mocks.getEpisode,
   createProductionRun:mocks.createRun,
+  listLibraryAssets:mocks.listLibraryAssets,
+  listSceneLibraryAssets:mocks.listSceneLibraryAssets,
+  bindLibraryAssetToScene:mocks.bindAsset,
+  unbindLibraryAssetFromScene:mocks.unbindAsset,
 }));
 
 const episode: EpisodeDetail = {
@@ -33,6 +37,29 @@ const episode: EpisodeDetail = {
 
 describe('SceneWorkspace', () => {
   afterEach(()=>{cleanup();vi.clearAllMocks();});
+  beforeEach(()=>{
+    mocks.listLibraryAssets.mockResolvedValue([
+      {id:'asset-scene',project_id:'project-1',kind:'scene',name:'雨夜实验室',description:'冷蓝灯光',tags:['雨夜'],metadata:{},created_at:'',updated_at:''},
+      {id:'asset-prop',project_id:'project-1',kind:'prop',name:'银色怀表',description:'关键线索',tags:['线索'],metadata:{},created_at:'',updated_at:''},
+      {id:'asset-sound',project_id:'project-1',kind:'sound',name:'电流声',description:'环境声',tags:[],metadata:{},created_at:'',updated_at:''},
+    ]);
+    mocks.listSceneLibraryAssets.mockResolvedValue([
+      {id:'asset-scene',project_id:'project-1',kind:'scene',name:'雨夜实验室',description:'冷蓝灯光',tags:['雨夜'],metadata:{},created_at:'',updated_at:''},
+    ]);
+  });
+
+  it('binds explicit scene and prop assets to the selected scene',async()=>{
+    render(<SceneWorkspace episode={episode} onOpenShot={vi.fn()}/>);
+
+    expect(await screen.findByRole('heading',{name:'生产资产'})).toBeVisible();
+    expect(screen.getByRole('checkbox',{name:'绑定场景资产 雨夜实验室'})).toBeChecked();
+    expect(screen.queryByRole('checkbox',{name:/电流声/})).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox',{name:'绑定道具资产 银色怀表'}));
+    expect(mocks.bindAsset).toHaveBeenCalledWith('scene-1','asset-prop');
+    await userEvent.click(screen.getByRole('checkbox',{name:'绑定场景资产 雨夜实验室'}));
+    expect(mocks.unbindAsset).toHaveBeenCalledWith('scene-1','asset-scene');
+  });
 
   it('switches scenes and exposes their production beats', async () => {
     const onOpenShot = vi.fn();

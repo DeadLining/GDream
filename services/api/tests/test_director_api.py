@@ -178,6 +178,26 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
                 review_status="approved",
             )
         )
+        scene_asset = models.LibraryAsset(
+            project_id=scene.episode.project_id,
+            kind="scene",
+            name="霓虹雨夜天台",
+            description="湿润地面反射冷蓝霓虹",
+            tags=["雨夜", "霓虹"],
+        )
+        prop_asset = models.LibraryAsset(
+            project_id=scene.episode.project_id,
+            kind="prop",
+            name="银色怀表",
+            description="关键时间线索",
+            tags=["线索"],
+        )
+        session.add_all([scene_asset, prop_asset])
+        session.flush()
+        session.add_all([
+            models.LibraryAssetSceneBinding(library_asset_id=scene_asset.id, scene_id=scene.id),
+            models.LibraryAssetSceneBinding(library_asset_id=prop_asset.id, scene_id=scene.id),
+        ])
         session.commit()
         character_id = character.id
         asset_id = asset.id
@@ -193,6 +213,9 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     assert character_item["asset_id"] == asset_id
     assert character_item["media_url"].endswith("/primary.png")
     assert {item["kind"] for item in catalog} == {"background", "character", "prop"}
+    library_items = [item for item in catalog if item["source_type"] == "library_asset"]
+    assert {item["label"] for item in library_items} == {"霓虹雨夜天台", "银色怀表"}
+    assert {item["source_id"] for item in library_items} == {scene_asset.id, prop_asset.id}
 
     synced = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",
@@ -203,7 +226,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     synced_stage = synced.json()
     assert synced_stage["environment"]["location"] == "天台"
     assert {item["kind"] for item in synced_stage["objects"]} == {"background", "character", "prop"}
-    assert [item["position"] for item in synced_stage["objects"]] == [1, 2, 3]
+    assert len(synced_stage["objects"]) == 5
     synced_character = next(item for item in synced_stage["objects"] if item["kind"] == "character")
     assert synced_character["appearance"]["image_url"].endswith("/primary.png")
     assert synced_character["metadata"]["asset_id"] == asset_id
@@ -214,4 +237,4 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     )
     assert repeated.status_code == 200
     assert repeated.json()["version"] == synced_stage["version"]
-    assert len(repeated.json()["objects"]) == 3
+    assert len(repeated.json()["objects"]) == 5

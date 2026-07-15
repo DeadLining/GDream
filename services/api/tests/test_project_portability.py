@@ -63,6 +63,8 @@ def _seed_project(session, data_root: Path) -> str:
         asset_metadata={"time_of_day": "night"},
     )
     session.add_all([asset, library_asset])
+    session.flush()
+    session.add(models.LibraryAssetSceneBinding(library_asset_id=library_asset.id, scene_id=scene.id))
     session.commit()
     return project.id
 
@@ -130,6 +132,7 @@ def test_import_round_trip_preserves_structure(db_session, tmp_path):
     assert len(new_project.library_assets) == 1
     assert new_project.library_assets[0].name == "雨夜巷道"
     assert new_project.library_assets[0].asset_metadata == {"time_of_day": "night"}
+    assert new_project.library_assets[0].scene_bindings[0].scene_id == episode.scenes[0].id
 
 
 def test_import_rejects_wrong_schema(db_session, tmp_path):

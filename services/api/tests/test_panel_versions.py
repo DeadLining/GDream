@@ -326,6 +326,26 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
             usage_kind="panel",
         )
     )
+    scene_asset = models.LibraryAsset(
+        project_id=project.id,
+        kind="scene",
+        name="霓虹雨夜天台",
+        description="湿润地面反射冷蓝霓虹",
+        tags=["雨夜", "霓虹"],
+    )
+    prop_asset = models.LibraryAsset(
+        project_id=project.id,
+        kind="prop",
+        name="银色证物箱",
+        description="放在角色右侧的关键线索",
+        tags=["线索"],
+    )
+    db_session.add_all([scene_asset, prop_asset])
+    db_session.flush()
+    db_session.add_all([
+        models.LibraryAssetSceneBinding(library_asset_id=scene_asset.id, scene_id=shot.scene_id),
+        models.LibraryAssetSceneBinding(library_asset_id=prop_asset.id, scene_id=shot.scene_id),
+    ])
     stage = models.DirectorStage(scene_id=shot.scene_id, environment={"weather": "rain"})
     db_session.add(stage)
     db_session.flush()
@@ -392,9 +412,12 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "隐藏证物箱" not in provider.prompt
     assert "camera position [1, 2, 6]" in provider.prompt
     assert "target [0, 1, 0]" in provider.prompt
+    assert "霓虹雨夜天台" in provider.prompt
+    assert "银色证物箱" in provider.prompt
     snapshot = asset.request_metadata["input_snapshot"]
     assert snapshot["asset_bindings"][0]["variant_id"] == variant.id
     assert snapshot["asset_bindings"][0]["state_id"] == state.id
     assert snapshot["director"]["camera"]["focal_length_mm"] == 85
     assert snapshot["director"]["objects"][0]["transform"]["position"] == [2, 0, 0]
+    assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id]
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64
