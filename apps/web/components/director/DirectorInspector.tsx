@@ -89,7 +89,8 @@ export function DirectorInspector({
   const pose=(typeof object?.appearance.pose_preset==='string'?object.appearance.pose_preset:'neutral') as DirectorPosePreset;
   const animation=(typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'idle') as DirectorAnimationClip;
   const animationPlaying=object?.appearance.animation_playing===true;
-  const proxyRig=object?.kind==='character'&&object.metadata.proxy_rig==='standard_humanoid';
+  const modelUrl=typeof object?.appearance.model_url==='string'?object.appearance.model_url.trim():'';
+  const proxyRig=object?.kind==='character'&&(object.metadata.proxy_rig==='standard_humanoid'||!modelUrl);
   const poseable=Boolean(object?.kind==='character'&&(proxyRig||(object.source_type==='model'&&object.metadata.has_skeleton)));
   const bodyControls=[
     ['proxy_height','角色身高',.75,1.3],
@@ -107,7 +108,7 @@ export function DirectorInspector({
       </div>
       <TransformEditor transform={object.transform} onCommit={onObjectTransformChange}/>
       {!cameraMode&&proxyRig&&<div className="director-body-profile">
-        {bodyControls.map(([key,label,min,max])=><label key={key}><span>{label}</span><input type="number" aria-label={label} min={min} max={max} step="0.05" defaultValue={typeof object.appearance[key]==='number'?object.appearance[key] as number:1} onBlur={event=>{const value=Number(event.currentTarget.value);if(Number.isFinite(value))onBodyProfileChange(key,Math.min(max,Math.max(min,value)));}}/></label>)}
+        {bodyControls.map(([key,label,min,max])=><label key={`${object.id}-${key}`}><span>{label}</span><input type="number" aria-label={label} min={min} max={max} step="0.05" defaultValue={typeof object.appearance[key]==='number'?object.appearance[key] as number:1} onBlur={event=>{const value=Number(event.currentTarget.value);if(Number.isFinite(value))onBodyProfileChange(key,Math.min(max,Math.max(min,value)));}}/></label>)}
       </div>}
       {cameraMode&&poseable&&<>
         <label htmlFor="director-pose">角色姿态</label>
