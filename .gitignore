@@ -13,6 +13,7 @@ test-results/
 .playwright-cli/
 .superpowers/
 .worktrees/
+.runtime/
 output/
 /data/provider-channels.json
 /data/provider-channels.json.*.tmp
