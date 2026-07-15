@@ -95,6 +95,22 @@ class Settings(BaseSettings):
         default="gpt-image-2",
         validation_alias=AliasChoices("GPT_IMAGE_MODEL", "AI_COMIC_GPT_IMAGE_MODEL"),
     )
+    fal_model3d_base_url: str = Field(
+        default="https://fal.run",
+        validation_alias=AliasChoices(
+            "FAL_MODEL3D_BASE_URL", "AI_COMIC_FAL_MODEL3D_BASE_URL"
+        ),
+    )
+    fal_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("FAL_KEY", "AI_COMIC_FAL_KEY"),
+    )
+    fal_model3d_model: str = Field(
+        default="fal-ai/triposr",
+        validation_alias=AliasChoices(
+            "FAL_MODEL3D_MODEL", "AI_COMIC_FAL_MODEL3D_MODEL"
+        ),
+    )
     qwen_tts_base_url: str = Field(
         default="http://192.168.18.94:18080",
         validation_alias=AliasChoices(

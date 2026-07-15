@@ -67,7 +67,7 @@ async def test_triposr_rejects_non_https_provider_file_urls():
             return httpx.Response(
                 200,
                 json={
-                    "upload_url": "https://upload.example.com/reference",
+                    "upload_url": "https://storage.googleapis.com/fal-upload/reference",
                     "file_url": "http://127.0.0.1/private.png",
                 },
             )

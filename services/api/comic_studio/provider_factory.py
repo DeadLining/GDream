@@ -8,6 +8,8 @@ from comic_studio.model_runtime.adapters import (
 from comic_studio.model_runtime.contracts import Capability
 from comic_studio.provider_channels import ProviderChannelStore
 
+__all__ = ["CapabilityAdapterRegistry", "ProviderFactory"]
+
 
 class ProviderConfigurationError(RuntimeError):
     """A stable, sanitized error for unavailable provider channels."""
@@ -37,6 +39,7 @@ _CAPABILITY_FOR_METHOD: dict[str, Capability] = {
     "image": Capability.IMAGE,
     "tts": Capability.SPEECH,
     "video": Capability.VIDEO,
+    "model3d": Capability.MODEL_3D,
 }
 
 
@@ -62,6 +65,7 @@ class ProviderFactory:
         image_provider_class: Callable[..., Any] | None = None,
         tts_provider_class: Callable[..., Any] | None = None,
         video_provider_class: Callable[..., Any] | None = None,
+        model3d_provider_class: Callable[..., Any] | None = None,
         prefer_ssh_for_host: Callable[[str], bool] | None = None,
         registry: ProviderRegistry | None = None,
     ):
@@ -74,6 +78,7 @@ class ProviderFactory:
         self._image_provider_class = image_provider_class
         self._tts_provider_class = tts_provider_class
         self._video_provider_class = video_provider_class
+        self._model3d_provider_class = model3d_provider_class
 
     @property
     def _explicit_overrides(self) -> dict[Capability, Callable[..., Any]]:
@@ -94,6 +99,9 @@ class ProviderFactory:
 
     def create_video(self) -> Any:
         return self._build("video", self._store.snapshot.video)
+
+    def create_model3d(self) -> Any:
+        return self._build("model3d", self._store.snapshot.model3d)
 
     def _build(self, kind: str, channel: Any) -> Any:
         capability = _CAPABILITY_FOR_METHOD[kind]
@@ -158,7 +166,7 @@ class ProviderFactory:
     @staticmethod
     def _requires_api_key(kind: str) -> bool:
         # Local speech and video services may be directly reachable without auth.
-        return kind in {"llm", "image"}
+        return kind in {"llm", "image", "model3d"}
 
     @staticmethod
     def _require_configured(

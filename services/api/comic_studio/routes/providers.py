@@ -16,7 +16,7 @@ from comic_studio.services.provider_channel_testing import (
 
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
-PROVIDER_KINDS: tuple[ProviderChannelKind, ...] = ("llm", "image", "tts", "video")
+PROVIDER_KINDS: tuple[ProviderChannelKind, ...] = ("llm", "image", "tts", "video", "model3d")
 sanitize_provider_error = ProviderChannelTestingService._sanitize_error
 
 
@@ -92,7 +92,7 @@ async def test_provider(
 async def provider_health(request: Request) -> ProviderHealthRead:
     request.app.state.model_runtime.mock_ssh_manager = request.app.state.mock_ssh_manager
     runtime = await request.app.state.model_runtime.health()
-    capability_names = {"llm": "text", "image": "image", "tts": "speech", "video": "video"}
+    capability_names = {"llm": "text", "image": "image", "tts": "speech", "video": "video", "model3d": "model3d"}
     results = {}
     for kind, capability in capability_names.items():
         item = runtime["capabilities"][capability]

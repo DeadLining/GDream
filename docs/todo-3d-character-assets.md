@@ -2,9 +2,10 @@
 
 ## Status
 
-- Priority: Backlog
-- Current state: The 3D director uses deterministic primitive placeholders. It does not load character models from the asset library.
-- Scope boundary: This document records the proposed work only. No production implementation is included yet.
+- Priority: Active
+- Current state: The director loads validated GLB character and prop assets, persists transforms and cameras, and falls back to 3D geometry placeholders when a model is missing. Backgrounds may remain images.
+- Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
+- Remaining boundary: AI generation currently uses one selected reference image. Rig repair, multi-view reconstruction, decimation, texture optimization, and variant/state-specific 3D inheritance remain open.
 
 ## Goal
 
@@ -43,14 +44,14 @@ Exact versions, API contracts, licensing, prices, and output quality must be ver
 
 ## Phase 1: Upload and Proxy Characters
 
-- [ ] Define a dedicated `Character3DRepresentation` persistence model instead of storing the complete representation in variant JSON overrides.
+- [x] Define a dedicated `Character3DRepresentation` persistence model instead of storing the complete representation in variant JSON overrides.
 - [ ] Link a representation to a character master and optionally to an episode variant or state.
-- [ ] Support GLB upload first; evaluate VRM as an additional character-specific format.
-- [ ] Validate media type, file signature, size, geometry complexity, external resource references, and archive/path safety.
+- [x] Support GLB upload first; evaluate VRM as an additional character-specific format.
+- [x] Validate media type, file signature, size, geometry complexity, external resource references, and archive/path safety.
 - [ ] Store model dimensions, bounding box, scale, skeleton status, material summary, checksum, version, and preview asset.
-- [ ] Add a standard low-poly humanoid proxy when no generated or uploaded model exists.
-- [ ] Add 3D representation controls to the character asset workspace.
-- [ ] Add a browser model preview with loading, error, and fallback states.
+- [x] Add a standard low-poly humanoid proxy when no generated or uploaded model exists.
+- [x] Add 3D representation controls to the character asset workspace.
+- [x] Add a browser model preview with loading, error, and fallback states.
 - [ ] Preserve model references through recycle-bin restore and block unsafe permanent deletion.
 
 Acceptance criteria:
@@ -66,11 +67,11 @@ Acceptance criteria:
 - [ ] Allow states to override materials, accessories, injury markers, visibility, and proportions where supported.
 - [ ] Extend shot usages to record the effective character variant, state, representation version, and director object.
 - [ ] Add an asset picker when inserting a character into a director stage.
-- [ ] Replace primitive character rendering in `DirectorObject` with cached GLTF/GLB loading.
-- [ ] Support translate, rotate, and scale transform modes.
+- [x] Replace primitive character rendering in `DirectorObject` with cached GLTF/GLB loading.
+- [x] Support translate, rotate, and scale transform modes.
 - [ ] Add rename, visibility, duplicate, and delete operations.
 - [ ] Surface downstream impact when a representation or inherited variant changes.
-- [ ] Keep placeholder objects available for props and unfinished assets.
+- [x] Keep placeholder objects available for props and unfinished assets.
 
 Acceptance criteria:
 
@@ -83,13 +84,14 @@ Acceptance criteria:
 
 - [ ] Detect and describe skeletons and animation clips during upload processing.
 - [ ] Define a normalized humanoid bone mapping for supported models.
-- [ ] Provide a reusable pose library and animation clip picker.
+- [x] Provide a reusable pose library.
+- [ ] Add an animation clip picker.
 - [ ] Support pose application, playback, pause, scrub, and reset.
 - [ ] Add basic facial expression or blend-shape controls when available.
 - [ ] Add gaze target and head direction controls.
-- [ ] Expand camera editing to position, target, rotation, focal length, clipping range, shot size, and motion metadata.
+- [x] Expand camera editing to position, target, rotation, focal length, clipping range, shot size, and motion metadata.
 - [ ] Add environment, background, ground, and light controls.
-- [ ] Connect the existing director undo/redo state to the actual workspace.
+- [x] Connect the existing director undo/redo state to the actual workspace.
 - [ ] Expose revision history, restore, and optimistic-lock conflict handling in the UI.
 
 Acceptance criteria:
@@ -101,10 +103,10 @@ Acceptance criteria:
 ## Phase 4: Downstream Image Guidance
 
 - [ ] Include the selected character variant and state in panel-generation context.
-- [ ] Capture a clean director composition preview without editor overlays.
+- [x] Capture a clean director composition preview without editor overlays.
 - [ ] Generate optional depth, silhouette, object-mask, and skeleton-pose guidance images.
-- [ ] Translate camera parameters and object positions into structured generation metadata.
-- [ ] Continue passing approved 2D character references for identity and visual-style consistency.
+- [x] Translate camera parameters and object positions into structured generation metadata.
+- [x] Continue passing approved 2D character references for identity and visual-style consistency.
 - [ ] Store the director stage and representation versions used by every generated panel.
 - [ ] Mark panels stale when relevant director or character inputs change.
 
@@ -116,13 +118,13 @@ Acceptance criteria:
 
 ## Optional Phase 5: AI 3D Generation
 
-- [ ] Add a `3d` model-runtime capability and provider contract.
-- [ ] Implement at least one hosted provider adapter before considering self-hosting.
+- [x] Add a `model3d` model-runtime capability and provider contract.
+- [x] Implement at least one hosted provider adapter before considering self-hosting.
 - [ ] Support image-to-3D generation from approved multi-view character references.
-- [ ] Persist asynchronous generation jobs, progress, retryability, provider metadata, and sanitized failures.
-- [ ] Validate and normalize generated outputs before they become selectable assets.
+- [x] Persist asynchronous generation jobs, progress, retryability, provider metadata, and sanitized failures.
+- [x] Validate and normalize generated outputs before they become selectable assets.
 - [ ] Add repair, decimation, texture optimization, and thumbnail processing.
-- [ ] Require explicit user approval before replacing an active character representation.
+- [x] Require explicit user approval before replacing an active character representation or project prop model.
 
 This phase is optional because uploaded models and standard proxies are sufficient for the initial director workflow.
 
@@ -156,21 +158,22 @@ Frontend:
 ## Test Requirements
 
 - [ ] Database migration and relationship tests.
-- [ ] Upload validation and malicious-file tests.
+- [x] Upload validation and malicious-file tests.
 - [ ] Asset inheritance and effective-representation resolution tests.
 - [ ] Reference impact, recycle-bin restore, and permanent-delete protection tests.
-- [ ] GLB loading, cache, fallback, and disposal tests.
-- [ ] Director transform, pose, camera, undo/redo, conflict, and restore tests.
+- [x] GLB loading, cache, fallback, and disposal tests.
+- [x] Director transform, pose, camera, and undo/redo tests.
+- [ ] Director optimistic-lock conflict and revision-restore tests.
 - [ ] Panel-generation context and provenance tests.
-- [ ] Desktop and mobile browser acceptance checks.
-- [ ] WebGL screenshots and nonblank canvas pixel checks at representative viewports.
+- [x] Desktop and mobile browser acceptance checks.
+- [x] WebGL screenshots and nonblank canvas pixel checks at representative viewports.
 - [ ] Performance checks with multiple characters and bounded model complexity.
 
 ## Decisions Needed Before Implementation
 
-- [ ] GLB only for the first release, or GLB plus VRM.
-- [ ] Hosted generation provider, self-hosted model, or upload-only first release.
-- [ ] Maximum model size, triangle count, texture resolution, and animation count.
+- [x] GLB only for the first release; VRM remains deferred.
+- [x] Hosted fal.ai TripoSR generation plus manual upload for the first release.
+- [x] Enforce 50 MiB, 2,000,000 triangles, 1,000 nodes, 200 meshes, and 200 materials; texture-specific limits remain open.
 - [ ] Standard humanoid skeleton definition and supported non-human character policy.
 - [ ] Whether episode variants replace complete models or primarily apply materials/accessories.
-- [ ] Whether 3D output is composition guidance only or can become final rendered footage.
+- [x] Treat current 3D output as composition and camera guidance, not final rendered footage.

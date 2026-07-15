@@ -5,8 +5,6 @@ from pydantic import ValidationError
 
 from comic_studio.provider_channels import (
     ProviderChannel,
-    ProviderChannels,
-    ProviderChannelState,
 )
 from comic_studio.schemas import (
     ProviderChannelKind,
@@ -17,7 +15,6 @@ from comic_studio.schemas import (
     ProviderChannelUpdateRead,
 )
 from comic_studio.services.provider_channel_testing import (
-    ProviderChannelTestingService,
     ProviderTestError,
     TOTAL_TIMEOUT_SECONDS,
     default_client_factory,
@@ -76,6 +73,7 @@ def channels_read(
         image=ProviderChannelRead.model_validate(runtime["image"]),
         tts=ProviderChannelRead.model_validate(runtime["speech"]),
         video=ProviderChannelRead.model_validate(runtime["video"]),
+        model3d=ProviderChannelRead.model_validate(runtime["model3d"]),
         persistence={
             "status": runtime["persistence"]["status"],
             "file_path": display_path(path, settings.data_root),
@@ -98,7 +96,7 @@ def update_provider_channel(
     if kind not in {"tts", "video"} and update.ssh_host:
         raise HTTPException(status_code=422, detail="ssh_host is only valid for tts and video")
 
-    capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO}[kind]
+    capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO, "model3d": Capability.MODEL_3D}[kind]
     try:
         committed = request.app.state.model_runtime.update_channel(capability, update)
     except (TypeError, ValueError, ValidationError) as error:
@@ -128,7 +126,7 @@ async def test_provider_channel(
     if kind not in {"tts", "video"} and candidate.ssh_host:
         raise HTTPException(status_code=422, detail="ssh_host is only valid for tts and video")
 
-    capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO}[kind]
+    capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO, "model3d": Capability.MODEL_3D}[kind]
     try:
         result = await request.app.state.model_runtime.test_channel(capability, candidate)
     except (ProviderTestError, ValidationError) as error:

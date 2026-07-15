@@ -41,7 +41,18 @@ class Character3DRepresentationService:
             )
         )
 
-    def upload(self, character_id: str, content: bytes, *, label: str = ""):
+    def upload(
+        self,
+        character_id: str,
+        content: bytes,
+        *,
+        label: str = "",
+        activate: bool = True,
+        review_status: str = "approved",
+        provider: str = "upload",
+        model: str = "local-glb",
+        request_metadata: dict[str, Any] | None = None,
+    ):
         character = self.session.get(models.Character, character_id)
         if character is None:
             raise KeyError(character_id)
@@ -59,12 +70,16 @@ class Character3DRepresentationService:
             kind=f"character-3d:{character_id}",
             local_path="",
             media_type="model/gltf-binary",
-            provider="upload",
-            model="local-glb",
-            request_metadata={"character_id": character_id, "format": "glb"},
+            provider=provider,
+            model=model,
+            request_metadata={
+                "character_id": character_id,
+                "format": "glb",
+                **(request_metadata or {}),
+            },
             generation_attempt=version,
             checksum=hashlib.sha256(content).hexdigest(),
-            review_status="approved",
+            review_status=review_status,
         )
         self.session.add(asset)
         self.session.flush()
@@ -81,25 +96,50 @@ class Character3DRepresentationService:
             raise Character3DRepresentationError("asset_path_escape")
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(".glb.tmp")
-        temporary.write_bytes(content)
-        os.replace(temporary, destination)
-        asset.local_path = str(relative)
+        try:
+            temporary.write_bytes(content)
+            os.replace(temporary, destination)
+            asset.local_path = str(relative)
+            if activate:
+                self.session.execute(
+                    update(models.Character3DRepresentation)
+                    .where(
+                        models.Character3DRepresentation.character_id == character_id
+                    )
+                    .values(is_active=False)
+                )
+            representation = models.Character3DRepresentation(
+                character_id=character_id,
+                asset_id=asset.id,
+                label=label.strip()[:160] or f"{character.name} 3D 代理 V{version}",
+                format="glb",
+                version=version,
+                is_active=activate,
+                review_status=review_status,
+                **metrics,
+            )
+            self.session.add(representation)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            temporary.unlink(missing_ok=True)
+            destination.unlink(missing_ok=True)
+            raise
+        return self.get(representation.id)
+
+    def activate(self, representation_id: str):
+        representation = self.get(representation_id)
         self.session.execute(
             update(models.Character3DRepresentation)
-            .where(models.Character3DRepresentation.character_id == character_id)
+            .where(
+                models.Character3DRepresentation.character_id
+                == representation.character_id
+            )
             .values(is_active=False)
         )
-        representation = models.Character3DRepresentation(
-            character_id=character_id,
-            asset_id=asset.id,
-            label=label.strip()[:160] or f"{character.name} 3D 代理 V{version}",
-            format="glb",
-            version=version,
-            is_active=True,
-            review_status="approved",
-            **metrics,
-        )
-        self.session.add(representation)
+        representation.is_active = True
+        representation.review_status = "approved"
+        representation.asset.review_status = "approved"
         self.session.commit()
         return self.get(representation.id)
 

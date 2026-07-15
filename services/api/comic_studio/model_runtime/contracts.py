@@ -9,6 +9,7 @@ class Capability(StrEnum):
     IMAGE = "image"
     SPEECH = "speech"
     VIDEO = "video"
+    MODEL_3D = "model3d"
 
 
 class RuntimeJobRead(BaseModel):
@@ -96,3 +97,11 @@ class VideoRuntimeRequest(BaseModel):
 
     shot_id: str
     activate: bool = True
+
+
+class Model3DRuntimeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_type: Literal["character", "library_asset"]
+    target_id: str
+    reference_asset_id: str | None = None

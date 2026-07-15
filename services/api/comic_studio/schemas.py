@@ -17,7 +17,7 @@ from comic_studio.provider_channels import validate_http_url
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
 ReviewStatus = Literal["draft", "needs_changes", "approved"]
-ProviderChannelKind = Literal["llm", "image", "tts", "video"]
+ProviderChannelKind = Literal["llm", "image", "tts", "video", "model3d"]
 SafeIdentifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")]
 
 
@@ -130,6 +130,7 @@ class ProviderChannelsRead(BaseModel):
     image: ProviderChannelRead
     tts: ProviderChannelRead
     video: ProviderChannelRead
+    model3d: ProviderChannelRead
     persistence: ProviderChannelPersistenceRead
     reloaded_at: datetime
 
@@ -170,6 +171,7 @@ class ProviderHealthRead(BaseModel):
     image: ProviderHealthStatusRead
     tts: ProviderHealthStatusRead
     video: ProviderHealthStatusRead
+    model3d: ProviderHealthStatusRead
 
 
 class PatchModel(BaseModel):

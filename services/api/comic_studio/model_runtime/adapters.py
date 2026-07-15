@@ -182,5 +182,6 @@ class CapabilityAdapterRegistry:
             Capability.IMAGE: "create_image",
             Capability.SPEECH: "create_tts",
             Capability.VIDEO: "create_video",
+            Capability.MODEL_3D: "create_model3d",
         }[capability]
         return getattr(provider_factory, method_name)()

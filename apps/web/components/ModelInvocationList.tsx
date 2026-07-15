@@ -1,7 +1,7 @@
 import {RotateCcw} from 'lucide-react';
 import type {ModelInvocation} from '../lib/types';
 
-const labels = {text: '文本', image: '画面', speech: '语音', video: '视频'};
+const labels = {text: '文本', image: '画面', speech: '语音', video: '视频', model3d: '3D'};
 
 export function ModelInvocationList({items, retrying, onRetry}: {items: ModelInvocation[]; retrying: string; onRetry: (item: ModelInvocation) => void}) {
   return <section className="runtime-invocations" aria-labelledby="runtime-invocations-title">
