@@ -2,7 +2,7 @@ import {cleanup, render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ProductOverview} from '../components/ProductOverview';
-import type {EpisodeDetail, ProductionReadiness, ProjectDetail, Storyline, Volume} from '../lib/types';
+import type {EpisodeDetail, ProductionReadiness, ProjectDetail, ProjectOverviewMetrics, Storyline, Volume} from '../lib/types';
 import {readAllStyles} from './_styles';
 
 const project: ProjectDetail = {
@@ -29,6 +29,32 @@ describe('ProductOverview', () => {
 
     await userEvent.click(screen.getByRole('button', {name: '进入第 01 集制作'}));
     expect(onOpenEpisode).toHaveBeenCalledWith('episode-1');
+  });
+
+  it('renders script, asset, and scene metrics from authoritative project data', () => {
+    const metrics: ProjectOverviewMetrics = {
+      project_id: project.id,
+      scene_count: 7,
+      script_locked: false,
+      asset_total: 4,
+      asset_ready: 1,
+    };
+
+    render(<ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={{'episode-1':readiness}} metrics={metrics} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
+
+    expect(screen.getByText('场').closest('span')).toHaveTextContent('7 场');
+    const stageRail=screen.getByLabelText('作品制作阶段');
+    expect(within(stageRail).getByText('剧本锁定').parentElement).toHaveTextContent('0%');
+    expect(within(stageRail).getByText('资产准备').parentElement).toHaveTextContent('25%');
+  });
+
+  it('does not invent project metrics while the aggregate is unavailable', () => {
+    render(<ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={{'episode-1':readiness}} metrics={null} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
+
+    expect(screen.getByText('场').closest('span')).toHaveTextContent('-- 场');
+    const stageRail=screen.getByLabelText('作品制作阶段');
+    expect(within(stageRail).getByText('剧本锁定').parentElement).toHaveTextContent('--');
+    expect(within(stageRail).getByText('资产准备').parentElement).toHaveTextContent('--');
   });
 
   it('keeps unassigned episodes visible and opens the selected episode from the primary action', async () => {

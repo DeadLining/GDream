@@ -9,6 +9,7 @@ import type {EpisodeDetail, Job, ProductionReadiness, Project, ProjectDetail} fr
 
 const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(), getProject: vi.fn(), getEpisode: vi.fn(), listVolumes:vi.fn(),listStorylines:vi.fn(),
+  getProjectOverviewMetrics:vi.fn(),
   getAsset: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
   listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../lib/api', () => ({
   listProjects: mocks.listProjects, getProject: mocks.getProject,
+  getProjectOverviewMetrics:mocks.getProjectOverviewMetrics,
   listVolumes:mocks.listVolumes,listStorylines:mocks.listStorylines,
   getAsset: mocks.getAsset,
   getEpisode: mocks.getEpisode, createProject: mocks.createProject,
@@ -149,6 +151,7 @@ describe('Workspace', () => {
     mocks.listPanelVersions.mockResolvedValue([]);
     mocks.listVolumes.mockResolvedValue([]);
     mocks.listStorylines.mockResolvedValue([]);
+    mocks.getProjectOverviewMetrics.mockResolvedValue({project_id:'project-1',scene_count:1,script_locked:true,asset_total:0,asset_ready:0});
     mocks.listVisualReviewThreads.mockResolvedValue([]);
     mocks.listReviewThreads.mockResolvedValue([]);
     mocks.listReleaseCandidates.mockResolvedValue([]);
@@ -365,6 +368,32 @@ describe('Workspace', () => {
       expect(mocks.getProductionReadiness).toHaveBeenCalledWith('episode-1');
       expect(mocks.getProductionReadiness).toHaveBeenCalledWith('episode-2');
     });
+  });
+
+  it('loads authoritative overview metrics with the selected project', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace/>);
+
+    await screen.findByRole('heading',{name:'失窃的雨夜'});
+    expect(mocks.getProjectOverviewMetrics).toHaveBeenCalledWith('project-1');
+  });
+
+  it('keeps the project usable when overview metrics are unavailable', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getProjectOverviewMetrics.mockRejectedValue(new Error('metrics offline'));
+
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('button',{name:'作品总览'}));
+
+    expect(screen.getByRole('heading',{name:'霓虹夜行'})).toBeVisible();
+    const stageRail=screen.getByLabelText('作品制作阶段');
+    expect(within(stageRail).getByText('剧本锁定').parentElement).toHaveTextContent('--');
+    expect(within(stageRail).getByText('资产准备').parentElement).toHaveTextContent('--');
   });
 
   it('preserves successful project readiness when another episode request fails', async () => {
