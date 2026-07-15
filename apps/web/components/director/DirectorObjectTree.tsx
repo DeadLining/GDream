@@ -15,7 +15,7 @@ export function DirectorObjectTree({objects,assets,selectedId,syncing,onSelect,o
     <div className="director-asset-list"><p>已同步 {assets.filter(item=>synced.has(item.key)).length} / {assets.length}</p>{assets.map(item=>{
       const model=item.media_type==='model/gltf-binary';
       const needsModel=item.kind!=='background'&&!model;
-      return <div key={item.key} className={synced.has(item.key)?'synced':''}>{item.media_url&&!model?<img src={item.media_url} alt=""/>:model?<Box size={15}/>:item.kind==='character'?<UserRound size={15}/>:<ImageIcon size={15}/>}<span>{item.label}</span><small>{synced.has(item.key)?needsModel?'已同步 · 待生成 3D':'已同步':model?'3D 模型':needsModel?'待生成 3D':item.media_url?'背景图片':'场景上下文'}</small>{!synced.has(item.key)&&<button type="button" aria-label={`添加资产：${item.label}`} title="添加到舞台" disabled={syncing} onClick={()=>onAddAsset(item.key)}><Plus size={13}/></button>}</div>;
+      return <div key={item.key} className={synced.has(item.key)?'synced':''}>{item.media_url&&!model?<img src={item.media_url} alt=""/>:model?<Box size={15}/>:item.kind==='character'?<UserRound size={15}/>:<ImageIcon size={15}/>}<span>{item.label}</span><small>{synced.has(item.key)?needsModel?'已同步 · 待生成 3D':'已同步':model?'3D 模型':needsModel?'待生成 3D':item.media_url?'背景图片':'场景上下文'}</small>{!synced.has(item.key)&&<button type="button" aria-label={`添加${item.label}到场景`} title="添加到舞台" disabled={syncing} onClick={()=>onAddAsset(item.key)}><Plus size={13}/></button>}</div>;
     })}</div>
   </aside>;
 }

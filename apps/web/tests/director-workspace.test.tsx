@@ -36,7 +36,7 @@ describe('DirectorWorkspace',()=>{
     mocks.getDirectorStage.mockResolvedValue(initialStage);mocks.getDirectorAssets.mockResolvedValue(catalog);mocks.syncDirectorAssets.mockResolvedValue(syncedStage);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
 
-    await userEvent.click(await screen.findByRole('button',{name:'添加资产：机械犬'}));
+    await userEvent.click(await screen.findByRole('button',{name:'添加机械犬到场景'}));
 
     await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,['character:c1','library_asset:dog-1']));
     expect(await screen.findByRole('button',{name:'机械犬'})).toBeVisible();
@@ -287,16 +287,18 @@ describe('DirectorWorkspace',()=>{
     mocks.getDirectorStage.mockResolvedValue(currentStage);mocks.getDirectorAssets.mockResolvedValue([asset]);mocks.syncDirectorAssets.mockResolvedValue(synced);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
 
-    await userEvent.click(await screen.findByRole('button',{name:'添加资产：林夏'}));
+    await userEvent.click(await screen.findByRole('button',{name:'添加林夏到场景'}));
 
     await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,['scene:scene-1',asset.key]));
     expect(await screen.findByDisplayValue('林夏')).toBeVisible();
   });
   it('renames an object and controls its scene-level visibility',async()=>{
-    mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
+    const shotHiddenStage={...stage,shot_cameras:[{...stage.shot_cameras[0],object_overrides:{'object-1':{visible:false}}}]};
+    mocks.getDirectorStage.mockResolvedValue(shotHiddenStage);mocks.getDirectorAssets.mockResolvedValue([]);
     mocks.updateDirectorObject.mockImplementation(async(_id:string,_version:number,patch:Record<string,unknown>)=>({...directorObject,...patch}));
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
     await userEvent.click(await screen.findByRole('button',{name:'方块'}));
+    expect(screen.getByLabelText('场景显示')).toBeChecked();
     const name=screen.getByRole('textbox',{name:'对象名称'});
     await userEvent.clear(name);await userEvent.type(name,'线索箱');
     await userEvent.click(screen.getByRole('button',{name:'保存对象名称'}));

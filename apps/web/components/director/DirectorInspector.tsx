@@ -46,6 +46,7 @@ function TransformEditor({transform,onCommit}:{transform:Transform;onCommit:(tra
 
 export function DirectorInspector({
   object,
+  sceneVisible,
   camera,
   cameraMode,
   transformMode,
@@ -71,6 +72,7 @@ export function DirectorInspector({
   onDeleteObject,
 }:{
   object:DirectorObject|null;
+  sceneVisible:boolean;
   camera:ShotCamera;
   cameraMode:boolean;
   transformMode:DirectorTransformMode;
@@ -140,7 +142,7 @@ export function DirectorInspector({
         <label className="director-checkbox"><input type="checkbox" aria-label="本镜头显示" checked={object.visible} onChange={event=>onShotVisibilityChange(event.target.checked)}/><span>本镜头显示</span></label>
         <button className="command-button" disabled={!hasShotOverride} onClick={onResetShotOverride}><RotateCcw size={14}/>重置本镜头覆盖</button>
       </>}
-      {!cameraMode&&<label className="director-checkbox"><input type="checkbox" aria-label="场景显示" checked={object.visible} onChange={event=>onSceneVisibilityChange(event.target.checked)}/><span>场景显示</span></label>}
+      {!cameraMode&&<label className="director-checkbox"><input type="checkbox" aria-label="场景显示" checked={sceneVisible} onChange={event=>onSceneVisibilityChange(event.target.checked)}/><span>场景显示</span></label>}
       {!cameraMode&&<button className="command-button" onClick={onDuplicateObject}><Copy size={14}/>复制场景对象</button>}
       <button className="command-button director-danger" onClick={onDeleteObject}><Trash2 size={14}/>删除场景对象</button>
     </section>}
