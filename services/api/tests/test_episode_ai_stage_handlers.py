@@ -37,7 +37,9 @@ def _seed_episode(tmp_path):
             name="林夏",
             role="侦探",
             appearance_bible="黑色短发，蓝色风衣",
+            personality="冷静敏锐",
             continuity_rules="服装和发型保持一致",
+            voice_speaker="Chelsie",
         )
         episode = models.Episode(
             project=project,
