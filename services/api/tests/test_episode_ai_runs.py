@@ -18,7 +18,13 @@ EXPECTED_STAGES = [
 ]
 
 
+class IdleOrchestrator:
+    async def run(self, _run_id):
+        return None
+
+
 def _episode(client):
+    client.app.state.episode_ai_orchestrator = IdleOrchestrator()
     project = client.post(
         "/api/projects",
         json={
@@ -227,3 +233,9 @@ def test_app_recovery_marks_interrupted_episode_ai_run_retryable(client):
         "error_code": "api_interrupted",
         "retryable": True,
     }
+
+
+def test_app_registers_complete_episode_ai_stage_mapping(client):
+    assert set(client.app.state.episode_ai_orchestrator.handlers) == set(
+        EXPECTED_STAGES[2:]
+    )
