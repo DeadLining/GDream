@@ -5,6 +5,7 @@ from comic_studio.assets import AssetStore
 from comic_studio.providers.gpt_image import ImageResult
 from comic_studio.services.character_references import CharacterReferenceService
 from comic_studio.services.panels import PanelService
+from comic_studio.services.shot_inputs import ShotInputCompiler
 from tests.test_character_references import PNG
 
 
@@ -115,6 +116,48 @@ def test_panel_api_lists_newest_first_and_activates_selected_version(client):
     assert response.status_code == 200
     data = response.json()
     assert [item["id"] for item in data] == [second.id, first.id]
+    assert all(item["is_stale"] is True for item in data)
+    assert all(item["stale_reason"] == "missing_provenance" for item in data)
+
+
+def test_panel_versions_mark_changed_generation_inputs_stale(client):
+    with client.app.state.session_factory() as session:
+        project, shot = seed_shot(session)
+        compiled = ShotInputCompiler(session).compile(
+            shot.id, usage_kinds={"panel", "reference"}
+        )
+        asset = AssetStore(session, client.app.state.settings.data_root).register_panel(
+            project_id=project.id,
+            shot_id=shot.id,
+            content=b"current",
+            media_type="image/png",
+            provider="test",
+            model="test-image",
+            request_metadata={
+                "prompt": "current",
+                "input_snapshot": compiled.snapshot,
+                "input_snapshot_hash": compiled.snapshot_hash,
+            },
+            activate=True,
+        )
+        shot_id = shot.id
+
+    current = client.get(f"/api/shots/{shot_id}/panels")
+    assert current.status_code == 200
+    assert current.json()[0]["id"] == asset.id
+    assert current.json()[0]["is_stale"] is False
+    assert current.json()[0]["stale_reason"] is None
+
+    with client.app.state.session_factory() as session:
+        shot = session.get(models.Shot, shot_id)
+        assert shot is not None
+        shot.image_prompt = "changed panel prompt"
+        session.commit()
+
+    changed = client.get(f"/api/shots/{shot_id}/panels")
+    assert changed.status_code == 200
+    assert changed.json()[0]["is_stale"] is True
+    assert changed.json()[0]["stale_reason"] == "inputs_changed"
 
 
 def test_generate_panel_uses_active_character_references(db_session, tmp_path):
