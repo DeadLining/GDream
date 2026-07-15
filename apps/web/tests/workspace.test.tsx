@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   listVisualReviewThreads:vi.fn(),updateVisualReviewThread:vi.fn(),createVisualReviewMessage:vi.fn(),createVisualReviewThread:vi.fn(),acceptVisualReviewCandidate:vi.fn(),
   listReviewThreads:vi.fn(),createReviewMessage:vi.fn(),updateReviewThread:vi.fn(),listReleaseCandidates:vi.fn(),
 }));
+  listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindLibraryAssetToScene:vi.fn(),unbindLibraryAssetFromScene:vi.fn(),
 
 vi.mock('../lib/api', () => ({
   listProjects: mocks.listProjects, getProject: mocks.getProject,
@@ -44,6 +45,7 @@ vi.mock('../lib/api', () => ({
   listVisualReviewThreads:mocks.listVisualReviewThreads,updateVisualReviewThread:mocks.updateVisualReviewThread,createVisualReviewMessage:mocks.createVisualReviewMessage,createVisualReviewThread:mocks.createVisualReviewThread,acceptVisualReviewCandidate:mocks.acceptVisualReviewCandidate,
   listReviewThreads:mocks.listReviewThreads,createReviewMessage:mocks.createReviewMessage,updateReviewThread:mocks.updateReviewThread,listReleaseCandidates:mocks.listReleaseCandidates,
   mediaUrl: (path: string) => path,
+  listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
 
@@ -151,6 +153,8 @@ describe('Workspace', () => {
     mocks.listReviewThreads.mockResolvedValue([]);
     mocks.listReleaseCandidates.mockResolvedValue([]);
     mocks.getAsset.mockResolvedValue({id: 'asset-2', kind: 'panel', media_url: '/media/panel.png', media_type: 'image/png', provider: 'test', model: 'test', generation_attempt: 1, review_status: 'approved', width: 1024, height: 1536, duration_seconds: null, created_at: ''});
+    mocks.listLibraryAssets.mockResolvedValue([]);
+    mocks.listSceneLibraryAssets.mockResolvedValue([]);
     mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
     mocks.listProductionItems.mockResolvedValue([]);
