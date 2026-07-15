@@ -70,6 +70,16 @@ describe('ReviewPanel', () => {
     expect(screen.getByRole('button', {name: '批准并登记'})).toBeDisabled();
   });
 
+  it('uses compact header groups and a bounded preview-media hook', async () => {
+    mocks.threads.mockResolvedValue([]);
+    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={() => {}} />);
+
+    const heading=screen.getByRole('heading',{name:'审核队列'});
+    expect(heading.parentElement).toHaveClass('review-header-title');
+    expect(heading.parentElement?.parentElement).toHaveClass('review-header-copy');
+    expect(await screen.findByRole('img',{name:'进入巷道'})).toHaveClass('review-player-media');
+  });
+
   it('shows honest QC availability and derives the next candidate version', async () => {
     mocks.threads.mockResolvedValue([]);
     mocks.candidates.mockResolvedValue([{id:'old-release',episode_id:'episode-1',version:'V2',render_path:'old.mp4',qc_snapshot:{},status:'draft',created_at:'',updated_at:''}]);
@@ -164,6 +174,7 @@ describe('ReviewPanel', () => {
     render(<ReviewPanel episode={videoEpisode} readiness={{...readiness,blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}}} onSelectShot={vi.fn()}/>);
 
     const video=await screen.findByLabelText('当前镜头视频');
+    expect(video).toHaveClass('review-player-media');
     await userEvent.click(screen.getByRole('button',{name:'播放'}));
     expect(play).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button',{name:'暂停'}));
