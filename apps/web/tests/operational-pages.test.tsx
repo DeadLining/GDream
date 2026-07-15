@@ -92,15 +92,19 @@ describe('operational frontend pages',()=>{
   });
 
   it('loads version snapshots without inventing a comparison',async()=>{
-    render(<VersionHistory episode={episode}/>);
+    const onRestored=vi.fn();
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+    render(<VersionHistory episode={episode} onRestored={onRestored}/>);
     expect(screen.getByRole('heading',{name:'版本历史'})).toBeVisible();
     expect((await screen.findAllByText('V1 审核前'))[0]).toBeVisible();
     expect(screen.queryByText('雨夜造型 → 左臂擦伤')).not.toBeInTheDocument();
     expect(screen.queryByText('雨夜造型 → 左臂包扎')).not.toBeInTheDocument();
     expect(screen.getByText('当前仅保存完整快照，尚未生成结构化版本差异。')).toBeVisible();
-    expect(screen.queryByRole('button',{name:'恢复所选项'})).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button',{name:'基于所选快照创建版本'}));
+    await userEvent.click(screen.getByRole('button',{name:'恢复所选快照'}));
+    expect(window.confirm).toHaveBeenCalledWith('恢复 V1“审核前”？当前状态会先自动备份。');
     expect(operationMocks.restoreEpisodeVersion).toHaveBeenCalledWith('v1');
+    expect(onRestored).toHaveBeenCalledOnce();
+    expect(screen.getByText('已恢复 V1，恢复前状态已自动备份。')).toBeVisible();
     expect(serializeEpisodeVersionsCsv(await operationMocks.listEpisodeVersions.mock.results[0].value)).toContain('V1');
     expect(serializeEpisodeVersionsCsv(await operationMocks.listEpisodeVersions.mock.results[0].value)).toContain('审核前');
   });

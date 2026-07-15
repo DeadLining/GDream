@@ -126,8 +126,15 @@ def test_tasks_validate_linked_hierarchy_and_support_updates(client):
     assert invalid.json()["detail"] == "Task links must belong to the project and hierarchy"
 
 
-def test_episode_versions_snapshot_and_restore_create_new_version(client):
-    _project, episode, _scene_id, _shot_id = _project_episode_shot(client, "版本作品")
+def test_episode_versions_restore_business_data_with_automatic_backup(client):
+    _project, episode, scene_id, shot_id = _project_episode_shot(client, "版本作品")
+    with client.app.state.session_factory() as session:
+        session.add(models.DialogueLine(
+            shot_id=shot_id, position=1, character_id=None, text="原始对白",
+            subtitle_text="原始对白", emotion="neutral",
+            performance_instruction="平静", start_seconds=0, duration_seconds=1,
+        ))
+        session.commit()
     v1 = client.post(
         f"/api/episodes/{episode['id']}/versions",
         json={"label": "审核前", "source": "manual", "author": "张伟"},
@@ -136,7 +143,28 @@ def test_episode_versions_snapshot_and_restore_create_new_version(client):
     assert v1.json()["version"] == 1
     assert v1.json()["snapshot"]["episode"]["title"] == "雨夜抉择"
 
-    client.patch(f"/api/episodes/{episode['id']}", json={"title": "雨夜抉择·修订"})
+    with client.app.state.session_factory() as session:
+        current_episode = session.get(models.Episode, episode["id"])
+        scene = session.get(models.Scene, scene_id)
+        shot = session.get(models.Shot, shot_id)
+        line = shot.dialogue[0]
+        current_episode.title = "雨夜抉择·修订"
+        scene.location = "修订后的营地"
+        shot.composition = "修订后的构图"
+        line.text = "修订对白"
+        extra_scene = models.Scene(
+            episode_id=episode["id"], position=2, location="新增场景",
+            time_of_day="day", summary="不应保留", continuity_state={},
+            estimated_duration_seconds=10,
+        )
+        session.add(extra_scene)
+        session.flush()
+        session.add(models.Shot(
+            scene_id=extra_scene.id, position=1, shot_type="close_up",
+            duration_seconds=2, composition="新增镜头", camera_motion="static",
+            character_state={}, image_prompt="", negative_prompt="",
+        ))
+        session.commit()
     v2 = client.post(
         f"/api/episodes/{episode['id']}/versions",
         json={"label": "当前版", "source": "manual", "author": "李想"},
@@ -144,11 +172,37 @@ def test_episode_versions_snapshot_and_restore_create_new_version(client):
     restored = client.post(f"/api/episode-versions/{v1.json()['id']}/restore")
     assert restored.status_code == 201
     restored = restored.json()
-    assert restored["version"] == 3
+    assert restored["version"] == 4
     assert restored["source"] == "restore"
     assert restored["restored_from_id"] == v1.json()["id"]
     assert restored["snapshot"] == v1.json()["snapshot"]
     assert restored["id"] != v2["id"]
+
+    current = client.get(f"/api/episodes/{episode['id']}").json()
+    assert current["title"] == "雨夜抉择"
+    assert [scene["location"] for scene in current["scenes"]] == ["雨夜营地"]
+    assert current["scenes"][0]["shots"][0]["composition"] == "进入营地"
+    assert current["scenes"][0]["shots"][0]["dialogue"][0]["text"] == "原始对白"
+    versions = client.get(f"/api/episodes/{episode['id']}/versions").json()
+    assert [item["version"] for item in versions] == [4, 3, 2, 1]
+    assert versions[1]["label"] == "恢复 V1 前自动备份"
+    assert versions[1]["snapshot"]["episode"]["title"] == "雨夜抉择·修订"
+
+
+def test_episode_version_restore_rejects_active_production(client):
+    _project, episode, _scene_id, _shot_id = _project_episode_shot(client, "恢复冲突作品")
+    version = client.post(
+        f"/api/episodes/{episode['id']}/versions",
+        json={"label": "生产前", "source": "manual", "author": "张伟"},
+    ).json()
+    with client.app.state.session_factory() as session:
+        session.add(models.ProductionRun(episode_id=episode["id"], status="running", stages=["panels"]))
+        session.commit()
+
+    restored = client.post(f"/api/episode-versions/{version['id']}/restore")
+
+    assert restored.status_code == 409
+    assert restored.json()["detail"] == "Cannot restore an episode while production is active"
 
 
 def test_delivery_packages_require_approved_release_candidate(client):
