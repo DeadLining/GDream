@@ -87,7 +87,7 @@ export function ReviewPanel({episode, readiness, onSelectShot, onEpisodeChanged}
 
   return <main className="review-panel review-publish-workspace">
     <header className="review-panel-header">
-      <div><span className="eyebrow">审核发布</span><h1>审核队列</h1><p>{episode.title} · 下一候选 V{nextCandidateVersion}</p></div>
+      <div className="review-header-copy"><div className="review-header-title"><span className="eyebrow">审核发布</span><h1>审核队列</h1></div><p>{episode.title} · 下一候选 V{nextCandidateVersion}</p></div>
       <div className="review-header-status"><span className="review-count">{pendingCount} 个待处理问题</span><span className={readiness.ready&&criticalCount===0 ? 'ready' : 'blocked'}>{readiness.ready&&criticalCount===0 ? <Check size={14}/> : <AlertCircle size={14}/>} {readiness.ready&&criticalCount===0 ? '可提交终审' : '存在关键问题'}</span></div>
     </header>
 
@@ -95,7 +95,7 @@ export function ReviewPanel({episode, readiness, onSelectShot, onEpisodeChanged}
       <section className="review-player-column">
         <section className="review-player" aria-label="审阅播放器">
           <div className="review-player-stage">
-            {previewUrl && previewType === 'video' ? <video ref={videoRef} aria-label="当前镜头视频" src={previewUrl} muted={muted} playsInline onTimeUpdate={event=>setCurrentTime(event.currentTarget.currentTime)} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>setPlaying(false)}/> : previewUrl ? <img src={previewUrl} alt={selected?.shot.composition ?? '审阅画面'}/> : <div className="review-player-empty"><ImageOff size={34}/><span>{selected ? '当前镜头尚无可播放结果' : '尚无镜头'}</span></div>}
+            {previewUrl && previewType === 'video' ? <video className="review-player-media" ref={videoRef} aria-label="当前镜头视频" src={previewUrl} muted={muted} playsInline onTimeUpdate={event=>setCurrentTime(event.currentTarget.currentTime)} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>setPlaying(false)}/> : previewUrl ? <img className="review-player-media" src={previewUrl} alt={selected?.shot.composition ?? '审阅画面'}/> : <div className="review-player-empty"><ImageOff size={34}/><span>{selected ? '当前镜头尚无可播放结果' : '尚无镜头'}</span></div>}
             {selected && <><span className="review-timecode">{formatTime(selectedShotStart+currentTime)} / {formatTime(totalDuration)}</span><span className="review-safe-frame"/>{selectedShotThreads.map((thread,index)=><button key={thread.id} className="review-comment-pin" style={{left:`${Math.min(90,10+(thread.timecode_seconds/Math.max(.1,selected.shot.duration_seconds))*80)}%`}} aria-label={`画面评论 ${thread.title}`} onClick={()=>selectThread(thread)}>{String(index+1).padStart(2,'0')}</button>)}</>}
           </div>
           <div className="review-transport"><button aria-label="上一镜头" disabled={selectedIndex<=0} onClick={()=>moveShot(-1)}><ChevronLeft size={16}/></button><button className="play" aria-label={playing ? '暂停' : '播放'} onClick={()=>void togglePlayback()}>{playing ? <Pause size={17}/> : <Play size={17}/>}</button><button aria-label="下一镜头" disabled={selectedIndex<0||selectedIndex>=allShots.length-1} onClick={()=>moveShot(1)}><ChevronRight size={16}/></button><span>{formatTime(selectedShotStart+currentTime)} / {formatTime(totalDuration)}</span><button aria-label={muted?'取消静音':'静音'} onClick={toggleMuted}><Volume2 size={16}/></button><span className="review-quality">{previewType==='video'?'视频源':'画面预览'}</span></div>

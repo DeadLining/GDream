@@ -77,6 +77,7 @@ describe('ReviewPanel', () => {
     const heading=screen.getByRole('heading',{name:'审核队列'});
     expect(heading.parentElement).toHaveClass('review-header-title');
     expect(heading.parentElement?.parentElement).toHaveClass('review-header-copy');
+    await userEvent.click(screen.getByRole('button',{name:'上一镜头'}));
     expect(await screen.findByRole('img',{name:'进入巷道'})).toHaveClass('review-player-media');
   });
 
