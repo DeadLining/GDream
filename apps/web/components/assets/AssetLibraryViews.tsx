@@ -3,7 +3,7 @@
 import {ArrowLeft,Box,Check,CheckCircle2,ChevronRight,Circle,GitBranch,ImageIcon,MessageSquareText,MousePointer2,Pencil,Plus,Search,Send,Sparkles,Trash2} from 'lucide-react';
 import {useEffect,useMemo,useState,type FormEvent,type ReactNode} from 'react';
 import {mediaUrl,suggestAssetVariant,type AssetVariantSuggestion} from '../../lib/api';
-import type {AssetVariant,AssetVariantState,Character,Character3DRepresentation,CharacterReference,CharacterReferenceType,EpisodeSummary,Job,LibraryAsset,LibraryAssetCreate,LibraryAssetKind,LibraryAssetPatch} from '../../lib/types';
+import type {AssetVariant,AssetVariantState,Character,CharacterBodyPlan,Character3DRepresentation,CharacterReference,CharacterReferenceType,EpisodeSummary,Job,LibraryAsset,LibraryAssetCreate,LibraryAssetKind,LibraryAssetPatch} from '../../lib/types';
 
 const referenceLabels:Record<CharacterReferenceType,string>={primary:'主参考',front:'正面',three_quarter:'四分之三',side:'侧面',back:'背面',expression:'表情',outfit:'服装'};
 const stateLabels:Record<AssetVariantState['kind'],string>={expression:'表情',outfit:'服装',injury:'伤势',age:'年龄',custom:'自定义'};
@@ -13,7 +13,7 @@ const imageFor=(references:CharacterReference[],type?:CharacterReferenceType)=>{
 
 export type AssetWorkspaceView='catalog'|'master'|'variant'|'lineage';
 export type CharacterAssetCatalogData={references:CharacterReference[];variants:AssetVariant[];representations?:Character3DRepresentation[]};
-export type CharacterDraft=Pick<Character,'name'|'role'|'appearance_bible'|'personality'|'continuity_rules'|'negative_constraints'|'voice_speaker'|'voice_instruction'>;
+export type CharacterDraft=Pick<Character,'name'|'role'|'appearance_bible'|'personality'|'continuity_rules'|'negative_constraints'|'voice_speaker'|'voice_instruction'>&{body_plan:CharacterBodyPlan};
 type CharacterDetailTab='master'|'references'|'variant'|'lineage';
 
 const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>={
@@ -23,7 +23,8 @@ const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>
   sound:{label:'声音',description:'管理环境音、效果音和声音设计说明。'},
 };
 
-const emptyCharacterDraft:CharacterDraft={name:'',role:'',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:''};
+const emptyCharacterDraft:CharacterDraft={name:'',role:'',body_plan:'humanoid',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:''};
+const bodyPlanLabels:Record<CharacterBodyPlan,string>={humanoid:'人形',quadruped:'四足',bird:'鸟类',other:'其他形态'};
 const characterFields:Array<{key:keyof CharacterDraft;label:string;multiline?:boolean;required?:boolean}>=[
   {key:'name',label:'角色名称',required:true},{key:'role',label:'角色定位',required:true},
   {key:'appearance_bible',label:'外观设定',multiline:true,required:true},{key:'personality',label:'性格设定',multiline:true,required:true},
@@ -68,7 +69,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
     void onLoadLibraryAssetModelJob(selectedLibrary.id).then(job=>{if(current)setModelJob(job);}).catch(()=>{if(current)setModelJob(null);});
     return()=>{current=false;};
   },[selectedLibrary?.id]);
-  const categories:(['character',string]|[LibraryAssetKind,string])[]=[['character','角色资产'],...Object.entries(libraryCategory).map(([kind,item])=>[kind as LibraryAssetKind,item.label] as [LibraryAssetKind,string])];
+  const categories:(['character',string]|[LibraryAssetKind,string])[]=[['character','角色实体'],...Object.entries(libraryCategory).map(([kind,item])=>[kind as LibraryAssetKind,item.label] as [LibraryAssetKind,string])];
   const selectCategory=(next:'character'|LibraryAssetKind)=>{setCategory(next);setQuery('');setFormMode(null);setAssetError('');if(next!=='character')setSelectedLibraryId(libraryAssets.find(item=>item.kind===next)?.id??'');};
   const openCreate=()=>{setFormMode('create');setAssetName('');setAssetDescription('');setAssetTags('');setAssetError('');};
   const openEdit=()=>{if(!selectedLibrary)return;setFormMode('edit');setAssetName(selectedLibrary.name);setAssetDescription(selectedLibrary.description);setAssetTags(selectedLibrary.tags.join(', '));setAssetError('');};
@@ -78,7 +79,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
   const generateLibraryModel=async()=>{if(!selectedLibrary?.media_asset_id||!onGenerateLibraryAssetModel||modelBusy)return;setModelBusy(true);setModelError('');try{setModelJob(await onGenerateLibraryAssetModel(selectedLibrary.id,selectedLibrary.media_asset_id));}catch(cause){setModelError(cause instanceof Error?cause.message:'3D 生成失败');}finally{setModelBusy(false);}};
   const approveLibraryModel=async()=>{if(!modelJob||!onApproveLibraryAssetModel||modelBusy)return;setModelBusy(true);setModelError('');try{await onApproveLibraryAssetModel(modelJob.id);setModelJob(current=>current?{...current,result_metadata:{...current.result_metadata,review_status:'approved',is_active:true}}:current);}catch(cause){setModelError(cause instanceof Error?cause.message:'批准 3D 候选失败');}finally{setModelBusy(false);}};
   const openCharacterCreate=()=>{setCharacterFormMode('create');setCharacterDraft(emptyCharacterDraft);setCharacterError('');};
-  const openCharacterEdit=()=>{if(!character)return;setCharacterFormMode('edit');setCharacterDraft({name:character.name,role:character.role,appearance_bible:character.appearance_bible,personality:character.personality,continuity_rules:character.continuity_rules,negative_constraints:character.negative_constraints,voice_speaker:character.voice_speaker,voice_instruction:character.voice_instruction});setCharacterError('');};
+  const openCharacterEdit=()=>{if(!character)return;setCharacterFormMode('edit');setCharacterDraft({name:character.name,role:character.role,body_plan:character.body_plan??'humanoid',appearance_bible:character.appearance_bible,personality:character.personality,continuity_rules:character.continuity_rules,negative_constraints:character.negative_constraints,voice_speaker:character.voice_speaker,voice_instruction:character.voice_instruction});setCharacterError('');};
   const saveCharacter=async(event:FormEvent)=>{event.preventDefault();if(characterBusy||characterFields.some(field=>field.required&&!characterDraft[field.key].trim()))return;setCharacterBusy(true);setCharacterError('');try{if(characterFormMode==='edit'&&character&&onUpdateCharacter)await onUpdateCharacter(character.id,characterDraft);else if(characterFormMode==='create'&&onCreateCharacter)await onCreateCharacter(characterDraft);setCharacterFormMode(null);}catch(cause){setCharacterError(cause instanceof Error?cause.message:'保存角色失败');}finally{setCharacterBusy(false);}};
 
   const sidebar=<aside className="asset-catalog-sidebar"><h2>工作区</h2>{categories.map(([kind,label])=>{const count=kind==='character'?characters.length:libraryAssets.filter(item=>item.kind===kind).length;return <button type="button" key={kind} aria-label={`${label} ${count}`} className={category===kind?'active':''} onClick={()=>selectCategory(kind)}><span>{label}</span><b>{count}</b></button>;})}</aside>;
@@ -106,7 +107,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
           <div><h1>作品资产库</h1><p>管理作品级主设定、集级变体与审核状态。</p></div>
           <div className="asset-catalog-header-actions"><label className="asset-search"><Search size={15}/><span className="sr-only">搜索资产</span><input type="search" aria-label="搜索资产" placeholder="搜索资产名称" value={query} onChange={event=>setQuery(event.target.value)}/></label><button type="button" onClick={openCharacterCreate}><Plus size={15}/>新建角色</button></div>
         </header>
-        {characterFormMode&&<form aria-label={characterFormMode==='edit'?'编辑角色':'新建角色'} className="library-asset-form character-asset-form" onSubmit={saveCharacter}>{characterFields.map(field=><label key={field.key}>{field.label}{field.multiline?<textarea aria-label={field.label} value={characterDraft[field.key]} onChange={event=>setCharacterDraft(current=>({...current,[field.key]:event.target.value}))}/>:<input aria-label={field.label} value={characterDraft[field.key]} onChange={event=>setCharacterDraft(current=>({...current,[field.key]:event.target.value}))}/>}</label>)}{characterError&&<p role="alert">{characterError}</p>}<div><button type="button" onClick={()=>setCharacterFormMode(null)}>取消</button><button className="primary-action" type="submit" disabled={characterBusy||characterFields.some(field=>field.required&&!characterDraft[field.key].trim())}>{characterBusy?'正在保存':'保存角色'}</button></div></form>}
+        {characterFormMode&&<form aria-label={characterFormMode==='edit'?'编辑角色':'新建角色'} className="library-asset-form character-asset-form" onSubmit={saveCharacter}><label>实体形态<select aria-label="实体形态" value={characterDraft.body_plan} onChange={event=>setCharacterDraft(current=>({...current,body_plan:event.target.value as CharacterBodyPlan}))}>{Object.entries(bodyPlanLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{characterFields.map(field=><label key={field.key}>{field.label}{field.multiline?<textarea aria-label={field.label} value={characterDraft[field.key]} onChange={event=>setCharacterDraft(current=>({...current,[field.key]:event.target.value}))}/>:<input aria-label={field.label} value={characterDraft[field.key]} onChange={event=>setCharacterDraft(current=>({...current,[field.key]:event.target.value}))}/>}</label>)}{characterError&&<p role="alert">{characterError}</p>}<div><button type="button" onClick={()=>setCharacterFormMode(null)}>取消</button><button className="primary-action" type="submit" disabled={characterBusy||characterFields.some(field=>field.required&&!characterDraft[field.key].trim())}>{characterBusy?'正在保存':'保存角色'}</button></div></form>}
         <div className="asset-catalog-filters">
           <button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>主设定</button>
           <button className={filter==='variants'?'active':''} onClick={()=>setFilter('variants')}>有变体</button>
@@ -130,7 +131,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
 
       {character?<aside className="asset-catalog-inspector">
         <header><div><h2>{character.name}</h2><span>{character.role}</span></div><strong>{statusLabel(variants.find(item=>item.kind==='master')?.review_status??'draft')}</strong></header>
-        <dl><div><dt>资产类型</dt><dd>角色</dd></div><div><dt>主设定</dt><dd>MASTER v{variants.find(item=>item.kind==='master')?.version??1}</dd></div><div><dt>集级变体</dt><dd>{episodeVariants.length}</dd></div><div><dt>状态数量</dt><dd>{episodeVariants.reduce((total,item)=>total+item.states.length,0)}</dd></div></dl>
+        <dl><div><dt>资产类型</dt><dd>角色实体</dd></div><div><dt>实体形态</dt><dd>{bodyPlanLabels[character.body_plan??'humanoid']}</dd></div><div><dt>主设定</dt><dd>MASTER v{variants.find(item=>item.kind==='master')?.version??1}</dd></div><div><dt>集级变体</dt><dd>{episodeVariants.length}</dd></div><div><dt>状态数量</dt><dd>{episodeVariants.reduce((total,item)=>total+item.states.length,0)}</dd></div></dl>
         <div className="asset-inspector-tabs"><button className="active">主设定</button><button onClick={()=>onOpen('variant')}>集级变体</button><button onClick={()=>onOpen('lineage')}>引用</button></div>
         <section className="asset-lineage-preview"><h3>继承谱系</h3><div><span className="lineage-preview-root">{character.name}<small>主设定</small></span><ChevronRight size={16}/><span className="lineage-preview-branches">{episodeVariants.slice(0,2).map(item=><button key={item.id} onClick={()=>onOpen('variant')}>{item.label}</button>)}</span></div></section>
         <footer><button onClick={openCharacterEdit}><Pencil size={15}/>编辑角色</button><button onClick={()=>onOpen('lineage')}><GitBranch size={15}/>打开谱系</button><button className="primary-action" onClick={()=>onOpen('variant')}><Plus size={15}/>创建变体</button></footer>

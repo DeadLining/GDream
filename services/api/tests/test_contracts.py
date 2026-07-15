@@ -70,7 +70,7 @@ CONTRACTS: list[tuple[type, set[str]]] = [
     (
         schemas.CharacterCreate,
         {
-            "name", "role", "appearance_bible", "personality",
+            "name", "role", "body_plan", "appearance_bible", "personality",
             "continuity_rules", "negative_constraints",
             "voice_speaker", "voice_instruction",
             "art_style_id",

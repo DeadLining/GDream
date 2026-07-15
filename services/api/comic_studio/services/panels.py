@@ -121,7 +121,7 @@ class PanelService:
         reference_assets = reference_assets[:4]
         character_by_id = {character.id: character for character in project.characters}
         character_rules = "\n".join(
-            f"- {character.name}: {character.appearance_bible}. "
+            f"- {character.name} [{character.body_plan}]: {character.appearance_bible}. "
             f"Continuity: {character.continuity_rules}. Avoid: {character.negative_constraints}"
             for character in project.characters
         )
@@ -290,7 +290,7 @@ class PanelService:
         from comic_studio.services.art_style_loader import get_art_style_loader
 
         character_rules = "\n".join(
-            f"- {character.name}: {character.appearance_bible}. "
+            f"- {character.name} [{character.body_plan}]: {character.appearance_bible}. "
             f"Continuity: {character.continuity_rules}. Avoid: {character.negative_constraints}"
             for character in project.characters
         )

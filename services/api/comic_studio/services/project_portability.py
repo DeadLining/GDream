@@ -304,6 +304,7 @@ class ProjectPortabilityService:
                 project_id=new_project_id,
                 name=row.get("name", ""),
                 role=row.get("role", ""),
+                body_plan=row.get("body_plan", "humanoid"),
                 appearance_bible=row.get("appearance_bible", ""),
                 personality=row.get("personality", ""),
                 continuity_rules=row.get("continuity_rules", ""),

@@ -4,7 +4,7 @@
 import { apiRequest, json } from './core';
 import type { Character, Project, ProjectCreate, ProjectDetail, ProjectOverviewMetrics, ProjectPatch } from '../types';
 
-export type CharacterWrite=Pick<Character,'name'|'role'|'appearance_bible'|'personality'|'continuity_rules'|'negative_constraints'|'voice_speaker'|'voice_instruction'>;
+export type CharacterWrite=Pick<Character,'name'|'role'|'body_plan'|'appearance_bible'|'personality'|'continuity_rules'|'negative_constraints'|'voice_speaker'|'voice_instruction'>;
 export type CharacterPatch=Partial<CharacterWrite>;
 
 export const listProjects = () => apiRequest<Project[]>('/api/projects');

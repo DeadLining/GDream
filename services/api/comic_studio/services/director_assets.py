@@ -13,6 +13,13 @@ from comic_studio import models
 from comic_studio.director import DirectorAssetRead
 from comic_studio.services.character_3d import Character3DRepresentationService
 
+BODY_PLAN_PROXY_RIG = {
+    "humanoid": "standard_humanoid",
+    "quadruped": "quadruped",
+    "bird": "bird",
+    "other": "prop_box",
+}
+
 
 @dataclass(frozen=True)
 class DirectorAssetDefinition:
@@ -229,6 +236,7 @@ class DirectorAssetCatalogService:
         )
         result: list[DirectorAssetDefinition] = []
         for index, character in enumerate(characters.values()):
+            proxy_rig = BODY_PLAN_PROXY_RIG.get(character.body_plan, "standard_humanoid")
             candidates = by_character.get(character.id, [])
             reference = next(
                 (
@@ -290,6 +298,8 @@ class DirectorAssetCatalogService:
                             "mesh_count": representation.mesh_count,
                             "triangle_count": representation.triangle_count,
                             "has_skeleton": representation.has_skeleton,
+                            "body_plan": character.body_plan,
+                            "proxy_rig": proxy_rig,
                             "requires_3d_model": False,
                             "appearance_bible": character.appearance_bible,
                             "continuity_rules": character.continuity_rules,
@@ -328,7 +338,8 @@ class DirectorAssetCatalogService:
                         "reference_id": reference.id,
                         "reference_type": reference.reference_type,
                         "asset_id": reference_asset.id,
-                        "proxy_rig": "standard_humanoid",
+                        "body_plan": character.body_plan,
+                        "proxy_rig": proxy_rig,
                         "requires_3d_model": False,
                         "full_model_optional": True,
                         "appearance_bible": character.appearance_bible,
@@ -341,7 +352,7 @@ class DirectorAssetCatalogService:
                     },
                     appearance={
                         "color": "#d76b4b",
-                        "proxy_rig": "standard_humanoid",
+                        "proxy_rig": proxy_rig,
                         "fallback_image_url": media_url,
                         "aspect_ratio": aspect_ratio,
                     },

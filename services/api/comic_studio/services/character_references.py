@@ -199,6 +199,7 @@ class CharacterReferenceService:
             "construction, palette, accessories, and distinctive internal details "
             "consistent across this reference set. "
             f"Narrative role: {character.role}. "
+            f"Body plan: {character.body_plan}. "
             f"Appearance bible: {character.appearance_bible}. "
             f"Continuity rules: {character.continuity_rules}. "
             f"Forbidden changes: {character.negative_constraints or 'none'}. "

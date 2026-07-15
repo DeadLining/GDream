@@ -177,6 +177,7 @@ class Character(Base):
     )
     name: Mapped[str] = mapped_column(String(120))
     role: Mapped[str] = mapped_column(String(80))
+    body_plan: Mapped[str] = mapped_column(String(24), default="humanoid", server_default="humanoid")
     appearance_bible: Mapped[str] = mapped_column(Text)
     personality: Mapped[str] = mapped_column(Text)
     continuity_rules: Mapped[str] = mapped_column(Text)

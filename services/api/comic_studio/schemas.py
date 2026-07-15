@@ -181,6 +181,7 @@ class PatchModel(BaseModel):
 class CharacterCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     role: str = Field(min_length=1, max_length=80)
+    body_plan: Literal["humanoid", "quadruped", "bird", "other"] = "humanoid"
     appearance_bible: str = Field(min_length=1)
     personality: str = Field(min_length=1)
     continuity_rules: str = Field(min_length=1)
@@ -202,6 +203,7 @@ class CharacterRead(CharacterCreate):
 class CharacterPatch(PatchModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     role: str | None = Field(default=None, min_length=1, max_length=80)
+    body_plan: Literal["humanoid", "quadruped", "bird", "other"] | None = None
     appearance_bible: str | None = Field(default=None, min_length=1)
     personality: str | None = Field(default=None, min_length=1)
     continuity_rules: str | None = Field(default=None, min_length=1)

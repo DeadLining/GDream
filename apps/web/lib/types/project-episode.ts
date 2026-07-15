@@ -3,8 +3,10 @@
 
 import type {AspectRatio, ReviewStatus} from './common';
 
+export type CharacterBodyPlan='humanoid'|'quadruped'|'bird'|'other';
 export type Character = {
   id: string; project_id: string; name: string; role: string;
+  body_plan?: CharacterBodyPlan;
   appearance_bible: string; personality: string; continuity_rules: string;
   negative_constraints: string; voice_speaker: string; voice_instruction: string;
   created_at: string; updated_at: string;
