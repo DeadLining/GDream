@@ -428,8 +428,8 @@ describe('Workspace', () => {
     render(<Workspace/>);
     await userEvent.click(await screen.findByRole('button', {name: '作品总览'}));
 
-    const firstRow = screen.getAllByText('失窃的雨夜').map(item => item.closest('[role="row"]')).find(Boolean)!;
-    const secondRow = screen.getAllByText('第二集').map(item => item.closest('[role="row"]')).find(Boolean)!;
+    const firstRow = screen.getAllByText('失窃的雨夜').map(item => item.closest<HTMLElement>('[role="row"]')).find(Boolean)!;
+    const secondRow = screen.getAllByText('第二集').map(item => item.closest<HTMLElement>('[role="row"]')).find(Boolean)!;
     expect(within(firstRow).getByText('50%')).toBeVisible();
     expect(within(secondRow).getByText('待获取')).toBeVisible();
   });
@@ -791,7 +791,7 @@ describe('Workspace', () => {
     await act(async () => {await staleReadiness.promise;});
 
     expect(screen.getByRole('heading', {name: '项目 A'})).toBeVisible();
-    const currentRow = screen.getAllByText('剧集 A').map(item => item.closest('[role="row"]')).find(Boolean)!;
+    const currentRow = screen.getAllByText('剧集 A').map(item => item.closest<HTMLElement>('[role="row"]')).find(Boolean)!;
     expect(within(currentRow).getByText('50%')).toBeVisible();
   });
 

@@ -55,13 +55,16 @@ it('offers only upload and AI generation when the project has no script',async()
 
 it('saves a draft explicitly and then creates an immutable version',async()=>{
   const onConfirmed=vi.fn();
+  const user=userEvent.setup();
   render(<ScriptLibrary projectId="p1" onConfirmed={onConfirmed}/>);
   const editor=await screen.findByLabelText('剧本正文');
   fireEvent.change(editor,{target:{value:'第二版'}});
   expect(mocks.patch).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole('button',{name:'保存草稿'}));
+  const saveButton=screen.getByRole('button',{name:'保存草稿'});
+  await waitFor(()=>expect(saveButton).toBeEnabled());
+  await user.click(saveButton);
   await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('s1',{content:'第二版',expected_checksum:'old'}));
-  await userEvent.click(screen.getByRole('button',{name:'创建版本'}));
+  await user.click(screen.getByRole('button',{name:'创建版本'}));
   expect(mocks.finalize).toHaveBeenCalledWith('s1');
   expect(onConfirmed).toHaveBeenCalledTimes(1);
 });

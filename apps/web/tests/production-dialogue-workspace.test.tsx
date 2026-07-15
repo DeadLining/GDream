@@ -5,9 +5,9 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {ProductionDialogueWorkspace} from '../components/production-canvas/ProductionDialogueWorkspace';
 import type {Character,Shot} from '../lib/types';
 
-const line={id:'line-1',shot_id:'shot-1',position:1,character_id:'character-1',text:'快走。',subtitle_text:'快走。',emotion:'紧张',performance_instruction:'压低声音',audio_asset_id:null};
+const line={id:'line-1',shot_id:'shot-1',position:1,character_id:'character-1',text:'快走。',subtitle_text:'快走。',emotion:'紧张',performance_instruction:'压低声音',start_seconds:0,duration_seconds:1,audio_asset_id:null};
 const shot:Shot={id:'shot-1',position:1,shot_type:'close_up',duration_seconds:3,composition:'回头示警',camera_motion:'still',character_state:{},review_status:'approved',render_status:'completed',image_prompt:'',negative_prompt:'',active_panel_asset_id:'panel-1',dialogue:[line]};
-const characters:Character[]=[{id:'character-1',project_id:'project-1',name:'林默',role:'主角',description:'',appearance:'',personality:'',voice_speaker:'林默音色',created_at:'',updated_at:''}];
+const characters:Character[]=[{id:'character-1',project_id:'project-1',name:'林默',role:'主角',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'林默音色',voice_instruction:'',created_at:'',updated_at:''}];
 
 vi.mock('../components/DialogueEditor',()=>({DialogueEditor:({line,onLineUpdated}:any)=><button type="button" onClick={()=>onLineUpdated({...line,text:'更新后的对白'})}>保存测试对白</button>}));
 

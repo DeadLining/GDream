@@ -94,8 +94,8 @@ describe('ProductOverview', () => {
 
     render(<ProductOverview project={multiEpisodeProject} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
 
-    const firstRow = screen.getByText('穿越时空').closest('[role="row"]')!;
-    const secondRow = screen.getByText('时间回响').closest('[role="row"]')!;
+    const firstRow = screen.getByText('穿越时空').closest<HTMLElement>('[role="row"]')!;
+    const secondRow = screen.getByText('时间回响').closest<HTMLElement>('[role="row"]')!;
     expect(within(firstRow).getByText('38%')).toBeVisible();
     expect(within(firstRow).getByText('6 项')).toBeVisible();
     expect(within(secondRow).getByText('100%')).toBeVisible();
@@ -114,7 +114,7 @@ describe('ProductOverview', () => {
 
     render(<ProductOverview project={multiEpisodeProject} episode={episode} readiness={readiness} readinessByEpisode={{'episode-1': readiness}} volumes={volumes} storylines={storylines} onOpenEpisode={vi.fn()} onOpenScript={vi.fn()} onOpenAssets={vi.fn()}/>);
 
-    const pendingRow = screen.getByText('状态未知').closest('[role="row"]')!;
+    const pendingRow = screen.getByText('状态未知').closest<HTMLElement>('[role="row"]')!;
     expect(within(pendingRow).getByText('待获取')).toBeVisible();
     expect(within(pendingRow).getByText('--')).toBeVisible();
     expect(within(pendingRow).queryByText('18%')).not.toBeInTheDocument();
