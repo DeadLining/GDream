@@ -5,6 +5,9 @@ import {
   createScript,
   deleteScript,
   generateCharacterReferenceSet,
+  createCharacter,
+  updateCharacter,
+  deleteCharacterReference,
   listScripts,
   patchScript,
   restoreScriptRevision,
@@ -148,6 +151,25 @@ describe('project library asset api',()=>{
 
 describe('character reference api', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('uses character lifecycle and reference deletion endpoints',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async(_path:string,init?:RequestInit)=>new Response(
+      init?.method==='DELETE'?null:JSON.stringify({}),
+      {status:init?.method==='DELETE'?204:200,headers:init?.method==='DELETE'?undefined:{'content-type':'application/json'}},
+    ));
+    vi.stubGlobal('fetch',fetchMock);
+    const data={name:'周然',role:'搭档',appearance_bible:'灰色风衣',personality:'谨慎',continuity_rules:'左手腕表',negative_constraints:'',voice_speaker:'v2',voice_instruction:''};
+
+    await createCharacter('project-1',data);
+    await updateCharacter('character-1',{name:'周然·修订'});
+    await deleteCharacterReference('reference-1');
+
+    expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method])).toEqual([
+      ['/api/projects/project-1/characters','POST'],
+      ['/api/characters/character-1','PATCH'],
+      ['/api/character-references/reference-1','DELETE'],
+    ]);
+  });
 
   it('starts a character reference set through the background model runtime', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({

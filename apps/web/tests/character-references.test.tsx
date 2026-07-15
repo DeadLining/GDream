@@ -1,11 +1,12 @@
-import {act,cleanup,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,render,screen,waitFor,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {CharacterWorkspace} from '../components/CharacterWorkspace';
 import {readAllStyles} from './_styles';
 
 const mocks=vi.hoisted(()=>({
-  list:vi.fn(),upload:vi.fn(),generateSet:vi.fn(),update:vi.fn(),activate:vi.fn(),
+  list:vi.fn(),upload:vi.fn(),generateSet:vi.fn(),update:vi.fn(),activate:vi.fn(),deleteReference:vi.fn(),
+  createCharacter:vi.fn(),updateCharacter:vi.fn(),
   retry:vi.fn(),pollJob:vi.fn(),variants:vi.fn(),
   libraryAssets:vi.fn(),createLibraryAsset:vi.fn(),updateLibraryAsset:vi.fn(),deleteLibraryAsset:vi.fn(),
   suggestVariant:vi.fn(),
@@ -14,6 +15,8 @@ const mocks=vi.hoisted(()=>({
 vi.mock('../lib/api',()=>({
   listCharacterReferences:mocks.list,
   listAssetVariants:mocks.variants,
+  createCharacter:mocks.createCharacter,
+  updateCharacter:mocks.updateCharacter,
   listLibraryAssets:mocks.libraryAssets,
   createLibraryAsset:mocks.createLibraryAsset,
   updateLibraryAsset:mocks.updateLibraryAsset,
@@ -22,6 +25,7 @@ vi.mock('../lib/api',()=>({
   generateCharacterReferenceSet:mocks.generateSet,
   updateCharacterReference:mocks.update,
   activateCharacterReference:mocks.activate,
+  deleteCharacterReference:mocks.deleteReference,
   retryModelRuntimeJob:mocks.retry,
   createAssetVariant:mocks.createVariant,
   createAssetVariantState:mocks.createState,
@@ -50,6 +54,9 @@ beforeEach(()=>{
   mocks.list.mockResolvedValue(allReferences);
   mocks.variants.mockResolvedValue(variants);
   mocks.libraryAssets.mockResolvedValue([]);
+  mocks.createCharacter.mockResolvedValue({...character,id:'c-new',name:'周然',role:'搭档'});
+  mocks.updateCharacter.mockResolvedValue({...character,name:'林夏·修订',role:'调查员'});
+  mocks.deleteReference.mockResolvedValue(undefined);
   mocks.update.mockResolvedValue({...reference,review_status:'approved'});
   mocks.activate.mockResolvedValue({...reference,review_status:'approved',is_active:true});
   mocks.generateSet.mockResolvedValue({job_id:'job-1',capability:'image',status:'queued'});
@@ -79,6 +86,64 @@ it('manages project asset catalogs even before the project has characters',async
   await user.type(screen.getByRole('textbox',{name:'资产标签'}),'室内');
   await user.click(screen.getByRole('button',{name:'保存资产'}));
   expect(mocks.createLibraryAsset).toHaveBeenCalledWith('p1',{kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{}});
+});
+
+it('creates and edits characters from the asset catalog',async()=>{
+  const user=userEvent.setup();
+  const onCharactersChanged=vi.fn().mockResolvedValue(undefined);
+  render(<CharacterWorkspace projectId="p1" characters={[character]} onCharactersChanged={onCharactersChanged}/>);
+
+  await user.click(await screen.findByRole('button',{name:'新建角色'}));
+  const createForm=screen.getByRole('form',{name:'新建角色'});
+  await user.type(within(createForm).getByRole('textbox',{name:'角色名称'}),'周然');
+  await user.type(within(createForm).getByRole('textbox',{name:'角色定位'}),'搭档');
+  await user.type(within(createForm).getByRole('textbox',{name:'外观设定'}),'灰色风衣');
+  await user.type(within(createForm).getByRole('textbox',{name:'性格设定'}),'谨慎');
+  await user.type(within(createForm).getByRole('textbox',{name:'连续性规则'}),'左手佩戴腕表');
+  await user.type(within(createForm).getByRole('textbox',{name:'声音角色'}),'v2');
+  await user.click(within(createForm).getByRole('button',{name:'保存角色'}));
+
+  await waitFor(()=>expect(mocks.createCharacter).toHaveBeenCalledWith('p1',{
+    name:'周然',role:'搭档',appearance_bible:'灰色风衣',personality:'谨慎',continuity_rules:'左手佩戴腕表',negative_constraints:'',voice_speaker:'v2',voice_instruction:'',
+  }));
+  expect(await screen.findByRole('button',{name:/周然/})).toBeVisible();
+  expect(onCharactersChanged).toHaveBeenCalledTimes(1);
+
+  await user.click(screen.getByRole('button',{name:'编辑角色'}));
+  const editForm=screen.getByRole('form',{name:'编辑角色'});
+  const name=within(editForm).getByRole('textbox',{name:'角色名称'});
+  const role=within(editForm).getByRole('textbox',{name:'角色定位'});
+  await user.clear(name);
+  await user.type(name,'林夏·修订');
+  await user.clear(role);
+  await user.type(role,'调查员');
+  await user.click(within(editForm).getByRole('button',{name:'保存角色'}));
+
+  await waitFor(()=>expect(mocks.updateCharacter).toHaveBeenCalledWith('c-new',expect.objectContaining({name:'林夏·修订',role:'调查员'})));
+  expect(onCharactersChanged).toHaveBeenCalledTimes(2);
+});
+
+it('renames and deletes an inactive character reference',async()=>{
+  const renamed={...reference,label:'雨夜主参考'};
+  let nextReferences=allReferences;
+  mocks.list.mockImplementation(()=>Promise.resolve(nextReferences));
+  mocks.update.mockImplementation(async()=>{nextReferences=[renamed,...allReferences.slice(1)];return renamed;});
+  mocks.deleteReference.mockImplementation(async()=>{nextReferences=allReferences.slice(1);});
+  vi.spyOn(window,'confirm').mockReturnValue(true);
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character]}/>);
+
+  await user.click(await screen.findByRole('button',{name:/林夏/}));
+  await user.click(screen.getByRole('button',{name:'参考集'}));
+  await user.click(await screen.findByRole('button',{name:'重命名主参考'}));
+  const input=screen.getByRole('textbox',{name:'参考图名称'});
+  await user.clear(input);
+  await user.type(input,'雨夜主参考');
+  await user.click(screen.getByRole('button',{name:'保存参考图名称'}));
+  await waitFor(()=>expect(mocks.update).toHaveBeenCalledWith('r1',{label:'雨夜主参考'}));
+
+  await user.click(await screen.findByRole('button',{name:'删除雨夜主参考'}));
+  await waitFor(()=>expect(mocks.deleteReference).toHaveBeenCalledWith('r1'));
 });
 
 it('keeps the AI variant workspace inside one viewport without a canvas scrollbar',()=>{
