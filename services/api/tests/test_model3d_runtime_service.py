@@ -116,6 +116,64 @@ async def test_character_model3d_job_creates_candidate_then_requires_approval(tm
 
 
 @pytest.mark.anyio
+async def test_character_model3d_job_preserves_variant_state_scope(tmp_path):
+    service, session_factory = _runtime(tmp_path)
+    character_id, reference_asset_id = _character_reference(
+        session_factory, service.data_root
+    )
+    with session_factory() as session:
+        character = session.get(models.Character, character_id)
+        episode = models.Episode(
+            project_id=character.project_id,
+            title="Episode two",
+            premise="Injury continuity",
+            target_duration_seconds=60,
+        )
+        session.add(episode)
+        session.flush()
+        variant = models.AssetVariant(
+            character_id=character_id,
+            episode_id=episode.id,
+            kind="episode",
+            label="Rain outfit",
+            inherited_fields=["identity"],
+            overrides={"outfit": "rain coat"},
+        )
+        state = models.AssetVariantState(
+            variant=variant,
+            kind="injury",
+            label="Injured brow",
+            overrides={"injury": "left brow"},
+        )
+        session.add_all([episode, variant, state])
+        session.commit()
+        variant_id, state_id = variant.id, state.id
+    job = service.create_media_job(
+        Capability.MODEL_3D,
+        "character",
+        character_id,
+        {
+            "reference_asset_id": reference_asset_id,
+            "variant_id": variant_id,
+            "state_id": state_id,
+        },
+    )
+
+    await service.run_media_job(job.id)
+
+    succeeded = service.get_job(job.id)
+    with session_factory() as session:
+        representation = session.get(
+            models.Character3DRepresentation,
+            succeeded.result_metadata["representation_id"],
+        )
+        assert representation.variant_id == variant_id
+        assert representation.state_id == state_id
+        assert representation.asset.request_metadata["variant_id"] == variant_id
+        assert representation.asset.request_metadata["state_id"] == state_id
+
+
+@pytest.mark.anyio
 async def test_character_model3d_rejects_an_unapproved_explicit_reference(tmp_path):
     service, session_factory = _runtime(tmp_path)
     character_id, reference_asset_id = _character_reference(
