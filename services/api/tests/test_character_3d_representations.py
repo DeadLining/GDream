@@ -341,10 +341,10 @@ def test_director_catalog_resolves_state_variant_and_master_models_by_shot(clien
         f"/api/asset-variants/{episode_variant['id']}/states",
         json={"kind": "injury", "label": "受伤", "overrides": {"injury": "left brow"}},
     ).json()
-    client.post(
+    usage = client.post(
         f"/api/asset-variants/{episode_variant['id']}/usages",
         json={"shot_id": second_shot_id, "state_id": state["id"], "usage_kind": "reference"},
-    )
+    ).json()
     master_model = client.post(
         f"/api/characters/{character['id']}/3d-representations",
         files={"file": ("master.glb", _glb(), "model/gltf-binary")},
@@ -376,10 +376,68 @@ def test_director_catalog_resolves_state_variant_and_master_models_by_shot(clien
     assert state_asset["metadata"]["variant_id"] == episode_variant["id"]
     assert state_asset["metadata"]["state_id"] == state["id"]
 
-    with client.app.state.session_factory() as session:
-        deleted_state = session.get(models.AssetVariantState, state["id"])
-        deleted_state.deleted_at = models.utc_now()
-        session.commit()
+    synced = client.post(
+        f"/api/director-stages/{stage['id']}/assets/sync",
+        json={
+            "expected_version": stage["version"],
+            "asset_keys": [item["key"] for item in default_catalog],
+        },
+    ).json()
+    character_object = next(
+        item for item in synced["objects"] if item["kind"] == "character"
+    )
+    bound_variants = client.get(
+        f"/api/characters/{character['id']}/variants"
+    ).json()
+    bound_usage = next(
+        item
+        for variant in bound_variants
+        for item in variant["usages"]
+        if item["id"] == usage["id"]
+    )
+    assert bound_usage["effective_variant_id"] == episode_variant["id"]
+    assert bound_usage["effective_state_id"] == state["id"]
+    assert bound_usage["effective_representation_id"] == state_model["id"]
+    assert bound_usage["effective_representation_version"] == state_model["version"]
+    assert bound_usage["director_object_id"] == character_object["id"]
+    assert bound_usage["binding_status"] == "resolved"
+    assert bound_usage["binding_updated_at"] is not None
+
+    replacement_state_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("state-v2.glb", _glb(), "model/gltf-binary")},
+        data={"state_id": state["id"]},
+    ).json()
+    refreshed_variants = client.get(
+        f"/api/characters/{character['id']}/variants"
+    ).json()
+    refreshed_usage = next(
+        item
+        for variant in refreshed_variants
+        for item in variant["usages"]
+        if item["id"] == usage["id"]
+    )
+    assert refreshed_usage["effective_representation_id"] == replacement_state_model["id"]
+    assert refreshed_usage["effective_representation_version"] == replacement_state_model["version"]
+
+    deleted = client.delete(f"/api/asset-variant-states/{state['id']}")
+    assert deleted.status_code == 204
+    fallback_variants = client.get(
+        f"/api/characters/{character['id']}/variants"
+    ).json()
+    fallback_usage = next(
+        item
+        for variant in fallback_variants
+        for item in variant["usages"]
+        if item["id"] == usage["id"]
+    )
+    assert fallback_usage["effective_variant_id"] == episode_variant["id"]
+    assert fallback_usage["effective_state_id"] is None
+    assert fallback_usage["effective_representation_id"] == variant_model["id"]
+    assert fallback_usage["effective_representation_version"] == variant_model["version"]
+    assert fallback_usage["director_object_id"] == character_object["id"]
+    assert fallback_usage["binding_status"] == "fallback"
+
     deleted_state_catalog = client.get(
         f"/api/director-stages/{stage['id']}/assets?shot_id={second_shot_id}"
     ).json()
