@@ -12,6 +12,7 @@ const mocks=vi.hoisted(()=>({
   suggestVariant:vi.fn(),
   representations:vi.fn(),uploadRepresentation:vi.fn(),
   generateModel3D:vi.fn(),latestModel3D:vi.fn(),approveModel3D:vi.fn(),
+  characterImpact:vi.fn(),variantImpact:vi.fn(),stateImpact:vi.fn(),createProductionRun:vi.fn(),
   createVariant:vi.fn(),createState:vi.fn(),updateVariant:vi.fn(),updateState:vi.fn(),deleteVariant:vi.fn(),deleteState:vi.fn(),
 }));
 vi.mock('../lib/api',()=>({
@@ -29,6 +30,10 @@ vi.mock('../lib/api',()=>({
   generateModel3D:mocks.generateModel3D,
   getLatestModel3DJob:mocks.latestModel3D,
   approveModel3DJob:mocks.approveModel3D,
+  getCharacterImpact:mocks.characterImpact,
+  getAssetVariantImpact:mocks.variantImpact,
+  getAssetVariantStateImpact:mocks.stateImpact,
+  createProductionRun:mocks.createProductionRun,
   generateCharacterReferenceSet:mocks.generateSet,
   updateCharacterReference:mocks.update,
   activateCharacterReference:mocks.activate,
@@ -65,6 +70,10 @@ beforeEach(()=>{
   mocks.latestModel3D.mockResolvedValue(null);
   mocks.generateModel3D.mockResolvedValue({job_id:'job-3d',capability:'model3d',status:'queued'});
   mocks.approveModel3D.mockResolvedValue({review_status:'approved',is_active:true});
+  mocks.characterImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
+  mocks.variantImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
+  mocks.stateImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
+  mocks.createProductionRun.mockResolvedValue({id:'run-impact'});
   mocks.libraryAssets.mockResolvedValue([]);
   mocks.createCharacter.mockResolvedValue({...character,id:'c-new',name:'周然',role:'搭档'});
   mocks.updateCharacter.mockResolvedValue({...character,name:'林夏·修订',role:'调查员'});
@@ -248,7 +257,7 @@ it('opens the master setting, variant editor, and lineage from the asset catalog
   render(<CharacterWorkspace characters={[character]} episodes={[{id:'e1',project_id:'p1',title:'雨夜危机',premise:'',target_duration_seconds:60,status:'draft',created_at:'',updated_at:''}]}/>);
 
   expect(await screen.findByRole('heading',{name:'作品资产库'})).toBeVisible();
-  expect(screen.getByText('角色实体')).toBeVisible();
+  expect(screen.getAllByText('角色实体')[0]).toBeVisible();
   expect(screen.getByText('集级变体 1')).toBeVisible();
 
   await user.click(screen.getByRole('button',{name:/林夏/}));
@@ -332,7 +341,29 @@ it('generates a reviewable 3D candidate from an existing character reference',as
   await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith('character','c1','a2'));
   expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
   await user.click(screen.getByRole('button',{name:'批准使用 3D 候选'}));
+  expect(await screen.findByRole('dialog',{name:'确认 3D 变更影响'})).toBeVisible();
+  expect(mocks.characterImpact).toHaveBeenCalledWith('c1');
+  expect(mocks.approveModel3D).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button',{name:'确认批准'}));
   expect(mocks.approveModel3D).toHaveBeenCalledWith('job-3d');
+});
+
+it('starts one forced panel run per affected episode',async()=>{
+  const affected={shots:['shot-1','shot-2'],assets:[],usage_count:2,episodes:[
+    {episode_id:'e1',episode_title:'第一集',scenes:[{scene_id:'sc1',scene_label:'场景 01 · 巷道',shots:[{id:'shot-1',position:1,composition:'近景'}]}]},
+    {episode_id:'e2',episode_title:'第二集',scenes:[{scene_id:'sc2',scene_label:'场景 01 · 天台',shots:[{id:'shot-2',position:2,composition:'远景'}]}]},
+  ]};
+  mocks.variantImpact.mockResolvedValue(affected);
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character]}/>);
+  await user.click(await screen.findByRole('button',{name:'打开谱系'}));
+  await user.click(await screen.findByRole('button',{name:'第 01 集雨夜造型'}));
+  await user.click(screen.getByRole('button',{name:'分析影响范围'}));
+  await user.click(await screen.findByRole('button',{name:'重新生成受影响画面'}));
+
+  expect(mocks.createProductionRun).toHaveBeenCalledTimes(2);
+  expect(mocks.createProductionRun).toHaveBeenNthCalledWith(1,'e1',{stages:['panels'],shot_ids:['shot-1'],concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
+  expect(mocks.createProductionRun).toHaveBeenNthCalledWith(2,'e2',{stages:['panels'],shot_ids:['shot-2'],concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
 });
 
 it('does not generate 3D from unapproved character references',async()=>{

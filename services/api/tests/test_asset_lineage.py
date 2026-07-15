@@ -125,7 +125,68 @@ def test_asset_lineage_persists_variants_states_and_shot_usage(client):
 
     impact = client.get(f"/api/asset-variants/{variant['id']}/impact")
     assert impact.status_code == 200
-    assert impact.json() == {"shots": [shot_id], "assets": [], "usage_count": 1}
+    assert impact.json() == {
+        "shots": [shot_id],
+        "assets": [],
+        "usage_count": 1,
+        "episodes": [
+            {
+                "episode_id": episode["id"],
+                "episode_title": "第三集",
+                "scenes": [
+                    {
+                        "scene_id": impact.json()["episodes"][0]["scenes"][0]["scene_id"],
+                        "scene_label": "场景 01 · 巷道",
+                        "shots": [
+                            {
+                                "id": shot_id,
+                                "position": 1,
+                                "composition": "面部伤痕特写",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_master_variant_impact_groups_shots_across_episodes_and_state_impact_filters_them(client):
+    project = _project(client, "跨集影响")
+    character = _character(client, project["id"], "林默")
+    first_episode = _episode(client, project["id"], "第一集")
+    second_episode = _episode(client, project["id"], "第二集")
+    first_shot = _shot(client, first_episode["id"])
+    second_shot = _shot(client, second_episode["id"])
+    master = client.post(
+        f"/api/characters/{character['id']}/variants",
+        json={"kind": "master", "label": "主设定", "inherited_fields": [], "overrides": {}},
+    ).json()
+    state = client.post(
+        f"/api/asset-variants/{master['id']}/states",
+        json={"kind": "expression", "label": "警惕", "overrides": {}},
+    ).json()
+    client.post(
+        f"/api/asset-variants/{master['id']}/usages",
+        json={"shot_id": first_shot, "usage_kind": "panel"},
+    )
+    client.post(
+        f"/api/asset-variants/{master['id']}/usages",
+        json={"state_id": state["id"], "shot_id": second_shot, "usage_kind": "panel"},
+    )
+
+    character_impact = client.get(f"/api/characters/{character['id']}/impact")
+    state_impact = client.get(f"/api/asset-variant-states/{state['id']}/impact")
+
+    assert character_impact.status_code == 200
+    assert [item["episode_title"] for item in character_impact.json()["episodes"]] == [
+        "第一集",
+        "第二集",
+    ]
+    assert character_impact.json()["shots"] == sorted([first_shot, second_shot])
+    assert state_impact.status_code == 200
+    assert state_impact.json()["shots"] == [second_shot]
+    assert state_impact.json()["episodes"][0]["episode_title"] == "第二集"
 
 
 def test_asset_variant_rejects_parent_from_another_character(client):
