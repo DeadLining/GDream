@@ -42,6 +42,7 @@ import {
   AssetCatalogView,
   AssetVariantEditorView,
   CharacterMasterView,
+  type CharacterAssetCatalogData,
   type AssetWorkspaceView,
 } from './assets/AssetLibraryViews';
 import {AssetLineageCanvas} from './canvas/AssetLineageCanvas';
@@ -57,34 +58,35 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
   const [filter,setFilter]=useState<CharacterReferenceType>('primary');
-  const [assetData,setAssetData]=useState<{characterId:string;references:CharacterReference[];variants:AssetVariant[]}>({characterId:'',references:[],variants:[]});
+  const [assetData,setAssetData]=useState<Record<string,CharacterAssetCatalogData>>({});
   const [libraryAssets,setLibraryAssets]=useState<LibraryAsset[]>([]);
   const [libraryError,setLibraryError]=useState('');
   const [error,setError]=useState('');
   const [generating,setGenerating]=useState(false);
   const [currentJob,setCurrentJob]=useState<Job|null>(null);
   const completedCount=useRef(0);
-  const loadRequest=useRef(0);
+  const loadRequests=useRef<Record<string,number>>({});
   const libraryLoadRequest=useRef(0);
   const resolvedProjectId=projectId??characters[0]?.project_id??'';
   const character=characters.find(item=>item.id===selected)??characters[0];
-  const dataMatchesCharacter=assetData.characterId===character?.id;
-  const references=dataMatchesCharacter?assetData.references:[];
-  const variants=dataMatchesCharacter?assetData.variants:[];
+  const references=character?assetData[character.id]?.references??[]:[];
+  const variants=character?assetData[character.id]?.variants??[]:[];
+  const characterIds=characters.map(item=>item.id).join('|');
 
   const load=async(id:string)=>{
-    const request=++loadRequest.current;
+    const request=(loadRequests.current[id]??0)+1;
+    loadRequests.current[id]=request;
     try{
       const [nextReferences,nextVariants]=await Promise.all([listCharacterReferences(id),listAssetVariants(id)]);
-      if(request!==loadRequest.current)return;
-      setAssetData({characterId:id,references:nextReferences,variants:nextVariants});
+      if(request!==loadRequests.current[id])return;
+      setAssetData(current=>({...current,[id]:{references:nextReferences,variants:nextVariants}}));
       setError('');
     }catch(cause){
-      if(request!==loadRequest.current)return;
+      if(request!==loadRequests.current[id])return;
       setError(cause instanceof Error?cause.message:'加载失败');
     }
   };
-  useEffect(()=>{if(character)void load(character.id);},[character?.id]);
+  useEffect(()=>{for(const item of characters)void load(item.id);},[characterIds]);
 
   const reloadLibraryAssets=async()=>{
     if(!resolvedProjectId){setLibraryAssets([]);return;}
@@ -109,7 +111,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
   const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
   const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();};
   const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();};
-  const catalog=<AssetCatalogView characters={characters} character={character??null} references={references} variants={variants} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia}/>;
+  const catalog=<AssetCatalogView characters={characters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia}/>;
 
   if(!character)return catalog;
 

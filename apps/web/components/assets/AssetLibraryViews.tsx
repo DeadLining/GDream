@@ -12,6 +12,7 @@ const firstReference=(references:CharacterReference[],type?:CharacterReferenceTy
 const imageFor=(references:CharacterReference[],type?:CharacterReferenceType)=>{const reference=firstReference(references,type);return reference?mediaUrl(reference.asset.media_url):null;};
 
 export type AssetWorkspaceView='catalog'|'master'|'variant'|'lineage';
+export type CharacterAssetCatalogData={references:CharacterReference[];variants:AssetVariant[]};
 type CharacterDetailTab='master'|'references'|'variant'|'lineage';
 
 const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>={
@@ -21,7 +22,7 @@ const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>
   sound:{label:'声音',description:'管理环境音、效果音和声音设计说明。'},
 };
 
-export function AssetCatalogView({characters,character,references,variants,libraryAssets=[],libraryError='',onSelect,onOpen,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset,onUploadLibraryAssetMedia}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];libraryAssets?:LibraryAsset[];libraryError?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void;onUploadLibraryAssetMedia?:(id:string,file:File)=>Promise<void>|void}){
+export function AssetCatalogView({characters,character,references,variants,characterAssets={},libraryAssets=[],libraryError='',onSelect,onOpen,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset,onUploadLibraryAssetMedia}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];characterAssets?:Record<string,CharacterAssetCatalogData>;libraryAssets?:LibraryAsset[];libraryError?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void;onUploadLibraryAssetMedia?:(id:string,file:File)=>Promise<void>|void}){
   const [filter,setFilter]=useState<'all'|'variants'|'pending'>('all');
   const [category,setCategory]=useState<'character'|LibraryAssetKind>('character');
   const [query,setQuery]=useState('');
@@ -32,11 +33,15 @@ export function AssetCatalogView({characters,character,references,variants,libra
   const [assetTags,setAssetTags]=useState('');
   const [assetBusy,setAssetBusy]=useState(false);
   const [assetError,setAssetError]=useState('');
-  const selectedImage=imageFor(references);
+  const catalogDataFor=(id:string)=>characterAssets[id]??(id===character?.id?{references,variants}:{references:[],variants:[]});
   const episodeVariants=variants.filter(item=>item.kind==='episode');
-  const pending=references.filter(item=>item.review_status!=='approved').length+variants.filter(item=>item.review_status!=='approved').length;
   const normalizedQuery=query.trim().toLocaleLowerCase();
-  const filtered=characters.filter(item=>(filter==='all'||item.id===character?.id)&&(!normalizedQuery||`${item.name} ${item.role}`.toLocaleLowerCase().includes(normalizedQuery)));
+  const filtered=characters.filter(item=>{
+    const data=catalogDataFor(item.id);
+    const hasVariant=data.variants.some(variant=>variant.kind==='episode');
+    const hasPending=data.references.some(reference=>reference.review_status!=='approved')||data.variants.some(variant=>variant.review_status!=='approved');
+    return (filter==='all'||filter==='variants'&&hasVariant||filter==='pending'&&hasPending)&&(!normalizedQuery||`${item.name} ${item.role}`.toLocaleLowerCase().includes(normalizedQuery));
+  });
   const categoryAssets=category==='character'?[]:libraryAssets.filter(item=>item.kind===category);
   const visibleLibraryAssets=categoryAssets.filter(item=>!normalizedQuery||`${item.name} ${item.description} ${item.tags.join(' ')}`.toLocaleLowerCase().includes(normalizedQuery));
   const selectedLibrary=visibleLibraryAssets.find(item=>item.id===selectedLibraryId)??visibleLibraryAssets[0]??null;
@@ -81,13 +86,14 @@ export function AssetCatalogView({characters,character,references,variants,libra
         <div className="asset-card-grid">
           {filtered.map(item=>{
             const current=item.id===character?.id;
-            const image=current?selectedImage:null;
-            const visible=filter!=='variants'||current&&episodeVariants.length>0;
-            const pendingVisible=filter!=='pending'||current&&pending>0;
-            if(!visible||!pendingVisible)return null;
+            const data=catalogDataFor(item.id);
+            const itemEpisodeVariants=data.variants.filter(variant=>variant.kind==='episode');
+            const itemPending=data.references.filter(reference=>reference.review_status!=='approved').length+data.variants.filter(variant=>variant.review_status!=='approved').length;
+            const loaded=Boolean(characterAssets[item.id])||current;
+            const image=imageFor(data.references);
             return <button type="button" className={`asset-catalog-card ${current?'selected':''}`} key={item.id} onClick={()=>{onSelect(item.id);onOpen('master');}} aria-label={`${item.name} ${item.role}`}>
-              <span className="asset-card-media">{image?<img src={image} alt=""/>:<span className="asset-card-placeholder">{item.name.slice(0,1)}</span>}<i>{current&&pending?'待审核':'主设定'}</i></span>
-              <span className="asset-card-body"><strong>{item.name}</strong><small>{item.role}</small><span><em>{current?statusLabel(variants.find(variant=>variant.kind==='master')?.review_status??'draft'):'未加载'}</em></span><span className="asset-card-stats">集级变体 {current?episodeVariants.length:0}</span></span>
+              <span className="asset-card-media">{image?<img src={image} alt=""/>:<span className="asset-card-placeholder">{item.name.slice(0,1)}</span>}<i>{itemPending?'待审核':'主设定'}</i></span>
+              <span className="asset-card-body"><strong>{item.name}</strong><small>{item.role}</small><span><em>{loaded?statusLabel(data.variants.find(variant=>variant.kind==='master')?.review_status??'draft'):'加载中'}</em></span><span className="asset-card-stats">集级变体 {itemEpisodeVariants.length}</span></span>
             </button>;
           })}
         </div>
