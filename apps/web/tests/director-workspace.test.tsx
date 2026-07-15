@@ -179,7 +179,7 @@ describe('DirectorWorkspace',()=>{
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{pose_preset:'action'}}}));
   });
   it('persists standard humanoid body proportions on the scene object',async()=>{
-    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1,proxy_shoulder_width:1,proxy_body_width:1},metadata:{proxy_rig:'standard_humanoid'}};
+    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1,proxy_shoulder_width:1,proxy_body_width:1},metadata:{}};
     const characterStage={...stage,objects:[characterObject]};
     mocks.getDirectorStage.mockResolvedValue(characterStage);mocks.getDirectorAssets.mockResolvedValue([]);
     mocks.updateDirectorObject.mockImplementation(async(_id:string,_version:number,patch:{appearance:Record<string,unknown>})=>({...characterObject,appearance:patch.appearance}));
