@@ -11,6 +11,22 @@ from comic_studio.providers.base import ProviderError
 
 
 class QwenTTSProvider:
+    SUPPORTED_SPEAKERS = frozenset(
+        {
+            "aiden",
+            "dylan",
+            "eric",
+            "ono_anna",
+            "ryan",
+            "serena",
+            "sohee",
+            "uncle_fu",
+            "vivian",
+        }
+    )
+    FEMALE_VOICE_HINTS = ("female", "woman", "girl", "女性", "女声", "少女", "女孩")
+    OLDER_MALE_VOICE_HINTS = ("older male", "old man", "elder", "大叔", "老年", "年长", "老人")
+
     def __init__(
         self,
         *,
@@ -90,7 +106,7 @@ class QwenTTSProvider:
         payload = {
             "model": self.model,
             "text": text,
-            "speaker": speaker,
+            "speaker": self.resolve_speaker(speaker),
             "language": language,
             "instruct": instruction,
             "response_format": "wav",
@@ -130,6 +146,19 @@ class QwenTTSProvider:
         finally:
             if owns_client:
                 await client.aclose()
+
+    @classmethod
+    def resolve_speaker(cls, speaker: str) -> str:
+        normalized = speaker.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in cls.SUPPORTED_SPEAKERS:
+            return normalized
+
+        hint = speaker.strip().lower()
+        if any(marker in hint for marker in cls.FEMALE_VOICE_HINTS):
+            return "vivian"
+        if any(marker in hint for marker in cls.OLDER_MALE_VOICE_HINTS):
+            return "uncle_fu"
+        return "dylan"
 
     def _synthesize_via_ssh(self, payload: dict) -> bytes:
         config_lines = [

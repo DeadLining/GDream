@@ -80,7 +80,7 @@ async def test_qwen_tts_sends_character_performance_contract():
     body = json.loads(request.content)
     assert request.url.path == "/v1/audio/speech"
     assert body["model"] == "Qwen3-TTS-12Hz-1.7B-CustomVoice"
-    assert body["speaker"] == "Dylan"
+    assert body["speaker"] == "dylan"
     assert body["instruct"] == "低声、紧张、快速"
     assert audio == WAV_BYTES
 
@@ -181,7 +181,7 @@ async def test_qwen_tts_falls_back_to_hostbridge_ssh_on_transport_failure():
     data_line = next(line for line in config.splitlines() if line.startswith("data = "))
     escaped_data = data_line.removeprefix('data = "').removesuffix('"')
     remote_payload = json.loads(json.loads(f'"{escaped_data}"'))
-    assert remote_payload["speaker"] == "Dylan"
+    assert remote_payload["speaker"] == "dylan"
     assert remote_payload["text"] == "别回头。"
     assert remote_payload["instruct"] == "低声"
     assert "别回头。" not in " ".join(captured["command"])
