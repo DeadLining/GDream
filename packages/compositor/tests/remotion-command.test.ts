@@ -17,5 +17,7 @@ describe('Remotion render command', () => {
     expect(args).toContainEqual('--browser-executable');
     expect(args).toContainEqual(browserExecutable);
     expect(args).toContainEqual('--chrome-mode=chrome-for-testing');
+    expect(args).toContainEqual('--concurrency=1');
+    expect(args).toContainEqual('--timeout=120000');
   });
 });
