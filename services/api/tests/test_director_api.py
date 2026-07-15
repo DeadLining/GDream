@@ -151,6 +151,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
             personality="冷静",
             continuity_rules="雨衣始终扣好",
             voice_speaker="linxia",
+            body_plan="quadruped",
         )
         session.add(character)
         session.flush()
@@ -245,7 +246,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     assert "image_url" not in synced_character["appearance"]
     assert synced_character["appearance"]["fallback_image_url"].endswith("/primary.png")
     assert synced_character["metadata"]["requires_3d_model"] is False
-    assert synced_character["metadata"]["proxy_rig"] == "standard_humanoid"
+    assert synced_character["metadata"]["proxy_rig"] == "quadruped"
     assert synced_character["metadata"]["full_model_optional"] is True
     assert synced_character["metadata"]["asset_id"] == asset_id
     non_background = [

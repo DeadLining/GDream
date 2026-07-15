@@ -24,6 +24,7 @@ def test_project_and_characters_survive_new_request(client):
             "continuity_rules": "Always wears the black coat outdoors",
             "voice_speaker": "Dylan",
             "voice_instruction": "冷静、低声、略带疲惫",
+            "body_plan": "quadruped",
         },
     )
     assert character_response.status_code == 201
@@ -36,6 +37,7 @@ def test_project_and_characters_survive_new_request(client):
     assert loaded["title"] == "霓虹夜行"
     assert loaded["characters"][0]["id"] == character["id"]
     assert loaded["characters"][0]["voice_speaker"] == "Dylan"
+    assert loaded["characters"][0]["body_plan"] == "quadruped"
 
 
 def test_project_rejects_unsupported_aspect_ratio(client):

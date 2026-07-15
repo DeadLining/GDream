@@ -46,7 +46,7 @@ vi.mock('../lib/api',()=>({
 vi.mock('../lib/jobs',()=>({pollJob:mocks.pollJob}));
 vi.mock('../components/assets/CharacterModelPreview',()=>({CharacterModelPreview:({url}:{url:string})=><div data-testid="character-model-preview" data-url={url}/>}));
 
-const character={id:'c1',project_id:'p1',name:'林夏',role:'主角',appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'银色耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:'',created_at:'',updated_at:''};
+const character={id:'c1',project_id:'p1',name:'林夏',role:'主角',body_plan:'humanoid' as const,appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'银色耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:'',created_at:'',updated_at:''};
 const reference={id:'r1',character_id:'c1',reference_type:'primary' as const,label:'主参考',position:0,is_active:false,review_status:'draft' as const,created_at:'',asset:{id:'a1',kind:'character-reference',media_url:'/media/a.png',media_type:'image/png',provider:'upload',model:'local',generation_attempt:1,review_status:'draft',width:1,height:1,duration_seconds:null,created_at:''}};
 const approvedReference=(type:'front'|'side'|'back'|'expression'|'outfit',index:number)=>({...reference,id:`r${index}`,reference_type:type,label:type,is_active:true,review_status:'approved' as const,asset:{...reference.asset,id:`a${index}`,media_url:`/media/${type}.png`,review_status:'approved'}});
 const allReferences=[reference,approvedReference('front',2),approvedReference('side',3),approvedReference('back',4),approvedReference('expression',5),approvedReference('outfit',6)];
@@ -111,6 +111,7 @@ it('creates and edits characters from the asset catalog',async()=>{
   const createForm=screen.getByRole('form',{name:'新建角色'});
   await user.type(within(createForm).getByRole('textbox',{name:'角色名称'}),'周然');
   await user.type(within(createForm).getByRole('textbox',{name:'角色定位'}),'搭档');
+  await user.selectOptions(within(createForm).getByLabelText('实体形态'),'quadruped');
   await user.type(within(createForm).getByRole('textbox',{name:'外观设定'}),'灰色风衣');
   await user.type(within(createForm).getByRole('textbox',{name:'性格设定'}),'谨慎');
   await user.type(within(createForm).getByRole('textbox',{name:'连续性规则'}),'左手佩戴腕表');
@@ -118,7 +119,7 @@ it('creates and edits characters from the asset catalog',async()=>{
   await user.click(within(createForm).getByRole('button',{name:'保存角色'}));
 
   await waitFor(()=>expect(mocks.createCharacter).toHaveBeenCalledWith('p1',{
-    name:'周然',role:'搭档',appearance_bible:'灰色风衣',personality:'谨慎',continuity_rules:'左手佩戴腕表',negative_constraints:'',voice_speaker:'v2',voice_instruction:'',
+    name:'周然',role:'搭档',body_plan:'quadruped',appearance_bible:'灰色风衣',personality:'谨慎',continuity_rules:'左手佩戴腕表',negative_constraints:'',voice_speaker:'v2',voice_instruction:'',
   }));
   expect(await screen.findByRole('button',{name:/周然/})).toBeVisible();
   expect(onCharactersChanged).toHaveBeenCalledTimes(1);
@@ -247,7 +248,7 @@ it('opens the master setting, variant editor, and lineage from the asset catalog
   render(<CharacterWorkspace characters={[character]} episodes={[{id:'e1',project_id:'p1',title:'雨夜危机',premise:'',target_duration_seconds:60,status:'draft',created_at:'',updated_at:''}]}/>);
 
   expect(await screen.findByRole('heading',{name:'作品资产库'})).toBeVisible();
-  expect(screen.getByText('角色资产')).toBeVisible();
+  expect(screen.getByText('角色实体')).toBeVisible();
   expect(screen.getByText('集级变体 1')).toBeVisible();
 
   await user.click(screen.getByRole('button',{name:/林夏/}));

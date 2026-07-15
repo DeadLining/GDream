@@ -24,6 +24,7 @@ def _seed_project(session, data_root: Path) -> str:
         project=project, name="林深", role="主角",
         appearance_bible="黑发", personality="沉稳",
         continuity_rules="疤痕在左眉", voice_speaker="male_adult",
+        body_plan="quadruped",
     )
     episode = models.Episode(
         project=project, title="雨夜", premise="线索",
@@ -91,6 +92,7 @@ def test_export_writes_valid_zip_with_manifest(db_session, tmp_path):
         database = json.loads(zf.read("database.json"))
         assert database["project"]["title"] == "夜行"
         assert len(database["characters"]) == 1
+        assert database["characters"][0]["body_plan"] == "quadruped"
         assert len(database["dialogue_lines"]) == 1
         assert database["library_assets"][0]["name"] == "雨夜巷道"
         # Asset binary packed.
@@ -130,6 +132,7 @@ def test_import_round_trip_preserves_structure(db_session, tmp_path):
     # Character preserved.
     assert len(new_project.characters) == 1
     assert new_project.characters[0].name == "林深"
+    assert new_project.characters[0].body_plan == "quadruped"
     assert len(new_project.library_assets) == 1
     assert new_project.library_assets[0].name == "雨夜巷道"
     assert new_project.library_assets[0].asset_metadata == {"time_of_day": "night"}
