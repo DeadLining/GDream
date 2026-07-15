@@ -11,6 +11,7 @@ import httpx
 
 from comic_studio.provider_channels import ProviderChannel
 from comic_studio.providers.qwen_tts import QwenTTSProvider
+from comic_studio.providers.wan_video import WanVideoProvider
 from comic_studio.schemas import ProviderChannelTestRead, ProviderChannelUpdate
 
 
@@ -60,6 +61,24 @@ def default_tts_provider_factory(
     )
 
 
+def default_video_provider_factory(
+    channel: ProviderChannel,
+    client: httpx.AsyncClient,
+    ssh_executor: Callable[[list[str], bytes], bytes] | None,
+    *,
+    prefer_ssh: bool = False,
+) -> WanVideoProvider:
+    return WanVideoProvider(
+        api_key=channel.api_key_value or "",
+        model=channel.model,
+        base_url=channel.base_url,
+        client=client,
+        ssh_host=channel.ssh_host,
+        ssh_executor=ssh_executor,
+        prefer_ssh=prefer_ssh,
+    )
+
+
 class ProviderChannelTestingService:
     def __init__(
         self,
@@ -70,6 +89,7 @@ class ProviderChannelTestingService:
             [ProviderKind, ProviderChannel, Any], Any
         ] = default_provider_factory,
         tts_provider_factory: Callable[..., Any] = default_tts_provider_factory,
+        video_provider_factory: Callable[..., Any] = default_video_provider_factory,
         client_factory: Callable[..., Any] = default_client_factory,
         ssh_executor: Callable[[list[str], bytes], bytes] | None = None,
         subprocess_runner: Callable[..., Any] = subprocess.run,
@@ -81,6 +101,7 @@ class ProviderChannelTestingService:
         self._clock = clock
         self._provider_factory = provider_factory
         self._tts_provider_factory = tts_provider_factory
+        self._video_provider_factory = video_provider_factory
         self._client_factory = client_factory
         self._ssh_executor = ssh_executor
         self._subprocess_runner = subprocess_runner
@@ -122,7 +143,23 @@ class ProviderChannelTestingService:
                         provider = self._provider_factory(kind, channel, client)
                         scope = await self._test_image(provider, channel)
                     elif kind == "video":
-                        provider = self._provider_factory(kind, channel, client)
+                        if WanVideoProvider.supports_channel(channel):
+                            provider_args = (
+                                channel,
+                                client,
+                                self._ssh_executor
+                                or self._make_bounded_ssh_executor(deadline),
+                            )
+                            prefer_ssh = self._should_prefer_ssh(channel.ssh_host)
+                            if prefer_ssh:
+                                provider = self._video_provider_factory(
+                                    *provider_args,
+                                    prefer_ssh=True,
+                                )
+                            else:
+                                provider = self._video_provider_factory(*provider_args)
+                        else:
+                            provider = self._provider_factory(kind, channel, client)
                         scope = await self._test_video(provider, channel)
                     else:
                         provider_args = (
@@ -173,7 +210,9 @@ class ProviderChannelTestingService:
                 base_url=str(candidate.base_url),
                 model=candidate.model,
                 api_key=effective_key,
-                ssh_host=(candidate.ssh_host or None) if kind == "tts" else None,
+                ssh_host=(candidate.ssh_host or None)
+                if kind in {"tts", "video"}
+                else None,
             )
         if candidate.api_key_value:
             return candidate
@@ -250,6 +289,10 @@ class ProviderChannelTestingService:
     async def _test_video(
         provider: Any, channel: ProviderChannel
     ) -> Literal["model", "endpoint"]:
+        check_health = getattr(provider, "check_health", None)
+        if check_health is not None:
+            await check_health()
+            return "model"
         headers = (
             {"Authorization": f"Bearer {channel.api_key_value}"}
             if channel.api_key_value

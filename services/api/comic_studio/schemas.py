@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -73,7 +74,10 @@ class ProviderChannelUpdate(BaseModel):
     @field_validator("ssh_host")
     @classmethod
     def strip_optional_text(cls, value: str) -> str:
-        return value.strip()
+        value = value.strip()
+        if value and not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value):
+            raise ValueError("Invalid SSH host alias")
+        return value
 
     @field_validator("api_key", mode="before")
     @classmethod

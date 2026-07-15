@@ -1,6 +1,7 @@
 import errno
 import json
 import os
+import re
 import stat
 import tempfile
 import threading
@@ -24,6 +25,7 @@ from comic_studio.config import Settings
 
 
 _HTTP_URL = TypeAdapter(AnyHttpUrl)
+_SAFE_SSH_ALIAS = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _UNSUPPORTED_ERRNOS = {
     errno_value
     for errno_value in (
@@ -60,6 +62,13 @@ class ProviderChannel(BaseModel):
     @classmethod
     def strip_text(cls, value: str | None) -> str | None:
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("ssh_host")
+    @classmethod
+    def validate_ssh_host(cls, value: str | None) -> str | None:
+        if value and not _SAFE_SSH_ALIAS.fullmatch(value):
+            raise ValueError("Invalid SSH host alias")
+        return value
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -120,7 +129,7 @@ class ProviderChannels(BaseModel):
         for channel_name in ("llm", "image"):
             channel = getattr(self, channel_name)
             if channel.ssh_host is not None:
-                raise ValueError("ssh_host is only valid for the tts channel")
+                raise ValueError("ssh_host is only valid for tts and video channels")
             if channel.enabled and not channel.api_key_value:
                 raise ValueError(f"Enabled {channel_name} channel requires an api_key")
         return self

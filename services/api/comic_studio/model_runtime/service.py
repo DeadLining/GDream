@@ -36,6 +36,7 @@ from comic_studio.services.visual_review import VisualReviewService
 provider_testing_client_factory = default_client_factory
 provider_testing_total_timeout_seconds = 8
 provider_testing_tts_timeout_seconds = 60
+provider_testing_video_timeout_seconds = 30
 sanitize_provider_error = ProviderChannelTestingService._sanitize_error
 
 
@@ -487,8 +488,8 @@ class ModelRuntimeService:
             )
             if capability in {Capability.TEXT, Capability.IMAGE} and update.enabled and not effective_key:
                 raise ValueError(f"Enabled {capability.value} channel requires an api_key")
-            if capability is not Capability.SPEECH and update.ssh_host:
-                raise ValueError("ssh_host is only valid for speech")
+            if capability not in {Capability.SPEECH, Capability.VIDEO} and update.ssh_host:
+                raise ValueError("ssh_host is only valid for speech and video")
             channel = ProviderChannel(
                 name=update.name,
                 enabled=update.enabled,
@@ -496,7 +497,7 @@ class ModelRuntimeService:
                 model=update.model,
                 api_key=effective_key,
                 ssh_host=(update.ssh_host or None)
-                if capability is Capability.SPEECH
+                if capability in {Capability.SPEECH, Capability.VIDEO}
                 else None,
             )
             return ProviderChannels.model_validate(
@@ -519,7 +520,13 @@ class ModelRuntimeService:
                 self.mock_ssh_manager
                 and getattr(self.mock_ssh_manager, "owns_running_alias", lambda _alias: False)(alias)
             ),
-            total_timeout_seconds=(provider_testing_tts_timeout_seconds if capability is Capability.SPEECH else provider_testing_total_timeout_seconds),
+            total_timeout_seconds=(
+                provider_testing_tts_timeout_seconds
+                if capability is Capability.SPEECH
+                else provider_testing_video_timeout_seconds
+                if capability is Capability.VIDEO
+                else provider_testing_total_timeout_seconds
+            ),
         )
         channel = service.resolve_candidate(kind, update)
         service.validate_channel(kind, channel)
@@ -550,7 +557,7 @@ class ModelRuntimeService:
         if not channel.enabled:
             return {**base, "status": "disabled", "elapsed_ms": 0, "error": None}
         prefer_ssh = False
-        if capability is Capability.SPEECH and channel.ssh_host:
+        if capability in {Capability.SPEECH, Capability.VIDEO} and channel.ssh_host:
             lookup = getattr(self.mock_ssh_manager, "owns_running_alias", None)
             if lookup:
                 try:
@@ -562,7 +569,13 @@ class ModelRuntimeService:
                 stored_channel=lambda name: getattr(snapshot, name),
                 client_factory=provider_testing_client_factory,
                 prefer_ssh_for_host=lambda _alias: prefer_ssh,
-                total_timeout_seconds=(provider_testing_tts_timeout_seconds if capability is Capability.SPEECH else provider_testing_total_timeout_seconds),
+                total_timeout_seconds=(
+                    provider_testing_tts_timeout_seconds
+                    if capability is Capability.SPEECH
+                    else provider_testing_video_timeout_seconds
+                    if capability is Capability.VIDEO
+                    else provider_testing_total_timeout_seconds
+                ),
             )
             result = await service.test(channel_name, channel)
             return {**base, "status": "healthy" if result.status == "ok" else "unavailable", "elapsed_ms": result.elapsed_ms, "error": result.error}

@@ -52,7 +52,7 @@ async def test_provider(
 
     try:
         prefer_ssh = False
-        if kind == "tts" and channel.ssh_host:
+        if kind in {"tts", "video"} and channel.ssh_host:
             try:
                 prefer_ssh = bool(
                     await asyncio.to_thread(
@@ -70,6 +70,8 @@ async def test_provider(
             total_timeout_seconds=(
                 provider_channels_route.provider_testing_tts_timeout_seconds
                 if kind == "tts"
+                else provider_channels_route.provider_testing_video_timeout_seconds
+                if kind == "video"
                 else provider_channels_route.provider_testing_total_timeout_seconds
             ),
         )

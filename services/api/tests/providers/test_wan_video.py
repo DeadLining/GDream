@@ -205,6 +205,33 @@ async def test_wan_video_polls_and_downloads_through_mock_ssh():
 
 
 @pytest.mark.anyio
+async def test_wan_video_rejects_invalid_ssh_download_without_leaking_secret():
+    secret = "video-secret-never-in-error"
+
+    def ssh_executor(command, payload):
+        request = json.loads(payload)
+        if request["action"] == "task":
+            return json.dumps(
+                {"id": request["task_id"], "status": "completed"}
+            ).encode()
+        return b"not-base64"
+
+    provider = WanVideoProvider(
+        api_key=secret,
+        ssh_host="hostbridge-a800_94",
+        ssh_executor=ssh_executor,
+        prefer_ssh=True,
+    )
+    task = await provider.get_task("video_gen_1")
+
+    with pytest.raises(ProviderError, match="invalid Base64") as caught:
+        await provider.download_result(task)
+
+    assert secret not in str(caught.value)
+    assert secret not in repr(caught.value)
+
+
+@pytest.mark.anyio
 async def test_wan_video_rejects_unsafe_task_id_before_ssh_execution():
     def ssh_executor(command, payload):
         raise AssertionError("unsafe task IDs must never reach SSH")

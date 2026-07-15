@@ -217,7 +217,8 @@ def test_provider_health_uses_media_timeouts_and_bridge_callback(client, monkeyp
     response = client.get("/api/providers/health")
 
     assert response.status_code == 200
-    assert [call["total_timeout_seconds"] for call in calls].count(60) == 2
+    assert [call["total_timeout_seconds"] for call in calls].count(60) == 1
+    assert [call["total_timeout_seconds"] for call in calls].count(30) == 1
     assert [call["total_timeout_seconds"] for call in calls].count(8) == 2
 
 

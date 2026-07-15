@@ -39,7 +39,7 @@ export function ProviderChannelSection({kind, label, draft, testing, disabled, t
       <label>{label}渠道名称<input value={draft.name} onChange={event => update('name', event.target.value)} autoComplete="off"/></label>
       <label>{label} Base URL<input type="url" value={draft.base_url} onChange={event => update('base_url', event.target.value)} autoComplete="url"/></label>
       <label>{label}模型<input value={draft.model} onChange={event => update('model', event.target.value)} autoComplete="off"/></label>
-      {kind === 'tts' && <label>{label} SSH Host<input value={draft.ssh_host} onChange={event => update('ssh_host', event.target.value)} autoComplete="off"/></label>}
+      {(kind === 'tts' || kind === 'video') && <label>{label} SSH Host<input value={draft.ssh_host} onChange={event => update('ssh_host', event.target.value)} autoComplete="off"/></label>}
       <div className="provider-key-control">
         <label>{draft.api_key_configured && !draft.clear_api_key ? `${label} API Key（当前 ${draft.api_key_masked}）` : `${label} API Key（${kind === 'tts' || kind === 'video' ? '可选，未配置' : '未配置'}）`}
           <input

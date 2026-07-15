@@ -29,6 +29,7 @@ router = APIRouter(prefix="/api/provider-channels", tags=["provider-channels"])
 provider_testing_client_factory = default_client_factory
 provider_testing_total_timeout_seconds = TOTAL_TIMEOUT_SECONDS
 provider_testing_tts_timeout_seconds = 60
+provider_testing_video_timeout_seconds = 30
 
 
 def mask_api_key(api_key: str | None) -> str:
@@ -94,8 +95,8 @@ def update_provider_channel(
     update: ProviderChannelUpdate,
     request: Request,
 ) -> ProviderChannelUpdateRead:
-    if kind != "tts" and update.ssh_host:
-        raise HTTPException(status_code=422, detail="ssh_host is only valid for tts")
+    if kind not in {"tts", "video"} and update.ssh_host:
+        raise HTTPException(status_code=422, detail="ssh_host is only valid for tts and video")
 
     capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO}[kind]
     try:
@@ -124,8 +125,8 @@ async def test_provider_channel(
     candidate: ProviderChannelUpdate,
     request: Request,
 ) -> ProviderChannelTestRead:
-    if kind != "tts" and candidate.ssh_host:
-        raise HTTPException(status_code=422, detail="ssh_host is only valid for tts")
+    if kind not in {"tts", "video"} and candidate.ssh_host:
+        raise HTTPException(status_code=422, detail="ssh_host is only valid for tts and video")
 
     capability = {"llm": Capability.TEXT, "image": Capability.IMAGE, "tts": Capability.SPEECH, "video": Capability.VIDEO}[kind]
     try:
