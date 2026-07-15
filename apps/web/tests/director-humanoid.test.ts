@@ -1,4 +1,5 @@
 import {describe,expect,it} from 'vitest';
+import {DIRECTOR_ANIMATION_CLIPS,directorAnimationMotion} from '../lib/director-animations';
 import {HUMANOID_BONES,humanoidPoseRotation} from '../lib/director-humanoid';
 
 describe('standard humanoid director rig',()=>{
@@ -20,6 +21,21 @@ describe('standard humanoid director rig',()=>{
     expect(humanoidPoseRotation('action','Spine')).not.toEqual([0,0,0]);
     expect(humanoidPoseRotation('injured','LeftUpperArm')).not.toEqual(
       humanoidPoseRotation('injured','RightUpperArm'),
+    );
+  });
+
+  it('defines the standard procedural animation clips used by shot overrides',()=>{
+    expect(DIRECTOR_ANIMATION_CLIPS.map(item=>item.id)).toEqual([
+      'idle','walk','run','talk','turn','injured',
+    ]);
+    expect(directorAnimationMotion('walk',.25).leftArm).toBeCloseTo(
+      -directorAnimationMotion('walk',.25).rightArm,
+    );
+    expect(directorAnimationMotion('run',.25).leftLeg).not.toBe(
+      directorAnimationMotion('walk',.25).leftLeg,
+    );
+    expect(directorAnimationMotion('idle',0).rootY).not.toBe(
+      directorAnimationMotion('idle',.5).rootY,
     );
   });
 });

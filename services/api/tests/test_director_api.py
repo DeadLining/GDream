@@ -44,10 +44,12 @@ def test_camera_object_overrides_are_scoped_and_cleaned_when_object_is_deleted(d
     scene=_scene(db_session);service=DirectorStageService(db_session);stage=service.get_or_create_stage(scene.id)
     created=service.create_object(stage.id,1,DirectorObjectCreate(kind="character",source_type="placeholder",label="林夏"))
     camera=stage.shot_cameras[0]
-    overridden=service.update_camera(stage.id,camera.shot_id,camera.version,ShotCameraPatch(object_overrides={created.id:{"transform":{"position":[2,0,0],"rotation":[0,0,0],"scale":[1,1,1]},"visible":False,"pose_preset":"action"}}))
+    overridden=service.update_camera(stage.id,camera.shot_id,camera.version,ShotCameraPatch(object_overrides={created.id:{"transform":{"position":[2,0,0],"rotation":[0,0,0],"scale":[1,1,1]},"visible":False,"pose_preset":"action","animation_clip":"walk","animation_playing":True}}))
     assert overridden.object_overrides[created.id]["transform"]["position"]==[2.0,0.0,0.0]
     assert overridden.object_overrides[created.id]["visible"] is False
     assert overridden.object_overrides[created.id]["pose_preset"] == "action"
+    assert overridden.object_overrides[created.id]["animation_clip"] == "walk"
+    assert overridden.object_overrides[created.id]["animation_playing"] is True
 
     service.delete_object(created.id,2)
 

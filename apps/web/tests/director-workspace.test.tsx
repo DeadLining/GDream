@@ -178,6 +178,38 @@ describe('DirectorWorkspace',()=>{
     await userEvent.selectOptions(screen.getByLabelText('角色姿态'),'action');
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{pose_preset:'action'}}}));
   });
+  it('persists standard humanoid body proportions on the scene object',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1,proxy_shoulder_width:1,proxy_body_width:1},metadata:{proxy_rig:'standard_humanoid'}};
+    const characterStage={...stage,objects:[characterObject]};
+    mocks.getDirectorStage.mockResolvedValue(characterStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorObject.mockImplementation(async(_id:string,_version:number,patch:{appearance:Record<string,unknown>})=>({...characterObject,appearance:patch.appearance}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'林夏'}));
+    expect(screen.getByLabelText('角色身高')).toBeVisible();
+    expect(screen.getByLabelText('肩宽')).toBeVisible();
+    expect(screen.getByLabelText('体型')).toBeVisible();
+    await userEvent.clear(screen.getByLabelText('角色身高'));
+    await userEvent.type(screen.getByLabelText('角色身高'),'1.1');
+    await userEvent.tab();
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{appearance:{proxy_height:1.1,proxy_shoulder_width:1,proxy_body_width:1}}));
+  });
+  it('stores proxy pose and animation controls on only the selected shot',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1},metadata:{proxy_rig:'standard_humanoid'}};
+    const characterStage={...stage,objects:[characterObject]};
+    mocks.getDirectorStage.mockResolvedValue(characterStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorCamera.mockImplementation(async(_stageId:string,_shotId:string,version:number,patch:{object_overrides:Record<string,unknown>})=>({...stage.shot_cameras[0],...patch,version:version+1}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+    expect(screen.getByLabelText('角色姿态')).toBeEnabled();
+    await userEvent.selectOptions(screen.getByLabelText('角色姿态'),'dialogue');
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{pose_preset:'dialogue'}}}));
+    await userEvent.selectOptions(screen.getByLabelText('动画片段'),'walk');
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',2,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk'}}}));
+    await userEvent.click(screen.getByRole('button',{name:'播放动画'}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',3,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:true}}}));
+    expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
+  });
   it('resets shot overrides and confirms object deletion',async()=>{
     const overridden={...stage,shot_cameras:[{...stage.shot_cameras[0],object_overrides:{'object-1':{visible:false}}}]};
     mocks.getDirectorStage.mockResolvedValue(overridden);mocks.getDirectorAssets.mockResolvedValue([]);mocks.updateDirectorCamera.mockResolvedValue({...overridden.shot_cameras[0],version:2,object_overrides:{}});mocks.deleteDirectorObject.mockResolvedValue(undefined);
