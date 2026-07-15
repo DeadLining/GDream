@@ -287,7 +287,7 @@ describe('DirectorWorkspace',()=>{
     mocks.getDirectorStage.mockResolvedValue(currentStage);mocks.getDirectorAssets.mockResolvedValue([asset]);mocks.syncDirectorAssets.mockResolvedValue(synced);
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
 
-    await userEvent.click(await screen.findByRole('button',{name:'添加林夏到场景'}));
+    await userEvent.click(await screen.findByRole('button',{name:'添加资产：林夏'}));
 
     await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,['scene:scene-1',asset.key]));
     expect(await screen.findByDisplayValue('林夏')).toBeVisible();

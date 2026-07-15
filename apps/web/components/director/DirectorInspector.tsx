@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {AlignCenter,ArrowDownToLine,Magnet,Move3D,Pause,Play,Rotate3D,RotateCcw,Scaling,Trash2} from 'lucide-react';
+import {AlignCenter,ArrowDownToLine,Copy,Magnet,Move3D,Pause,Play,Rotate3D,RotateCcw,Save,Scaling,Trash2} from 'lucide-react';
 import {DIRECTOR_ANIMATION_CLIPS} from '../../lib/director-animations';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
 import {DIRECTOR_PROXY_RIGS,isAnimatedDirectorProxy,resolveDirectorProxyRig} from '../../lib/director-proxies';
@@ -64,6 +64,9 @@ export function DirectorInspector({
   onAnimationChange,
   onAnimationPlayingChange,
   onShotVisibilityChange,
+  onSceneVisibilityChange,
+  onRenameObject,
+  onDuplicateObject,
   onResetShotOverride,
   onDeleteObject,
 }:{
@@ -86,9 +89,14 @@ export function DirectorInspector({
   onAnimationChange:(clip:DirectorAnimationClip)=>void;
   onAnimationPlayingChange:(playing:boolean)=>void;
   onShotVisibilityChange:(visible:boolean)=>void;
+  onSceneVisibilityChange:(visible:boolean)=>void;
+  onRenameObject:(label:string)=>void;
+  onDuplicateObject:()=>void;
   onResetShotOverride:()=>void;
   onDeleteObject:()=>void;
 }){
+  const [labelDraft,setLabelDraft]=useState(object?.label??'');
+  useEffect(()=>setLabelDraft(object?.label??''),[object?.id,object?.label]);
   const pose=(typeof object?.appearance.pose_preset==='string'?object.appearance.pose_preset:'neutral') as DirectorPosePreset;
   const animation=(typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'idle') as DirectorAnimationClip;
   const animationPlaying=object?.appearance.animation_playing===true;
@@ -106,6 +114,7 @@ export function DirectorInspector({
   return <aside className="director-inspector">
     <header><strong>{object?.label??'镜头相机'}</strong></header>
     {object&&<section>
+      <div className="director-object-name"><input aria-label="对象名称" value={labelDraft} onChange={event=>setLabelDraft(event.target.value)}/><button type="button" className="command-button" aria-label="保存对象名称" disabled={!labelDraft.trim()||labelDraft.trim()===object.label} onClick={()=>onRenameObject(labelDraft.trim())}><Save size={14}/></button></div>
       <div className="director-transform-tools" role="toolbar" aria-label="对象变换工具">
         {transformTools.map(({mode,label,icon:Icon})=><button key={mode} type="button" aria-label={label} title={label} aria-pressed={transformMode===mode} onClick={()=>onTransformModeChange(mode)}><Icon size={15}/></button>)}
         <button type="button" aria-label="对象落地" title="对象落地" onClick={onGroundObject}><ArrowDownToLine size={15}/></button>
@@ -131,6 +140,8 @@ export function DirectorInspector({
         <label className="director-checkbox"><input type="checkbox" aria-label="本镜头显示" checked={object.visible} onChange={event=>onShotVisibilityChange(event.target.checked)}/><span>本镜头显示</span></label>
         <button className="command-button" disabled={!hasShotOverride} onClick={onResetShotOverride}><RotateCcw size={14}/>重置本镜头覆盖</button>
       </>}
+      {!cameraMode&&<label className="director-checkbox"><input type="checkbox" aria-label="场景显示" checked={object.visible} onChange={event=>onSceneVisibilityChange(event.target.checked)}/><span>场景显示</span></label>}
+      {!cameraMode&&<button className="command-button" onClick={onDuplicateObject}><Copy size={14}/>复制场景对象</button>}
       <button className="command-button director-danger" onClick={onDeleteObject}><Trash2 size={14}/>删除场景对象</button>
     </section>}
     <section>
