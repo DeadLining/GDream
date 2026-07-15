@@ -58,4 +58,12 @@ describe('EpisodeAIRunControls',()=>{
     await waitFor(()=>expect(mocks.continueEpisodeAIRun).toHaveBeenCalledWith('ai-run-1'));
     expect(await screen.findByText('整集成片已完成')).toBeVisible();
   });
+
+  it('shows an actionable Chinese message for a missing storyboard',async()=>{
+    localStorage.setItem('ai-comic-episode-ai-ep-1','ai-run-1');
+    mocks.getEpisodeAIRun.mockResolvedValueOnce({...queued,status:'needs_review',current_stage:'panels',error:'Episode has no shots'});
+    render(<EpisodeAIRunControls episodeId="ep-1"/>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('本集还没有分镜，请先解析剧本或创建镜头');
+    expect(screen.queryByText('Episode has no shots')).not.toBeInTheDocument();
+  });
 });
