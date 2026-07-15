@@ -146,6 +146,19 @@ class ShotInputCompiler:
                 "state_overrides": state.overrides if state is not None else {},
                 "resolved_overrides": resolved_overrides,
                 "reference_asset_id": reference_asset.id if reference_asset else None,
+                "effective_variant_id": usage.effective_variant_id,
+                "effective_state_id": usage.effective_state_id,
+                "effective_representation_id": usage.effective_representation_id,
+                "effective_representation_version": (
+                    usage.effective_representation_version
+                ),
+                "director_object_id": usage.director_object_id,
+                "binding_status": usage.binding_status,
+                "binding_updated_at": (
+                    usage.binding_updated_at.isoformat()
+                    if usage.binding_updated_at is not None
+                    else None
+                ),
             }
             bindings.append(binding)
             character_ids.add(character.id)
