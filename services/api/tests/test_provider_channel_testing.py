@@ -218,6 +218,47 @@ async def test_video_without_api_key_checks_openai_models_endpoint():
 
 
 @pytest.mark.anyio
+async def test_wan_video_connection_test_prefers_owned_mock_ssh_alias():
+    captured = []
+
+    def video_provider_factory(
+        channel,
+        client,
+        ssh_executor,
+        *,
+        prefer_ssh=False,
+    ):
+        captured.append((channel.ssh_host, prefer_ssh, ssh_executor))
+        return type(
+            "Provider",
+            (),
+            {"check_health": lambda self: asyncio.sleep(0)},
+        )()
+
+    service = ProviderChannelTestingService(
+        stored_channel=lambda kind: candidate(kind, api_key=None),
+        client_factory=ClientFactory(RecordingClient([])),
+        video_provider_factory=video_provider_factory,
+        prefer_ssh_for_host=lambda alias: alias == "hostbridge-a800_94",
+    )
+
+    result = await service.test(
+        "video",
+        candidate(
+            "video",
+            api_key=None,
+            base_url="http://192.168.18.94:18081",
+            model="Wan-AI/Wan2.2-TI2V-5B",
+            ssh_host="hostbridge-a800_94",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert captured[0][0:2] == ("hostbridge-a800_94", True)
+    assert callable(captured[0][2])
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("root_status", [200, 401, 404])
 async def test_image_falls_back_to_endpoint_reachability_when_capabilities_absent(
     root_status,

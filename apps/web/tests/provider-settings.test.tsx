@@ -107,6 +107,7 @@ describe('ProviderSettings', () => {
     expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
     expect(screen.getByDisplayValue('MiniMax-M3')).toBeVisible();
     expect(screen.getByLabelText('语音合成 SSH Host')).toHaveValue('ai-comic-tts');
+    expect(screen.getByLabelText('视频生成 SSH Host')).toHaveValue('');
     expect(screen.queryByLabelText('剧本规划 SSH Host')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('full-secret')).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('full-secret');
@@ -137,7 +138,7 @@ describe('ProviderSettings', () => {
     expect(screen.getByText('Provider returned HTTP 503')).toHaveAttribute('role', 'alert');
   });
 
-  it('allows a directly reachable video channel without an API key or SSH host', async () => {
+  it('allows video channels to use direct HTTP or a configured Mock SSH alias', async () => {
     const localVideo = structuredClone(snapshot);
     localVideo.video = {
       name: 'Wan2.2 Local', enabled: true, base_url: 'http://192.168.18.94:18081',
@@ -147,13 +148,15 @@ describe('ProviderSettings', () => {
     render(<ProviderSettings/>);
     const section = await screen.findByRole('form', {name: '视频生成渠道'});
 
-    expect(within(section).queryByLabelText('视频生成 SSH Host')).not.toBeInTheDocument();
+    const sshHost = within(section).getByLabelText('视频生成 SSH Host');
+    await userEvent.type(sshHost, 'hostbridge-a800_94');
     await userEvent.click(within(section).getByRole('button', {name: '测试视频生成连接'}));
 
     expect(mocks.testProviderChannel).toHaveBeenCalledWith('video', expect.objectContaining({
       base_url: 'http://192.168.18.94:18081',
       model: 'Wan-AI/Wan2.2-TI2V-5B',
       api_key: '',
+      ssh_host: 'hostbridge-a800_94',
     }));
     expect(within(section).queryByText('已启用渠道需要 API Key。')).not.toBeInTheDocument();
   });

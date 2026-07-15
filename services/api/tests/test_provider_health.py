@@ -183,13 +183,14 @@ def test_provider_health_sanitizes_unexpected_channel_exception(client, monkeypa
     assert "secret-token" not in str(response.json())
 
 
-def test_provider_health_uses_tts_timeout_and_bridge_callback(client, monkeypatch):
+def test_provider_health_uses_media_timeouts_and_bridge_callback(client, monkeypatch):
     snapshot = _enable_all_channels(client)
     store = client.app.state.provider_channel_store
     store.save(
         snapshot.model_copy(
             update={
-                "tts": snapshot.tts.model_copy(update={"ssh_host": "render-alias"})
+                "tts": snapshot.tts.model_copy(update={"ssh_host": "render-alias"}),
+                "video": snapshot.video.model_copy(update={"ssh_host": "render-alias"}),
             }
         )
     )
@@ -204,7 +205,7 @@ def test_provider_health_uses_tts_timeout_and_bridge_callback(client, monkeypatc
             calls.append(kwargs)
 
         async def test(self, kind, channel):
-            if kind == "tts":
+            if kind in {"tts", "video"}:
                 assert self.kwargs["prefer_ssh_for_host"]("render-alias") is True
             return _result(kind, channel)
 
@@ -216,8 +217,8 @@ def test_provider_health_uses_tts_timeout_and_bridge_callback(client, monkeypatc
     response = client.get("/api/providers/health")
 
     assert response.status_code == 200
-    assert [call["total_timeout_seconds"] for call in calls].count(60) == 1
-    assert [call["total_timeout_seconds"] for call in calls].count(8) == 3
+    assert [call["total_timeout_seconds"] for call in calls].count(60) == 2
+    assert [call["total_timeout_seconds"] for call in calls].count(8) == 2
 
 
 @pytest.mark.anyio

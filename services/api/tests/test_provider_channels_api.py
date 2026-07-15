@@ -492,6 +492,37 @@ def test_tts_may_be_enabled_without_key_and_accepts_ssh_host(client):
     assert response.json()["channel"]["ssh_host"] == "tts-host"
 
 
+def test_video_may_be_enabled_without_key_and_accepts_ssh_host(client):
+    response = client.put(
+        "/api/provider-channels/video",
+        json=channel_update(
+            name="Wan Local",
+            base_url="http://192.168.18.94:18081",
+            model="Wan-AI/Wan2.2-TI2V-5B",
+            api_key="",
+            ssh_host="hostbridge-a800_94",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["channel"]["ssh_host"] == "hostbridge-a800_94"
+
+
+def test_video_rejects_unsafe_ssh_host_alias(client):
+    response = client.put(
+        "/api/provider-channels/video",
+        json=channel_update(
+            name="Wan Local",
+            base_url="http://192.168.18.94:18081",
+            model="Wan-AI/Wan2.2-TI2V-5B",
+            api_key="",
+            ssh_host="host; rm -rf /",
+        ),
+    )
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize("kind", ["llm", "image"])
 def test_ssh_host_is_rejected_outside_tts(client, kind):
     response = client.put(

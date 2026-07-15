@@ -138,6 +138,7 @@ def test_existing_json_is_authoritative_over_bootstrap_defaults(tmp_path):
         channels_payload(tts=channel_payload(api_key=None, base_url="")),
         channels_payload(llm=channel_payload(ssh_host="not-valid-for-llm")),
         channels_payload(image=channel_payload(ssh_host="not-valid-for-image")),
+        channels_payload(video=channel_payload(ssh_host="host; rm -rf /")),
     ],
 )
 def test_schema_rejects_invalid_provider_channels(payload):
@@ -174,6 +175,22 @@ def test_disabled_channel_may_omit_connection_fields():
     )
 
     assert channel.enabled is False
+
+
+def test_video_channel_accepts_safe_mock_ssh_alias():
+    channels = ProviderChannels.model_validate(
+        channels_payload(
+            video=channel_payload(
+                name="Wan Local",
+                api_key=None,
+                base_url="http://192.168.18.94:18081",
+                model="Wan-AI/Wan2.2-TI2V-5B",
+                ssh_host="hostbridge-a800_94",
+            )
+        )
+    )
+
+    assert channels.video.ssh_host == "hostbridge-a800_94"
 
 
 def test_store_rejects_invalid_json_instead_of_using_defaults(tmp_path):
