@@ -48,11 +48,13 @@ describe('Inspector', () => {
 
   it('explains stale active panel inputs and exposes regeneration', async () => {
     mocks.listPanelVersions.mockResolvedValue([{...asset,is_stale:true,stale_reason:'inputs_changed'}]);
-    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1'}}/>);
+    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1',review_status:'approved'}}/>);
 
     expect(await screen.findByText('当前画面使用的角色、场景或导演输入已变化')).toBeVisible();
     expect(screen.getByRole('button',{name:'重新生成画面'})).toBeEnabled();
     expect(screen.getByRole('button',{name:/画面版本 2.*输入已变化/})).toBeVisible();
+    expect(screen.getByText('当前画面已过期，请重新生成后再生成视频。')).toBeVisible();
+    expect(screen.getByRole('button',{name:'使用首帧和提示词生成视频'})).toBeDisabled();
   });
 
   it('ignores panel versions returned for a previously selected shot', async () => {
