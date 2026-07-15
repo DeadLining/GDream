@@ -189,14 +189,89 @@ class AssetLineageService:
 
     def impact(self, variant_id: str):
         variant = self.session.get(models.AssetVariant, variant_id)
-        if variant is None:
+        if variant is None or variant.deleted_at is not None:
             return None
         statement = select(models.AssetVariantUsage).where(
             models.AssetVariantUsage.variant_id == variant.id
         )
-        usages = list(self.session.scalars(statement))
+        return self._impact_from_usages(list(self.session.scalars(statement)))
+
+    def character_impact(self, character_id: str):
+        character = self.session.get(models.Character, character_id)
+        if character is None:
+            return None
+        statement = (
+            select(models.AssetVariantUsage)
+            .join(
+                models.AssetVariant,
+                models.AssetVariant.id == models.AssetVariantUsage.variant_id,
+            )
+            .where(
+                models.AssetVariant.character_id == character.id,
+                models.AssetVariant.deleted_at.is_(None),
+            )
+        )
+        return self._impact_from_usages(list(self.session.scalars(statement)))
+
+    def state_impact(self, state_id: str):
+        state = self.session.get(models.AssetVariantState, state_id)
+        if state is None or state.deleted_at is not None:
+            return None
+        statement = select(models.AssetVariantUsage).where(
+            models.AssetVariantUsage.state_id == state.id
+        )
+        return self._impact_from_usages(list(self.session.scalars(statement)))
+
+    def _impact_from_usages(self, usages: list[models.AssetVariantUsage]):
+        shot_ids = sorted({usage.shot_id for usage in usages})
+        rows = []
+        if shot_ids:
+            rows = list(
+                self.session.execute(
+                    select(models.Shot, models.Scene, models.Episode)
+                    .join(models.Scene, models.Scene.id == models.Shot.scene_id)
+                    .join(models.Episode, models.Episode.id == models.Scene.episode_id)
+                    .where(models.Shot.id.in_(shot_ids))
+                    .order_by(
+                        models.Episode.position,
+                        models.Episode.created_at,
+                        models.Scene.position,
+                        models.Shot.position,
+                    )
+                )
+            )
+        episodes: list[schemas.AssetImpactEpisodeRead] = []
+        episode_map: dict[str, schemas.AssetImpactEpisodeRead] = {}
+        scene_map: dict[str, schemas.AssetImpactSceneRead] = {}
+        for shot, scene, episode in rows:
+            episode_read = episode_map.get(episode.id)
+            if episode_read is None:
+                episode_read = schemas.AssetImpactEpisodeRead(
+                    episode_id=episode.id,
+                    episode_title=episode.title,
+                    scenes=[],
+                )
+                episode_map[episode.id] = episode_read
+                episodes.append(episode_read)
+            scene_read = scene_map.get(scene.id)
+            if scene_read is None:
+                scene_read = schemas.AssetImpactSceneRead(
+                    scene_id=scene.id,
+                    scene_label=f"场景 {scene.position:02d} · {scene.location}",
+                    shots=[],
+                )
+                scene_map[scene.id] = scene_read
+                episode_read.scenes.append(scene_read)
+            scene_read.shots.append(
+                schemas.AssetImpactShotRead(
+                    id=shot.id,
+                    position=shot.position,
+                    composition=shot.composition,
+                )
+            )
         return schemas.AssetVariantImpactRead(
-            shots=sorted({usage.shot_id for usage in usages}),
+            shots=shot_ids,
             assets=sorted({usage.asset_id for usage in usages if usage.asset_id}),
             usage_count=len(usages),
+            episodes=episodes,
         )

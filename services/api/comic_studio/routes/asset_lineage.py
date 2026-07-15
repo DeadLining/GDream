@@ -148,3 +148,25 @@ def variant_impact(variant_id: str, session: SessionDependency):
     if impact is None:
         raise HTTPException(404, "Asset variant not found")
     return impact
+
+
+@router.get(
+    "/api/characters/{character_id}/impact",
+    response_model=schemas.AssetVariantImpactRead,
+)
+def character_impact(character_id: str, session: SessionDependency):
+    impact = AssetLineageService(session).character_impact(character_id)
+    if impact is None:
+        raise HTTPException(404, "Character not found")
+    return impact
+
+
+@router.get(
+    "/api/asset-variant-states/{state_id}/impact",
+    response_model=schemas.AssetVariantImpactRead,
+)
+def state_impact(state_id: str, session: SessionDependency):
+    impact = AssetLineageService(session).state_impact(state_id)
+    if impact is None:
+        raise HTTPException(404, "Asset variant state not found")
+    return impact

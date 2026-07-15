@@ -2,11 +2,14 @@
 // Do not edit manually; regenerate via the split script if api.ts changes.
 
 import { API_BASE, ApiError, apiRequest, json } from './core';
-import type { AssetVariant, AssetVariantUsage, Character3DRepresentation, CharacterReference, CharacterReferenceType, ModelRuntimeJob, ReviewStatus } from '../types';
+import type { AssetImpact, AssetVariant, AssetVariantUsage, Character3DRepresentation, CharacterReference, CharacterReferenceType, ModelRuntimeJob, ReviewStatus } from '../types';
 
 export const listCharacterReferences = (id:string) => apiRequest<CharacterReference[]>(`/api/characters/${id}/references`);
 export const listAssetVariants = (id:string) => apiRequest<AssetVariant[]>(`/api/characters/${id}/variants`);
 export const listCharacter3DRepresentations=(id:string)=>apiRequest<Character3DRepresentation[]>(`/api/characters/${id}/3d-representations`);
+export const getCharacterImpact=(id:string)=>apiRequest<AssetImpact>(`/api/characters/${id}/impact`);
+export const getAssetVariantImpact=(id:string)=>apiRequest<AssetImpact>(`/api/asset-variants/${id}/impact`);
+export const getAssetVariantStateImpact=(id:string)=>apiRequest<AssetImpact>(`/api/asset-variant-states/${id}/impact`);
 export const createAssetVariant=(characterId:string,data:{kind:'master'|'episode';label:string;episode_id:string|null;parent_variant_id:string|null;inherited_fields:string[];overrides:Record<string,unknown>})=>apiRequest<AssetVariant>(`/api/characters/${characterId}/variants`,json('POST',data));
 export const createAssetVariantState=(variantId:string,data:{kind:'expression'|'outfit'|'injury'|'age'|'custom';label:string;overrides:Record<string,unknown>})=>apiRequest<AssetVariant['states'][number]>(`/api/asset-variants/${variantId}/states`,json('POST',data));
 export const createAssetVariantUsage=(variantId:string,data:{state_id?:string|null;shot_id:string;asset_id?:string|null;usage_kind:'panel'|'video'|'reference'})=>apiRequest<AssetVariantUsage>(`/api/asset-variants/${variantId}/usages`,json('POST',data));

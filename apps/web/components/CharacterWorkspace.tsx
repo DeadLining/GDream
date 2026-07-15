@@ -16,8 +16,12 @@ import {
   deleteAssetVariantState,
   generateCharacterReferenceSet,
   generateModel3D,
+  getAssetVariantImpact,
+  getAssetVariantStateImpact,
+  getCharacterImpact,
   getLatestModel3DJob,
   getEpisodeProductionGraph,
+  createProductionRun,
   listCharacterReferences,
   listCharacter3DRepresentations,
   listLibraryAssets,
@@ -40,6 +44,7 @@ import type {
   CharacterReferenceSetMetadata,
   CharacterReferenceType,
   AssetVariant,
+  AssetImpact,
   LibraryAsset,
   LibraryAssetCreate,
   LibraryAssetPatch,
@@ -79,6 +84,8 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const [model3dBusy,setModel3dBusy]=useState(false);
   const [model3dError,setModel3dError]=useState('');
   const [modelScope,setModelScope]=useState('master');
+  const [modelImpact,setModelImpact]=useState<AssetImpact|null>(null);
+  const [modelImpactLoading,setModelImpactLoading]=useState(false);
   const [editingReferenceId,setEditingReferenceId]=useState('');
   const [editingReferenceLabel,setEditingReferenceLabel]=useState('');
   const completedCount=useRef(0);
@@ -105,6 +112,20 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
       if(request!==loadRequests.current[id])return;
       setError(cause instanceof Error?cause.message:'加载失败');
     }
+  };
+  const analyzeImpact=({characterId,variantId,stateId}:{characterId:string;variantId:string|null;stateId:string|null})=>stateId?getAssetVariantStateImpact(stateId):variantId?getAssetVariantImpact(variantId):getCharacterImpact(characterId);
+  const regenerateImpact=async(impact:AssetImpact)=>{
+    let started=0;
+    const errors:string[]=[];
+    for(const episode of impact.episodes){
+      const shotIds=episode.scenes.flatMap(scene=>scene.shots.map(shot=>shot.id));
+      if(!shotIds.length)continue;
+      try{
+        await createProductionRun(episode.episode_id,{stages:['panels'],shot_ids:shotIds,concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
+        started+=1;
+      }catch(cause){errors.push(`${episode.episode_title}：${cause instanceof Error?cause.message:'启动失败'}`);}
+    }
+    if(errors.length)throw new Error(`已启动 ${started} 集，${errors.length} 集失败：${errors.join('；')}`);
   };
   useEffect(()=>{for(const item of workspaceCharacters)void load(item.id);},[characterIds]);
   useEffect(()=>setModelScope('master'),[character?.id]);
@@ -175,12 +196,19 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     }catch(cause){setModel3dError(cause instanceof Error?cause.message:'3D 生成失败');}
     finally{setModel3dBusy(false);}
   };
-  const approveCharacterModel=async()=>{
+  const confirmApproveCharacterModel=async()=>{
     if(!model3dJob||model3dBusy)return;
     setModel3dBusy(true);setModel3dError('');
-    try{await approveModel3DJob(model3dJob.id);await load(character.id);setModel3dJob(current=>current?{...current,result_metadata:{...current.result_metadata,review_status:'approved',is_active:true}}:current);await onMetricsChanged?.();}
+    try{await approveModel3DJob(model3dJob.id);await load(character.id);setModel3dJob(current=>current?{...current,result_metadata:{...current.result_metadata,review_status:'approved',is_active:true}}:current);setModelImpact(null);await onMetricsChanged?.();}
     catch(cause){setModel3dError(cause instanceof Error?cause.message:'批准 3D 候选失败');}
     finally{setModel3dBusy(false);}
+  };
+  const requestApproveCharacterModel=async()=>{
+    if(model3dBusy)return;
+    setModelImpactLoading(true);setModel3dError('');
+    try{setModelImpact(await analyzeImpact({characterId:character.id,variantId:selectedScope.variantId,stateId:selectedScope.stateId}));}
+    catch(cause){setModel3dError(cause instanceof Error?cause.message:'分析 3D 变更影响失败');}
+    finally{setModelImpactLoading(false);}
   };
   const follow=async(jobId:string)=>{
     const finished=await pollJob(jobId,{
@@ -258,7 +286,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const activeRepresentation=scopedRepresentations.find(item=>item.is_active)??null;
   const visibleRepresentation=candidateRepresentation??activeRepresentation;
   const candidatePending=Boolean(candidateRepresentation&&model3dJob?.status==='succeeded'&&model3dJob.result_metadata?.is_active!==true);
-  const modelManager=<section className="character-model-section"><header><div><strong>3D 导演代理</strong><small>角色必须使用 GLB；AI 候选批准后才进入导演台</small></div><div className="character-model-actions"><select aria-label="3D 模型作用域" value={modelScope} onChange={event=>setModelScope(event.target.value)}><option value="master">作品主设定</option>{variants.filter(item=>item.kind==='episode').map(variant=><Fragment key={variant.id}><option value={`variant:${variant.id}`}>{variant.label}</option>{variant.states.map(state=><option key={state.id} value={`state:${state.id}`}>{variant.label} / {state.label}</option>)}</Fragment>)}</select><button type="button" onClick={()=>void generateCharacterModel()} disabled={model3dBusy||!modelReference}>{model3dBusy?<LoaderCircle className="reference-spinner" size={15}/>:<Sparkles size={15}/>}根据参考图生成 3D</button><label>上传 GLB<input aria-label="上传角色 3D 模型" type="file" accept=".glb,model/gltf-binary" onChange={event=>void uploadModel(event.target.files?.[0]??null)}/></label></div></header>{visibleRepresentation?<><CharacterModelPreview url={visibleRepresentation.model_url}/><div className="character-model-meta"><strong>{visibleRepresentation.label}</strong><span>{visibleRepresentation.triangle_count.toLocaleString()} 三角面</span><span>{visibleRepresentation.has_skeleton?'含骨骼':'静态代理'}</span>{candidatePending&&<button type="button" className="primary-action" onClick={()=>void approveCharacterModel()} disabled={model3dBusy}><Check size={14}/>批准使用 3D 候选</button>}</div></>:<div className="character-model-empty"><Box size={24}/><span>{model3dBusy?'正在生成 3D 候选':'当前作用域尚未准备 GLB'}</span></div>}{model3dError&&<p className="form-error" role="alert">{model3dError}</p>}</section>;
+  const modelManager=<><section className="character-model-section"><header><div><strong>3D 导演代理</strong><small>角色必须使用 GLB；AI 候选批准后才进入导演台</small></div><div className="character-model-actions"><select aria-label="3D 模型作用域" value={modelScope} onChange={event=>setModelScope(event.target.value)}><option value="master">作品主设定</option>{variants.filter(item=>item.kind==='episode').map(variant=><Fragment key={variant.id}><option value={`variant:${variant.id}`}>{variant.label}</option>{variant.states.map(state=><option key={state.id} value={`state:${state.id}`}>{variant.label} / {state.label}</option>)}</Fragment>)}</select><button type="button" onClick={()=>void generateCharacterModel()} disabled={model3dBusy||!modelReference}>{model3dBusy?<LoaderCircle className="reference-spinner" size={15}/>:<Sparkles size={15}/>}根据参考图生成 3D</button><label>上传 GLB<input aria-label="上传角色 3D 模型" type="file" accept=".glb,model/gltf-binary" onChange={event=>void uploadModel(event.target.files?.[0]??null)}/></label></div></header>{visibleRepresentation?<><CharacterModelPreview url={visibleRepresentation.model_url}/><div className="character-model-meta"><strong>{visibleRepresentation.label}</strong><span>{visibleRepresentation.triangle_count.toLocaleString()} 三角面</span><span>{visibleRepresentation.has_skeleton?'含骨骼':'静态代理'}</span>{candidatePending&&<button type="button" className="primary-action" onClick={()=>void requestApproveCharacterModel()} disabled={model3dBusy||modelImpactLoading}><Check size={14}/>{modelImpactLoading?'正在分析':'批准使用 3D 候选'}</button>}</div></>:<div className="character-model-empty"><Box size={24}/><span>{model3dBusy?'正在生成 3D 候选':'当前作用域尚未准备 GLB'}</span></div>}{model3dError&&<p className="form-error" role="alert">{model3dError}</p>}</section>{modelImpact&&<div className="dialog-backdrop"><section className="form-dialog impact-dialog" role="dialog" aria-label="确认 3D 变更影响"><header><div><h2>确认 3D 变更影响</h2><small>批准后会影响 {modelImpact.shots.length} 个已绑定镜头</small></div><button type="button" aria-label="关闭 3D 影响" onClick={()=>setModelImpact(null)}>×</button></header><div className="impact-report">{modelImpact.episodes.length?modelImpact.episodes.map(episode=><section key={episode.episode_id}><h3>{episode.episode_title}</h3>{episode.scenes.map(scene=><div className="impact-scene" key={scene.scene_id}><strong>{scene.scene_label}</strong>{scene.shots.map(shot=><p key={shot.id}>镜头 {String(shot.position).padStart(2,'0')} · {shot.composition}</p>)}</div>)}</section>):<p>当前 3D 作用域没有已绑定镜头。</p>}</div><footer><button type="button" onClick={()=>setModelImpact(null)}>取消</button><button type="button" className="primary-action" onClick={()=>void confirmApproveCharacterModel()} disabled={model3dBusy}>{model3dBusy?'正在批准':'确认批准'}</button></footer></section></div>}</>;
 
   if(view!=='catalog')return <CharacterMasterView
     characters={workspaceCharacters}
@@ -267,7 +295,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     variants={variants}
     referenceManager={referenceManager}
     variantWorkspace={<AssetVariantEditorView embedded character={character} references={references} variants={variants} episodes={episodes} onOpen={setView} onCreateVariant={addEpisodeVariant} onCreateState={addState}/>}
-    lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState} onLoadEpisodeShots={loadEpisodeShots} onCreateUsage={addUsage}/>}
+    lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState} onLoadEpisodeShots={loadEpisodeShots} onCreateUsage={addUsage} onAnalyzeImpact={analyzeImpact} onRegenerateImpact={regenerateImpact}/>}
     modelManager={modelManager}
     initialTab={view==='variant'?'variant':view==='lineage'?'lineage':'master'}
     onSelect={setSelected}

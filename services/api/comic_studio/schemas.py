@@ -329,10 +329,29 @@ class AssetVariantRead(AssetVariantCreate):
     usages: list[AssetVariantUsageRead] = []
 
 
+class AssetImpactShotRead(BaseModel):
+    id: str
+    position: int
+    composition: str
+
+
+class AssetImpactSceneRead(BaseModel):
+    scene_id: str
+    scene_label: str
+    shots: list[AssetImpactShotRead]
+
+
+class AssetImpactEpisodeRead(BaseModel):
+    episode_id: str
+    episode_title: str
+    scenes: list[AssetImpactSceneRead]
+
+
 class AssetVariantImpactRead(BaseModel):
     shots: list[str]
     assets: list[str]
     usage_count: int
+    episodes: list[AssetImpactEpisodeRead] = Field(default_factory=list)
 
 
 class TrashItemRead(BaseModel):

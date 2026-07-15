@@ -3,7 +3,7 @@
 import {applyNodeChanges, Background, Controls, MiniMap, ReactFlow, type ReactFlowInstance} from '@xyflow/react';
 import {X} from 'lucide-react';
 import {useEffect, useMemo, useRef, useState} from 'react';
-import type {AssetVariant, AssetVariantState, AssetVariantUsage, Character, CharacterReference, EpisodeSummary} from '../../lib/types';
+import type {AssetImpact, AssetVariant, AssetVariantState, AssetVariantUsage, Character, CharacterReference, EpisodeSummary} from '../../lib/types';
 import {
   assetLineageNodeId,
   assetLineageNodeSize,
@@ -72,6 +72,8 @@ export function AssetLineageCanvas({
   onDeleteState,
   onLoadEpisodeShots,
   onCreateUsage,
+  onAnalyzeImpact,
+  onRegenerateImpact,
 }: {
   character: Character;
   references: CharacterReference[];
@@ -85,6 +87,8 @@ export function AssetLineageCanvas({
   onDeleteState?: (id: string) => Promise<void> | void;
   onLoadEpisodeShots?: (episodeId: string) => Promise<ShotOption[]>;
   onCreateUsage?: (variantId: string, data: UsageDraft) => Promise<void> | void;
+  onAnalyzeImpact?: (scope: {characterId: string; variantId: string | null; stateId: string | null}) => Promise<AssetImpact>;
+  onRegenerateImpact?: (impact: AssetImpact) => Promise<void> | void;
 }) {
   const [scope, setScope] = useState<AssetLineageScope>('work');
   const [selectedNodeId, setSelectedNodeId] = useState(() => {
@@ -108,6 +112,15 @@ export function AssetLineageCanvas({
   const [viewport, setViewport] = useState({x: 0, y: 0, zoom: 0.75});
   const [undoNodes, setUndoNodes] = useState<any[] | null>(null);
   const [readOnly, setReadOnly] = useState(false);
+  const [impact, setImpact] = useState<AssetImpact | null>(null);
+  const [impactMode, setImpactMode] = useState<'analysis' | 'confirm' | null>(null);
+  const [impactBusy, setImpactBusy] = useState(false);
+  const [impactMessage, setImpactMessage] = useState('');
+  const [pendingMutation, setPendingMutation] = useState<
+    | {kind: 'variant'; id: string; data: VariantDraft}
+    | {kind: 'state'; id: string; data: StateDraft}
+    | null
+  >(null);
   const flowRef = useRef<ReactFlowInstance<any, any> | null>(null);
 
   useEffect(() => {
@@ -354,6 +367,42 @@ export function AssetLineageCanvas({
     }
   };
 
+  const impactScope = () => ({
+    characterId: character.id,
+    variantId: selectedVariant?.id ?? null,
+    stateId:
+      selected?.kind === 'state'
+        ? selected.item.id
+        : selected?.kind === 'usage'
+          ? selected.item.state_id
+          : null,
+  });
+
+  const loadImpact = async (mode: 'analysis' | 'confirm') => {
+    if (!onAnalyzeImpact || !selectedVariant || impactBusy) return null;
+    setImpactBusy(true);
+    setImpactMessage('');
+    setFormError('');
+    try {
+      const report = await onAnalyzeImpact(impactScope());
+      setImpact(report);
+      setImpactMode(mode);
+      return report;
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : '分析影响范围失败');
+      return null;
+    } finally {
+      setImpactBusy(false);
+    }
+  };
+
+  const closeImpact = () => {
+    setImpact(null);
+    setImpactMode(null);
+    setImpactMessage('');
+    setPendingMutation(null);
+  };
+
   const saveVariant = async () => {
     if (!selectedVariant || !variantLabel.trim() || busy) return;
     setBusy(true);
@@ -378,6 +427,11 @@ export function AssetLineageCanvas({
           };
       if (editingId) {
         if (!onUpdateVariant) return;
+        if (onAnalyzeImpact) {
+          const report = await loadImpact('confirm');
+          if (report) setPendingMutation({kind: 'variant', id: editingId, data});
+          return;
+        }
         await onUpdateVariant(editingId, data);
       } else {
         if (!onCreateVariant) return;
@@ -401,6 +455,11 @@ export function AssetLineageCanvas({
       const data: StateDraft = {kind: stateKind, label: stateLabel.trim(), overrides};
       if (editingId) {
         if (!onUpdateState) return;
+        if (onAnalyzeImpact) {
+          const report = await loadImpact('confirm');
+          if (report) setPendingMutation({kind: 'state', id: editingId, data});
+          return;
+        }
         await onUpdateState(editingId, data);
       } else {
         if (!onCreateState) return;
@@ -467,6 +526,41 @@ export function AssetLineageCanvas({
       setFormError(cause instanceof Error ? cause.message : '删除状态失败');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const confirmMutation = async () => {
+    if (!pendingMutation || impactBusy) return;
+    setImpactBusy(true);
+    setFormError('');
+    try {
+      if (pendingMutation.kind === 'variant') {
+        await onUpdateVariant?.(pendingMutation.id, pendingMutation.data);
+        setVariantLabel('');
+      } else {
+        await onUpdateState?.(pendingMutation.id, pendingMutation.data);
+        setStateLabel('');
+      }
+      closeImpact();
+      closeEditor();
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : '保存变更失败');
+    } finally {
+      setImpactBusy(false);
+    }
+  };
+
+  const regenerateImpact = async () => {
+    if (!impact || !onRegenerateImpact || impactBusy) return;
+    setImpactBusy(true);
+    setImpactMessage('');
+    try {
+      await onRegenerateImpact(impact);
+      setImpactMessage(`已启动 ${impact.episodes.length} 集的画面重生成`);
+    } catch (cause) {
+      setImpactMessage(cause instanceof Error ? cause.message : '启动画面重生成失败');
+    } finally {
+      setImpactBusy(false);
     }
   };
 
@@ -671,7 +765,9 @@ export function AssetLineageCanvas({
               <section>
                 <h3>下游影响</h3>
                 <strong className="impact-count">{detail.impact}</strong>
-                <button className="impact-action">分析影响范围</button>
+                <button className="impact-action" onClick={() => void loadImpact('analysis')} disabled={!onAnalyzeImpact || impactBusy}>
+                  {impactBusy ? '正在分析' : '分析影响范围'}
+                </button>
               </section>
               <section>
                 <h3>版本与引用</h3>
@@ -716,6 +812,46 @@ export function AssetLineageCanvas({
           )}
         </aside>
       </div>
+      {impact && impactMode && (
+        <div className="dialog-backdrop">
+          <section className="form-dialog impact-dialog" role="dialog" aria-label={impactMode === 'confirm' ? '确认下游影响' : '下游影响范围'}>
+            <header>
+              <div>
+                <h2>{impactMode === 'confirm' ? '确认下游影响' : '下游影响范围'}</h2>
+                <small>共 {impact.shots.length} 个镜头，分布在 {impact.episodes.length} 集</small>
+              </div>
+              <button type="button" aria-label="关闭影响范围" onClick={closeImpact}>×</button>
+            </header>
+            <div className="impact-report">
+              {impact.episodes.length ? impact.episodes.map((episode) => (
+                <section key={episode.episode_id}>
+                  <h3>{episode.episode_title}</h3>
+                  {episode.scenes.map((scene) => (
+                    <div key={scene.scene_id} className="impact-scene">
+                      <strong>{scene.scene_label}</strong>
+                      {scene.shots.map((shot) => <p key={shot.id}>镜头 {String(shot.position).padStart(2, '0')} · {shot.composition}</p>)}
+                    </div>
+                  ))}
+                </section>
+              )) : <p>当前变更没有已绑定镜头。</p>}
+            </div>
+            {impactMessage && <p role="status" className="impact-message">{impactMessage}</p>}
+            <footer>
+              <button type="button" onClick={closeImpact}>取消</button>
+              {impactMode === 'analysis' && onRegenerateImpact && impact.shots.length > 0 && (
+                <button type="button" className="primary-action" onClick={() => void regenerateImpact()} disabled={impactBusy}>
+                  {impactBusy ? '正在启动' : '重新生成受影响画面'}
+                </button>
+              )}
+              {impactMode === 'confirm' && (
+                <button type="button" className="primary-action" onClick={() => void confirmMutation()} disabled={impactBusy}>
+                  {impactBusy ? '正在保存' : '确认变更'}
+                </button>
+              )}
+            </footer>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

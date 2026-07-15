@@ -357,7 +357,6 @@ it('starts one forced panel run per affected episode',async()=>{
   const user=userEvent.setup();
   render(<CharacterWorkspace characters={[character]}/>);
   await user.click(await screen.findByRole('button',{name:'打开谱系'}));
-  await user.click(await screen.findByRole('button',{name:'第 01 集雨夜造型'}));
   await user.click(screen.getByRole('button',{name:'分析影响范围'}));
   await user.click(await screen.findByRole('button',{name:'重新生成受影响画面'}));
 
