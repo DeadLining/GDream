@@ -3,9 +3,9 @@
 ## Status
 
 - Priority: Active
-- Current state: The director loads validated GLB character and prop assets, persists transforms and cameras, and falls back to 3D geometry placeholders when a model is missing. Backgrounds may remain images.
+- Current state: The director loads validated GLB character and prop assets, resolves master, episode-variant, and shot-state character models deterministically, persists transforms and cameras, and falls back to 3D geometry placeholders when a model is missing. Backgrounds may remain images.
 - Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
-- Remaining boundary: AI generation currently uses one selected reference image. Rig repair, multi-view reconstruction, decimation, texture optimization, and variant/state-specific 3D inheritance remain open.
+- Remaining boundary: AI generation currently uses one selected reference image. Rig repair, multi-view reconstruction, decimation, texture optimization, and editable state-level material or geometry overrides remain open.
 
 ## Goal
 
@@ -45,7 +45,7 @@ Exact versions, API contracts, licensing, prices, and output quality must be ver
 ## Phase 1: Upload and Proxy Characters
 
 - [x] Define a dedicated `Character3DRepresentation` persistence model instead of storing the complete representation in variant JSON overrides.
-- [ ] Link a representation to a character master and optionally to an episode variant or state.
+- [x] Link a representation to a character master and optionally to an episode variant or state.
 - [x] Support GLB upload first; evaluate VRM as an additional character-specific format.
 - [x] Validate media type, file signature, size, geometry complexity, external resource references, and archive/path safety.
 - [ ] Store model dimensions, bounding box, scale, skeleton status, material summary, checksum, version, and preview asset.
@@ -63,7 +63,7 @@ Acceptance criteria:
 
 ## Phase 2: Lineage and Director Instances
 
-- [ ] Allow episode variants to inherit or replace the master representation.
+- [x] Allow episode variants to inherit or replace the master representation.
 - [ ] Allow states to override materials, accessories, injury markers, visibility, and proportions where supported.
 - [ ] Extend shot usages to record the effective character variant, state, representation version, and director object.
 - [ ] Add an asset picker when inserting a character into a director stage.
@@ -159,7 +159,7 @@ Frontend:
 
 - [ ] Database migration and relationship tests.
 - [x] Upload validation and malicious-file tests.
-- [ ] Asset inheritance and effective-representation resolution tests.
+- [x] Asset inheritance and effective-representation resolution tests.
 - [ ] Reference impact, recycle-bin restore, and permanent-delete protection tests.
 - [x] GLB loading, cache, fallback, and disposal tests.
 - [x] Director transform, pose, camera, and undo/redo tests.
