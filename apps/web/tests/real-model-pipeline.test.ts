@@ -28,14 +28,16 @@ describe('real model E2E helpers', () => {
 
   it('requires every shot and the final release chain to be complete', () => {
     const complete={
-      episode:{scenes:[{shots:[{id:'shot-1',active_video_asset_id:'video-1'},{id:'shot-2',active_video_asset_id:'video-2'}]}]},
+      episode:{scenes:[{shots:[{id:'shot-1',active_video_asset_id:'video-1',dialogue:[{id:'line-1',text:'向前走'}]},{id:'shot-2',active_video_asset_id:'video-2',dialogue:[]}]}]},
       shots:[{shot_id:'shot-1',panel:{bytes:20_000},video:{bytes:200_000}},{shot_id:'shot-2',panel:{bytes:21_000},video:{bytes:210_000}}],
+      speech:[{dialogue_id:'line-1',asset:{bytes:4_000}}],
       render:{bytes:500_000,review:{overall_pass:true}},
       release:{candidate:{id:'candidate-1'},gate:{ready:true},publication:{id:'publication-1',status:'published'}},
     };
 
     expect(()=>assertFullEpisodeClosure(complete)).not.toThrow();
     expect(()=>assertFullEpisodeClosure({...complete,shots:complete.shots.slice(0,1)})).toThrow('Not every episode shot has a generated video');
+    expect(()=>assertFullEpisodeClosure({...complete,speech:[]})).toThrow('Not every dialogue line has generated speech');
     expect(()=>assertFullEpisodeClosure({...complete,render:{...complete.render,review:{overall_pass:false}}})).toThrow('Render quality review did not pass');
     expect(()=>assertFullEpisodeClosure({...complete,release:{...complete.release,gate:{ready:false}}})).toThrow('Release gate did not pass');
   });
