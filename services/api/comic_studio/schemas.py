@@ -289,6 +289,20 @@ class AssetVariantUsageRead(AssetVariantUsageCreate):
     model_config = ConfigDict(from_attributes=True)
     id: str
     variant_id: str
+    effective_variant_id: str | None
+    effective_state_id: str | None
+    effective_representation_id: str | None
+    effective_representation_version: int | None
+    director_object_id: str | None
+    binding_status: Literal[
+        "pending",
+        "resolved",
+        "fallback",
+        "missing_representation",
+        "missing_director_object",
+        "invalid_scope",
+    ]
+    binding_updated_at: datetime | None
     created_at: datetime
 
 

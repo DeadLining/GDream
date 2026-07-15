@@ -43,7 +43,10 @@ class ProductionCanvasService:
         variants = list(
             self.session.scalars(
                 select(models.AssetVariant)
-                .join(models.AssetVariantUsage)
+                .join(
+                    models.AssetVariantUsage,
+                    models.AssetVariantUsage.variant_id == models.AssetVariant.id,
+                )
                 .where(
                     models.AssetVariantUsage.shot_id.in_(shot_ids),
                     models.AssetVariant.deleted_at.is_(None),

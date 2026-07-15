@@ -226,7 +226,10 @@ class AssetVariant(Base):
         back_populates="variant", cascade="all, delete-orphan", order_by="AssetVariantState.created_at"
     )
     usages: Mapped[list[AssetVariantUsage]] = relationship(
-        back_populates="variant", cascade="all, delete-orphan", order_by="AssetVariantUsage.created_at"
+        back_populates="variant",
+        cascade="all, delete-orphan",
+        order_by="AssetVariantUsage.created_at",
+        foreign_keys="AssetVariantUsage.variant_id",
     )
 
 
@@ -245,7 +248,9 @@ class AssetVariantState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     variant: Mapped[AssetVariant] = relationship(back_populates="states")
-    usages: Mapped[list[AssetVariantUsage]] = relationship(back_populates="state")
+    usages: Mapped[list[AssetVariantUsage]] = relationship(
+        back_populates="state", foreign_keys="AssetVariantUsage.state_id"
+    )
 
 
 class AssetVariantUsage(Base):
@@ -258,10 +263,35 @@ class AssetVariantUsage(Base):
     shot_id: Mapped[str] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), index=True)
     asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True)
     usage_kind: Mapped[str] = mapped_column(String(24), index=True)
+    effective_variant_id: Mapped[str | None] = mapped_column(
+        ForeignKey("asset_variants.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    effective_state_id: Mapped[str | None] = mapped_column(
+        ForeignKey("asset_variant_states.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    effective_representation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("character_3d_representations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    effective_representation_version: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    director_object_id: Mapped[str | None] = mapped_column(
+        ForeignKey("director_objects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    binding_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
+    binding_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
-    variant: Mapped[AssetVariant] = relationship(back_populates="usages")
-    state: Mapped[AssetVariantState | None] = relationship(back_populates="usages")
+    variant: Mapped[AssetVariant] = relationship(
+        back_populates="usages", foreign_keys=[variant_id]
+    )
+    state: Mapped[AssetVariantState | None] = relationship(
+        back_populates="usages", foreign_keys=[state_id]
+    )
 
 
 class TrashItem(Base):

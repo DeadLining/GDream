@@ -48,10 +48,14 @@ class DirectorStageService:
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
         self._record_revision(stage)
         created=models.DirectorObject(stage_id=stage.id,kind=data.kind,source_type=data.source_type,source_id=data.source_id,label=data.label,position=len(stage.objects)+1,transform=data.transform.model_dump(),appearance=data.appearance,object_metadata=data.metadata,visible=data.visible)
-        self.session.add(created);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(created);return created
+        self.session.add(created);stage.version+=1;self.session.flush()
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+        AssetUsageBindingService(self.session).refresh_for_stage(stage.id)
+        self._prune_revisions(stage.id);self.session.commit();self.session.refresh(created);return created
 
     def sync_assets(self,stage_id:str,expected_version:int,asset_keys:list[str])->models.DirectorStage:
         from comic_studio.services.director_assets import DirectorAssetCatalogService
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
 
         stage=self.get_stage(stage_id)
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
@@ -73,7 +77,9 @@ class DirectorStageService:
                 continue
             desired={"kind":definition.kind,"source_type":definition.source_type,"source_id":definition.source_id,"label":definition.label,"appearance":definition.appearance,"object_metadata":metadata}
             if any(getattr(current,key)!=value for key,value in desired.items()):changed=True
-        if not changed:return stage
+        if not changed:
+            if AssetUsageBindingService(self.session).refresh_for_stage(stage.id):self.session.commit()
+            return stage
         self._record_revision(stage)
         stage.environment=environment
         stale_ids={item.id for item in stale}
@@ -91,7 +97,7 @@ class DirectorStageService:
                 next_position+=1
                 continue
             current.kind=definition.kind;current.source_type=definition.source_type;current.source_id=definition.source_id;current.label=definition.label;current.appearance=definition.appearance;current.object_metadata=metadata
-        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
+        stage.version+=1;self.session.flush();AssetUsageBindingService(self.session).refresh_for_stage(stage.id);self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
 
     def update_stage(self,stage_id:str,expected_version:int,patch:DirectorStagePatch)->models.DirectorStage:
         stage=self.get_stage(stage_id)
@@ -107,7 +113,10 @@ class DirectorStageService:
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
         self._record_revision(stage)
         for key,value in patch.model_dump(exclude_none=True).items():setattr(item,"object_metadata" if key=="metadata" else key,value.model_dump() if hasattr(value,"model_dump") else value)
-        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(item);return item
+        stage.version+=1;self.session.flush()
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+        AssetUsageBindingService(self.session).refresh_for_stage(stage.id)
+        self._prune_revisions(stage.id);self.session.commit();self.session.refresh(item);return item
 
     def delete_object(self,object_id:str,expected_version:int)->None:
         item=self.session.get(models.DirectorObject,object_id)
@@ -118,7 +127,10 @@ class DirectorStageService:
         for camera in stage.shot_cameras:
             if object_id in camera.object_overrides:
                 camera.object_overrides={key:value for key,value in camera.object_overrides.items() if key!=object_id}
-        self.session.delete(item);stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit()
+        self.session.delete(item);stage.version+=1;self.session.flush()
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+        AssetUsageBindingService(self.session).refresh_for_stage(stage.id)
+        self._prune_revisions(stage.id);self.session.commit()
 
     def list_revisions(self,stage_id:str)->list[models.DirectorRevision]:
         if self.session.get(models.DirectorStage,stage_id) is None:raise KeyError(stage_id)
@@ -134,7 +146,10 @@ class DirectorStageService:
         self.session.flush()
         for data in snapshot.get("objects",[]):
             self.session.add(models.DirectorObject(id=data["id"],stage_id=stage.id,kind=data["kind"],source_type=data["source_type"],source_id=data.get("source_id"),label=data["label"],position=data.get("position",0),transform=data["transform"],appearance=data.get("appearance",{}),object_metadata=data.get("metadata",{}),visible=data.get("visible",True)))
-        stage.version+=1;self.session.flush();self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
+        stage.version+=1;self.session.flush()
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+        AssetUsageBindingService(self.session).refresh_for_stage(stage.id)
+        self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
 
     def update_camera(self,stage_id:str,shot_id:str,expected_version:int,patch:ShotCameraPatch)->models.ShotCamera:
         stage=self.get_stage(stage_id);camera=next((item for item in stage.shot_cameras if item.shot_id==shot_id),None)

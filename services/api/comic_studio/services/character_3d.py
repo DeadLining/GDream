@@ -128,6 +128,14 @@ class Character3DRepresentationService:
                 **metrics,
             )
             self.session.add(representation)
+            if activate:
+                from comic_studio.services.asset_usage_bindings import (
+                    AssetUsageBindingService,
+                )
+
+                AssetUsageBindingService(self.session).refresh_for_character(
+                    character_id
+                )
             self.session.commit()
         except Exception:
             self.session.rollback()
@@ -152,6 +160,11 @@ class Character3DRepresentationService:
         representation.is_active = True
         representation.review_status = "approved"
         representation.asset.review_status = "approved"
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+
+        AssetUsageBindingService(self.session).refresh_for_character(
+            representation.character_id
+        )
         self.session.commit()
         return self.get(representation.id)
 
@@ -166,7 +179,10 @@ class Character3DRepresentationService:
                 raise KeyError(shot_id)
             usage = self.session.scalar(
                 select(models.AssetVariantUsage)
-                .join(models.AssetVariant)
+                .join(
+                    models.AssetVariant,
+                    models.AssetVariant.id == models.AssetVariantUsage.variant_id,
+                )
                 .where(
                     models.AssetVariantUsage.shot_id == shot_id,
                     models.AssetVariant.character_id == character_id,

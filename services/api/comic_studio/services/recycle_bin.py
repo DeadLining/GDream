@@ -54,6 +54,9 @@ class RecycleBinService:
                 expires_at=now + timedelta(days=30),
             )
         )
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+
+        AssetUsageBindingService(self.session).refresh_for_variant(variant.id)
         self.session.commit()
         return True
 
@@ -81,6 +84,9 @@ class RecycleBinService:
                 expires_at=now + timedelta(days=30),
             )
         )
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+
+        AssetUsageBindingService(self.session).refresh_for_state(state.id)
         self.session.commit()
         return True
 
@@ -171,6 +177,13 @@ class RecycleBinService:
         resource.deleted_at = None
         resource.deleted_by = ""
         self.session.delete(item)
+        from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
+
+        bindings = AssetUsageBindingService(self.session)
+        if item.resource_type == "asset_variant":
+            bindings.refresh_for_variant(resource.id)
+        else:
+            bindings.refresh_for_state(resource.id)
         self.session.commit()
         return schemas.TrashRestoreRead(
             restored=True,

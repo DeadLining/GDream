@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload, with_loader_criteria
 
 from comic_studio import models, schemas
+from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
 
 
 class AssetLineageReferenceError(ValueError):
@@ -86,6 +87,7 @@ class AssetLineageService:
             for key, value in merged.model_dump().items():
                 setattr(variant, key, value)
             variant.version += 1
+            AssetUsageBindingService(self.session).refresh_for_variant(variant.id)
             self.session.commit()
             self.session.refresh(variant)
         return variant
@@ -140,6 +142,7 @@ class AssetLineageService:
             for key, value in merged.model_dump().items():
                 setattr(state, key, value)
             state.version += 1
+            AssetUsageBindingService(self.session).refresh_for_state(state.id)
             self.session.commit()
             self.session.refresh(state)
         return state
@@ -175,6 +178,8 @@ class AssetLineageService:
         usage = models.AssetVariantUsage(variant_id=variant.id, **data.model_dump())
         self.session.add(usage)
         try:
+            self.session.flush()
+            AssetUsageBindingService(self.session).refresh_usage(usage)
             self.session.commit()
         except IntegrityError as exc:
             self.session.rollback()
