@@ -95,8 +95,43 @@ describe('AssetLineageCanvas', () => {
 
     expect(await screen.findByRole('dialog',{name:'确认下游影响'})).toBeVisible();
     expect(onUpdateState).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button',{name:'确认变更'}));
+    await userEvent.click(screen.getByRole('button',{name:'仅保存'}));
     expect(onUpdateState).toHaveBeenCalledWith('st1',expect.objectContaining({label:'高度警惕'}));
+  });
+
+  it('regenerates affected panels only after a referenced state change succeeds', async () => {
+    const order:string[]=[];
+    const onAnalyzeImpact=vi.fn().mockResolvedValue(impact);
+    const onUpdateState=vi.fn().mockImplementation(async()=>{order.push('save');});
+    const onRegenerateImpact=vi.fn().mockImplementation(async()=>{order.push('regenerate');});
+    render(<AssetLineageCanvas character={character} references={[reference]} variants={variants} onAnalyzeImpact={onAnalyzeImpact} onUpdateState={onUpdateState} onRegenerateImpact={onRegenerateImpact}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'警惕'}));
+    await userEvent.click(screen.getByRole('button',{name:'编辑状态'}));
+    const input=screen.getByRole('textbox',{name:'状态名称'});
+    await userEvent.clear(input);
+    await userEvent.type(input,'高度警惕');
+    await userEvent.click(screen.getByRole('button',{name:'保存状态'}));
+    await userEvent.click(await screen.findByRole('button',{name:'保存并重生成'}));
+
+    expect(order).toEqual(['save','regenerate']);
+    expect(onRegenerateImpact).toHaveBeenCalledWith(impact);
+    expect(await screen.findByText('变更已保存，已启动 2 集的画面重生成')).toBeVisible();
+  });
+
+  it('does not regenerate when saving a referenced change fails', async () => {
+    const onAnalyzeImpact=vi.fn().mockResolvedValue(impact);
+    const onUpdateState=vi.fn().mockRejectedValue(new Error('版本冲突'));
+    const onRegenerateImpact=vi.fn();
+    render(<AssetLineageCanvas character={character} references={[reference]} variants={variants} onAnalyzeImpact={onAnalyzeImpact} onUpdateState={onUpdateState} onRegenerateImpact={onRegenerateImpact}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'警惕'}));
+    await userEvent.click(screen.getByRole('button',{name:'编辑状态'}));
+    await userEvent.click(screen.getByRole('button',{name:'保存状态'}));
+    await userEvent.click(await screen.findByRole('button',{name:'保存并重生成'}));
+
+    expect(onRegenerateImpact).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('版本冲突');
   });
 
   it('creates an episode variant and a state from the lineage inspector', async () => {

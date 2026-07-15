@@ -344,8 +344,27 @@ it('generates a reviewable 3D candidate from an existing character reference',as
   expect(await screen.findByRole('dialog',{name:'确认 3D 变更影响'})).toBeVisible();
   expect(mocks.characterImpact).toHaveBeenCalledWith('c1');
   expect(mocks.approveModel3D).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button',{name:'确认批准'}));
+  await user.click(screen.getByRole('button',{name:'仅批准'}));
   expect(mocks.approveModel3D).toHaveBeenCalledWith('job-3d');
+});
+
+it('approves a 3D candidate before regenerating its affected panels',async()=>{
+  const affected={shots:['shot-1'],assets:[],usage_count:1,episodes:[{episode_id:'e1',episode_title:'第一集',scenes:[{scene_id:'sc1',scene_label:'场景 01 · 巷道',shots:[{id:'shot-1',position:1,composition:'近景'}]}]}]};
+  const candidate={id:'rep-ai',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-ai',label:'AI 生成 3D 候选',format:'glb',version:2,is_active:false,review_status:'draft',model_url:'/media/linxia-ai.glb',mesh_count:1,triangle_count:2400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
+  const order:string[]=[];
+  mocks.representations.mockResolvedValue([candidate]);
+  mocks.latestModel3D.mockResolvedValue({...job('succeeded',{representation_id:'rep-ai',is_active:false}),id:'job-3d'});
+  mocks.characterImpact.mockResolvedValue(affected);
+  mocks.approveModel3D.mockImplementation(async()=>{order.push('approve');return{review_status:'approved',is_active:true};});
+  mocks.createProductionRun.mockImplementation(async()=>{order.push('regenerate');return{id:'run-impact'};});
+  const user=userEvent.setup();
+  render(<CharacterWorkspace characters={[character]}/>);
+  await user.click(await screen.findByRole('button',{name:/林夏/}));
+  await user.click(await screen.findByRole('button',{name:'批准使用 3D 候选'}));
+  await user.click(await screen.findByRole('button',{name:'批准并重生成'}));
+
+  expect(order).toEqual(['approve','regenerate']);
+  expect(await screen.findByText('3D 候选已批准，已启动 1 集的画面重生成')).toBeVisible();
 });
 
 it('starts one forced panel run per affected episode',async()=>{
@@ -354,6 +373,7 @@ it('starts one forced panel run per affected episode',async()=>{
     {episode_id:'e2',episode_title:'第二集',scenes:[{scene_id:'sc2',scene_label:'场景 01 · 天台',shots:[{id:'shot-2',position:2,composition:'远景'}]}]},
   ]};
   mocks.variantImpact.mockResolvedValue(affected);
+  mocks.createProductionRun.mockResolvedValueOnce({id:'run-1'}).mockRejectedValueOnce(new Error('队列不可用'));
   const user=userEvent.setup();
   render(<CharacterWorkspace characters={[character]}/>);
   await user.click(await screen.findByRole('button',{name:'打开谱系'}));
@@ -363,6 +383,7 @@ it('starts one forced panel run per affected episode',async()=>{
   expect(mocks.createProductionRun).toHaveBeenCalledTimes(2);
   expect(mocks.createProductionRun).toHaveBeenNthCalledWith(1,'e1',{stages:['panels'],shot_ids:['shot-1'],concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
   expect(mocks.createProductionRun).toHaveBeenNthCalledWith(2,'e2',{stages:['panels'],shot_ids:['shot-2'],concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
+  expect(await screen.findByText('已启动 1 集，1 集失败：第二集：队列不可用')).toBeVisible();
 });
 
 it('does not generate 3D from unapproved character references',async()=>{
