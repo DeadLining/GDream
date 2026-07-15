@@ -242,7 +242,9 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     synced_character = next(item for item in synced_stage["objects"] if item["kind"] == "character")
     assert "image_url" not in synced_character["appearance"]
     assert synced_character["appearance"]["fallback_image_url"].endswith("/primary.png")
-    assert synced_character["metadata"]["requires_3d_model"] is True
+    assert synced_character["metadata"]["requires_3d_model"] is False
+    assert synced_character["metadata"]["proxy_rig"] == "standard_humanoid"
+    assert synced_character["metadata"]["full_model_optional"] is True
     assert synced_character["metadata"]["asset_id"] == asset_id
     non_background = [
         item for item in synced_stage["objects"] if item["kind"] != "background"
@@ -257,8 +259,15 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     assert synced_prop["appearance"]["model_url"].endswith(".glb")
     assert synced_prop["metadata"]["requires_3d_model"] is False
     assert synced_prop["metadata"]["asset_id"] == prop_media_asset_id
-    placeholders = [item for item in non_background if item["id"] != synced_prop["id"]]
-    assert all(item["metadata"]["requires_3d_model"] is True for item in placeholders)
+    unresolved_props = [
+        item
+        for item in non_background
+        if item["kind"] == "prop" and item["id"] != synced_prop["id"]
+    ]
+    assert all(
+        item["metadata"]["requires_3d_model"] is True
+        for item in unresolved_props
+    )
 
     repeated = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",

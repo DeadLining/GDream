@@ -328,7 +328,9 @@ class DirectorAssetCatalogService:
                         "reference_id": reference.id,
                         "reference_type": reference.reference_type,
                         "asset_id": reference_asset.id,
-                        "requires_3d_model": True,
+                        "proxy_rig": "standard_humanoid",
+                        "requires_3d_model": False,
+                        "full_model_optional": True,
                         "appearance_bible": character.appearance_bible,
                         "continuity_rules": character.continuity_rules,
                     },
@@ -339,6 +341,7 @@ class DirectorAssetCatalogService:
                     },
                     appearance={
                         "color": "#d76b4b",
+                        "proxy_rig": "standard_humanoid",
                         "fallback_image_url": media_url,
                         "aspect_ratio": aspect_ratio,
                     },

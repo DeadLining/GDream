@@ -53,7 +53,11 @@ class AssetUsageBindingService:
         representation = Character3DRepresentationService(
             self.session, Path(".")
         ).resolve(variant.character_id, shot.id)
-        stage = shot.scene.director_stage
+        stage = self.session.scalar(
+            select(models.DirectorStage).where(
+                models.DirectorStage.scene_id == shot.scene_id
+            )
+        )
         stage_objects = (
             list(
                 self.session.scalars(
