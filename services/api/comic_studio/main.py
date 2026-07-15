@@ -55,6 +55,7 @@ from comic_studio.routes.episode_ai_runs import router as episode_ai_runs_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
 from comic_studio.services.episode_ai_orchestrator import EpisodeAIOrchestrator
+from comic_studio.services.episode_ai_stage_handlers import EpisodeAIStageHandlers
 from comic_studio.services.production_coordinator import ProductionCoordinator
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
@@ -223,6 +224,17 @@ def create_app(
         CapabilityAdapterRegistry(lambda: app.state.provider_factory),
         mock_ssh_manager=app.state.mock_ssh_manager,
     )
+    app.state.episode_ai_stage_handlers = EpisodeAIStageHandlers(
+        session_factory,
+        settings.data_root,
+        app.state.model_runtime,
+        compositor_root=settings.compositor_root,
+    )
+    episode_ai_orchestrator = EpisodeAIOrchestrator(
+        session_factory,
+        app.state.episode_ai_stage_handlers.mapping(),
+    )
+    app.state.episode_ai_orchestrator = episode_ai_orchestrator
     from comic_studio.services.art_style_loader import get_art_style_loader
 
     app.state.art_style_loader = get_art_style_loader()
@@ -282,7 +294,7 @@ def create_app(
     app.state.recover_script_generations = recover_script_generations
 
     def recover_episode_ai_runs():
-        return EpisodeAIOrchestrator(session_factory, {}).recover_interrupted()
+        return episode_ai_orchestrator.recover_interrupted()
 
     app.state.recover_episode_ai_runs = recover_episode_ai_runs
 
