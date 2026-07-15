@@ -113,7 +113,7 @@ export function AssetLineageCanvas({
   const [undoNodes, setUndoNodes] = useState<any[] | null>(null);
   const [readOnly, setReadOnly] = useState(false);
   const [impact, setImpact] = useState<AssetImpact | null>(null);
-  const [impactMode, setImpactMode] = useState<'analysis' | 'confirm' | null>(null);
+  const [impactMode, setImpactMode] = useState<'analysis' | 'confirm' | 'result' | null>(null);
   const [impactBusy, setImpactBusy] = useState(false);
   const [impactMessage, setImpactMessage] = useState('');
   const [pendingMutation, setPendingMutation] = useState<
@@ -529,7 +529,7 @@ export function AssetLineageCanvas({
     }
   };
 
-  const confirmMutation = async () => {
+  const confirmMutation = async (regenerate: boolean) => {
     if (!pendingMutation || impactBusy) return;
     setImpactBusy(true);
     setFormError('');
@@ -541,10 +541,25 @@ export function AssetLineageCanvas({
         await onUpdateState?.(pendingMutation.id, pendingMutation.data);
         setStateLabel('');
       }
-      closeImpact();
       closeEditor();
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : '保存变更失败');
+      setImpactBusy(false);
+      return;
+    }
+    if (!regenerate || !impact || !onRegenerateImpact) {
+      closeImpact();
+      setImpactBusy(false);
+      return;
+    }
+    setPendingMutation(null);
+    setImpactMode('result');
+    try {
+      await onRegenerateImpact(impact);
+      setImpactMessage(`变更已保存，已启动 ${impact.episodes.length} 集的画面重生成`);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '启动画面重生成失败';
+      setImpactMessage(`变更已保存；${message}`);
     } finally {
       setImpactBusy(false);
     }
@@ -814,10 +829,10 @@ export function AssetLineageCanvas({
       </div>
       {impact && impactMode && (
         <div className="dialog-backdrop">
-          <section className="form-dialog impact-dialog" role="dialog" aria-label={impactMode === 'confirm' ? '确认下游影响' : '下游影响范围'}>
+          <section className="form-dialog impact-dialog" role="dialog" aria-label={impactMode === 'confirm' ? '确认下游影响' : impactMode === 'result' ? '变更结果' : '下游影响范围'}>
             <header>
               <div>
-                <h2>{impactMode === 'confirm' ? '确认下游影响' : '下游影响范围'}</h2>
+                <h2>{impactMode === 'confirm' ? '确认下游影响' : impactMode === 'result' ? '变更结果' : '下游影响范围'}</h2>
                 <small>共 {impact.shots.length} 个镜头，分布在 {impact.episodes.length} 集</small>
               </div>
               <button type="button" aria-label="关闭影响范围" onClick={closeImpact}>×</button>
@@ -837,16 +852,23 @@ export function AssetLineageCanvas({
             </div>
             {impactMessage && <p role="status" className="impact-message">{impactMessage}</p>}
             <footer>
-              <button type="button" onClick={closeImpact}>取消</button>
+              <button type="button" onClick={closeImpact}>{impactMode === 'result' ? '关闭' : '取消'}</button>
               {impactMode === 'analysis' && onRegenerateImpact && impact.shots.length > 0 && (
                 <button type="button" className="primary-action" onClick={() => void regenerateImpact()} disabled={impactBusy}>
                   {impactBusy ? '正在启动' : '重新生成受影响画面'}
                 </button>
               )}
               {impactMode === 'confirm' && (
-                <button type="button" className="primary-action" onClick={() => void confirmMutation()} disabled={impactBusy}>
-                  {impactBusy ? '正在保存' : '确认变更'}
-                </button>
+                <>
+                  <button type="button" onClick={() => void confirmMutation(false)} disabled={impactBusy}>
+                    {impactBusy ? '正在保存' : '仅保存'}
+                  </button>
+                  {onRegenerateImpact && impact.shots.length > 0 && (
+                    <button type="button" className="primary-action" onClick={() => void confirmMutation(true)} disabled={impactBusy}>
+                      {impactBusy ? '正在处理' : '保存并重生成'}
+                    </button>
+                  )}
+                </>
               )}
             </footer>
           </section>
