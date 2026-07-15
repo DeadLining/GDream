@@ -378,14 +378,41 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     )
     db_session.add(state)
     db_session.flush()
-    db_session.add(
-        models.AssetVariantUsage(
-            variant_id=variant.id,
-            state_id=state.id,
-            shot_id=shot.id,
-            usage_kind="panel",
-        )
+    model_asset = models.Asset(
+        project_id=project.id,
+        kind=f"character-model:{character.id}",
+        local_path="projects/linxia.glb",
+        media_type="model/gltf-binary",
+        provider="upload",
+        model="local",
+        checksum="3" * 64,
     )
+    db_session.add(model_asset)
+    db_session.flush()
+    representation = models.Character3DRepresentation(
+        character_id=character.id,
+        variant_id=variant.id,
+        state_id=state.id,
+        asset_id=model_asset.id,
+        label="左眉受伤模型",
+        version=3,
+        is_active=True,
+    )
+    db_session.add(representation)
+    db_session.flush()
+    usage = models.AssetVariantUsage(
+        variant_id=variant.id,
+        state_id=state.id,
+        shot_id=shot.id,
+        usage_kind="panel",
+        effective_variant_id=variant.id,
+        effective_state_id=state.id,
+        effective_representation_id=representation.id,
+        effective_representation_version=representation.version,
+        binding_status="resolved",
+        binding_updated_at=models.utc_now(),
+    )
+    db_session.add(usage)
     scene_asset = models.LibraryAsset(
         project_id=project.id,
         kind="scene",
@@ -453,6 +480,7 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     )
     db_session.add_all([director_character, hidden_prop])
     db_session.flush()
+    usage.director_object_id = director_character.id
     db_session.add(
         models.ShotCamera(
             stage_id=stage.id,
@@ -504,6 +532,13 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     snapshot = asset.request_metadata["input_snapshot"]
     assert snapshot["asset_bindings"][0]["variant_id"] == variant.id
     assert snapshot["asset_bindings"][0]["state_id"] == state.id
+    assert snapshot["asset_bindings"][0]["effective_variant_id"] == variant.id
+    assert snapshot["asset_bindings"][0]["effective_state_id"] == state.id
+    assert snapshot["asset_bindings"][0]["effective_representation_id"] == representation.id
+    assert snapshot["asset_bindings"][0]["effective_representation_version"] == 3
+    assert snapshot["asset_bindings"][0]["director_object_id"] == director_character.id
+    assert snapshot["asset_bindings"][0]["binding_status"] == "resolved"
+    assert snapshot["asset_bindings"][0]["binding_updated_at"]
     assert snapshot["director"]["camera"]["focal_length_mm"] == 85
     assert snapshot["director"]["objects"][0]["transform"]["position"] == [2, 0, 0]
     assert snapshot["director"]["objects"][0]["appearance"]["pose_preset"] == "action"
