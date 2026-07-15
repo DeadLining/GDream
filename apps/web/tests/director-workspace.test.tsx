@@ -261,6 +261,46 @@ describe('DirectorWorkspace',()=>{
     await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,assets.map(item=>item.key)));
     expect(await screen.findByText('已同步 1 / 2')).toBeVisible();
   });
+  it('adds one selected production asset without removing existing scene objects',async()=>{
+    const asset={key:'character:char-1:ref-1',kind:'character',source_type:'model',source_id:'representation-1',asset_id:'asset-1',label:'林夏',media_url:'/media/linxia.glb',media_type:'model/gltf-binary',metadata:{role:'侦探'}} as const;
+    const existing={...directorObject,metadata:{catalog_key:'scene:scene-1'}};
+    const syncedObject={...directorObject,id:'object-2',kind:'character' as const,source_type:'model' as const,source_id:'representation-1',label:'林夏',metadata:{catalog_key:asset.key}};
+    const currentStage={...stage,objects:[existing]};
+    const synced={...stage,version:2,objects:[existing,syncedObject]};
+    mocks.getDirectorStage.mockResolvedValue(currentStage);mocks.getDirectorAssets.mockResolvedValue([asset]);mocks.syncDirectorAssets.mockResolvedValue(synced);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'添加林夏到场景'}));
+
+    await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,['scene:scene-1',asset.key]));
+    expect(await screen.findByDisplayValue('林夏')).toBeVisible();
+  });
+  it('renames an object and controls its scene-level visibility',async()=>{
+    mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorObject.mockImplementation(async(_id:string,_version:number,patch:Record<string,unknown>)=>({...directorObject,...patch}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'方块'}));
+    const name=screen.getByRole('textbox',{name:'对象名称'});
+    await userEvent.clear(name);await userEvent.type(name,'线索箱');
+    await userEvent.click(screen.getByRole('button',{name:'保存对象名称'}));
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{label:'线索箱'}));
+
+    await userEvent.click(screen.getByLabelText('场景显示'));
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenLastCalledWith('object-1',2,{visible:false}));
+  });
+  it('duplicates a scene object as an independent instance',async()=>{
+    const catalogObject={...directorObject,source_type:'library_asset' as const,source_id:'asset-1',label:'机械犬',appearance:{color:'#777'},metadata:{catalog_key:'library_asset:asset-1',proxy_rig:'quadruped'}};
+    const currentStage={...stage,objects:[catalogObject]};
+    const duplicate={...catalogObject,id:'object-2',label:'机械犬 副本',position:2,transform:{...catalogObject.transform,position:[.5,0,0] as [number,number,number]},metadata:{proxy_rig:'quadruped'}};
+    mocks.getDirectorStage.mockResolvedValue(currentStage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.createDirectorObject.mockResolvedValue(duplicate);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'机械犬'}));
+
+    await userEvent.click(screen.getByRole('button',{name:'复制场景对象'}));
+
+    await waitFor(()=>expect(mocks.createDirectorObject).toHaveBeenCalledWith('stage-1',1,{kind:'primitive',source_type:'library_asset',source_id:'asset-1',label:'机械犬 副本',transform:{...catalogObject.transform,position:[.5,0,0]},appearance:{color:'#777'},metadata:{proxy_rig:'quadruped'},visible:true}));
+    expect(screen.getByRole('button',{name:'机械犬 副本'})).toBeVisible();
+  });
   it('renders the effective variant model when the selected shot changes',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,source_id:'master-representation',label:'林夏',appearance:{model_url:'/media/master.glb'},metadata:{character_id:'char-1',representation_id:'master-representation'},transform:{...directorObject.transform,position:[3,0,1] as [number,number,number]}};
     const secondShot={...scene.shots[0],id:'shot-2',position:2,composition:'受伤特写'};
