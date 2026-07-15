@@ -5,6 +5,8 @@ import pytest
 
 from comic_studio import models
 from comic_studio.services.character_3d import Character3DRepresentationService
+from comic_studio.services.character_references import CharacterReferenceService
+from tests.test_character_references import PNG
 
 
 def _glb(document: dict | None = None) -> bytes:
@@ -163,6 +165,49 @@ def test_director_catalog_prefers_active_character_glb(client):
     ]
     assert len(character_objects) == 1
     assert character_objects[0]["source_id"] == replacement["id"]
+
+
+def test_director_catalog_exposes_a_usable_humanoid_proxy_without_glb(client):
+    project, character = _character(client)
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "代理测试", "premise": "骨架走位", "target_duration_seconds": 30},
+    ).json()
+    with client.app.state.session_factory() as session:
+        reference, _asset = CharacterReferenceService(
+            session,
+            client.app.state.settings.data_root,
+        ).upload(character["id"], PNG, "front", "正面")
+        reference.review_status = "approved"
+        reference.is_active = True
+        scene = models.Scene(
+            episode_id=episode["id"],
+            position=1,
+            location="排练场",
+            summary="骨架代理排练",
+            continuity_state={"characters_present": [character["id"]]},
+            estimated_duration_seconds=5,
+        )
+        scene.shots.append(
+            models.Shot(
+                position=1,
+                shot_type="medium",
+                duration_seconds=5,
+                composition="角色走位",
+                character_state={character["id"]: {}},
+            )
+        )
+        session.add(scene)
+        session.commit()
+        scene_id = scene.id
+    stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
+
+    catalog = client.get(f"/api/director-stages/{stage['id']}/assets").json()
+
+    character_asset = next(item for item in catalog if item["kind"] == "character")
+    assert character_asset["metadata"]["proxy_rig"] == "standard_humanoid"
+    assert character_asset["metadata"]["requires_3d_model"] is False
+    assert character_asset["metadata"]["full_model_optional"] is True
 
 
 def test_character_model_upload_scopes_activation_to_variant_and_state(client):

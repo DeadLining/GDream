@@ -39,6 +39,15 @@ describe('DirectorCanvas',()=>{
     expect(ui.getByTestId('orbit')).toHaveAttribute('data-enabled','true');
   });
 
+  it('renders a standard humanoid rig proxy when a character has no GLB',()=>{
+    const view=render(<DirectorCanvas objects={[objects[0]]} camera={camera} selectedObjectId={null} mode="world" onTransform={vi.fn()}/>);
+
+    expect(view.container.querySelector('[name="humanoid-rig-character-1"]')).toBeInTheDocument();
+    for(const bone of ['Hips','Spine','Head','LeftUpperArm','RightUpperArm','LeftUpperLeg','RightUpperLeg']){
+      expect(view.container.querySelector(`[name="humanoid-bone-${bone}"]`)).toBeInTheDocument();
+    }
+  });
+
   it('reports the persisted camera pose after camera-mode navigation',()=>{
     const onCameraChange=vi.fn();
     const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId={null} mode="camera" onTransform={vi.fn()} onCameraChange={onCameraChange}/>);
