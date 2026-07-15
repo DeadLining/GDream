@@ -9,6 +9,13 @@ const dialogueSchema = z.object({
   audioPath: z.string().min(1).optional(),
 });
 
+const soundSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  audioPath: z.string().min(1),
+  volume: z.number().min(0).max(1),
+});
+
 const shotSchema = z.object({
   id: z.string().min(1),
   durationSeconds: z.number().positive().max(60),
@@ -18,6 +25,7 @@ const shotSchema = z.object({
   reviewStatus: z.literal('approved'),
   motion: z.enum(['push_in', 'pull_out', 'pan_left', 'pan_right', 'still']),
   dialogue: z.array(dialogueSchema),
+  sounds: z.array(soundSchema).default([]),
 });
 
 export const manifestSchema = z.object({

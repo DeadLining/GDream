@@ -47,6 +47,9 @@ const ShotScene: React.FC<{shot: RenderManifest['shots'][number]}> = ({shot}) =>
           transformOrigin: 'center',
         }}
       />}
+      {shot.sounds.map((sound) => (
+        <Audio key={sound.id} src={mediaSource(sound.audioPath)} volume={sound.volume} loop />
+      ))}
       <AbsoluteFill
         style={{
           background:

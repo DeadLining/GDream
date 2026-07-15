@@ -85,6 +85,9 @@ class LibraryAsset(Base):
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+    media_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     kind: Mapped[str] = mapped_column(String(24), index=True)
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
@@ -96,6 +99,7 @@ class LibraryAsset(Base):
     )
 
     project: Mapped[Project] = relationship(back_populates="library_assets")
+    media_asset: Mapped[Asset | None] = relationship(foreign_keys=[media_asset_id])
     scene_bindings: Mapped[list[LibraryAssetSceneBinding]] = relationship(
         back_populates="library_asset",
         cascade="all, delete-orphan",

@@ -158,16 +158,35 @@ class ShotInputCompiler:
             self.session.scalars(
                 select(models.LibraryAsset)
                 .join(models.LibraryAssetSceneBinding)
-                .where(
-                    models.LibraryAssetSceneBinding.scene_id == shot.scene_id,
-                    models.LibraryAsset.kind.in_(("scene", "prop")),
-                )
+                .where(models.LibraryAssetSceneBinding.scene_id == shot.scene_id)
                 .order_by(
                     models.LibraryAssetSceneBinding.created_at,
                     models.LibraryAssetSceneBinding.id,
                 )
             )
         )
+        if "video" not in allowed_kinds:
+            library_assets = [item for item in library_assets if item.kind != "sound"]
+        library_media: dict[str, models.Asset | None] = {}
+        for item in library_assets:
+            media = (
+                self.session.get(models.Asset, item.media_asset_id)
+                if item.media_asset_id
+                else None
+            )
+            if item.media_asset_id and (
+                media is None or media.project_id != project.id
+            ):
+                raise ShotInputReferenceError(
+                    "Bound library asset media must belong to the shot project"
+                )
+            library_media[item.id] = media
+            if (
+                media is not None
+                and item.kind in {"scene", "prop", "costume"}
+                and media.media_type.startswith("image/")
+            ):
+                reference_asset_ids.append(media.id)
         library_asset_snapshot = [
             {
                 "id": item.id,
@@ -176,6 +195,12 @@ class ShotInputCompiler:
                 "description": item.description,
                 "tags": item.tags,
                 "metadata": item.asset_metadata,
+                "media_asset_id": item.media_asset_id,
+                "media_type": (
+                    library_media[item.id].media_type
+                    if library_media[item.id] is not None
+                    else None
+                ),
             }
             for item in library_assets
         ]

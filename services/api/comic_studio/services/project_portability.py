@@ -67,7 +67,7 @@ def _alembic_head() -> str:
     Hard-coded rather than read at runtime so the export does not require a
     live alembic context. Update this constant when bumping the migration head.
     """
-    return "20260720_28"
+    return "20260721_29"
 
 
 def _row_to_dict(instance: object) -> dict[str, Any]:
@@ -83,6 +83,7 @@ def _serialize_project_tree(project: models.Project) -> dict[str, Any]:
         {
             "id": asset.id,
             "project_id": asset.project_id,
+            "media_asset_id": asset.media_asset_id,
             "kind": asset.kind,
             "name": asset.name,
             "description": asset.description,
@@ -417,6 +418,18 @@ class ProjectPortabilityService:
                 checksum=checksum,
             )
             self.session.add(asset)
+        self.session.flush()
+
+        for row in database.get("library_assets", []):
+            old_media_id = row.get("media_asset_id")
+            if not old_media_id:
+                continue
+            library_asset = self.session.get(
+                models.LibraryAsset, id_maps["library_asset"][row["id"]]
+            )
+            library_asset.media_asset_id = id_maps["asset"].get(old_media_id)
+            if library_asset.media_asset_id is None:
+                warnings.append("Skipped missing library asset media reference")
         self.session.commit()
 
         return ImportResult(project_id=new_project_id, warnings=warnings)

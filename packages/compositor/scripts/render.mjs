@@ -25,6 +25,11 @@ for (const [shotIndex, shot] of manifest.shots.entries()) {
     copyFileSync(line.audioPath, resolve(stageDir, audioName));
     line.audioPath = `public/jobs/${jobName}/${audioName}`;
   }
+  for (const [soundIndex, sound] of (shot.sounds ?? []).entries()) {
+    const soundName = `sound-${shotIndex}-${soundIndex}${extname(sound.audioPath) || '.wav'}`;
+    copyFileSync(sound.audioPath, resolve(stageDir, soundName));
+    sound.audioPath = `public/jobs/${jobName}/${soundName}`;
+  }
 }
 
 const stagedProps = resolve(stageDir, 'props.json');

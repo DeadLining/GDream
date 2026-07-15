@@ -924,6 +924,9 @@ class LibraryAssetRead(LibraryAssetCreate):
     model_config = ConfigDict(from_attributes=True)
     id: str
     project_id: str
+    media_asset_id: str | None = None
+    media_url: str | None = None
+    media_type: str | None = None
     created_at: datetime
     updated_at: datetime
 

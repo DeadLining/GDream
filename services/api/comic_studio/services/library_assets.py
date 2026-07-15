@@ -1,6 +1,12 @@
+from io import BytesIO
+import hashlib
+import os
+from pathlib import Path
+
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
 
@@ -13,7 +19,18 @@ class LibraryAssetSceneProjectMismatchError(RuntimeError):
     pass
 
 
+class LibraryAssetMediaError(RuntimeError):
+    pass
+
+
 class LibraryAssetService:
+    MAX_MEDIA_BYTES = 25 * 1024 * 1024
+    IMAGE_FORMATS = {
+        "PNG": ("image/png", ".png"),
+        "JPEG": ("image/jpeg", ".jpg"),
+        "WEBP": ("image/webp", ".webp"),
+    }
+
     def __init__(self, session: Session):
         self.session = session
 
@@ -26,8 +43,10 @@ class LibraryAssetService:
     ):
         if self.session.get(models.Project, project_id) is None:
             return None
-        statement = select(models.LibraryAsset).where(
-            models.LibraryAsset.project_id == project_id
+        statement = (
+            select(models.LibraryAsset)
+            .options(selectinload(models.LibraryAsset.media_asset))
+            .where(models.LibraryAsset.project_id == project_id)
         )
         if kind is not None:
             statement = statement.where(models.LibraryAsset.kind == kind)
@@ -82,12 +101,101 @@ class LibraryAssetService:
         self.session.commit()
         return True
 
+    def upload_media(
+        self,
+        asset_id: str,
+        content: bytes,
+        *,
+        filename: str,
+        data_root: Path,
+    ):
+        library_asset = self.session.get(models.LibraryAsset, asset_id)
+        if library_asset is None:
+            return None
+        if not content:
+            raise LibraryAssetMediaError("empty_media")
+        if len(content) > self.MAX_MEDIA_BYTES:
+            raise LibraryAssetMediaError("media_too_large")
+
+        width = None
+        height = None
+        if library_asset.kind == "sound":
+            media_type, extension = self._audio_format(content)
+            if media_type is None:
+                raise LibraryAssetMediaError("sound_asset_requires_audio")
+        else:
+            try:
+                with Image.open(BytesIO(content)) as image:
+                    image.load()
+                    image_format = image.format or ""
+                    width, height = image.size
+            except (UnidentifiedImageError, OSError, ValueError) as exc:
+                raise LibraryAssetMediaError("visual_asset_requires_image") from exc
+            media = self.IMAGE_FORMATS.get(image_format)
+            if media is None:
+                raise LibraryAssetMediaError("unsupported_image_format")
+            media_type, extension = media
+
+        media_asset = models.Asset(
+            project_id=library_asset.project_id,
+            kind="library-asset-media",
+            local_path="",
+            media_type=media_type,
+            provider="upload",
+            model="local",
+            request_metadata={
+                "library_asset_id": library_asset.id,
+                "original_filename": Path(filename).name,
+            },
+            checksum=hashlib.sha256(content).hexdigest(),
+            review_status="approved",
+            width=width,
+            height=height,
+        )
+        self.session.add(media_asset)
+        self.session.flush()
+        relative = (
+            Path("projects")
+            / library_asset.project_id
+            / "library-assets"
+            / library_asset.id
+            / f"{media_asset.id}{extension}"
+        )
+        root = data_root.resolve()
+        destination = (root / relative).resolve()
+        if root not in destination.parents:
+            raise LibraryAssetMediaError("asset_path_escape")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_suffix(destination.suffix + ".tmp")
+        temporary.write_bytes(content)
+        os.replace(temporary, destination)
+        media_asset.local_path = str(relative)
+        library_asset.media_asset_id = media_asset.id
+        self.session.commit()
+        self.session.refresh(library_asset)
+        return library_asset
+
+    @staticmethod
+    def _audio_format(content: bytes) -> tuple[str | None, str]:
+        if (
+            len(content) >= 12
+            and content[:4] == b"RIFF"
+            and content[8:12] == b"WAVE"
+        ):
+            return "audio/wav", ".wav"
+        if content.startswith(b"ID3") or (
+            len(content) >= 2 and content[0] == 0xFF and content[1] & 0xE0 == 0xE0
+        ):
+            return "audio/mpeg", ".mp3"
+        return None, ""
+
     def list_for_scene(self, scene_id: str):
         if self.session.get(models.Scene, scene_id) is None:
             return None
         return list(
             self.session.scalars(
                 select(models.LibraryAsset)
+                .options(selectinload(models.LibraryAsset.media_asset))
                 .join(models.LibraryAssetSceneBinding)
                 .where(models.LibraryAssetSceneBinding.scene_id == scene_id)
                 .order_by(

@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from comic_studio import schemas
 from comic_studio.db import get_session
 from comic_studio.services.library_assets import (
     DuplicateLibraryAssetError,
+    LibraryAssetMediaError,
     LibraryAssetSceneProjectMismatchError,
     LibraryAssetService,
 )
@@ -17,6 +18,7 @@ SessionDependency = Annotated[Session, Depends(get_session)]
 
 
 def _response(asset) -> schemas.LibraryAssetRead:
+    media = asset.media_asset
     return schemas.LibraryAssetRead(
         id=asset.id,
         project_id=asset.project_id,
@@ -25,6 +27,9 @@ def _response(asset) -> schemas.LibraryAssetRead:
         description=asset.description,
         tags=asset.tags,
         metadata=asset.asset_metadata,
+        media_asset_id=media.id if media is not None else None,
+        media_url=f"/media/{media.local_path}" if media is not None else None,
+        media_type=media.media_type if media is not None else None,
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
@@ -85,6 +90,34 @@ def delete_library_asset(asset_id: str, session: SessionDependency):
     if not LibraryAssetService(session).delete(asset_id):
         raise HTTPException(404, "Library asset not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/api/library-assets/{asset_id}/media",
+    response_model=schemas.LibraryAssetRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_library_asset_media(
+    asset_id: str, request: Request, session: SessionDependency
+):
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        raise HTTPException(422, "file_required")
+    try:
+        asset = LibraryAssetService(session).upload_media(
+            asset_id,
+            await upload.read(),
+            filename=str(getattr(upload, "filename", "media")),
+            data_root=request.app.state.settings.data_root,
+        )
+    except LibraryAssetMediaError as exc:
+        raise HTTPException(
+            413 if str(exc) == "media_too_large" else 422, str(exc)
+        ) from exc
+    if asset is None:
+        raise HTTPException(404, "Library asset not found")
+    return _response(asset)
 
 
 @router.get(

@@ -11,7 +11,8 @@ export type Asset = {
 export type LibraryAssetKind='scene'|'prop'|'costume'|'sound';
 export type LibraryAsset={
   id:string;project_id:string;kind:LibraryAssetKind;name:string;description:string;
-  tags:string[];metadata:Record<string,unknown>;created_at:string;updated_at:string;
+  tags:string[];metadata:Record<string,unknown>;media_asset_id?:string|null;media_url?:string|null;
+  media_type?:string|null;created_at:string;updated_at:string;
 };
 export type LibraryAssetCreate=Pick<LibraryAsset,'kind'|'name'|'description'|'tags'|'metadata'>;
 export type LibraryAssetPatch=Partial<LibraryAssetCreate>;

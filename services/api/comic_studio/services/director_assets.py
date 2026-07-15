@@ -55,7 +55,8 @@ class DirectorAssetCatalogService:
                 .selectinload(models.Shot.dialogue),
                 selectinload(models.DirectorStage.scene)
                 .selectinload(models.Scene.library_asset_bindings)
-                .selectinload(models.LibraryAssetSceneBinding.library_asset),
+                .selectinload(models.LibraryAssetSceneBinding.library_asset)
+                .selectinload(models.LibraryAsset.media_asset),
             )
             .where(models.DirectorStage.id == stage_id)
         )
@@ -81,15 +82,23 @@ class DirectorAssetCatalogService:
         ]
         for index, asset in enumerate(supported):
             is_background = asset.kind == "scene"
+            media = asset.media_asset
+            media_is_image = media is not None and media.media_type.startswith("image/")
+            media_url = f"/media/{media.local_path}" if media_is_image else None
+            aspect_ratio = (
+                media.width / media.height
+                if media_is_image and media.width and media.height
+                else 1.5 if is_background else 1.0
+            )
             result.append(
                 DirectorAssetDefinition(
                     key=f"library_asset:{asset.id}",
                     kind="background" if is_background else "prop",
                     source_type="library_asset",
                     source_id=asset.id,
-                    asset_id=None,
+                    asset_id=media.id if media_is_image else None,
                     label=asset.name,
-                    media_url=None,
+                    media_url=media_url,
                     metadata={
                         "description": asset.description,
                         "tags": asset.tags,
@@ -104,7 +113,11 @@ class DirectorAssetCatalogService:
                         "rotation": [0, 0, 0],
                         "scale": [2.5, 2.5, 2.5] if is_background else [0.8, 0.8, 0.8],
                     },
-                    appearance={"color": "#49636e" if is_background else "#7295a3"},
+                    appearance=(
+                        {"image_url": media_url, "aspect_ratio": aspect_ratio}
+                        if media_url
+                        else {"color": "#49636e" if is_background else "#7295a3"}
+                    ),
                 )
             )
         return result

@@ -23,6 +23,7 @@ import {
   updateCharacterReference,
   updateLibraryAsset,
   uploadCharacterReference,
+  uploadLibraryAssetMedia,
 } from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import type {
@@ -107,7 +108,8 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
   };
   const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
   const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();};
-  const catalog=<AssetCatalogView characters={characters} character={character??null} references={references} variants={variants} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset}/>;
+  const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();};
+  const catalog=<AssetCatalogView characters={characters} character={character??null} references={references} variants={variants} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia}/>;
 
   if(!character)return catalog;
 

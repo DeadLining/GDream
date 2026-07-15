@@ -5,6 +5,7 @@ import pytest
 from comic_studio import models
 from comic_studio.assets import AssetStore
 from comic_studio.services.videos import VideoService
+from comic_studio.services.shot_inputs import ShotInputCompiler
 from tests.test_panel_versions import seed_shot
 
 
@@ -195,6 +196,11 @@ def test_video_generation_includes_bound_sound_design(db_session, tmp_path):
 
     assert "城市雨声" in provider.prompt
     assert asset.request_metadata["input_snapshot"]["library_assets"][0]["id"] == sound.id
+    panel_input = ShotInputCompiler(db_session).compile(
+        shot.id, usage_kinds={"panel", "reference"}
+    )
+    assert panel_input.snapshot["library_assets"] == []
+    assert "城市雨声" not in panel_input.prompt_constraints
 
 
 def test_video_api_job_lists_and_activates_versions(client):

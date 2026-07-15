@@ -14,6 +14,7 @@ const fallbackManifest: RenderManifest = {
       reviewStatus: 'approved',
       motion: 'still',
       dialogue: [],
+      sounds: [],
     },
   ],
 };

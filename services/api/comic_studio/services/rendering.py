@@ -20,7 +20,11 @@ class RenderingService:
             .options(
                 selectinload(models.Episode.scenes)
                 .selectinload(models.Scene.shots)
-                .selectinload(models.Shot.dialogue)
+                .selectinload(models.Shot.dialogue),
+                selectinload(models.Episode.scenes)
+                .selectinload(models.Scene.library_asset_bindings)
+                .selectinload(models.LibraryAssetSceneBinding.library_asset)
+                .selectinload(models.LibraryAsset.media_asset),
             )
             .where(models.Episode.id == episode_id)
         )
@@ -38,6 +42,41 @@ class RenderingService:
         width, height = dimensions[project.aspect_ratio]
         shots = []
         for scene in episode.scenes:
+            sounds = []
+            for binding in scene.library_asset_bindings:
+                library_asset = binding.library_asset
+                if library_asset.kind != "sound" or library_asset.media_asset is None:
+                    continue
+                media = library_asset.media_asset
+                if not media.media_type.startswith("audio/"):
+                    raise ValueError(
+                        f"Library sound {library_asset.id} media is not audio"
+                    )
+                audio_file = (self.data_root / media.local_path).resolve()
+                if (
+                    self.data_root not in audio_file.parents
+                    or not audio_file.is_file()
+                ):
+                    raise ValueError(
+                        f"Library sound {library_asset.id} media file is missing"
+                    )
+                volume = (library_asset.asset_metadata or {}).get("volume", 0.35)
+                if (
+                    not isinstance(volume, (int, float))
+                    or isinstance(volume, bool)
+                    or not 0 <= volume <= 1
+                ):
+                    raise ValueError(
+                        f"Library sound {library_asset.id} volume must be between 0 and 1"
+                    )
+                sounds.append(
+                    {
+                        "id": library_asset.id,
+                        "name": library_asset.name,
+                        "audioPath": str(audio_file),
+                        "volume": float(volume),
+                    }
+                )
             for shot in scene.shots:
                 if shot.review_status != "approved":
                     raise ValueError(f"Shot {shot.id} is not approved")
@@ -102,6 +141,7 @@ class RenderingService:
                         in {"push_in", "pull_out", "pan_left", "pan_right", "still"}
                         else "push_in",
                         "dialogue": dialogue,
+                        "sounds": sounds,
                     }
                 )
         if not shots:
