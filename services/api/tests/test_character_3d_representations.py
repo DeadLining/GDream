@@ -165,6 +165,145 @@ def test_director_catalog_prefers_active_character_glb(client):
     assert character_objects[0]["source_id"] == replacement["id"]
 
 
+def test_character_model_upload_scopes_activation_to_variant_and_state(client):
+    project, character = _character(client)
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "第二集", "premise": "雨夜追踪", "target_duration_seconds": 60},
+    ).json()
+    master_variant = client.post(
+        f"/api/characters/{character['id']}/variants",
+        json={
+            "kind": "master",
+            "label": "作品主设定",
+            "episode_id": None,
+            "parent_variant_id": None,
+            "inherited_fields": [],
+            "overrides": {},
+        },
+    ).json()
+    episode_variant = client.post(
+        f"/api/characters/{character['id']}/variants",
+        json={
+            "kind": "episode",
+            "label": "雨夜造型",
+            "episode_id": episode["id"],
+            "parent_variant_id": master_variant["id"],
+            "inherited_fields": ["identity"],
+            "overrides": {"outfit": "雨衣"},
+        },
+    ).json()
+    state = client.post(
+        f"/api/asset-variants/{episode_variant['id']}/states",
+        json={"kind": "injury", "label": "左眉受伤", "overrides": {"injury": "left brow"}},
+    ).json()
+
+    master_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("master.glb", _glb(), "model/gltf-binary")},
+    ).json()
+    variant_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("variant.glb", _glb(), "model/gltf-binary")},
+        data={"variant_id": episode_variant["id"]},
+    ).json()
+    state_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("state.glb", _glb(), "model/gltf-binary")},
+        data={"state_id": state["id"]},
+    ).json()
+
+    assert master_model["is_active"] is True
+    assert variant_model["variant_id"] == episode_variant["id"]
+    assert variant_model["state_id"] is None
+    assert variant_model["is_active"] is True
+    assert state_model["variant_id"] == episode_variant["id"]
+    assert state_model["state_id"] == state["id"]
+    assert state_model["is_active"] is True
+
+    listed = client.get(
+        f"/api/characters/{character['id']}/3d-representations"
+    ).json()
+    assert {item["id"] for item in listed if item["is_active"]} == {
+        master_model["id"],
+        variant_model["id"],
+        state_model["id"],
+    }
+
+
+def test_director_catalog_resolves_state_variant_and_master_models_by_shot(client):
+    project, character = _character(client)
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "第三集", "premise": "伤后对峙", "target_duration_seconds": 60},
+    ).json()
+    with client.app.state.session_factory() as session:
+        scene = models.Scene(
+            episode_id=episode["id"],
+            position=1,
+            location="仓库",
+            summary="角色状态连续变化",
+            continuity_state={"characters_present": [character["id"]]},
+            estimated_duration_seconds=10,
+        )
+        scene.shots.extend(
+            [
+                models.Shot(position=1, shot_type="wide", duration_seconds=5, composition="未受伤", character_state={character["id"]: {}}),
+                models.Shot(position=2, shot_type="close_up", duration_seconds=5, composition="受伤特写", character_state={character["id"]: {}}),
+            ]
+        )
+        session.add(scene)
+        session.commit()
+        scene_id = scene.id
+        first_shot_id, second_shot_id = [shot.id for shot in scene.shots]
+    master_variant = client.post(
+        f"/api/characters/{character['id']}/variants",
+        json={"kind": "master", "label": "主设定", "episode_id": None, "parent_variant_id": None, "inherited_fields": [], "overrides": {}},
+    ).json()
+    episode_variant = client.post(
+        f"/api/characters/{character['id']}/variants",
+        json={"kind": "episode", "label": "本集造型", "episode_id": episode["id"], "parent_variant_id": master_variant["id"], "inherited_fields": ["identity"], "overrides": {}},
+    ).json()
+    state = client.post(
+        f"/api/asset-variants/{episode_variant['id']}/states",
+        json={"kind": "injury", "label": "受伤", "overrides": {"injury": "left brow"}},
+    ).json()
+    client.post(
+        f"/api/asset-variants/{episode_variant['id']}/usages",
+        json={"shot_id": second_shot_id, "state_id": state["id"], "usage_kind": "reference"},
+    )
+    master_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("master.glb", _glb(), "model/gltf-binary")},
+    ).json()
+    variant_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("variant.glb", _glb(), "model/gltf-binary")},
+        data={"variant_id": episode_variant["id"]},
+    ).json()
+    state_model = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("state.glb", _glb(), "model/gltf-binary")},
+        data={"state_id": state["id"]},
+    ).json()
+    stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
+
+    default_catalog = client.get(f"/api/director-stages/{stage['id']}/assets").json()
+    first_catalog = client.get(
+        f"/api/director-stages/{stage['id']}/assets?shot_id={first_shot_id}"
+    ).json()
+    second_catalog = client.get(
+        f"/api/director-stages/{stage['id']}/assets?shot_id={second_shot_id}"
+    ).json()
+
+    assert next(item for item in default_catalog if item["kind"] == "character")["source_id"] == master_model["id"]
+    assert next(item for item in first_catalog if item["kind"] == "character")["source_id"] == variant_model["id"]
+    state_asset = next(item for item in second_catalog if item["kind"] == "character")
+    assert state_asset["source_id"] == state_model["id"]
+    assert state_asset["metadata"]["variant_id"] == episode_variant["id"]
+    assert state_asset["metadata"]["state_id"] == state["id"]
+
+
 def test_character_model_upload_cleans_file_when_commit_fails(
     db_session, tmp_path, monkeypatch
 ):
