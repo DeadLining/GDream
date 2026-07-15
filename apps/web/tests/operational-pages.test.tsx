@@ -30,7 +30,10 @@ describe('operational frontend pages',()=>{
     operationMocks.listProductionTasks.mockResolvedValue([{id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',assignee:'王磊',due_at:'2026-07-14T12:00:00Z',checklist:[{label:'收集素材',done:true},{label:'提交审核',done:false}],created_at:'',updated_at:''}]);
     operationMocks.updateProductionTask.mockImplementation(async(_id:string,data:Record<string,unknown>)=>({...await operationMocks.listProductionTasks.mock.results[0]?.value?.then((items:any[])=>items[0]),...data}));
     operationMocks.createProductionTask.mockResolvedValue({id:'t2',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,review_thread_id:null,title:'审核镜头连续性',description:'检查角色状态',priority:'high',status:'todo',assignee:'张伟',due_at:null,checklist:[],created_at:'',updated_at:''});
-    operationMocks.listEpisodeVersions.mockResolvedValue([{id:'v1',episode_id:'e1',version:1,label:'审核前',source:'manual',author:'张伟',snapshot:{episode:{title:'雨夜抉择'}},restored_from_id:null,created_at:''}]);
+    operationMocks.listEpisodeVersions.mockResolvedValue([
+      {id:'v2',episode_id:'e1',version:2,label:'当前版',source:'manual',author:'林默',snapshot:{episode:{id:'e1',project_id:'p1',title:'雨夜抉择·修订',premise:'寻找失踪同伴',target_duration_seconds:480,status:'production'},scenes:[{id:'s1',position:1,location:'天台',time_of_day:'night',summary:'雨夜追踪',continuity_state:{},estimated_duration_seconds:30,shots:[]}]},restored_from_id:null,created_at:''},
+      {id:'v1',episode_id:'e1',version:1,label:'审核前',source:'manual',author:'张伟',snapshot:{episode:{id:'e1',project_id:'p1',title:'雨夜抉择',premise:'寻找失踪同伴',target_duration_seconds:480,status:'planned'},scenes:[{id:'s1',position:1,location:'珊瑚营地',time_of_day:'night',summary:'雨夜追踪',continuity_state:{},estimated_duration_seconds:30,shots:[]}]},restored_from_id:null,created_at:''},
+    ]);
     operationMocks.createEpisodeVersion.mockResolvedValue({id:'v2',episode_id:'e1',version:2,label:'当前版',source:'manual',author:'林默',snapshot:{},restored_from_id:null,created_at:''});
     operationMocks.restoreEpisodeVersion.mockResolvedValue({id:'v3',episode_id:'e1',version:3,label:'从 V1 恢复',source:'restore',author:'林默',snapshot:{},restored_from_id:'v1',created_at:''});
     operationMocks.listTrashItems.mockResolvedValue([{id:'trash-1',project_id:'p1',resource_type:'asset_variant_state',resource_id:'state-1',name:'左臂擦伤',original_location:['作品主设定','第03集雨夜造型','左臂擦伤'],lineage:['作品主设定','第03集雨夜造型','左臂擦伤'],deleted_by:'林默',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:14,can_permanently_delete:false}]);
@@ -91,20 +94,25 @@ describe('operational frontend pages',()=>{
     expect((await screen.findAllByText('审核镜头连续性'))[0]).toBeVisible();
   });
 
-  it('loads version snapshots without inventing a comparison',async()=>{
+  it('compares two saved snapshots and restores the selected target version',async()=>{
     const onRestored=vi.fn();
     vi.spyOn(window,'confirm').mockReturnValue(true);
     render(<VersionHistory episode={episode} onRestored={onRestored}/>);
     expect(screen.getByRole('heading',{name:'版本历史'})).toBeVisible();
-    expect((await screen.findAllByText('V1 审核前'))[0]).toBeVisible();
-    expect(screen.queryByText('雨夜造型 → 左臂擦伤')).not.toBeInTheDocument();
-    expect(screen.queryByText('雨夜造型 → 左臂包扎')).not.toBeInTheDocument();
-    expect(screen.getByText('当前仅保存完整快照，尚未生成结构化版本差异。')).toBeVisible();
+    expect((await screen.findAllByText('V2 当前版'))[0]).toBeVisible();
+    expect(screen.getByRole('combobox',{name:'对比基线'})).toHaveValue('v1');
+    expect(screen.getByRole('combobox',{name:'目标版本'})).toHaveValue('v2');
+    expect(screen.getByRole('heading',{name:'V1 审核前 → V2 当前版'})).toBeVisible();
+    expect(screen.getByText('4 项变化')).toBeVisible();
+    expect(screen.getByText('雨夜抉择')).toBeVisible();
+    expect(screen.getByText('雨夜抉择·修订')).toBeVisible();
+    expect(screen.getByText('珊瑚营地')).toBeVisible();
+    expect(screen.getByText('天台')).toBeVisible();
     await userEvent.click(screen.getByRole('button',{name:'恢复所选快照'}));
-    expect(window.confirm).toHaveBeenCalledWith('恢复 V1“审核前”？当前状态会先自动备份。');
-    expect(operationMocks.restoreEpisodeVersion).toHaveBeenCalledWith('v1');
+    expect(window.confirm).toHaveBeenCalledWith('恢复 V2“当前版”？当前状态会先自动备份。');
+    expect(operationMocks.restoreEpisodeVersion).toHaveBeenCalledWith('v2');
     expect(onRestored).toHaveBeenCalledOnce();
-    expect(screen.getByText('已恢复 V1，恢复前状态已自动备份。')).toBeVisible();
+    expect(screen.getByText('已恢复 V2，恢复前状态已自动备份。')).toBeVisible();
     expect(serializeEpisodeVersionsCsv(await operationMocks.listEpisodeVersions.mock.results[0].value)).toContain('V1');
     expect(serializeEpisodeVersionsCsv(await operationMocks.listEpisodeVersions.mock.results[0].value)).toContain('审核前');
   });
