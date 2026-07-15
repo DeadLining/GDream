@@ -1,8 +1,9 @@
 'use client';
 
-import {useEffect,useState} from 'react';
-import {Download,RotateCcw} from 'lucide-react';
+import {useEffect,useMemo,useState} from 'react';
+import {ArrowRight,Download,RotateCcw} from 'lucide-react';
 import {listEpisodeVersions,restoreEpisodeVersion} from '../lib/api';
+import {diffEpisodeSnapshots} from '../lib/episode-version-diff';
 import type {EpisodeDetail,EpisodeVersion} from '../lib/types';
 
 const csvCell=(value:unknown)=>`"${String(value??'').replaceAll('"','""')}"`;
@@ -11,46 +12,58 @@ export const serializeEpisodeVersionsCsv=(versions:EpisodeVersion[])=>[
   ...versions.map(version=>[`V${version.version}`,version.label,version.source,version.author,version.restored_from_id??'',version.created_at].map(csvCell).join(',')),
 ].join('\n');
 const downloadVersions=(episodeId:string,versions:EpisodeVersion[])=>{const anchor=document.createElement('a');anchor.href=`data:text/csv;charset=utf-8,${encodeURIComponent('\uFEFF'+serializeEpisodeVersionsCsv(versions))}`;anchor.download=`episode-${episodeId}-versions.csv`;anchor.click();};
+const scopeLabels={episode:'单集',scene:'场景',shot:'镜头',dialogue:'对白'} as const;
+const changeLabels={added:'新增',removed:'删除',changed:'修改',moved:'移动'} as const;
+const formatValue=(value:unknown)=>{if(value===null||value===undefined)return'无';if(typeof value==='string')return value||'空';if(typeof value==='object')return JSON.stringify(value);return String(value);};
 
 export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;onRestored?:()=>Promise<void>|void}){
   const [versions,setVersions]=useState<EpisodeVersion[]>([]);
   const [selectedId,setSelectedId]=useState('');
+  const [compareId,setCompareId]=useState('');
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
   const [restoring,setRestoring]=useState(false);
   useEffect(()=>{
-    if(!episode?.id){setVersions([]);setLoading(false);return;}
+    if(!episode?.id){setVersions([]);setSelectedId('');setCompareId('');setLoading(false);return;}
     let active=true;setLoading(true);setError('');
-    listEpisodeVersions(episode.id).then(items=>{if(active){setVersions(items);setSelectedId(items[0]?.id??'');}}).catch(cause=>active&&setError(cause instanceof Error?cause.message:'版本加载失败')).finally(()=>active&&setLoading(false));
+    listEpisodeVersions(episode.id).then(items=>{if(active){setVersions(items);setSelectedId(items[0]?.id??'');setCompareId(items[1]?.id??items[0]?.id??'');}}).catch(cause=>active&&setError(cause instanceof Error?cause.message:'版本加载失败')).finally(()=>active&&setLoading(false));
     return()=>{active=false;};
   },[episode?.id]);
   const selected=versions.find(version=>version.id===selectedId)??versions[0]??null;
-  const snapshotEpisode=selected?.snapshot?.episode;
-  const snapshotScenes=Array.isArray(selected?.snapshot?.scenes)?selected.snapshot.scenes:[];
-  const snapshotShotCount=snapshotScenes.reduce((sum,scene)=>sum+(typeof scene==='object'&&scene&&Array.isArray((scene as {shots?:unknown[]}).shots)?(scene as {shots:unknown[]}).shots.length:0),0);
-  const restoreSnapshot=async()=>{if(!selected||!window.confirm(`恢复 V${selected.version}“${selected.label}”？当前状态会先自动备份。`))return;setRestoring(true);setError('');setSuccess('');try{const created=await restoreEpisodeVersion(selected.id);const refreshed=episode?await listEpisodeVersions(episode.id):[];setVersions(refreshed.some(item=>item.id===created.id)?refreshed:[created,...refreshed]);setSelectedId(created.id);try{await onRestored?.();}catch{setError('快照已恢复，但工作区刷新失败，请手动刷新项目。');}setSuccess(`已恢复 V${selected.version}，恢复前状态已自动备份。`);}catch(cause){setError(cause instanceof Error?cause.message:'快照恢复失败');}finally{setRestoring(false);}};
+  const baseline=versions.find(version=>version.id===compareId)??versions[1]??selected;
+  const diff=useMemo(()=>baseline&&selected?diffEpisodeSnapshots(baseline.snapshot,selected.snapshot):null,[baseline,selected]);
+  const restoreSnapshot=async()=>{if(!selected||!window.confirm(`恢复 V${selected.version}“${selected.label}”？当前状态会先自动备份。`))return;setRestoring(true);setError('');setSuccess('');try{const created=await restoreEpisodeVersion(selected.id);const refreshed=episode?await listEpisodeVersions(episode.id):[];const nextVersions=refreshed.some(item=>item.id===created.id)?refreshed:[created,...refreshed];setVersions(nextVersions);setCompareId(selected.id);setSelectedId(created.id);try{await onRestored?.();}catch{setError('快照已恢复，但工作区刷新失败，请手动刷新项目。');}setSuccess(`已恢复 V${selected.version}，恢复前状态已自动备份。`);}catch(cause){setError(cause instanceof Error?cause.message:'快照恢复失败');}finally{setRestoring(false);}};
 
   return <main className="operations-page version-history-page">
-    <header className="operations-page-header"><div><h1>版本历史</h1><p>{episode?.title??'当前单集'} · 这里保存的是不可变快照记录</p></div></header>
+    <header className="operations-page-header"><div><h1>版本历史</h1><p>{episode?.title??'当前单集'} · 比较不可变快照并恢复业务状态</p></div></header>
     {error&&<p className="warning-box" role="alert">{error}</p>}
     {success&&<p className="success-box" role="status">{success}</p>}
     <div className="version-layout">
       <aside className="version-timeline"><h2>历史快照</h2>{loading?<p>正在加载版本…</p>:versions.length===0?<p>暂无版本记录。</p>:versions.map(version=><button key={version.id} className={version.id===selected?.id?'active':''} onClick={()=>setSelectedId(version.id)}><strong>V{version.version} {version.label}</strong><small>{version.author} · {version.created_at?new Date(version.created_at).toLocaleString('zh-CN'):'时间未记录'}</small></button>)}</aside>
-      <section className="version-compare version-snapshot-summary">
-        <span className="eyebrow">快照内容</span>
-        <h2>{selected?`V${selected.version} ${selected.label}`:'请选择版本'}</h2>
-        <p className="diff-summary">当前仅保存完整快照，尚未生成结构化版本差异。</p>
-        {selected&&<div className="snapshot-metrics"><div><small>单集标题</small><strong>{typeof snapshotEpisode==='object'&&snapshotEpisode&&'title' in snapshotEpisode?String(snapshotEpisode.title):episode?.title??'未记录'}</strong></div><div><small>场景数量</small><strong>{snapshotScenes.length}</strong></div><div><small>镜头数量</small><strong>{snapshotShotCount}</strong></div><div><small>记录来源</small><strong>{selected.source}</strong></div></div>}
-        <p className="warning-box">此页面不会声称已比较两个版本。结构化差异功能接入前，只展示服务端实际保存的快照摘要。</p>
+      <section className="version-compare version-structured-diff">
+        <div className="version-compare-controls">
+          <label><span>对比基线</span><select aria-label="对比基线" value={baseline?.id??''} disabled={!versions.length} onChange={event=>setCompareId(event.target.value)}>{versions.map(version=><option key={version.id} value={version.id}>V{version.version} {version.label}</option>)}</select></label>
+          <ArrowRight size={18}/>
+          <label><span>目标版本</span><select aria-label="目标版本" value={selected?.id??''} disabled={!versions.length} onChange={event=>setSelectedId(event.target.value)}>{versions.map(version=><option key={version.id} value={version.id}>V{version.version} {version.label}</option>)}</select></label>
+        </div>
+        <div className="version-diff-heading">
+          <span className="eyebrow">结构化差异</span>
+          <h2>{baseline&&selected?`V${baseline.version} ${baseline.label} → V${selected.version} ${selected.label}`:'请选择两个版本'}</h2>
+          <p className="diff-summary"><strong>{diff?.summary.total??0} 项变化</strong><span>新增 {diff?.summary.added??0}</span><b>删除 {diff?.summary.removed??0}</b><em>修改 {diff?.summary.changed??0}</em><i>移动 {diff?.summary.moved??0}</i></p>
+        </div>
+        {!diff?.changes.length?<p className="version-diff-empty">两个快照的业务数据一致。</p>:<div className="version-diff-list">{diff.changes.map(change=><article key={`${change.scope}-${change.id}`} className={`version-diff-item diff-${change.change_type}`}>
+          <header><span>{changeLabels[change.change_type]}</span><strong>{scopeLabels[change.scope]} · {change.label}</strong><small>{change.id}</small></header>
+          {change.fields.length?<dl>{change.fields.map(field=><div key={field.key}><dt>{field.label}</dt><dd><span title={formatValue(field.before)}>{formatValue(field.before)}</span><ArrowRight size={13}/><strong title={formatValue(field.after)}>{formatValue(field.after)}</strong></dd></div>)}</dl>:<p>{change.change_type==='added'?'目标版本新增了这项内容。':'目标版本中已删除这项内容。'}</p>}
+        </article>)}</div>}
       </section>
       <aside className="operations-inspector">
-        <h2>快照信息</h2>
-        {selected?<><h3>V{selected.version} {selected.label}</h3><dl className="snapshot-details"><div><dt>来源</dt><dd>{selected.source}</dd></div><div><dt>创建者</dt><dd>{selected.author}</dd></div><div><dt>恢复来源</dt><dd>{selected.restored_from_id??'无'}</dd></div></dl><p className="warning-box">恢复会应用单集、场景、镜头和对白快照；当前状态会先自动保存为检查点。</p></>:<p>请选择一个历史快照。</p>}
+        <h2>目标快照</h2>
+        {selected?<><h3>V{selected.version} {selected.label}</h3><dl className="snapshot-details"><div><dt>来源</dt><dd>{selected.source}</dd></div><div><dt>创建者</dt><dd>{selected.author}</dd></div><div><dt>恢复来源</dt><dd>{selected.restored_from_id??'无'}</dd></div></dl><p className="warning-box">恢复会应用单集、场景、镜头和对白快照；当前状态会先自动保存为检查点。</p></>:<p>请选择一个目标快照。</p>}
       </aside>
     </div>
     <footer className="operations-sticky-footer">
-      <p>恢复操作会先备份当前状态，再原子化应用所选快照。</p>
+      <p>差异来自两个服务端不可变快照；恢复始终作用于目标版本。</p>
       <button aria-label="导出版本记录" disabled={!episode||!versions.length} onClick={()=>episode&&downloadVersions(episode.id,versions)}><Download size={16}/>导出版本记录</button>
       <button className="command-button" aria-label="恢复所选快照" disabled={!selected||restoring} onClick={restoreSnapshot}><RotateCcw size={16}/>{restoring?'恢复中…':'恢复所选快照'}</button>
     </footer>

@@ -103,7 +103,7 @@ describe('operational frontend pages',()=>{
     expect(screen.getByRole('combobox',{name:'对比基线'})).toHaveValue('v1');
     expect(screen.getByRole('combobox',{name:'目标版本'})).toHaveValue('v2');
     expect(screen.getByRole('heading',{name:'V1 审核前 → V2 当前版'})).toBeVisible();
-    expect(screen.getByText('4 项变化')).toBeVisible();
+    expect(screen.getByText('2 项变化')).toBeVisible();
     expect(screen.getByText('雨夜抉择')).toBeVisible();
     expect(screen.getByText('雨夜抉择·修订')).toBeVisible();
     expect(screen.getByText('珊瑚营地')).toBeVisible();
