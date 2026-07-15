@@ -2,8 +2,10 @@ from io import BytesIO
 import wave
 
 from PIL import Image
+import pytest
 
 from comic_studio import models
+from comic_studio.services.library_assets import LibraryAssetService
 from tests.test_character_3d_representations import _glb
 
 
@@ -243,3 +245,39 @@ def test_library_asset_rejects_invalid_prop_glb(client):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "invalid_glb"
+
+
+def test_library_asset_upload_cleans_model_file_when_commit_fails(
+    db_session, tmp_path, monkeypatch
+):
+    project = models.Project(
+        title="上传事务",
+        logline="验证失败清理",
+        story_bible="资产文件与数据库保持一致。",
+        visual_style="cinematic comic",
+    )
+    library_asset = models.LibraryAsset(
+        project=project,
+        kind="prop",
+        name="事务怀表",
+        description="",
+        tags=[],
+    )
+    db_session.add_all([project, library_asset])
+    db_session.commit()
+
+    def fail_commit():
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        LibraryAssetService(db_session).upload_media(
+            library_asset.id,
+            _glb(),
+            filename="watch.glb",
+            data_root=tmp_path,
+        )
+
+    assert list(tmp_path.rglob("*.glb")) == []
+    assert list(tmp_path.rglob("*.tmp")) == []

@@ -209,6 +209,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
         files={"file": ("watch.glb", _glb(), "model/gltf-binary")},
     )
     assert prop_upload.status_code == 201
+    prop_media_asset_id = prop_upload.json()["media_asset_id"]
 
     stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
     catalog_response = client.get(f"/api/director-stages/{stage['id']}/assets")
@@ -226,6 +227,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     assert {item["source_id"] for item in library_items} == {scene_asset.id, prop_asset.id}
     prop_item = next(item for item in library_items if item["source_id"] == prop_asset.id)
     assert prop_item["media_type"] == "model/gltf-binary"
+    assert prop_item["asset_id"] == prop_media_asset_id
 
     synced = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",
@@ -254,6 +256,7 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     )
     assert synced_prop["appearance"]["model_url"].endswith(".glb")
     assert synced_prop["metadata"]["requires_3d_model"] is False
+    assert synced_prop["metadata"]["asset_id"] == prop_media_asset_id
     placeholders = [item for item in non_background if item["id"] != synced_prop["id"]]
     assert all(item["metadata"]["requires_3d_model"] is True for item in placeholders)
 
