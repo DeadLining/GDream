@@ -24,6 +24,23 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getAllByRole('button',{name:'添加占位物'})[0]);
     await waitFor(()=>expect(mocks.createDirectorObject).toHaveBeenCalledWith('stage-1',1,expect.objectContaining({label:'新道具'})));
   });
+  it('adds one selected catalog asset without removing existing stage assets',async()=>{
+    const existingCharacter={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',metadata:{catalog_key:'character:c1'}};
+    const addedProp={...directorObject,id:'object-2',kind:'prop' as const,source_type:'library_asset' as const,source_id:'dog-1',label:'机械犬',position:2,metadata:{catalog_key:'library_asset:dog-1',proxy_rig:'quadruped'}};
+    const catalog=[
+      {key:'character:c1',kind:'character' as const,source_type:'character_reference' as const,source_id:'c1',asset_id:null,label:'林夏',media_url:null,media_type:null,metadata:{proxy_rig:'standard_humanoid'}},
+      {key:'library_asset:dog-1',kind:'prop' as const,source_type:'library_asset' as const,source_id:'dog-1',asset_id:null,label:'机械犬',media_url:null,media_type:null,metadata:{proxy_rig:'quadruped'}},
+    ];
+    const initialStage={...stage,objects:[existingCharacter]};
+    const syncedStage={...stage,version:2,objects:[existingCharacter,addedProp]};
+    mocks.getDirectorStage.mockResolvedValue(initialStage);mocks.getDirectorAssets.mockResolvedValue(catalog);mocks.syncDirectorAssets.mockResolvedValue(syncedStage);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'添加资产：机械犬'}));
+
+    await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,['character:c1','library_asset:dog-1']));
+    expect(await screen.findByRole('button',{name:'机械犬'})).toBeVisible();
+  });
   it('returns to the production canvas when embedded as a production subview',async()=>{
     const onBackToProduction=vi.fn();
     mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
