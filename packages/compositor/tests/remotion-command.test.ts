@@ -13,11 +13,9 @@ describe('Remotion render command', () => {
     );
 
     expect(browserExecutable).toBe('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
-    expect(buildRemotionRenderArgs('episode.mp4', 'props.json', browserExecutable)).toContainEqual(
-      '--browser-executable',
-    );
-    expect(buildRemotionRenderArgs('episode.mp4', 'props.json', browserExecutable)).toContainEqual(
-      browserExecutable,
-    );
+    const args = buildRemotionRenderArgs('episode.mp4', 'props.json', browserExecutable);
+    expect(args).toContainEqual('--browser-executable');
+    expect(args).toContainEqual(browserExecutable);
+    expect(args).toContainEqual('--chrome-mode=chrome-for-testing');
   });
 });
