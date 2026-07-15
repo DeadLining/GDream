@@ -2,6 +2,8 @@ import {execFileSync} from 'node:child_process';
 import {copyFileSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {basename, extname, resolve} from 'node:path';
 
+import {buildRemotionRenderArgs, resolveBrowserExecutable} from './remotion-command.mjs';
+
 const [manifestArg, outputArg] = process.argv.slice(2);
 if (!manifestArg || !outputArg) {
   throw new Error('Usage: node scripts/render.mjs <manifest.json> <output.mp4>');
@@ -37,7 +39,6 @@ writeFileSync(stagedProps, JSON.stringify({manifest}, null, 2));
 mkdirSync(resolve(outputPath, '..'), {recursive: true});
 execFileSync(
   'npx',
-  ['remotion', 'render', 'src/index.tsx', 'ComicEpisode', outputPath,
-    '--props', stagedProps, '--codec', 'h264', '--crf', '20'],
+  buildRemotionRenderArgs(outputPath, stagedProps, resolveBrowserExecutable()),
   {cwd: root, stdio: 'inherit'},
 );
