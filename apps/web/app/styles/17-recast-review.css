@@ -572,6 +572,9 @@
 .publish-actions .approve-publish { margin-top: 0 !important; }
 .generate-preview { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--color-accent-strong); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-accent-strong); font-size: var(--fs-sm); font-weight: 700; }
 .generate-preview:disabled { border-color: var(--color-line); color: var(--color-muted); background: var(--color-surface-subtle); cursor: not-allowed; }
+@media (max-width: 899px) {
+  .review-timeline > .timeline-playhead { min-width: 0; width: 2px; }
+}
 @media (max-width: 700px) {
   .review-preview-toolbar { flex-wrap: wrap; }
   .review-preview-toolbar select { order: 3; width: 100%; margin-left: 0; }
