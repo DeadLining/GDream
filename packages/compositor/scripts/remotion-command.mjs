@@ -21,6 +21,12 @@ export function buildRemotionRenderArgs(outputPath, stagedProps, browserExecutab
     'remotion', 'render', 'src/index.tsx', 'ComicEpisode', outputPath,
     '--props', stagedProps, '--codec', 'h264', '--crf', '20',
   ];
-  if (browserExecutable) args.push('--browser-executable', browserExecutable);
+  if (browserExecutable) {
+    args.push(
+      '--browser-executable',
+      browserExecutable,
+      '--chrome-mode=chrome-for-testing',
+    );
+  }
   return args;
 }
