@@ -39,6 +39,7 @@ export function Workspace() {
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [volumes,setVolumes]=useState<Volume[]>([]);
   const [storylines,setStorylines]=useState<Storyline[]>([]);
+  const [focusedStorylineId,setFocusedStorylineId]=useState<string|null>(null);
   const [overviewMetrics,setOverviewMetrics]=useState<ProjectOverviewMetrics|null>(null);
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
@@ -142,6 +143,16 @@ export function Workspace() {
     return loadProjectForRequest(id, request);
   };
 
+  const refreshOverviewSummary=async()=>{
+    if(!project)return;
+    const projectId=project.id;
+    const request=navigationRequest.current;
+    const [metrics,nextStorylines]=await Promise.all([getProjectOverviewMetrics(projectId),listStorylines(projectId)]);
+    if(navigationRequest.current!==request||project.id!==projectId)return;
+    setOverviewMetrics(metrics);
+    setStorylines(nextStorylines);
+  };
+
   const reloadProjects = async (preferredId?: string) => {
     const request = ++navigationRequest.current;
     const loaded = await listProjects();
@@ -235,6 +246,7 @@ export function Workspace() {
   const navigateGlobal = (section: GlobalSection) => {
     if (!canLeaveSettings()) return;
     setPlatformPage('project');
+    if(section==='script')setFocusedStorylineId(null);
     setGlobalSection(section);
     changeWorkArea(globalSectionWorkAreas[section]);
   };
@@ -258,9 +270,9 @@ export function Workspace() {
   const productionDialogueShot=productionDialogueShotId?shots.find(shot=>shot.id===productionDialogueShotId)??null:null;
   const productionMediaShot=productionMedia?shots.find(shot=>shot.id===productionMedia.shotId)??null:null;
   let center;
-  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} metrics={overviewMetrics} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
-  else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
-  else if (workArea === 'characters' && project) center = <CharacterWorkspace projectId={project.id} characters={project.characters} episodes={project.episodes} onCharactersChanged={()=>loadProject(project.id)}/>;
+  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} metrics={overviewMetrics} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setFocusedStorylineId(null);setGlobalSection('script'); changeWorkArea('import');}} onOpenStoryline={id=>{setFocusedStorylineId(id);setGlobalSection('script');changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
+  else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={refreshOverviewSummary} initialView={focusedStorylineId?'storyline':'document'} initialStorylineId={focusedStorylineId??undefined}/>;
+  else if (workArea === 'characters' && project) center = <CharacterWorkspace projectId={project.id} characters={project.characters} episodes={project.episodes} onCharactersChanged={()=>loadProject(project.id)} onMetricsChanged={refreshOverviewSummary}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={id => {selectShotById(id); setGlobalSection('episode'); changeWorkArea('storyboard');}} onOpenProduction={() => {setGlobalSection('episode'); changeWorkArea('production');}} onOpenReview={openReview}/>;

@@ -14,6 +14,7 @@ type Props={
   scriptTitle:string;
   volumes:Volume[];
   storylines:Storyline[];
+  initialStorylineId?:string;
   onCreateStoryline?:(data:StorylineDraft)=>Promise<void>|void;
   onUpdateStoryline?:(id:string,data:StorylineDraft)=>Promise<void>|void;
   onCreateEvent?:(storylineId:string,data:EventDraft)=>Promise<void>|void;
@@ -23,11 +24,11 @@ type Props={
 
 const emptyLineDraft:StorylineDraft={title:'',kind:'foreshadowing',color:'#B9473E',description:''};
 
-export function StorylineCanvas({scriptTitle,volumes,storylines,onCreateStoryline,onUpdateStoryline,onCreateEvent,onUpdateEvent,onDeleteEvent}:Props){
+export function StorylineCanvas({scriptTitle,volumes,storylines,initialStorylineId,onCreateStoryline,onUpdateStoryline,onCreateEvent,onUpdateEvent,onDeleteEvent}:Props){
   const allEvents=useMemo(()=>storylines.flatMap(line=>line.events.map(event=>({event,line}))).sort((a,b)=>a.event.position-b.event.position),[storylines]);
   const episodes=volumes.flatMap(volume=>volume.episodes);
   const [selectedId,setSelectedId]=useState(allEvents[0]?.event.id??'');
-  const [lineId,setLineId]=useState(storylines[0]?.id??'all');
+  const [lineId,setLineId]=useState(storylines.some(line=>line.id===initialStorylineId)?initialStorylineId!:storylines[0]?.id??'all');
   const [editor,setEditor]=useState<Editor>(null);
   const [editingLineId,setEditingLineId]=useState<string|null>(null);
   const [editingEventId,setEditingEventId]=useState<string|null>(null);

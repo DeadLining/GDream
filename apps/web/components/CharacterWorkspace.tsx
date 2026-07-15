@@ -61,7 +61,7 @@ const types:Array<[CharacterReferenceType,string]>=[
 const labels=Object.fromEntries(types) as Record<CharacterReferenceType,string>;
 const setMetadata=(job:Job|null)=>job?.result_metadata as Partial<CharacterReferenceSetMetadata>|undefined;
 
-export function CharacterWorkspace({projectId,characters,episodes=[],onCharactersChanged}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];onCharactersChanged?:()=>Promise<void>|void}){
+export function CharacterWorkspace({projectId,characters,episodes=[],onCharactersChanged,onMetricsChanged}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void}){
   const [workspaceCharacters,setWorkspaceCharacters]=useState(characters);
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
@@ -119,10 +119,11 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建资产');
     await createLibraryAsset(resolvedProjectId,data);
     await reloadLibraryAssets();
+    await onMetricsChanged?.();
   };
   const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
-  const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();};
-  const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();};
+  const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();await onMetricsChanged?.();};
+  const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();await onMetricsChanged?.();};
   const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
   const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
   const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia}/>;
@@ -169,7 +170,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     finally{setGenerating(false);}
   };
   const approve=async(reference:CharacterReference)=>{await updateCharacterReference(reference.id,{review_status:'approved'});await load(character.id);};
-  const activate=async(reference:CharacterReference)=>{await activateCharacterReference(character.id,reference.id);await load(character.id);};
+  const activate=async(reference:CharacterReference)=>{await activateCharacterReference(character.id,reference.id);await load(character.id);await onMetricsChanged?.();};
   const renameReference=async(reference:CharacterReference)=>{const label=editingReferenceLabel.trim();if(!label)return;try{await updateCharacterReference(reference.id,{label});setEditingReferenceId('');setEditingReferenceLabel('');await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'重命名参考图失败');}};
   const removeReference=async(reference:CharacterReference)=>{const label=reference.label||labels[reference.reference_type];if(reference.is_active||!window.confirm(`删除参考图「${label}」？`))return;try{await deleteCharacterReference(reference.id);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'删除参考图失败');}};
   const addVariant=async(data:Parameters<typeof createAssetVariant>[1])=>{await createAssetVariant(character.id,data);await load(character.id);};

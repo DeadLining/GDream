@@ -6,7 +6,7 @@ import type {EpisodeDetail, EpisodeSummary, ProductionReadiness, ProjectDetail, 
 
 const statusLabel = (status: string) => ({planned: '已规划', draft: '草稿', completed: '已完成'}[status] ?? status);
 
-export function ProductOverview({project, episode, readiness, readinessByEpisode, metrics, volumes, storylines, onOpenEpisode, onOpenScript, onOpenAssets, onCreateVolume, onUpdateVolume, onDeleteVolume, onMoveEpisode}: {
+export function ProductOverview({project, episode, readiness, readinessByEpisode, metrics, volumes, storylines, onOpenEpisode, onOpenScript, onOpenStoryline, onOpenAssets, onCreateVolume, onUpdateVolume, onDeleteVolume, onMoveEpisode}: {
   project: ProjectDetail;
   episode: EpisodeDetail | null;
   readiness: ProductionReadiness | null;
@@ -16,6 +16,7 @@ export function ProductOverview({project, episode, readiness, readinessByEpisode
   storylines: Storyline[];
   onOpenEpisode: (episodeId: string) => void;
   onOpenScript: () => void;
+  onOpenStoryline?: (storylineId:string) => void;
   onOpenAssets: () => void;
   onCreateVolume?: (data:{title:string;summary:string;position:number}) => Promise<void> | void;
   onUpdateVolume?: (id:string,data:{title:string;summary:string;position:number}) => Promise<void> | void;
@@ -99,7 +100,7 @@ export function ProductOverview({project, episode, readiness, readinessByEpisode
       </section>
 
       <aside className="project-side-summary">
-        <section><header><h2>故事线</h2><span>跨集追踪</span></header>{storylines.length ? storylines.slice(0,3).map(line => <button key={line.id}><i style={{backgroundColor:line.color}}/><span><strong>{line.title}</strong><small>{line.events.length} 个事件 · {line.description || '持续追踪'}</small></span></button>) : <p className="project-side-empty">尚未创建故事线</p>}</section>
+        <section><header><h2>故事线</h2><span>跨集追踪</span></header>{storylines.length ? storylines.slice(0,3).map(line => <button key={line.id} onClick={()=>onOpenStoryline?.(line.id)}><i style={{backgroundColor:line.color}}/><span><strong>{line.title}</strong><small>{line.events.length} 个事件 · {line.description || '持续追踪'}</small></span></button>) : <p className="project-side-empty">尚未创建故事线</p>}</section>
         <section><header><h2>快捷入口</h2></header><button onClick={onOpenScript}><BookOpenText size={16}/><span><strong>剧本与故事线</strong><small>继续编辑作品结构</small></span></button><button onClick={onOpenAssets}><Library size={16}/><span><strong>作品资产库</strong><small>角色、场景与变体</small></span></button></section>
         <section className="project-deadline"><Clock3 size={16}/><div><span>当前集目标</span><strong>{episode?.target_duration_seconds ?? 0} 秒</strong></div><div><span>制作阻塞</span><strong>{projectReadiness.length?projectBlockerCount:'--'}</strong></div></section>
       </aside>
