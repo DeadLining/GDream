@@ -303,6 +303,14 @@ it('generates a reviewable 3D candidate from an existing character reference',as
   expect(mocks.approveModel3D).toHaveBeenCalledWith('job-3d');
 });
 
+it('does not generate 3D from unapproved character references',async()=>{
+  mocks.list.mockResolvedValue(allReferences.map(item=>({...item,review_status:'draft',is_active:false})));
+  render(<CharacterWorkspace characters={[character]}/>);
+  await userEvent.click(await screen.findByRole('button',{name:/林夏/}));
+
+  expect(screen.getByRole('button',{name:'根据参考图生成 3D'})).toBeDisabled();
+});
+
 it('loads every character asset summary for catalog filters',async()=>{
   const supportingCharacter={...character,id:'c2',name:'周然',role:'搭档'};
   const masterOnly=[variants[0]];

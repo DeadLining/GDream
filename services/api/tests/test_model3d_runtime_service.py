@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from comic_studio import models
 from comic_studio.db import create_session_factory, create_tables
@@ -8,6 +9,7 @@ from comic_studio.model_runtime.contracts import Capability
 from comic_studio.model_runtime.service import ModelRuntimeService
 from comic_studio.providers.model_3d_base import Model3DResult
 from comic_studio.services.character_references import CharacterReferenceService
+from comic_studio.services.model_3d import Model3DGenerationError
 from tests.test_character_3d_representations import _glb
 from tests.test_character_references import PNG
 
@@ -111,3 +113,27 @@ async def test_character_model3d_job_creates_candidate_then_requires_approval(tm
         )
         assert representation.review_status == "approved"
         assert representation.is_active is True
+
+
+@pytest.mark.anyio
+async def test_character_model3d_rejects_an_unapproved_explicit_reference(tmp_path):
+    service, session_factory = _runtime(tmp_path)
+    character_id, reference_asset_id = _character_reference(
+        session_factory, service.data_root
+    )
+    with session_factory() as session:
+        reference = session.scalar(
+            select(models.CharacterReference).where(
+                models.CharacterReference.asset_id == reference_asset_id
+            )
+        )
+        reference.review_status = "draft"
+        reference.is_active = False
+        session.commit()
+
+    with pytest.raises(Model3DGenerationError, match="approved_character_reference_required"):
+        await service.execute_model3d(
+            "character",
+            character_id,
+            reference_asset_id,
+        )
