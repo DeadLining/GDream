@@ -1,7 +1,10 @@
 import json
 import struct
 
+import pytest
+
 from comic_studio import models
+from comic_studio.services.character_3d import Character3DRepresentationService
 
 
 def _glb(document: dict | None = None) -> bytes:
@@ -160,3 +163,41 @@ def test_director_catalog_prefers_active_character_glb(client):
     ]
     assert len(character_objects) == 1
     assert character_objects[0]["source_id"] == replacement["id"]
+
+
+def test_character_model_upload_cleans_file_when_commit_fails(
+    db_session, tmp_path, monkeypatch
+):
+    project = models.Project(
+        title="3D transaction",
+        logline="Keep files and rows consistent",
+        story_bible="Story",
+        visual_style="comic",
+    )
+    character = models.Character(
+        project=project,
+        name="Lin Xia",
+        role="Lead",
+        appearance_bible="teal jacket",
+        personality="calm",
+        continuity_rules="same face",
+        voice_speaker="v1",
+    )
+    db_session.add(project)
+    db_session.commit()
+
+    def fail_commit():
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(db_session, "commit", fail_commit)
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        Character3DRepresentationService(db_session, tmp_path).upload(
+            character.id,
+            _glb(),
+            activate=False,
+            review_status="draft",
+        )
+
+    assert list(tmp_path.rglob("*.glb")) == []
+    assert list(tmp_path.rglob("*.tmp")) == []
