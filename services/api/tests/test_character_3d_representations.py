@@ -230,6 +230,34 @@ def test_character_model_upload_scopes_activation_to_variant_and_state(client):
         state_model["id"],
     }
 
+    other_character = client.post(
+        f"/api/projects/{project['id']}/characters",
+        json={
+            "name": "周然",
+            "role": "搭档",
+            "appearance_bible": "灰色风衣",
+            "personality": "谨慎",
+            "continuity_rules": "保持腕表",
+            "negative_constraints": "",
+            "voice_speaker": "v2",
+            "voice_instruction": "",
+        },
+    ).json()
+    cross_variant = client.post(
+        f"/api/characters/{other_character['id']}/3d-representations",
+        files={"file": ("cross-variant.glb", _glb(), "model/gltf-binary")},
+        data={"variant_id": episode_variant["id"]},
+    )
+    cross_state = client.post(
+        f"/api/characters/{other_character['id']}/3d-representations",
+        files={"file": ("cross-state.glb", _glb(), "model/gltf-binary")},
+        data={"state_id": state["id"]},
+    )
+    assert cross_variant.status_code == 422
+    assert cross_variant.json()["detail"] == "representation_variant_not_available"
+    assert cross_state.status_code == 422
+    assert cross_state.json()["detail"] == "representation_variant_not_available"
+
 
 def test_director_catalog_resolves_state_variant_and_master_models_by_shot(client):
     project, character = _character(client)
@@ -302,6 +330,44 @@ def test_director_catalog_resolves_state_variant_and_master_models_by_shot(clien
     assert state_asset["source_id"] == state_model["id"]
     assert state_asset["metadata"]["variant_id"] == episode_variant["id"]
     assert state_asset["metadata"]["state_id"] == state["id"]
+
+    with client.app.state.session_factory() as session:
+        deleted_state = session.get(models.AssetVariantState, state["id"])
+        deleted_state.deleted_at = models.utc_now()
+        session.commit()
+    deleted_state_catalog = client.get(
+        f"/api/director-stages/{stage['id']}/assets?shot_id={second_shot_id}"
+    ).json()
+    assert next(
+        item for item in deleted_state_catalog if item["kind"] == "character"
+    )["source_id"] == variant_model["id"]
+
+    with client.app.state.session_factory() as session:
+        other_scene = models.Scene(
+            episode_id=episode["id"],
+            position=2,
+            location="楼梯间",
+            summary="另一个导演台",
+            continuity_state={"characters_present": [character["id"]]},
+            estimated_duration_seconds=5,
+        )
+        other_scene.shots.append(
+            models.Shot(
+                position=1,
+                shot_type="medium",
+                duration_seconds=5,
+                composition="离开仓库",
+                character_state={character["id"]: {}},
+            )
+        )
+        session.add(other_scene)
+        session.commit()
+        other_shot_id = other_scene.shots[0].id
+    wrong_stage = client.get(
+        f"/api/director-stages/{stage['id']}/assets?shot_id={other_shot_id}"
+    )
+    assert wrong_stage.status_code == 422
+    assert wrong_stage.json()["detail"] == "director_shot_not_in_stage"
 
 
 def test_character_model_upload_cleans_file_when_commit_fails(

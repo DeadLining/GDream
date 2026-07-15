@@ -7,7 +7,7 @@ import struct
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
@@ -52,10 +52,17 @@ class Character3DRepresentationService:
         provider: str = "upload",
         model: str = "local-glb",
         request_metadata: dict[str, Any] | None = None,
+        variant_id: str | None = None,
+        state_id: str | None = None,
     ):
         character = self.session.get(models.Character, character_id)
         if character is None:
             raise KeyError(character_id)
+        variant_id, state_id = self._validate_scope(
+            character_id,
+            variant_id,
+            state_id,
+        )
         metrics = self.inspect_glb(content)
         version = (
             self.session.scalar(
@@ -73,9 +80,11 @@ class Character3DRepresentationService:
             provider=provider,
             model=model,
             request_metadata={
+                **(request_metadata or {}),
                 "character_id": character_id,
                 "format": "glb",
-                **(request_metadata or {}),
+                "variant_id": variant_id,
+                "state_id": state_id,
             },
             generation_attempt=version,
             checksum=hashlib.sha256(content).hexdigest(),
@@ -103,13 +112,13 @@ class Character3DRepresentationService:
             if activate:
                 self.session.execute(
                     update(models.Character3DRepresentation)
-                    .where(
-                        models.Character3DRepresentation.character_id == character_id
-                    )
+                    .where(*self._scope_filters(character_id, variant_id, state_id))
                     .values(is_active=False)
                 )
             representation = models.Character3DRepresentation(
                 character_id=character_id,
+                variant_id=variant_id,
+                state_id=state_id,
                 asset_id=asset.id,
                 label=label.strip()[:160] or f"{character.name} 3D 代理 V{version}",
                 format="glb",
@@ -132,8 +141,11 @@ class Character3DRepresentationService:
         self.session.execute(
             update(models.Character3DRepresentation)
             .where(
-                models.Character3DRepresentation.character_id
-                == representation.character_id
+                *self._scope_filters(
+                    representation.character_id,
+                    representation.variant_id,
+                    representation.state_id,
+                )
             )
             .values(is_active=False)
         )
@@ -142,6 +154,124 @@ class Character3DRepresentationService:
         representation.asset.review_status = "approved"
         self.session.commit()
         return self.get(representation.id)
+
+    def resolve(self, character_id: str, shot_id: str | None = None):
+        if self.session.get(models.Character, character_id) is None:
+            raise KeyError(character_id)
+        variant_id: str | None = None
+        state_id: str | None = None
+        if shot_id:
+            shot = self.session.get(models.Shot, shot_id)
+            if shot is None:
+                raise KeyError(shot_id)
+            usage = self.session.scalar(
+                select(models.AssetVariantUsage)
+                .join(models.AssetVariant)
+                .where(
+                    models.AssetVariantUsage.shot_id == shot_id,
+                    models.AssetVariant.character_id == character_id,
+                    models.AssetVariant.deleted_at.is_(None),
+                )
+                .order_by(
+                    case(
+                        (models.AssetVariantUsage.usage_kind == "reference", 0),
+                        (models.AssetVariantUsage.usage_kind == "panel", 1),
+                        (models.AssetVariantUsage.usage_kind == "video", 2),
+                        else_=3,
+                    ),
+                    models.AssetVariantUsage.created_at.desc(),
+                )
+                .limit(1)
+            )
+            if usage is not None:
+                variant_id = usage.variant_id
+                state_id = (
+                    usage.state_id
+                    if usage.state is not None and usage.state.deleted_at is None
+                    else None
+                )
+            else:
+                variant_id = self.session.scalar(
+                    select(models.AssetVariant.id)
+                    .where(
+                        models.AssetVariant.character_id == character_id,
+                        models.AssetVariant.episode_id == shot.scene.episode_id,
+                        models.AssetVariant.deleted_at.is_(None),
+                    )
+                    .order_by(
+                        models.AssetVariant.updated_at.desc(),
+                        models.AssetVariant.id.desc(),
+                    )
+                    .limit(1)
+                )
+        scopes = (
+            [(variant_id, state_id), (variant_id, None)]
+            if variant_id
+            else []
+        )
+        scopes.append((None, None))
+        for scope_variant_id, scope_state_id in dict.fromkeys(scopes):
+            representation = self.session.scalar(
+                select(models.Character3DRepresentation)
+                .options(selectinload(models.Character3DRepresentation.asset))
+                .where(
+                    *self._scope_filters(
+                        character_id,
+                        scope_variant_id,
+                        scope_state_id,
+                    ),
+                    models.Character3DRepresentation.is_active.is_(True),
+                    models.Character3DRepresentation.review_status == "approved",
+                )
+                .order_by(models.Character3DRepresentation.version.desc())
+                .limit(1)
+            )
+            if representation is not None:
+                return representation
+        return None
+
+    def _validate_scope(
+        self,
+        character_id: str,
+        variant_id: str | None,
+        state_id: str | None,
+    ) -> tuple[str | None, str | None]:
+        variant = self.session.get(models.AssetVariant, variant_id) if variant_id else None
+        state = self.session.get(models.AssetVariantState, state_id) if state_id else None
+        if state is not None:
+            if state.deleted_at is not None:
+                raise Character3DRepresentationError("representation_state_not_available")
+            if variant is None:
+                variant = self.session.get(models.AssetVariant, state.variant_id)
+                variant_id = state.variant_id
+            elif state.variant_id != variant.id:
+                raise Character3DRepresentationError("representation_state_variant_mismatch")
+        if variant_id and (
+            variant is None
+            or variant.deleted_at is not None
+            or variant.character_id != character_id
+        ):
+            raise Character3DRepresentationError("representation_variant_not_available")
+        if state_id and state is None:
+            raise Character3DRepresentationError("representation_state_not_available")
+        return variant_id, state_id
+
+    @staticmethod
+    def _scope_filters(
+        character_id: str,
+        variant_id: str | None,
+        state_id: str | None,
+    ) -> tuple:
+        representation = models.Character3DRepresentation
+        return (
+            representation.character_id == character_id,
+            representation.variant_id == variant_id
+            if variant_id
+            else representation.variant_id.is_(None),
+            representation.state_id == state_id
+            if state_id
+            else representation.state_id.is_(None),
+        )
 
     @classmethod
     def inspect_glb(cls, content: bytes) -> dict[str, Any]:

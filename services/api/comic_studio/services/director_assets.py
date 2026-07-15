@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
 from comic_studio.director import DirectorAssetRead
+from comic_studio.services.character_3d import Character3DRepresentationService
 
 
 @dataclass(frozen=True)
@@ -44,7 +46,9 @@ class DirectorAssetCatalogService:
     def __init__(self, session: Session):
         self.session = session
 
-    def definitions(self, stage_id: str) -> list[DirectorAssetDefinition]:
+    def definitions(
+        self, stage_id: str, shot_id: str | None = None
+    ) -> list[DirectorAssetDefinition]:
         stage = self.session.scalar(
             select(models.DirectorStage)
             .options(
@@ -65,10 +69,12 @@ class DirectorAssetCatalogService:
         if stage is None:
             raise KeyError(stage_id)
         scene = stage.scene
+        if shot_id and all(shot.id != shot_id for shot in scene.shots):
+            raise ValueError("director_shot_not_in_stage")
         continuity = scene.continuity_state or {}
         result = [self._scene_definition(scene)]
         result.extend(self._library_asset_definitions(scene))
-        result.extend(self._character_definitions(scene))
+        result.extend(self._character_definitions(scene, shot_id))
         result.extend(self._prop_definitions(scene, continuity.get("props")))
         return result
 
@@ -141,8 +147,10 @@ class DirectorAssetCatalogService:
             )
         return result
 
-    def list(self, stage_id: str) -> list[DirectorAssetRead]:
-        return [item.read() for item in self.definitions(stage_id)]
+    def list(
+        self, stage_id: str, shot_id: str | None = None
+    ) -> list[DirectorAssetRead]:
+        return [item.read() for item in self.definitions(stage_id, shot_id)]
 
     @staticmethod
     def environment(stage: models.DirectorStage) -> dict[str, Any]:
@@ -182,7 +190,7 @@ class DirectorAssetCatalogService:
         )
 
     def _character_definitions(
-        self, scene: models.Scene
+        self, scene: models.Scene, shot_id: str | None = None
     ) -> list[DirectorAssetDefinition]:
         raw_present = (scene.continuity_state or {}).get("characters_present", [])
         present_ids = {
@@ -215,23 +223,10 @@ class DirectorAssetCatalogService:
         by_character: dict[str, list[models.CharacterReference]] = {}
         for reference in references:
             by_character.setdefault(reference.character_id, []).append(reference)
-        representations = list(
-            self.session.scalars(
-                select(models.Character3DRepresentation)
-                .options(selectinload(models.Character3DRepresentation.asset))
-                .where(
-                    models.Character3DRepresentation.character_id.in_(characters),
-                    models.Character3DRepresentation.is_active.is_(True),
-                    models.Character3DRepresentation.review_status == "approved",
-                    models.Character3DRepresentation.variant_id.is_(None),
-                    models.Character3DRepresentation.state_id.is_(None),
-                )
-                .order_by(models.Character3DRepresentation.version.desc())
-            )
+        representation_service = Character3DRepresentationService(
+            self.session,
+            Path("."),
         )
-        by_character_representation = {
-            item.character_id: item for item in representations
-        }
         result: list[DirectorAssetDefinition] = []
         for index, character in enumerate(characters.values()):
             candidates = by_character.get(character.id, [])
@@ -244,7 +239,7 @@ class DirectorAssetCatalogService:
                 ),
                 None,
             )
-            representation = by_character_representation.get(character.id)
+            representation = representation_service.resolve(character.id, shot_id)
             if reference is None and representation is None:
                 continue
             reference_asset = (
@@ -289,6 +284,8 @@ class DirectorAssetCatalogService:
                             "role": character.role,
                             "representation_id": representation.id,
                             "representation_version": representation.version,
+                            "variant_id": representation.variant_id,
+                            "state_id": representation.state_id,
                             "asset_id": representation.asset_id,
                             "mesh_count": representation.mesh_count,
                             "triangle_count": representation.triangle_count,

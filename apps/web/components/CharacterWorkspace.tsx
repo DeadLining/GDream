@@ -1,7 +1,7 @@
 'use client';
 
 import {Box,Check,ImagePlus,LoaderCircle,Pencil,RefreshCw,Sparkles,Trash2} from 'lucide-react';
-import {useEffect,useRef,useState} from 'react';
+import {Fragment,useEffect,useRef,useState} from 'react';
 import {
   activateCharacterReference,
   approveModel3DJob,
@@ -78,6 +78,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const [model3dJob,setModel3dJob]=useState<Job|null>(null);
   const [model3dBusy,setModel3dBusy]=useState(false);
   const [model3dError,setModel3dError]=useState('');
+  const [modelScope,setModelScope]=useState('master');
   const [editingReferenceId,setEditingReferenceId]=useState('');
   const [editingReferenceLabel,setEditingReferenceLabel]=useState('');
   const completedCount=useRef(0);
@@ -89,6 +90,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const references=character?assetData[character.id]?.references??[]:[];
   const variants=character?assetData[character.id]?.variants??[]:[];
   const representations=character?assetData[character.id]?.representations??[]:[];
+  const selectedScope=(()=>{if(modelScope.startsWith('state:')){const stateId=modelScope.slice(6);const variant=variants.find(item=>item.states.some(state=>state.id===stateId));return{variantId:variant?.id??null,stateId};}if(modelScope.startsWith('variant:'))return{variantId:modelScope.slice(8),stateId:null};return{variantId:null,stateId:null};})();
   const characterIds=workspaceCharacters.map(item=>item.id).join('|');
 
   const load=async(id:string)=>{
@@ -105,12 +107,13 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     }
   };
   useEffect(()=>{for(const item of workspaceCharacters)void load(item.id);},[characterIds]);
+  useEffect(()=>setModelScope('master'),[character?.id]);
   useEffect(()=>{
     let current=true;
     if(!character){setModel3dJob(null);return;}
-    void getLatestModel3DJob('character',character.id).then(job=>{if(current)setModel3dJob(job);}).catch(()=>{if(current)setModel3dJob(null);});
+    void getLatestModel3DJob('character',character.id,selectedScope.variantId,selectedScope.stateId).then(job=>{if(current)setModel3dJob(job);}).catch(()=>{if(current)setModel3dJob(null);});
     return()=>{current=false;};
-  },[character?.id]);
+  },[character?.id,modelScope,selectedScope.variantId,selectedScope.stateId]);
 
   const reloadLibraryAssets=async()=>{
     if(!resolvedProjectId){setLibraryAssets([]);return;}
@@ -155,14 +158,16 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     try{await uploadCharacterReference(character.id,filter,file);await load(character.id);}
     catch(cause){setError(cause instanceof Error?cause.message:'上传失败');}
   };
-  const uploadModel=async(file:File|null)=>{if(!file)return;try{await uploadCharacter3DRepresentation(character.id,file);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'3D 模型上传失败');}};
+  const uploadModel=async(file:File|null)=>{if(!file)return;try{if(selectedScope.variantId||selectedScope.stateId)await uploadCharacter3DRepresentation(character.id,file,'',selectedScope.variantId,selectedScope.stateId);else await uploadCharacter3DRepresentation(character.id,file);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'3D 模型上传失败');}};
   const modelReference=references.find(item=>item.review_status==='approved'&&item.is_active)??references.find(item=>item.review_status==='approved')??null;
   const generateCharacterModel=async()=>{
     if(model3dBusy)return;
     if(!modelReference){setModel3dError('请先批准至少一张角色参考图');return;}
     setModel3dBusy(true);setModel3dError('');
     try{
-      const started=await generateModel3D('character',character.id,modelReference.asset.id);
+      const started=selectedScope.variantId||selectedScope.stateId
+        ?await generateModel3D('character',character.id,modelReference.asset.id,selectedScope.variantId,selectedScope.stateId)
+        :await generateModel3D('character',character.id,modelReference.asset.id);
       const finished=await pollJob(started.job_id,{onUpdate:setModel3dJob});
       setModel3dJob(finished);
       if(finished.status==='failed')throw new Error(finished.error||'3D 生成失败');
@@ -247,12 +252,13 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     {error&&<div className="form-error reference-set-error" role="alert"><span>{error}</span>{canRetry&&<button onClick={retry} disabled={generating}><RefreshCw size={14}/>继续未完成项</button>}</div>}
     <div className="reference-grid">{visible.map(reference=>{const label=reference.label||labels[reference.reference_type];const editing=editingReferenceId===reference.id;return <article key={reference.id} className={reference.is_active?'active':''}><img src={mediaUrl(reference.asset.media_url)} alt={`${character.name}${label}`}/><div>{editing?<><input aria-label="参考图名称" value={editingReferenceLabel} onChange={event=>setEditingReferenceLabel(event.target.value)}/><button aria-label="保存参考图名称" onClick={()=>void renameReference(reference)}><Check size={14}/></button></>:<span>{label}</span>}<small>{reference.review_status==='approved'?'已批准':'待审核'}{reference.is_active?' · 使用中':''}</small></div><div className="reference-commands">{reference.review_status!=='approved'&&<button onClick={()=>approve(reference)}><Check size={14}/>批准</button>}{reference.review_status==='approved'&&!reference.is_active&&<button onClick={()=>activate(reference)}>设为使用</button>}<button aria-label={`重命名${label}`} onClick={()=>{setEditingReferenceId(reference.id);setEditingReferenceLabel(label);}}><Pencil size={14}/></button><button aria-label={`删除${label}`} title={reference.is_active?'使用中的参考图不能删除':'删除参考图'} disabled={reference.is_active} onClick={()=>void removeReference(reference)}><Trash2 size={14}/></button></div></article>;})}</div>
   </section>;
+  const scopedRepresentations=representations.filter(item=>item.variant_id===selectedScope.variantId&&item.state_id===selectedScope.stateId);
   const candidateId=String(model3dJob?.result_metadata?.representation_id??'');
-  const candidateRepresentation=representations.find(item=>item.id===candidateId)??representations.find(item=>!item.is_active&&item.review_status!=='approved')??null;
-  const activeRepresentation=representations.find(item=>item.is_active)??null;
+  const candidateRepresentation=scopedRepresentations.find(item=>item.id===candidateId)??scopedRepresentations.find(item=>!item.is_active&&item.review_status!=='approved')??null;
+  const activeRepresentation=scopedRepresentations.find(item=>item.is_active)??null;
   const visibleRepresentation=candidateRepresentation??activeRepresentation;
   const candidatePending=Boolean(candidateRepresentation&&model3dJob?.status==='succeeded'&&model3dJob.result_metadata?.is_active!==true);
-  const modelManager=<section className="character-model-section"><header><div><strong>3D 导演代理</strong><small>角色必须使用 GLB；AI 候选批准后才进入导演台</small></div><div className="character-model-actions"><button type="button" onClick={()=>void generateCharacterModel()} disabled={model3dBusy||!modelReference}>{model3dBusy?<LoaderCircle className="reference-spinner" size={15}/>:<Sparkles size={15}/>}根据参考图生成 3D</button><label>上传 GLB<input aria-label="上传角色 3D 模型" type="file" accept=".glb,model/gltf-binary" onChange={event=>void uploadModel(event.target.files?.[0]??null)}/></label></div></header>{visibleRepresentation?<><CharacterModelPreview url={visibleRepresentation.model_url}/><div className="character-model-meta"><strong>{visibleRepresentation.label}</strong><span>{visibleRepresentation.triangle_count.toLocaleString()} 三角面</span><span>{visibleRepresentation.has_skeleton?'含骨骼':'静态代理'}</span>{candidatePending&&<button type="button" className="primary-action" onClick={()=>void approveCharacterModel()} disabled={model3dBusy}><Check size={14}/>批准使用 3D 候选</button>}</div></>:<div className="character-model-empty"><Box size={24}/><span>{model3dBusy?'正在生成 3D 候选':'尚未准备角色 GLB'}</span></div>}{model3dError&&<p className="form-error" role="alert">{model3dError}</p>}</section>;
+  const modelManager=<section className="character-model-section"><header><div><strong>3D 导演代理</strong><small>角色必须使用 GLB；AI 候选批准后才进入导演台</small></div><div className="character-model-actions"><select aria-label="3D 模型作用域" value={modelScope} onChange={event=>setModelScope(event.target.value)}><option value="master">作品主设定</option>{variants.filter(item=>item.kind==='episode').map(variant=><Fragment key={variant.id}><option value={`variant:${variant.id}`}>{variant.label}</option>{variant.states.map(state=><option key={state.id} value={`state:${state.id}`}>{variant.label} / {state.label}</option>)}</Fragment>)}</select><button type="button" onClick={()=>void generateCharacterModel()} disabled={model3dBusy||!modelReference}>{model3dBusy?<LoaderCircle className="reference-spinner" size={15}/>:<Sparkles size={15}/>}根据参考图生成 3D</button><label>上传 GLB<input aria-label="上传角色 3D 模型" type="file" accept=".glb,model/gltf-binary" onChange={event=>void uploadModel(event.target.files?.[0]??null)}/></label></div></header>{visibleRepresentation?<><CharacterModelPreview url={visibleRepresentation.model_url}/><div className="character-model-meta"><strong>{visibleRepresentation.label}</strong><span>{visibleRepresentation.triangle_count.toLocaleString()} 三角面</span><span>{visibleRepresentation.has_skeleton?'含骨骼':'静态代理'}</span>{candidatePending&&<button type="button" className="primary-action" onClick={()=>void approveCharacterModel()} disabled={model3dBusy}><Check size={14}/>批准使用 3D 候选</button>}</div></>:<div className="character-model-empty"><Box size={24}/><span>{model3dBusy?'正在生成 3D 候选':'当前作用域尚未准备 GLB'}</span></div>}{model3dError&&<p className="form-error" role="alert">{model3dError}</p>}</section>;
 
   if(view!=='catalog')return <CharacterMasterView
     characters={workspaceCharacters}

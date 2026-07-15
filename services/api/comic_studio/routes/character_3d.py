@@ -68,6 +68,8 @@ async def upload_representation(character_id: str, request: Request):
                 character_id,
                 await upload.read(),
                 label=str(form.get("label", "")),
+                variant_id=str(form.get("variant_id") or "") or None,
+                state_id=str(form.get("state_id") or "") or None,
             )
             return _response(representation)
         except KeyError as exc:

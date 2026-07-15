@@ -122,7 +122,7 @@
 .character-model-section > header strong { font-size: var(--fs-xs); }
 .character-model-section > header small { color: var(--color-muted); font-size: 9px; }
 .character-model-section > header label { min-height: 26px; display: inline-flex; align-items: center; padding: 0 8px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm); font-size: 9px; cursor: pointer; white-space: nowrap; }
-.character-model-section > header .character-model-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }.character-model-actions button { min-width: 0; min-height: 26px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; overflow: hidden; border: 1px solid var(--color-accent); border-radius: var(--radius-sm); background: var(--color-info-bg); color: var(--color-info-text); padding: 0 6px; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.character-model-section > header .character-model-actions { display: grid; grid-template-columns: minmax(80px, .9fr) minmax(0, 1fr) auto; gap: 4px; }.character-model-actions select { min-width: 0; min-height: 26px; overflow: hidden; border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); padding: 0 5px; font-size: 9px; text-overflow: ellipsis; }.character-model-actions button { min-width: 0; min-height: 26px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; overflow: hidden; border: 1px solid var(--color-accent); border-radius: var(--radius-sm); background: var(--color-info-bg); color: var(--color-info-text); padding: 0 6px; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .character-model-section input { display: none; }
 .character-model-preview { min-height: 0; position: relative; background: #263238; }
 .character-model-preview canvas { display: block; width: 100%; height: 100%; }
@@ -212,6 +212,10 @@
 .asset-lineage-page-layout { min-width: 0; min-height: 0; flex: 1; display: grid; grid-template-columns: 184px minmax(0, 1fr); }
 .lineage-character-list > button { min-height: 50px; display: grid; align-content: center; justify-content: stretch; }
 .asset-lineage-page-layout > .asset-lineage-workspace { min-width: 0; }
+
+@media (max-width: 1350px) {
+  .master-image-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); }
+}
 
 @media (max-width: 1100px) {
   .asset-catalog-layout { grid-template-columns: 150px minmax(380px, 1fr) 250px; }

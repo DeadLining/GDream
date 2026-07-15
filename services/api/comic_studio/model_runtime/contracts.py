@@ -105,3 +105,11 @@ class Model3DRuntimeRequest(BaseModel):
     target_type: Literal["character", "library_asset"]
     target_id: str
     reference_asset_id: str | None = None
+    variant_id: str | None = Field(default=None, max_length=36)
+    state_id: str | None = Field(default=None, max_length=36)
+
+    @model_validator(mode="after")
+    def validate_character_scope(self):
+        if self.target_type != "character" and (self.variant_id or self.state_id):
+            raise ValueError("3D variant scope requires a character target")
+        return self

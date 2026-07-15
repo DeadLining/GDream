@@ -27,6 +27,8 @@ class Model3DGenerationService:
         target_type: str,
         target_id: str,
         reference_asset_id: str | None = None,
+        variant_id: str | None = None,
+        state_id: str | None = None,
     ) -> dict:
         reference = self._reference_asset(
             target_type,
@@ -63,6 +65,8 @@ class Model3DGenerationService:
                     "source_url": result.source_url,
                     "generation_kind": "image_to_3d",
                 },
+                variant_id=variant_id,
+                state_id=state_id,
             )
             return {
                 "capability": "model3d",
@@ -70,6 +74,8 @@ class Model3DGenerationService:
                 "target_id": target_id,
                 "asset_id": representation.asset_id,
                 "representation_id": representation.id,
+                "variant_id": representation.variant_id,
+                "state_id": representation.state_id,
                 "model_url": f"/media/{representation.asset.local_path}",
                 "review_status": representation.review_status,
                 "is_active": representation.is_active,

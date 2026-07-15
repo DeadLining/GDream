@@ -323,13 +323,21 @@ class ModelRuntimeService:
         target_type: str,
         target_id: str,
         reference_asset_id: str | None,
+        variant_id: str | None = None,
+        state_id: str | None = None,
     ):
         with self.session_factory() as session:
             return await Model3DGenerationService(
                 session,
                 self.data_root,
                 self.adapters.create(Capability.MODEL_3D),
-            ).generate(target_type, target_id, reference_asset_id)
+            ).generate(
+                target_type,
+                target_id,
+                reference_asset_id,
+                variant_id,
+                state_id,
+            )
 
     def create_media_job(
         self,
@@ -404,6 +412,8 @@ class ModelRuntimeService:
                     job.target_type,
                     job.target_id,
                     job.request_payload.get("reference_asset_id"),
+                    job.request_payload.get("variant_id"),
+                    job.request_payload.get("state_id"),
                 )
             else:
                 result = await self.execute_video(
@@ -650,17 +660,33 @@ class ModelRuntimeService:
             session.expunge(job)
             return job
 
-    def latest_model3d_job(self, target_type: str, target_id: str):
+    def latest_model3d_job(
+        self,
+        target_type: str,
+        target_id: str,
+        variant_id: str | None = None,
+        state_id: str | None = None,
+    ):
         with self.session_factory() as session:
-            job = session.scalar(
-                select(models.Job)
-                .where(
-                    models.Job.operation == "runtime_model3d",
-                    models.Job.target_type == target_type,
-                    models.Job.target_id == target_id,
+            jobs = list(
+                session.scalars(
+                    select(models.Job)
+                    .where(
+                        models.Job.operation == "runtime_model3d",
+                        models.Job.target_type == target_type,
+                        models.Job.target_id == target_id,
+                    )
+                    .order_by(models.Job.created_at.desc(), models.Job.id.desc())
                 )
-                .order_by(models.Job.created_at.desc(), models.Job.id.desc())
-                .limit(1)
+            )
+            job = next(
+                (
+                    item
+                    for item in jobs
+                    if item.request_payload.get("variant_id") == variant_id
+                    and item.request_payload.get("state_id") == state_id
+                ),
+                None,
             )
             if job is not None:
                 session.expunge(job)

@@ -3,7 +3,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {ArrowLeft,Box,Camera,CameraIcon,Globe2,LoaderCircle,Plus,Redo2,RefreshCw,Sparkles,Undo2} from 'lucide-react';
 import {ApiError,applyDirectorSuggestionToShot,createDirectorObject,createDirectorStage,createDirectorSuggestion,deleteDirectorObject,getDirectorAssets,getDirectorStage,syncDirectorAssets,updateDirectorCamera,updateDirectorObject,uploadDirectorPreview} from '../../lib/api';
-import {applyDirectorObjectOverrides,mergeDirectorObjectOverride,removeDirectorObjectOverride,setDirectorObjectOverrideTransform} from '../../lib/director-overrides';
+import {applyDirectorAssetModels,applyDirectorObjectOverrides,mergeDirectorObjectOverride,removeDirectorObjectOverride,setDirectorObjectOverrideTransform} from '../../lib/director-overrides';
 import {captureDirectorPreview} from '../../lib/director-preview';
 import type {DirectorApplyField,DirectorAsset,DirectorPosePreset,DirectorStage,DirectorSuggestion,DirectorTransformMode,Scene,Shot,Transform} from '../../lib/types';
 import {DirectorCanvas,type DirectorCameraPose,type DirectorCanvasMode} from './DirectorCanvas';
@@ -42,16 +42,26 @@ export function DirectorWorkspace({scene,selectedShotId,mobile,onSelectShot,onSh
     setBusy(true);setError('');
     getDirectorStage(scene.id)
       .catch(cause=>cause instanceof ApiError&&cause.status===404?createDirectorStage(scene.id):Promise.reject(cause))
-      .then(async value=>{const catalog=await getDirectorAssets(value.id);if(current){setStage(value);setAssets(catalog);setUndoHistory([]);setRedoHistory([]);}})
+      .then(async value=>{const catalog=await getDirectorAssets(value.id,selectedShotId);if(current){setStage(value);setAssets(catalog);setUndoHistory([]);setRedoHistory([]);}})
       .catch(cause=>{if(current)setError(cause instanceof Error?cause.message:'无法加载导演台');})
       .finally(()=>{if(current)setBusy(false);});
     return()=>{current=false;};
   },[scene.id]);
 
+  useEffect(()=>{
+    if(!stage)return;
+    let current=true;
+    getDirectorAssets(stage.id,selectedShotId)
+      .then(catalog=>{if(current)setAssets(catalog);})
+      .catch(cause=>{if(current)setError(cause instanceof Error?cause.message:'无法加载镜头资产');});
+    return()=>{current=false;};
+  },[stage?.id,selectedShotId]);
+
   const camera=stage?.shot_cameras.find(item=>item.shot_id===selectedShotId)??stage?.shot_cameras[0]??null;
   const shot=scene.shots.find(item=>item.id===selectedShotId)??scene.shots[0];
   const objects=useMemo(()=>stage?.objects??[],[stage]);
-  const effectiveObjects=useMemo(()=>camera?applyDirectorObjectOverrides(objects,camera.object_overrides):objects,[camera,objects]);
+  const scopedObjects=useMemo(()=>applyDirectorAssetModels(objects,assets),[assets,objects]);
+  const effectiveObjects=useMemo(()=>camera?applyDirectorObjectOverrides(scopedObjects,camera.object_overrides):scopedObjects,[camera,scopedObjects]);
   const object=effectiveObjects.find(item=>item.id===selectedObjectId)??null;
 
   const addObject=async()=>{if(!stage)return;try{const created=await createDirectorObject(stage.id,stage.version,{kind:'primitive',source_type:'placeholder',label:'新道具'});setStage({...stage,version:stage.version+1,objects:[...stage.objects,created]});setSelectedObjectId(created.id);}catch(cause){setError(cause instanceof Error?cause.message:'添加失败');}};

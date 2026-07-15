@@ -38,9 +38,10 @@ def get_director_stage(scene_id:str,session:SessionDependency):
 
 
 @router.get("/api/director-stages/{stage_id}/assets",response_model=list[DirectorAssetRead])
-def list_director_assets(stage_id:str,session:SessionDependency):
-    try:return DirectorAssetCatalogService(session).list(stage_id)
+def list_director_assets(stage_id:str,session:SessionDependency,shot_id:str|None=None):
+    try:return DirectorAssetCatalogService(session).list(stage_id,shot_id)
     except KeyError as exc:raise HTTPException(status_code=404,detail="Director stage not found") from exc
+    except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
 
 
 @router.post("/api/director-stages/{stage_id}/assets/sync",response_model=DirectorStageRead)

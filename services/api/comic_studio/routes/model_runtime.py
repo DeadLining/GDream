@@ -193,13 +193,24 @@ def model3d(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
+    scope = {
+        key: value
+        for key, value in {
+            "variant_id": payload.variant_id,
+            "state_id": payload.state_id,
+        }.items()
+        if value is not None
+    }
     return _create_media_job(
         request,
         background_tasks,
         Capability.MODEL_3D,
         payload.target_type,
         payload.target_id,
-        {"reference_asset_id": payload.reference_asset_id},
+        {
+            "reference_asset_id": payload.reference_asset_id,
+            **scope,
+        },
     )
 
 
@@ -218,10 +229,19 @@ def latest_model3d(
     request: Request,
     target_type: str = Query(pattern="^(character|library_asset)$"),
     target_id: str = Query(min_length=1, max_length=64),
+    variant_id: str | None = Query(default=None, max_length=36),
+    state_id: str | None = Query(default=None, max_length=36),
 ):
+    if variant_id is None and state_id is None:
+        return request.app.state.model_runtime.latest_model3d_job(
+            target_type,
+            target_id,
+        )
     return request.app.state.model_runtime.latest_model3d_job(
         target_type,
         target_id,
+        variant_id,
+        state_id,
     )
 
 

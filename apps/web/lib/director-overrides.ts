@@ -1,4 +1,24 @@
-import type {DirectorObject,DirectorObjectOverride,Transform} from './types';
+import type {DirectorAsset,DirectorObject,DirectorObjectOverride,Transform} from './types';
+
+export function applyDirectorAssetModels(objects:DirectorObject[],assets:DirectorAsset[]):DirectorObject[]{
+  const byCharacter=new Map<string,DirectorAsset>();
+  for(const asset of assets){
+    const characterId=typeof asset.metadata.character_id==='string'?asset.metadata.character_id:'';
+    if(characterId&&asset.source_type==='model'&&asset.media_url)byCharacter.set(characterId,asset);
+  }
+  return objects.map(object=>{
+    const characterId=typeof object.metadata.character_id==='string'?object.metadata.character_id:'';
+    const asset=characterId?byCharacter.get(characterId):undefined;
+    if(!asset)return object;
+    return {
+      ...object,
+      source_type:'model',
+      source_id:asset.source_id,
+      appearance:{...object.appearance,model_url:asset.media_url},
+      metadata:{...object.metadata,...asset.metadata,asset_id:asset.asset_id},
+    };
+  });
+}
 
 export function applyDirectorObjectOverrides(objects:DirectorObject[],overrides:Record<string,DirectorObjectOverride>):DirectorObject[]{
   return objects.map(object=>{
