@@ -5,6 +5,7 @@
 - Priority: Active
 - Current state: The director uses visible low-poly 3D proxies by default: standard humanoid, quadruped, bird, box, cylinder, and sphere templates. It supports persistent humanoid body proportions plus shot-scoped procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. Backgrounds may remain images.
 - Shot binding traceability: Each `AssetVariantUsage` persists its effective variant, state, 3D representation and version, linked director object, resolution status, and refresh timestamp. Mutation paths refresh these bindings when lineage, models, or director objects change.
+- Impact recovery: Variant, state, and 3D approval flows show affected episodes, scenes, and shots before mutation. The same report can start forced panel-only production runs for every affected episode, with partial failures reported explicitly.
 - Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
 - Remaining boundary: AI generation currently uses one selected reference image. Rig repair, multi-view reconstruction, decimation, texture optimization, and editable state-level material or geometry overrides remain open.
 
@@ -71,7 +72,7 @@ Acceptance criteria:
 - [x] Replace primitive character rendering in `DirectorObject` with cached GLTF/GLB loading.
 - [x] Support translate, rotate, and scale transform modes.
 - [ ] Add rename, visibility, duplicate, and delete operations.
-- [ ] Surface downstream impact when a representation or inherited variant changes.
+- [x] Surface downstream impact when a representation or inherited variant changes.
 - [x] Keep placeholder objects available for props and unfinished assets.
 
 Acceptance criteria:
@@ -79,6 +80,7 @@ Acceptance criteria:
 - A shot can reference an episode-specific character state.
 - The director resolves the effective inherited model deterministically.
 - Updating a model reports every affected scene and shot.
+- Affected panels can be regenerated in one action across all impacted episodes.
 - Existing director stages continue to load after the migration.
 
 ## Phase 3: Rig, Pose, and Camera Controls
