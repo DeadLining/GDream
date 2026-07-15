@@ -86,6 +86,35 @@ async def test_qwen_tts_sends_character_performance_contract():
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("speaker", "expected_speaker"),
+    [
+        ("成年男性低音", "dylan"),
+        ("成年女性轻声", "vivian"),
+        ("Dylan", "dylan"),
+    ],
+)
+async def test_qwen_tts_resolves_character_voice_descriptions_to_supported_speakers(
+    speaker,
+    expected_speaker,
+):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200, content=WAV_BYTES, headers={"content-type": "audio/wav"}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        await QwenTTSProvider(client=client).synthesize("测试", speaker)
+
+    assert captured["body"]["speaker"] == expected_speaker
+
+
+@pytest.mark.anyio
 async def test_qwen_tts_sends_configured_bearer_token_and_omits_empty_token():
     headers = []
 
