@@ -84,6 +84,16 @@ def test_draft_rejects_dialogue_with_unknown_character():
         ScriptImportDraft.model_validate(payload)
 
 
+def test_draft_rejects_character_state_with_unknown_character_key():
+    payload = valid_draft().model_dump()
+    payload["episodes"][0]["scenes"][0]["shots"][0]["character_state"] = {
+        "expression": "紧张",
+    }
+
+    with pytest.raises(ValidationError, match="unknown character_state draft_id"):
+        ScriptImportDraft.model_validate(payload)
+
+
 def test_parser_persists_preview_without_mutating_project_graph(db_session):
     project = models.Project(
         title="已有项目",
