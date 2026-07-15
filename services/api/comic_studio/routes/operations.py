@@ -83,7 +83,14 @@ def list_versions(episode_id: str, session: SessionDependency):
 
 @router.post("/api/episode-versions/{version_id}/restore", response_model=schemas.EpisodeVersionRead, status_code=status.HTTP_201_CREATED)
 def restore_version(version_id: str, session: SessionDependency):
-    version = OperationsService(session).restore_version(version_id)
+    try:
+        version = OperationsService(session).restore_version(version_id)
+    except OperationsValidationError as exc:
+        _unprocessable(exc)
+    except RuntimeError as exc:
+        if str(exc) == "episode_restore_active_production":
+            raise HTTPException(status_code=409, detail="Cannot restore an episode while production is active") from exc
+        raise
     if version is None: raise HTTPException(status_code=404, detail="Episode version not found")
     return version
 
@@ -107,6 +114,5 @@ def list_delivery_packages(episode_id: str, session: SessionDependency):
     packages = OperationsService(session).list_delivery_packages(episode_id)
     if packages is None: raise HTTPException(status_code=404, detail="Episode not found")
     return packages
-
 
 

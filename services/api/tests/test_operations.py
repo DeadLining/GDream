@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from comic_studio import models
 
 
@@ -203,6 +205,32 @@ def test_episode_version_restore_rejects_active_production(client):
 
     assert restored.status_code == 409
     assert restored.json()["detail"] == "Cannot restore an episode while production is active"
+
+
+def test_episode_version_restore_rolls_back_backup_and_business_changes_on_invalid_snapshot(client):
+    _project, episode, _scene_id, _shot_id = _project_episode_shot(client, "原子恢复作品")
+    version = client.post(
+        f"/api/episodes/{episode['id']}/versions",
+        json={"label": "损坏快照", "source": "manual", "author": "张伟"},
+    ).json()
+    with client.app.state.session_factory() as session:
+        current_episode = session.get(models.Episode, episode["id"])
+        current_episode.title = "必须保留的当前标题"
+        stored_version = session.get(models.EpisodeVersion, version["id"])
+        invalid_snapshot = deepcopy(stored_version.snapshot)
+        invalid_snapshot["episode"]["title"] = "不得落库的快照标题"
+        invalid_snapshot["scenes"][0].pop("position")
+        stored_version.snapshot = invalid_snapshot
+        session.commit()
+
+    restored = client.post(f"/api/episode-versions/{version['id']}/restore")
+
+    assert restored.status_code == 422
+    assert restored.json()["detail"] == "Invalid scene fields in version snapshot"
+    current = client.get(f"/api/episodes/{episode['id']}").json()
+    assert current["title"] == "必须保留的当前标题"
+    versions = client.get(f"/api/episodes/{episode['id']}/versions").json()
+    assert [item["version"] for item in versions] == [1]
 
 
 def test_delivery_packages_require_approved_release_candidate(client):
