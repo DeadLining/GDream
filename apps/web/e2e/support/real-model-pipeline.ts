@@ -20,6 +20,7 @@ type Shot = JsonObject & {
   image_prompt: string;
   active_panel_asset_id: string | null;
   active_video_asset_id: string | null;
+  dialogue: Array<JsonObject & {id: string; text: string; audio_asset_id: string | null; duration_seconds: number}>;
 };
 type Asset = JsonObject & {
   id: string;
@@ -51,7 +52,27 @@ export type ThemeToVideoResult = {
   script: {characters: number; episodes: number; bytes: number};
   panel: Asset & {bytes: number};
   video: Asset & {bytes: number};
+  shots: Array<{shot_id: string; panel: Asset & {bytes: number}; video: Asset & {bytes: number}}>;
+  speech: Array<{dialogue_id: string; asset: Asset & {bytes: number}}>;
+  render: {
+    path: string;
+    media_url: string;
+    bytes: number;
+    review: JsonObject & {overall_pass: boolean};
+  };
+  release: {
+    candidate: JsonObject & {id: string; status: string};
+    gate: JsonObject & {ready: boolean};
+    publication: JsonObject & {id: string; status: string};
+  };
   timings_ms: Record<string, number>;
+};
+
+type FullEpisodeClosure = {
+  episode: {scenes: Array<{shots: Array<{id: string; active_video_asset_id: string | null}>}>};
+  shots: Array<{shot_id: string; panel: {bytes: number}; video: {bytes: number}}>;
+  render: {bytes: number; review: {overall_pass: boolean}};
+  release: {candidate: {id: string}; gate: {ready: boolean}; publication: {id: string; status: string}};
 };
 
 const wait = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
@@ -90,6 +111,24 @@ export function hasImageSignature(content: Buffer): boolean {
 
 export function hasMp4Signature(content: Buffer): boolean {
   return content.length >= 12 && content.subarray(0, 32).includes(Buffer.from('ftyp'));
+}
+
+export function assertFullEpisodeClosure(result: FullEpisodeClosure): void {
+  const episodeShots = result.episode.scenes.flatMap(scene => scene.shots);
+  const producedShotIds = new Set(result.shots.map(item => item.shot_id));
+  if (!episodeShots.length || episodeShots.some(shot => !shot.active_video_asset_id || !producedShotIds.has(shot.id))) {
+    throw new Error('Not every episode shot has a generated video');
+  }
+  if (result.shots.some(item => item.panel.bytes < 10_000 || item.video.bytes < 100_000)) {
+    throw new Error('One or more shot media assets are invalid');
+  }
+  if (result.render.bytes < 100_000) throw new Error('Final episode render is invalid');
+  if (!result.render.review.overall_pass) throw new Error('Render quality review did not pass');
+  if (!result.release.candidate.id) throw new Error('Release candidate was not persisted');
+  if (!result.release.gate.ready) throw new Error('Release gate did not pass');
+  if (!result.release.publication.id || result.release.publication.status !== 'published') {
+    throw new Error('Publication record was not persisted');
+  }
 }
 
 async function pollJob(
