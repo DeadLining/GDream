@@ -41,4 +41,11 @@ describe('episode version diff',()=>{
   it('returns an empty diff for equivalent snapshots',()=>{
     expect(diffEpisodeSnapshots(before,structuredClone(before))).toEqual({summary:{total:0,added:0,removed:0,changed:0,moved:0},changes:[]});
   });
+
+  it('treats omitted optional references and explicit null as equivalent',()=>{
+    const legacy={episode:{id:'e1',project_id:'p1',title:'标题',premise:'',target_duration_seconds:60,status:'draft'},scenes:[{id:'s1',position:1,location:'巷道',time_of_day:'night',summary:'',continuity_state:{},estimated_duration_seconds:10,shots:[{id:'shot-1',position:1,shot_type:'wide',duration_seconds:3,composition:'',camera_motion:'static',character_state:{},image_prompt:'',negative_prompt:'',dialogue:[]}]}]};
+    const current=structuredClone(legacy) as typeof legacy&{scenes:Array<{shots:Array<Record<string,unknown>>}>};
+    Object.assign(current.scenes[0].shots[0],{active_panel_asset_id:null,previous_shot_tail_asset_id:null,active_video_asset_id:null});
+    expect(diffEpisodeSnapshots(legacy,current).summary.total).toBe(0);
+  });
 });
