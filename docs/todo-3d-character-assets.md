@@ -3,7 +3,7 @@
 ## Status
 
 - Priority: Active
-- Current state: The director loads validated GLB character and prop assets, resolves master, episode-variant, and shot-state character models deterministically, persists transforms and cameras, and falls back to 3D geometry placeholders when a model is missing. Backgrounds may remain images.
+- Current state: The director uses a visible standard-humanoid skeleton and low-poly body proxy by default, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. Backgrounds may remain images.
 - Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
 - Remaining boundary: AI generation currently uses one selected reference image. Rig repair, multi-view reconstruction, decimation, texture optimization, and editable state-level material or geometry overrides remain open.
 
@@ -65,7 +65,7 @@ Acceptance criteria:
 
 - [x] Allow episode variants to inherit or replace the master representation.
 - [ ] Allow states to override materials, accessories, injury markers, visibility, and proportions where supported.
-- [ ] Extend shot usages to record the effective character variant, state, representation version, and director object.
+- [x] Extend shot usages to record the effective character variant, state, representation version, and director object.
 - [ ] Add an asset picker when inserting a character into a director stage.
 - [x] Replace primitive character rendering in `DirectorObject` with cached GLTF/GLB loading.
 - [x] Support translate, rotate, and scale transform modes.
@@ -83,7 +83,7 @@ Acceptance criteria:
 ## Phase 3: Rig, Pose, and Camera Controls
 
 - [ ] Detect and describe skeletons and animation clips during upload processing.
-- [ ] Define a normalized humanoid bone mapping for supported models.
+- [x] Define a normalized humanoid bone mapping for supported models.
 - [x] Provide a reusable pose library.
 - [ ] Add an animation clip picker.
 - [ ] Support pose application, playback, pause, scrub, and reset.
@@ -157,7 +157,7 @@ Frontend:
 
 ## Test Requirements
 
-- [ ] Database migration and relationship tests.
+- [x] Database migration and relationship tests.
 - [x] Upload validation and malicious-file tests.
 - [x] Asset inheritance and effective-representation resolution tests.
 - [ ] Reference impact, recycle-bin restore, and permanent-delete protection tests.
@@ -174,6 +174,7 @@ Frontend:
 - [x] GLB only for the first release; VRM remains deferred.
 - [x] Hosted fal.ai TripoSR generation plus manual upload for the first release.
 - [x] Enforce 50 MiB, 2,000,000 triangles, 1,000 nodes, 200 meshes, and 200 materials; texture-specific limits remain open.
-- [ ] Standard humanoid skeleton definition and supported non-human character policy.
+- [x] Standard humanoid skeleton definition and reusable pose mapping.
+- [ ] Supported non-human character policy and quadruped/bird rig templates.
 - [ ] Whether episode variants replace complete models or primarily apply materials/accessories.
 - [x] Treat current 3D output as composition and camera guidance, not final rendered footage.
