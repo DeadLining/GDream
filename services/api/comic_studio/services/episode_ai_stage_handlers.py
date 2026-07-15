@@ -23,6 +23,8 @@ class EpisodeAIStageHandlers:
             "references": self.references,
             "panels": self.panels,
             "panel_review": self.panel_review,
+            "speech": self.speech,
+            "videos": self.videos,
         }
 
     def _episode_targets(self, episode_id: str):
@@ -43,6 +45,25 @@ class EpisodeAIStageHandlers:
             )
             return [item.id for item in characters], [item.id for item in shots]
 
+    def _dialogue_ids(self, episode_id: str) -> list[str]:
+        with self.session_factory() as session:
+            episode = EpisodeRepository(session).get(episode_id)
+            if episode is None:
+                raise KeyError(episode_id)
+            return [
+                line.id
+                for scene in episode.scenes
+                for shot in scene.shots
+                for line in shot.dialogue
+                if line.text.strip()
+            ]
+
+    def _media_path(self, asset: models.Asset, label: str) -> Path:
+        path = (self.data_root / asset.local_path).resolve()
+        if self.data_root not in path.parents or not path.is_file():
+            raise EpisodeAIStageNeedsReview(f"{label} media is missing: {asset.id}")
+        return path
+
     def _image_asset(self, asset_id: str, label: str) -> models.Asset:
         with self.session_factory() as session:
             asset = session.get(models.Asset, asset_id)
@@ -52,9 +73,7 @@ class EpisodeAIStageHandlers:
                 raise EpisodeAIStageNeedsReview(
                     f"{label} generation metadata is incomplete: {asset_id}"
                 )
-            path = (self.data_root / asset.local_path).resolve()
-            if self.data_root not in path.parents or not path.is_file():
-                raise EpisodeAIStageNeedsReview(f"{label} media is missing: {asset_id}")
+            path = self._media_path(asset, label)
             try:
                 with Image.open(path) as image:
                     image.verify()
@@ -154,3 +173,95 @@ class EpisodeAIStageHandlers:
                 approved.append(shot_id)
             session.commit()
         return {"approved_shot_ids": approved}
+
+    def _speech_asset(self, dialogue_id: str, asset_id: str) -> None:
+        with self.session_factory() as session:
+            line = session.get(models.DialogueLine, dialogue_id)
+            asset = session.get(models.Asset, asset_id)
+            if line is None or asset is None or line.audio_asset_id != asset.id:
+                raise EpisodeAIStageNeedsReview(
+                    f"Dialogue speech is not activated: {dialogue_id}"
+                )
+            if (
+                asset.kind != f"dialogue:{dialogue_id}"
+                or not asset.provider
+                or not asset.model
+                or not asset.request_metadata.get("text")
+                or not asset.duration_seconds
+                or asset.duration_seconds <= 0
+                or line.duration_seconds <= 0
+            ):
+                raise EpisodeAIStageNeedsReview(
+                    f"Dialogue speech metadata is invalid: {dialogue_id}"
+                )
+            path = self._media_path(asset, "Dialogue speech")
+            if path.read_bytes()[:4] != b"RIFF":
+                raise EpisodeAIStageNeedsReview(
+                    f"Dialogue speech media is invalid: {dialogue_id}"
+                )
+
+    async def speech(self, context: EpisodeAIStageContext) -> dict:
+        dialogue_ids = self._dialogue_ids(context.episode_id)
+        asset_ids = []
+        for dialogue_id in dialogue_ids:
+            with self.session_factory() as session:
+                line = session.get(models.DialogueLine, dialogue_id)
+                if line.character_id is None:
+                    raise EpisodeAIStageNeedsReview(
+                        f"Dialogue has no character: {dialogue_id}"
+                    )
+                asset_id = (
+                    line.audio_asset_id
+                    if line.audio_asset_id and line.duration_seconds > 0
+                    else None
+                )
+            if asset_id is None:
+                asset = await self.model_runtime.execute_speech(dialogue_id)
+                asset_id = asset.id
+            self._speech_asset(dialogue_id, asset_id)
+            asset_ids.append(asset_id)
+        return {"dialogue_ids": dialogue_ids, "asset_ids": asset_ids}
+
+    def _video_asset(self, shot_id: str, asset_id: str) -> None:
+        with self.session_factory() as session:
+            shot = session.get(models.Shot, shot_id)
+            asset = session.get(models.Asset, asset_id)
+            if shot is None or asset is None or shot.active_video_asset_id != asset.id:
+                raise EpisodeAIStageNeedsReview(
+                    f"Shot video is not activated: {shot_id}"
+                )
+            if (
+                asset.kind != f"video:{shot_id}"
+                or asset.parent_asset_id != shot.active_panel_asset_id
+                or not asset.provider
+                or not asset.model
+                or not asset.request_metadata.get("prompt")
+                or not asset.duration_seconds
+                or asset.duration_seconds <= 0
+            ):
+                raise EpisodeAIStageNeedsReview(
+                    f"Shot video metadata is invalid: {shot_id}"
+                )
+            path = self._media_path(asset, "Shot video")
+            if b"ftyp" not in path.read_bytes()[:32]:
+                raise EpisodeAIStageNeedsReview(
+                    f"Shot video media is invalid: {shot_id}"
+                )
+
+    async def videos(self, context: EpisodeAIStageContext) -> dict:
+        _character_ids, shot_ids = self._episode_targets(context.episode_id)
+        asset_ids = []
+        for shot_id in shot_ids:
+            with self.session_factory() as session:
+                shot = session.get(models.Shot, shot_id)
+                if shot.review_status != "approved" or not shot.active_panel_asset_id:
+                    raise EpisodeAIStageNeedsReview(
+                        f"Shot is not ready for video: {shot_id}"
+                    )
+                asset_id = shot.active_video_asset_id
+            if asset_id is None:
+                asset = await self.model_runtime.execute_video(shot_id, True)
+                asset_id = asset.id
+            self._video_asset(shot_id, asset_id)
+            asset_ids.append(asset_id)
+        return {"shot_ids": shot_ids, "asset_ids": asset_ids}
