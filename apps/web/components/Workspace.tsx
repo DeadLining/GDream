@@ -41,6 +41,7 @@ export function Workspace() {
   const [storylines,setStorylines]=useState<Storyline[]>([]);
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [readiness, setReadiness] = useState<ProductionReadiness | null>(null);
+  const [readinessByEpisode,setReadinessByEpisode]=useState<Record<string,ProductionReadiness>>({});
   const [readinessError, setReadinessError] = useState('');
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [productionReviewShotId,setProductionReviewShotId]=useState<string|null>(null);
@@ -83,18 +84,19 @@ export function Workspace() {
     return () => query.removeEventListener?.('change', update);
   }, []);
 
-  const loadEpisodeForRequest = async (id: string, request: number, preserveSelection = false) => {
+  const loadEpisodeForRequest = async (id: string, request: number, preserveSelection = false, readinessRequest?:Promise<ProductionReadiness>) => {
     const loaded = await getEpisode(id);
     let loadedReadiness: ProductionReadiness | null = null;
     let readinessFailure = '';
     try {
-      loadedReadiness = await getProductionReadiness(id);
+      loadedReadiness = await (readinessRequest??getProductionReadiness(id));
     } catch {
       readinessFailure = '渲染准备状态暂时无法获取。';
     }
     if (navigationRequest.current !== request) return;
     setEpisode(loaded);
     setReadiness(current => loadedReadiness ?? (current?.episode_id === id ? current : null));
+    if(loadedReadiness)setReadinessByEpisode(current=>({...current,[id]:loadedReadiness}));
     setReadinessError(readinessFailure);
     if(!preserveSelection){setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);}
     const loadedShots = loaded.scenes.flatMap(scene => scene.shots);
@@ -109,17 +111,26 @@ export function Workspace() {
   const loadProjectForRequest = async (id: string, request: number) => {
     const [loaded,loadedVolumes,loadedStorylines] = await Promise.all([getProject(id),listVolumes(id),listStorylines(id)]);
     if (navigationRequest.current !== request) return;
+    const readinessRequests=loaded.episodes.map(item=>[item.id,getProductionReadiness(item.id)] as const);
+    const projectReadinessRequest=Promise.allSettled(readinessRequests.map(([,pending])=>pending));
     setProject(loaded);
     setVolumes(loadedVolumes);
     setStorylines(loadedStorylines);
+    setReadinessByEpisode({});
     localStorage.setItem('ai-comic-project', id);
     const preferred = localStorage.getItem('ai-comic-episode');
     const selected = loaded.episodes.find(item => item.id === preferred) ?? loaded.episodes[0];
-    if (selected) await loadEpisodeForRequest(selected.id, request);
+    const selectedReadinessRequest=selected?readinessRequests.find(([episodeId])=>episodeId===selected.id)?.[1]:undefined;
+    const episodeRequest=selected?loadEpisodeForRequest(selected.id,request,false,selectedReadinessRequest):Promise.resolve();
+    const settledReadiness=await projectReadinessRequest;
+    if(navigationRequest.current!==request)return;
+    setReadinessByEpisode(Object.fromEntries(settledReadiness.flatMap((result,index)=>result.status==='fulfilled'?[[readinessRequests[index][0],result.value]]:[])));
+    if (selected) await episodeRequest;
     else {
       if (navigationRequest.current !== request) return;
       setEpisode(null);
       setReadiness(null);
+      setReadinessByEpisode({});
       setReadinessError('');
       setSelectedShotId(null);
     }
@@ -144,6 +155,7 @@ export function Workspace() {
       setStorylines([]);
       setEpisode(null);
       setReadiness(null);
+      setReadinessByEpisode({});
       setReadinessError('');
       setWorkArea('overview');
     }
@@ -243,7 +255,7 @@ export function Workspace() {
   const productionDialogueShot=productionDialogueShotId?shots.find(shot=>shot.id===productionDialogueShotId)??null:null;
   const productionMediaShot=productionMedia?shots.find(shot=>shot.id===productionMedia.shotId)??null:null;
   let center;
-  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
+  if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setGlobalSection('script'); changeWorkArea('import');}} onOpenAssets={() => {setGlobalSection('assets'); changeWorkArea('characters');}} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
   else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={()=>reloadProjects(project.id)}/>;
   else if (workArea === 'characters' && project) center = <CharacterWorkspace projectId={project.id} characters={project.characters} episodes={project.episodes} onCharactersChanged={()=>loadProject(project.id)}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;

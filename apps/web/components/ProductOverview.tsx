@@ -6,10 +6,11 @@ import type {EpisodeDetail, EpisodeSummary, ProductionReadiness, ProjectDetail, 
 
 const statusLabel = (status: string) => ({planned: '已规划', draft: '草稿', completed: '已完成'}[status] ?? status);
 
-export function ProductOverview({project, episode, readiness, volumes, storylines, onOpenEpisode, onOpenScript, onOpenAssets, onCreateVolume, onUpdateVolume, onDeleteVolume, onMoveEpisode}: {
+export function ProductOverview({project, episode, readiness, readinessByEpisode, volumes, storylines, onOpenEpisode, onOpenScript, onOpenAssets, onCreateVolume, onUpdateVolume, onDeleteVolume, onMoveEpisode}: {
   project: ProjectDetail;
   episode: EpisodeDetail | null;
   readiness: ProductionReadiness | null;
+  readinessByEpisode?: Record<string, ProductionReadiness>;
   volumes: Volume[];
   storylines: Storyline[];
   onOpenEpisode: (episodeId: string) => void;
@@ -38,10 +39,19 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
   const orderedEpisodes = [...assignedEpisodes, ...unassignedEpisodes];
   const episodeNumbers = new Map(project.episodes.map((item,index)=>[item.id,index+1]));
   const primaryEpisodeId = episode?.id ?? orderedEpisodes[0]?.id ?? null;
-  const currentProgress = readiness && readiness.totals.shots
-    ? Math.round((readiness.ready_counts.panels + readiness.ready_counts.approved) / (readiness.totals.shots * 2) * 100)
-    : 0;
-  const blockerCount = readiness ? readiness.blockers.missing_panels.length + readiness.blockers.unapproved_shots.length + readiness.blockers.missing_speech.length : 0;
+  const effectiveReadinessByEpisode = readinessByEpisode ?? (readiness ? {[readiness.episode_id]: readiness} : {});
+  const projectReadiness = project.episodes.map(item => effectiveReadinessByEpisode[item.id]).filter((item): item is ProductionReadiness => Boolean(item));
+  const projectTotals = projectReadiness.reduce((totals,item)=>({
+    shots:totals.shots+item.totals.shots,
+    panels:totals.panels+item.ready_counts.panels,
+    approved:totals.approved+item.ready_counts.approved,
+  }),{shots:0,panels:0,approved:0});
+  const percentage=(readyCount:number,total:number)=>total?Math.round(readyCount/total*100):projectReadiness.length?0:null;
+  const blockerCount=(item:ProductionReadiness)=>item.blockers.missing_panels.length+item.blockers.unapproved_shots.length+item.blockers.missing_speech.length+(item.blockers.missing_videos?.length??0);
+  const projectBlockerCount=projectReadiness.reduce((total,item)=>total+blockerCount(item),0);
+  const storyboardProgress=percentage(projectTotals.panels,projectTotals.shots);
+  const generationProgress=percentage(projectTotals.panels+projectTotals.approved,projectTotals.shots*2);
+  const reviewProgress=percentage(projectTotals.approved,projectTotals.shots);
   const closeVolumeForm=()=>{setVolumeForm(false);setEditingVolumeId(null);setVolumeError('');};
   const openCreateVolume=()=>{setEditingVolumeId(null);setVolumeTitle('');setVolumeSummary('');setVolumePosition(String(Math.max(0,...volumes.map(item=>item.position))+1));setVolumeError('');setVolumeForm(true);};
   const openEditVolume=(volume:Volume)=>{setEditingVolumeId(volume.id);setVolumeTitle(volume.title);setVolumeSummary(volume.summary);setVolumePosition(String(volume.position));setVolumeError('');setVolumeForm(true);};
@@ -52,10 +62,12 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
     <div role="row" className="episode-table-head"><span>集数</span><span>剧集</span><span>阶段</span><span>进度</span><span>所属卷</span><span>风险</span><span/></div>
     {items.length?items.map(item=>{
       const active=item.id===episode?.id;
-      const progress=active?currentProgress:item.status==='completed'?100:item.status==='planned'?18:0;
+      const itemReadiness=effectiveReadinessByEpisode[item.id];
+      const progress=itemReadiness&&itemReadiness.totals.shots?Math.round((itemReadiness.ready_counts.panels+itemReadiness.ready_counts.approved)/(itemReadiness.totals.shots*2)*100):itemReadiness?0:null;
+      const itemBlockerCount=itemReadiness?blockerCount(itemReadiness):null;
       const number=episodeNumbers.get(item.id)??project.episodes.findIndex(candidate=>candidate.id===item.id)+1;
       return <div role="row" className={active?'active':''} key={item.id}>
-        <span>第 {String(number).padStart(2,'0')} 集</span><span><strong>{item.title}</strong><small>{item.premise}</small></span><span>{statusLabel(item.status)}</span><span><progress max="100" value={progress}/><small>{progress}%</small></span><span>{onMoveEpisode?<select aria-label={`剧集 ${item.title} 所属卷`} value={item.volume_id??''} disabled={episodeBusyId===item.id} onChange={event=>void moveEpisode(item.id,event.target.value||null)}><option value="">未归卷</option>{volumes.map(volume=><option key={volume.id} value={volume.id}>{volume.title}</option>)}</select>:(item.volume_id?'已归卷':'未归卷')}</span><span>{active&&blockerCount?<><AlertTriangle size={13}/>{blockerCount} 项</>:'正常'}</span><button type="button" aria-label={`进入第 ${String(number).padStart(2,'0')} 集制作`} onClick={()=>onOpenEpisode(item.id)}><ArrowRight size={15}/></button>
+        <span>第 {String(number).padStart(2,'0')} 集</span><span><strong>{item.title}</strong><small>{item.premise}</small></span><span>{statusLabel(item.status)}</span><span>{progress===null?<small>--</small>:<><progress max="100" value={progress}/><small>{progress}%</small></>}</span><span>{onMoveEpisode?<select aria-label={`剧集 ${item.title} 所属卷`} value={item.volume_id??''} disabled={episodeBusyId===item.id} onChange={event=>void moveEpisode(item.id,event.target.value||null)}><option value="">未归卷</option>{volumes.map(volume=><option key={volume.id} value={volume.id}>{volume.title}</option>)}</select>:(item.volume_id?'已归卷':'未归卷')}</span><span>{itemBlockerCount===null?'待获取':itemBlockerCount?<><AlertTriangle size={13}/>{itemBlockerCount} 项</>:'正常'}</span><button type="button" aria-label={`进入第 ${String(number).padStart(2,'0')} 集制作`} onClick={()=>onOpenEpisode(item.id)}><ArrowRight size={15}/></button>
       </div>;
     }):<p className="volume-empty">暂无剧集</p>}
   </div>;
@@ -69,7 +81,7 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
     </header>
 
     <section className="project-stage-rail" aria-label="作品制作阶段">
-      {[['剧本锁定', 100], ['资产准备', project.characters.length ? 70 : 0], ['分镜', readiness?.totals.shots ? Math.round(readiness.ready_counts.panels / readiness.totals.shots * 100) : 0], ['生成', currentProgress], ['审核', readiness?.totals.shots ? Math.round(readiness.ready_counts.approved / readiness.totals.shots * 100) : 0]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value}%</strong><progress max="100" value={Number(value)}/></div>)}
+      {[['剧本锁定', 100], ['资产准备', project.characters.length ? 70 : 0], ['分镜', storyboardProgress], ['生成', generationProgress], ['审核', reviewProgress]].map(([label, value]) => <div key={String(label)}><span>{label}</span><strong>{value===null?'--':`${value}%`}</strong><progress max="100" value={value===null?0:Number(value)}/></div>)}
     </section>
 
     <div className="product-overview-grid">
@@ -86,7 +98,7 @@ export function ProductOverview({project, episode, readiness, volumes, storyline
       <aside className="project-side-summary">
         <section><header><h2>故事线</h2><span>跨集追踪</span></header>{storylines.length ? storylines.slice(0,3).map(line => <button key={line.id}><i style={{backgroundColor:line.color}}/><span><strong>{line.title}</strong><small>{line.events.length} 个事件 · {line.description || '持续追踪'}</small></span></button>) : <p className="project-side-empty">尚未创建故事线</p>}</section>
         <section><header><h2>快捷入口</h2></header><button onClick={onOpenScript}><BookOpenText size={16}/><span><strong>剧本与故事线</strong><small>继续编辑作品结构</small></span></button><button onClick={onOpenAssets}><Library size={16}/><span><strong>作品资产库</strong><small>角色、场景与变体</small></span></button></section>
-        <section className="project-deadline"><Clock3 size={16}/><div><span>当前集目标</span><strong>{episode?.target_duration_seconds ?? 0} 秒</strong></div><div><span>制作阻塞</span><strong>{blockerCount}</strong></div></section>
+        <section className="project-deadline"><Clock3 size={16}/><div><span>当前集目标</span><strong>{episode?.target_duration_seconds ?? 0} 秒</strong></div><div><span>制作阻塞</span><strong>{projectReadiness.length?projectBlockerCount:'--'}</strong></div></section>
       </aside>
     </div>
   </main>;
