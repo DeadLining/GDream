@@ -2,6 +2,7 @@ from pathlib import Path
 
 from comic_studio import models
 from comic_studio.services.rendering import RenderingService
+from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
 def seed_episode(session, data_root: Path):
@@ -46,6 +47,13 @@ def seed_episode(session, data_root: Path):
     session.add_all([shot, panel])
     session.flush()
     shot.active_panel_asset_id = panel.id
+    compiled = ShotInputCompiler(session).compile(
+        shot.id, usage_kinds={"panel", "reference"}
+    )
+    panel.request_metadata = {
+        "input_snapshot": compiled.snapshot,
+        "input_snapshot_hash": compiled.snapshot_hash,
+    }
     session.commit()
     panel_path = data_root / panel.local_path
     panel_path.parent.mkdir(parents=True)
@@ -78,6 +86,20 @@ def test_render_manifest_rejects_unapproved_shot(db_session, tmp_path):
         assert "not approved" in str(exc)
     else:
         raise AssertionError("Expected unapproved shot to block rendering")
+
+
+def test_render_manifest_rejects_stale_active_panel(db_session, tmp_path):
+    episode = seed_episode(db_session, tmp_path)
+    episode.scenes[0].shots[0].image_prompt = "changed after panel generation"
+    db_session.commit()
+
+    service = RenderingService(db_session, tmp_path, tmp_path)
+    try:
+        service.build_manifest(episode.id)
+    except ValueError as exc:
+        assert "panel is stale" in str(exc)
+    else:
+        raise AssertionError("Expected stale panel to block rendering")
 
 
 def test_render_manifest_includes_active_video_and_keeps_panel_fallback(db_session,tmp_path):

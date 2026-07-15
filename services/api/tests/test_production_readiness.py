@@ -1,4 +1,5 @@
 from comic_studio import models
+from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
 def seed_graph(client):
@@ -10,6 +11,16 @@ def seed_graph(client):
         line = models.DialogueLine(shot=shot, position=1, text="别回头", subtitle_text="别回头")
         session.add(line); session.commit()
         return episode.id, shot.id, line.id, project.id
+
+
+def stamp_panel_provenance(session, shot, panel):
+    compiled = ShotInputCompiler(session).compile(
+        shot.id, usage_kinds={"panel", "reference"}
+    )
+    panel.request_metadata = {
+        "input_snapshot": compiled.snapshot,
+        "input_snapshot_hash": compiled.snapshot_hash,
+    }
 
 
 def test_readiness_reports_exact_panel_approval_and_speech_blockers(client):
@@ -36,11 +47,33 @@ def test_readiness_becomes_true_when_required_assets_are_ready(client):
         shot = session.get(models.Shot, shot_id); line = session.get(models.DialogueLine, line_id)
         shot.active_panel_asset_id = panel.id; shot.review_status = "approved"
         line.audio_asset_id = audio.id; line.duration_seconds = 1.0
+        stamp_panel_provenance(session, shot, panel)
         session.commit()
 
     report = client.get(f"/api/episodes/{episode_id}/production-readiness").json()
 
     assert report["ready"] is True
-    assert report["blockers"] == {"missing_panels": [], "unapproved_shots": [], "missing_speech": [], "missing_videos": [shot_id]}
+    assert report["blockers"] == {"missing_panels": [], "stale_panels": [], "unapproved_shots": [], "missing_speech": [], "missing_videos": [shot_id]}
     assert report["ready"] is True
     assert report["video_ready"] is False
+
+
+def test_readiness_reports_stale_active_panels(client):
+    episode_id, shot_id, line_id, project_id = seed_graph(client)
+    with client.app.state.session_factory() as session:
+        panel = models.Asset(project_id=project_id, kind=f"panel:{shot_id}", local_path="panel.png", media_type="image/png", provider="test", model="test", checksum="0"*64)
+        audio = models.Asset(project_id=project_id, kind=f"dialogue:{line_id}", local_path="line.wav", media_type="audio/wav", provider="test", model="test", checksum="1"*64, duration_seconds=1.0)
+        session.add_all([panel, audio]); session.flush()
+        shot = session.get(models.Shot, shot_id); line = session.get(models.DialogueLine, line_id)
+        shot.active_panel_asset_id = panel.id; shot.review_status = "approved"
+        line.audio_asset_id = audio.id; line.duration_seconds = 1.0
+        stamp_panel_provenance(session, shot, panel)
+        shot.image_prompt = "changed after generation"
+        session.commit()
+
+    report = client.get(f"/api/episodes/{episode_id}/production-readiness").json()
+
+    assert report["ready"] is False
+    assert report["blockers"]["missing_panels"] == []
+    assert report["blockers"]["stale_panels"] == [shot_id]
+    assert report["ready_counts"]["panels"] == 0

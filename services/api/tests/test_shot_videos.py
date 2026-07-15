@@ -36,6 +36,9 @@ class Provider:
 
 def _eligible(session, tmp_path):
     project, shot = seed_shot(session)
+    compiled = ShotInputCompiler(session).compile(
+        shot.id, usage_kinds={"panel", "reference"}
+    )
     panel = AssetStore(session, tmp_path).register_panel(
         project_id=project.id,
         shot_id=shot.id,
@@ -43,7 +46,10 @@ def _eligible(session, tmp_path):
         media_type="image/png",
         provider="test",
         model="image",
-        request_metadata={},
+        request_metadata={
+            "input_snapshot": compiled.snapshot,
+            "input_snapshot_hash": compiled.snapshot_hash,
+        },
         activate=True,
     )
     shot.review_status = "approved"
@@ -72,6 +78,15 @@ def test_requires_approved_shot_and_active_panel(db_session, tmp_path):
     shot.review_status = "draft"
     db_session.commit()
     with pytest.raises(ValueError, match="shot_not_approved"):
+        asyncio.run(VideoService(db_session, tmp_path, Provider()).generate(shot.id))
+
+
+def test_rejects_stale_active_panel(db_session, tmp_path):
+    _, shot, _ = _eligible(db_session, tmp_path)
+    shot.image_prompt = "changed after panel generation"
+    db_session.commit()
+
+    with pytest.raises(ValueError, match="active_panel_stale"):
         asyncio.run(VideoService(db_session, tmp_path, Provider()).generate(shot.id))
 
 
