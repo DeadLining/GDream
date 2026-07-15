@@ -21,10 +21,11 @@ function Placeholder({object}:{object:DirectorObjectDto}){
   return <mesh castShadow receiveShadow position={[0,0.5,0]}><boxGeometry args={[1,1,1]}/><meshStandardMaterial color={color}/></mesh>;
 }
 
-export function DirectorObject({object,selected,editable,transformMode,onTransform}:{object:DirectorObjectDto;selected:boolean;editable:boolean;transformMode:DirectorTransformMode;onTransform:(transform:Transform)=>void}){
+export function DirectorObject({object,selected,editable,transformMode,snapEnabled,onSelect,onTransform}:{object:DirectorObjectDto;selected:boolean;editable:boolean;transformMode:DirectorTransformMode;snapEnabled:boolean;onSelect:()=>void;onTransform:(transform:Transform)=>void}){
   const ref=useRef<Group>(null);
+  const pendingTransform=useRef<Transform|null>(null);
   if(!object.visible)return null;
-  const group=<group ref={ref} name={`director-object-${object.id}`} userData={{kind:object.kind,sourceType:object.source_type}} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale}><Placeholder object={object}/></group>;
+  const group=<group ref={ref} name={`director-object-${object.id}`} userData={{kind:object.kind,sourceType:object.source_type}} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale} onClick={event=>{event.stopPropagation();onSelect();}}><Placeholder object={object}/></group>;
   if(!selected||!editable)return group;
-  return <TransformControls mode={transformMode} onObjectChange={()=>{const current=ref.current;if(!current)return;onTransform({position:[current.position.x,current.position.y,current.position.z],rotation:[current.rotation.x,current.rotation.y,current.rotation.z],scale:[current.scale.x,current.scale.y,current.scale.z]});}}>{group}</TransformControls>;
+  return <TransformControls mode={transformMode} translationSnap={snapEnabled ? .25 : null} rotationSnap={snapEnabled ? Math.PI/12 : null} scaleSnap={snapEnabled ? .1 : null} onMouseDown={()=>{pendingTransform.current=null;}} onObjectChange={()=>{const current=ref.current;if(!current)return;pendingTransform.current={position:[current.position.x,current.position.y,current.position.z],rotation:[current.rotation.x,current.rotation.y,current.rotation.z],scale:[current.scale.x,current.scale.y,current.scale.z]};}} onMouseUp={()=>{const transform=pendingTransform.current;pendingTransform.current=null;if(transform)onTransform(transform);}}>{group}</TransformControls>;
 }

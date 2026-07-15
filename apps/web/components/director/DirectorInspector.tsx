@@ -1,8 +1,9 @@
 'use client';
 
-import {AlignCenter,ArrowDownToLine,Move3D,Rotate3D,RotateCcw,Scaling,Trash2} from 'lucide-react';
+import {useEffect,useState} from 'react';
+import {AlignCenter,ArrowDownToLine,Magnet,Move3D,Rotate3D,RotateCcw,Scaling,Trash2} from 'lucide-react';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
-import type {DirectorObject,DirectorPosePreset,DirectorTransformMode,ShotCamera} from '../../lib/types';
+import type {DirectorObject,DirectorPosePreset,DirectorTransformMode,ShotCamera,Transform,Vector3} from '../../lib/types';
 
 const transformTools=[
   {mode:'translate' as const,label:'平移对象',icon:Move3D},
@@ -10,15 +11,49 @@ const transformTools=[
   {mode:'scale' as const,label:'缩放对象',icon:Scaling},
 ];
 
+const axes=['X','Y','Z'] as const;
+type TransformDraft={position:[string,string,string];rotation:[string,string,string];scale:[string,string,string]};
+
+const formatNumber=(value:number,precision=4)=>String(Number(value.toFixed(precision)));
+const createDraft=(transform:Transform):TransformDraft=>({
+  position:transform.position.map(value=>formatNumber(value)) as TransformDraft['position'],
+  rotation:transform.rotation.map(value=>formatNumber(value*180/Math.PI,2)) as TransformDraft['rotation'],
+  scale:transform.scale.map(value=>formatNumber(value)) as TransformDraft['scale'],
+});
+
+function TransformEditor({transform,onCommit}:{transform:Transform;onCommit:(transform:Transform)=>void}){
+  const [draft,setDraft]=useState<TransformDraft>(()=>createDraft(transform));
+  useEffect(()=>setDraft(createDraft(transform)),[transform]);
+  const update=(kind:keyof TransformDraft,index:number,value:string)=>setDraft(current=>({...current,[kind]:current[kind].map((item,itemIndex)=>itemIndex===index?value:item) as TransformDraft[typeof kind]}));
+  const commit=(kind:keyof TransformDraft,index:number)=>{
+    const parsed=Number(draft[kind][index]);
+    if(!Number.isFinite(parsed)||(kind==='scale'&&parsed<=0)){setDraft(createDraft(transform));return;}
+    const value=kind==='rotation'?parsed*Math.PI/180:parsed;
+    const vector=transform[kind].map((item,itemIndex)=>itemIndex===index?value:item) as Vector3;
+    const next:Transform={...transform,[kind]:vector};
+    if(JSON.stringify(next)!==JSON.stringify(transform))onCommit(next);
+  };
+  const rows:[keyof TransformDraft,string,number][]=[['position','位置',.01],['rotation','旋转',1],['scale','缩放',.01]];
+  return <div className="director-transform-editor">
+    {rows.map(([kind,label,step])=><div className="director-transform-row" key={kind}>
+      <span>{label}</span>
+      {axes.map((axis,index)=><label key={axis}><small>{axis}</small><input type="number" aria-label={`${label} ${axis}`} min={kind==='scale'?0.01:undefined} step={step} value={draft[kind][index]} onChange={event=>update(kind,index,event.target.value)} onBlur={()=>commit(kind,index)} onKeyDown={event=>{if(event.key==='Enter')event.currentTarget.blur();}}/></label>)}
+    </div>)}
+  </div>;
+}
+
 export function DirectorInspector({
   object,
   camera,
   cameraMode,
   transformMode,
+  snapEnabled,
   hasShotOverride,
   onTransformModeChange,
+  onSnapEnabledChange,
   onGroundObject,
   onCenterObject,
+  onObjectTransformChange,
   onCameraChange,
   onSaveCamera,
   onPoseChange,
@@ -30,10 +65,13 @@ export function DirectorInspector({
   camera:ShotCamera;
   cameraMode:boolean;
   transformMode:DirectorTransformMode;
+  snapEnabled:boolean;
   hasShotOverride:boolean;
   onTransformModeChange:(mode:DirectorTransformMode)=>void;
+  onSnapEnabledChange:(enabled:boolean)=>void;
   onGroundObject:()=>void;
   onCenterObject:()=>void;
+  onObjectTransformChange:(transform:Transform)=>void;
   onCameraChange:(value:number)=>void;
   onSaveCamera:()=>void;
   onPoseChange:(pose:DirectorPosePreset)=>void;
@@ -50,9 +88,9 @@ export function DirectorInspector({
         {transformTools.map(({mode,label,icon:Icon})=><button key={mode} type="button" aria-label={label} title={label} aria-pressed={transformMode===mode} onClick={()=>onTransformModeChange(mode)}><Icon size={15}/></button>)}
         <button type="button" aria-label="对象落地" title="对象落地" onClick={onGroundObject}><ArrowDownToLine size={15}/></button>
         <button type="button" aria-label="场景居中" title="场景居中" onClick={onCenterObject}><AlignCenter size={15}/></button>
+        <button type="button" aria-label="网格吸附" title="网格吸附" aria-pressed={snapEnabled} onClick={()=>onSnapEnabledChange(!snapEnabled)}><Magnet size={15}/></button>
       </div>
-      <span>位置</span>
-      <div className="director-vector">{object.transform.position.map((value,index)=><output key={index}>{value.toFixed(2)}</output>)}</div>
+      <TransformEditor transform={object.transform} onCommit={onObjectTransformChange}/>
       {cameraMode&&object.kind==='character'&&object.source_type==='model'&&<>
         <label htmlFor="director-pose">角色姿态</label>
         <select id="director-pose" value={pose} disabled={!poseable} onChange={event=>onPoseChange(event.target.value as DirectorPosePreset)}>

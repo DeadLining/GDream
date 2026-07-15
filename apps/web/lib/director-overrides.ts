@@ -1,4 +1,4 @@
-import type {DirectorObject,DirectorObjectOverride} from './types';
+import type {DirectorObject,DirectorObjectOverride,Transform} from './types';
 
 export function applyDirectorObjectOverrides(objects:DirectorObject[],overrides:Record<string,DirectorObjectOverride>):DirectorObject[]{
   return objects.map(object=>{
@@ -21,4 +21,13 @@ export function mergeDirectorObjectOverride(overrides:Record<string,DirectorObje
 
 export function removeDirectorObjectOverride(overrides:Record<string,DirectorObjectOverride>,objectId:string):Record<string,DirectorObjectOverride>{
   return Object.fromEntries(Object.entries(overrides).filter(([id])=>id!==objectId));
+}
+
+export function setDirectorObjectOverrideTransform(overrides:Record<string,DirectorObjectOverride>,objectId:string,transform:Transform|null):Record<string,DirectorObjectOverride>{
+  if(transform)return mergeDirectorObjectOverride(overrides,objectId,{transform});
+  const current=overrides[objectId];
+  if(!current)return overrides;
+  const {transform:_removed,...remaining}=current;
+  if(Object.keys(remaining).length)return {...overrides,[objectId]:remaining};
+  return removeDirectorObjectOverride(overrides,objectId);
 }

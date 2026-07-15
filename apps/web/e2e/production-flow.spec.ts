@@ -49,11 +49,12 @@ test.beforeEach(async ({page}) => {
 });
 
 test('3D director renders, captures preview, and applies selected AI fields',async({page},testInfo)=>{
-  let previewUploads=0;let appliedFields:string[]=[];let modelRequests=0;const cameraWrites:any[]=[];
+  let previewUploads=0;let appliedFields:string[]=[];let modelRequests=0;const cameraWrites:any[]=[];const objectWrites:any[]=[];
   await page.route('**/api/scenes/scene-1/director-stage',route=>route.fulfill({json:directorStage}));
   await page.route('**/api/director-stages/stage-1/assets',route=>route.fulfill({json:directorAssets}));
   await page.route('**/media/linxia.glb',route=>{modelRequests+=1;return route.fulfill({status:200,contentType:'model/gltf-binary',body:triangleGlb()});});
   await page.route('**/api/director-stages/stage-1/shots/shot-1/camera',async route=>{const body=await route.request().postDataJSON();cameraWrites.push(body);await route.fulfill({json:{...directorStage.shot_cameras[0],...body.camera,version:2}});});
+  await page.route('**/api/director-objects/object-1',async route=>{const body=await route.request().postDataJSON();objectWrites.push(body);await route.fulfill({json:{...directorStage.objects[0],...body.object}});});
   await page.route('**/api/director-cameras/camera-1/preview',async route=>{expect(route.request().headers()['content-type']).toContain('multipart/form-data');previewUploads+=1;await route.fulfill({status:201,json:{id:'preview-1',kind:'director_preview:camera-1',media_url:'/media/preview.png',media_type:'image/png',provider:'director',model:'threejs',generation_attempt:1,review_status:'draft',width:1262,height:900,duration_seconds:null,created_at:''}});});
   await page.route('**/api/director-stages/stage-1/suggestions',route=>route.fulfill({status:201,json:{id:'suggestion-1',stage_id:'stage-1',shot_id:'shot-1',kind:'shot_composition',status:'ready',request_context:{},suggested_patch:{composition:'低机位雨夜对峙',camera_motion:'pan_left',image_prompt:'cinematic rain',rationale:'强化压迫感'},error_category:'',error:'',created_at:'',applied_at:null}}));
   await page.route('**/api/director-stages/stage-1/shots/shot-1/apply-to-shot',async route=>{appliedFields=(await route.request().postDataJSON()).fields;await route.fulfill({json:{...episode.scenes[0].shots[0],composition:'低机位雨夜对峙'}});});
@@ -70,6 +71,11 @@ test('3D director renders, captures preview, and applies selected AI fields',asy
     const canvas=page.locator('canvas');const initialBox=await canvas.boundingBox();expect(initialBox).not.toBeNull();
     await canvas.click({position:{x:initialBox!.width*.5,y:initialBox!.height*.62}});
     await expect(page.locator('.director-inspector header strong')).toHaveText('林夏');
+    await page.getByRole('spinbutton',{name:'位置 X'}).fill('0.5');await page.getByRole('spinbutton',{name:'位置 X'}).press('Tab');
+    await expect.poll(()=>objectWrites.length).toBe(1);
+    expect(objectWrites[0]).toEqual({expected_version:2,object:{transform:{position:[.5,.4,0],rotation:[0,0,0],scale:[1,1,1]}}});
+    await page.getByRole('button',{name:'撤销对象变换'}).click();await expect.poll(()=>objectWrites.length).toBe(2);
+    expect(objectWrites[1]).toEqual({expected_version:3,object:{transform:directorStage.objects[0].transform}});
     await canvas.click({position:{x:initialBox!.width*.06,y:initialBox!.height*.08}});
     await expect(page.locator('.director-inspector header strong')).toHaveText('镜头相机');
     await page.getByRole('button',{name:'镜头',exact:true}).click();
