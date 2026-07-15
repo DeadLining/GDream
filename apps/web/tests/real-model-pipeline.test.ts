@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {assertFullEpisodeClosure, hasImageSignature, hasMp4Signature, parseScriptSse} from '../e2e/support/real-model-pipeline';
+import {assertFullEpisodeClosure, buildFullEpisodeExecutionPlan, hasImageSignature, hasMp4Signature, parseScriptSse} from '../e2e/support/real-model-pipeline';
 
 
 describe('real model E2E helpers', () => {
@@ -38,5 +38,14 @@ describe('real model E2E helpers', () => {
     expect(()=>assertFullEpisodeClosure({...complete,shots:complete.shots.slice(0,1)})).toThrow('Not every episode shot has a generated video');
     expect(()=>assertFullEpisodeClosure({...complete,render:{...complete.render,review:{overall_pass:false}}})).toThrow('Render quality review did not pass');
     expect(()=>assertFullEpisodeClosure({...complete,release:{...complete.release,gate:{ready:false}}})).toThrow('Release gate did not pass');
+  });
+
+  it('plans every shot and every non-empty dialogue line in episode order',()=>{
+    const plan=buildFullEpisodeExecutionPlan({scenes:[
+      {shots:[{id:'shot-1',dialogue:[{id:'line-1',text:'第一句'},{id:'line-empty',text:'  '}]},{id:'shot-2',dialogue:[]}]},
+      {shots:[{id:'shot-3',dialogue:[{id:'line-2',text:'第二句'}]}]},
+    ]});
+
+    expect(plan).toEqual({shotIds:['shot-1','shot-2','shot-3'],dialogueIds:['line-1','line-2']});
   });
 });
