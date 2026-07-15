@@ -13,6 +13,7 @@ const imageFor=(references:CharacterReference[],type?:CharacterReferenceType)=>{
 
 export type AssetWorkspaceView='catalog'|'master'|'variant'|'lineage';
 export type CharacterAssetCatalogData={references:CharacterReference[];variants:AssetVariant[]};
+export type CharacterDraft=Pick<Character,'name'|'role'|'appearance_bible'|'personality'|'continuity_rules'|'negative_constraints'|'voice_speaker'|'voice_instruction'>;
 type CharacterDetailTab='master'|'references'|'variant'|'lineage';
 
 const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>={
@@ -22,7 +23,15 @@ const libraryCategory:Record<LibraryAssetKind,{label:string;description:string}>
   sound:{label:'声音',description:'管理环境音、效果音和声音设计说明。'},
 };
 
-export function AssetCatalogView({characters,character,references,variants,characterAssets={},libraryAssets=[],libraryError='',onSelect,onOpen,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset,onUploadLibraryAssetMedia}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];characterAssets?:Record<string,CharacterAssetCatalogData>;libraryAssets?:LibraryAsset[];libraryError?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void;onUploadLibraryAssetMedia?:(id:string,file:File)=>Promise<void>|void}){
+const emptyCharacterDraft:CharacterDraft={name:'',role:'',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:''};
+const characterFields:Array<{key:keyof CharacterDraft;label:string;multiline?:boolean;required?:boolean}>=[
+  {key:'name',label:'角色名称',required:true},{key:'role',label:'角色定位',required:true},
+  {key:'appearance_bible',label:'外观设定',multiline:true,required:true},{key:'personality',label:'性格设定',multiline:true,required:true},
+  {key:'continuity_rules',label:'连续性规则',multiline:true,required:true},{key:'negative_constraints',label:'禁止漂移',multiline:true},
+  {key:'voice_speaker',label:'声音角色',required:true},{key:'voice_instruction',label:'配音说明',multiline:true},
+];
+
+export function AssetCatalogView({characters,character,references,variants,characterAssets={},libraryAssets=[],libraryError='',onSelect,onOpen,onCreateCharacter,onUpdateCharacter,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset,onUploadLibraryAssetMedia}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];characterAssets?:Record<string,CharacterAssetCatalogData>;libraryAssets?:LibraryAsset[];libraryError?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateCharacter?:(data:CharacterDraft)=>Promise<void>|void;onUpdateCharacter?:(id:string,data:CharacterDraft)=>Promise<void>|void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void;onUploadLibraryAssetMedia?:(id:string,file:File)=>Promise<void>|void}){
   const [filter,setFilter]=useState<'all'|'variants'|'pending'>('all');
   const [category,setCategory]=useState<'character'|LibraryAssetKind>('character');
   const [query,setQuery]=useState('');
@@ -33,6 +42,10 @@ export function AssetCatalogView({characters,character,references,variants,chara
   const [assetTags,setAssetTags]=useState('');
   const [assetBusy,setAssetBusy]=useState(false);
   const [assetError,setAssetError]=useState('');
+  const [characterFormMode,setCharacterFormMode]=useState<'create'|'edit'|null>(null);
+  const [characterDraft,setCharacterDraft]=useState<CharacterDraft>(emptyCharacterDraft);
+  const [characterBusy,setCharacterBusy]=useState(false);
+  const [characterError,setCharacterError]=useState('');
   const catalogDataFor=(id:string)=>characterAssets[id]??(id===character?.id?{references,variants}:{references:[],variants:[]});
   const episodeVariants=variants.filter(item=>item.kind==='episode');
   const normalizedQuery=query.trim().toLocaleLowerCase();
@@ -52,6 +65,9 @@ export function AssetCatalogView({characters,character,references,variants,chara
   const saveLibraryAsset=async(event:FormEvent)=>{event.preventDefault();if(category==='character'||!assetName.trim()||assetBusy)return;const data={kind:category,name:assetName.trim(),description:assetDescription.trim(),tags:assetTags.split(/[,，]/).map(item=>item.trim()).filter(Boolean),metadata:formMode==='edit'?selectedLibrary?.metadata??{}:{}};setAssetBusy(true);setAssetError('');try{if(formMode==='edit'&&selectedLibrary&&onUpdateLibraryAsset)await onUpdateLibraryAsset(selectedLibrary.id,data);else if(formMode==='create'&&onCreateLibraryAsset)await onCreateLibraryAsset(data);setFormMode(null);}catch(cause){setAssetError(cause instanceof Error?cause.message:'保存资产失败');}finally{setAssetBusy(false);}};
   const removeLibraryAsset=async()=>{if(!selectedLibrary||!onDeleteLibraryAsset||assetBusy||!window.confirm(`删除资产「${selectedLibrary.name}」？`))return;setAssetBusy(true);setAssetError('');try{await onDeleteLibraryAsset(selectedLibrary.id);setSelectedLibraryId('');}catch(cause){setAssetError(cause instanceof Error?cause.message:'删除资产失败');}finally{setAssetBusy(false);}};
   const uploadLibraryMedia=async(file:File|null)=>{if(!file||!selectedLibrary||!onUploadLibraryAssetMedia||assetBusy)return;setAssetBusy(true);setAssetError('');try{await onUploadLibraryAssetMedia(selectedLibrary.id,file);}catch(cause){setAssetError(cause instanceof Error?cause.message:'上传资产媒体失败');}finally{setAssetBusy(false);}};
+  const openCharacterCreate=()=>{setCharacterFormMode('create');setCharacterDraft(emptyCharacterDraft);setCharacterError('');};
+  const openCharacterEdit=()=>{if(!character)return;setCharacterFormMode('edit');setCharacterDraft({name:character.name,role:character.role,appearance_bible:character.appearance_bible,personality:character.personality,continuity_rules:character.continuity_rules,negative_constraints:character.negative_constraints,voice_speaker:character.voice_speaker,voice_instruction:character.voice_instruction});setCharacterError('');};
+  const saveCharacter=async(event:FormEvent)=>{event.preventDefault();if(characterBusy||characterFields.some(field=>field.required&&!characterDraft[field.key].trim()))return;setCharacterBusy(true);setCharacterError('');try{if(characterFormMode==='edit'&&character&&onUpdateCharacter)await onUpdateCharacter(character.id,characterDraft);else if(characterFormMode==='create'&&onCreateCharacter)await onCreateCharacter(characterDraft);setCharacterFormMode(null);}catch(cause){setCharacterError(cause instanceof Error?cause.message:'保存角色失败');}finally{setCharacterBusy(false);}};
 
   const sidebar=<aside className="asset-catalog-sidebar"><h2>工作区</h2>{categories.map(([kind,label])=>{const count=kind==='character'?characters.length:libraryAssets.filter(item=>item.kind===kind).length;return <button type="button" key={kind} aria-label={`${label} ${count}`} className={category===kind?'active':''} onClick={()=>selectCategory(kind)}><span>{label}</span><b>{count}</b></button>;})}</aside>;
 
@@ -76,8 +92,9 @@ export function AssetCatalogView({characters,character,references,variants,chara
       <section className="asset-catalog-content">
         <header>
           <div><h1>作品资产库</h1><p>管理作品级主设定、集级变体与审核状态。</p></div>
-          <label className="asset-search"><Search size={15}/><span className="sr-only">搜索资产</span><input type="search" aria-label="搜索资产" placeholder="搜索资产名称" value={query} onChange={event=>setQuery(event.target.value)}/></label>
+          <div className="asset-catalog-header-actions"><label className="asset-search"><Search size={15}/><span className="sr-only">搜索资产</span><input type="search" aria-label="搜索资产" placeholder="搜索资产名称" value={query} onChange={event=>setQuery(event.target.value)}/></label><button type="button" onClick={openCharacterCreate}><Plus size={15}/>新建角色</button></div>
         </header>
+        {characterFormMode&&<form aria-label={characterFormMode==='edit'?'编辑角色':'新建角色'} className="library-asset-form character-asset-form" onSubmit={saveCharacter}>{characterFields.map(field=><label key={field.key}>{field.label}{field.multiline?<textarea aria-label={field.label} value={characterDraft[field.key]} onChange={event=>setCharacterDraft(current=>({...current,[field.key]:event.target.value}))}/>:<input aria-label={field.label} value={characterDraft[field.key]} onChange={event=>setCharacterDraft(current=>({...current,[field.key]:event.target.value}))}/>}</label>)}{characterError&&<p role="alert">{characterError}</p>}<div><button type="button" onClick={()=>setCharacterFormMode(null)}>取消</button><button className="primary-action" type="submit" disabled={characterBusy||characterFields.some(field=>field.required&&!characterDraft[field.key].trim())}>{characterBusy?'正在保存':'保存角色'}</button></div></form>}
         <div className="asset-catalog-filters">
           <button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>主设定</button>
           <button className={filter==='variants'?'active':''} onClick={()=>setFilter('variants')}>有变体</button>
@@ -104,7 +121,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
         <dl><div><dt>资产类型</dt><dd>角色</dd></div><div><dt>主设定</dt><dd>MASTER v{variants.find(item=>item.kind==='master')?.version??1}</dd></div><div><dt>集级变体</dt><dd>{episodeVariants.length}</dd></div><div><dt>状态数量</dt><dd>{episodeVariants.reduce((total,item)=>total+item.states.length,0)}</dd></div></dl>
         <div className="asset-inspector-tabs"><button className="active">主设定</button><button onClick={()=>onOpen('variant')}>集级变体</button><button onClick={()=>onOpen('lineage')}>引用</button></div>
         <section className="asset-lineage-preview"><h3>继承谱系</h3><div><span className="lineage-preview-root">{character.name}<small>主设定</small></span><ChevronRight size={16}/><span className="lineage-preview-branches">{episodeVariants.slice(0,2).map(item=><button key={item.id} onClick={()=>onOpen('variant')}>{item.label}</button>)}</span></div></section>
-        <footer><button onClick={()=>onOpen('lineage')}><GitBranch size={15}/>打开谱系</button><button className="primary-action" onClick={()=>onOpen('variant')}><Plus size={15}/>创建变体</button></footer>
+        <footer><button onClick={openCharacterEdit}><Pencil size={15}/>编辑角色</button><button onClick={()=>onOpen('lineage')}><GitBranch size={15}/>打开谱系</button><button className="primary-action" onClick={()=>onOpen('variant')}><Plus size={15}/>创建变体</button></footer>
       </aside>:<aside className="asset-catalog-inspector"><p className="asset-catalog-empty">尚未创建角色，可以先管理其他作品资产。</p></aside>}
     </div>
   </main>;

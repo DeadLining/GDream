@@ -1,14 +1,16 @@
 'use client';
 
-import {Check,ImagePlus,LoaderCircle,RefreshCw,Sparkles} from 'lucide-react';
+import {Check,ImagePlus,LoaderCircle,Pencil,RefreshCw,Sparkles,Trash2} from 'lucide-react';
 import {useEffect,useRef,useState} from 'react';
 import {
   activateCharacterReference,
+  createCharacter,
   createLibraryAsset,
   createAssetVariant,
   createAssetVariantState,
   createAssetVariantUsage,
   deleteLibraryAsset,
+  deleteCharacterReference,
   deleteAssetVariant,
   deleteAssetVariantState,
   generateCharacterReferenceSet,
@@ -21,6 +23,7 @@ import {
   updateAssetVariant,
   updateAssetVariantState,
   updateCharacterReference,
+  updateCharacter,
   updateLibraryAsset,
   uploadCharacterReference,
   uploadLibraryAssetMedia,
@@ -43,6 +46,7 @@ import {
   AssetVariantEditorView,
   CharacterMasterView,
   type CharacterAssetCatalogData,
+  type CharacterDraft,
   type AssetWorkspaceView,
 } from './assets/AssetLibraryViews';
 import {AssetLineageCanvas} from './canvas/AssetLineageCanvas';
@@ -54,7 +58,8 @@ const types:Array<[CharacterReferenceType,string]>=[
 const labels=Object.fromEntries(types) as Record<CharacterReferenceType,string>;
 const setMetadata=(job:Job|null)=>job?.result_metadata as Partial<CharacterReferenceSetMetadata>|undefined;
 
-export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[]}){
+export function CharacterWorkspace({projectId,characters,episodes=[],onCharactersChanged}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];onCharactersChanged?:()=>Promise<void>|void}){
+  const [workspaceCharacters,setWorkspaceCharacters]=useState(characters);
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
   const [filter,setFilter]=useState<CharacterReferenceType>('primary');
@@ -64,14 +69,17 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
   const [error,setError]=useState('');
   const [generating,setGenerating]=useState(false);
   const [currentJob,setCurrentJob]=useState<Job|null>(null);
+  const [editingReferenceId,setEditingReferenceId]=useState('');
+  const [editingReferenceLabel,setEditingReferenceLabel]=useState('');
   const completedCount=useRef(0);
   const loadRequests=useRef<Record<string,number>>({});
   const libraryLoadRequest=useRef(0);
-  const resolvedProjectId=projectId??characters[0]?.project_id??'';
-  const character=characters.find(item=>item.id===selected)??characters[0];
+  useEffect(()=>setWorkspaceCharacters(characters),[characters]);
+  const resolvedProjectId=projectId??workspaceCharacters[0]?.project_id??'';
+  const character=workspaceCharacters.find(item=>item.id===selected)??workspaceCharacters[0];
   const references=character?assetData[character.id]?.references??[]:[];
   const variants=character?assetData[character.id]?.variants??[]:[];
-  const characterIds=characters.map(item=>item.id).join('|');
+  const characterIds=workspaceCharacters.map(item=>item.id).join('|');
 
   const load=async(id:string)=>{
     const request=(loadRequests.current[id]??0)+1;
@@ -86,7 +94,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
       setError(cause instanceof Error?cause.message:'加载失败');
     }
   };
-  useEffect(()=>{for(const item of characters)void load(item.id);},[characterIds]);
+  useEffect(()=>{for(const item of workspaceCharacters)void load(item.id);},[characterIds]);
 
   const reloadLibraryAssets=async()=>{
     if(!resolvedProjectId){setLibraryAssets([]);return;}
@@ -111,7 +119,9 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
   const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
   const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();};
   const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();};
-  const catalog=<AssetCatalogView characters={characters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia}/>;
+  const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
+  const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
+  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia}/>;
 
   if(!character)return catalog;
 
@@ -155,6 +165,8 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
   };
   const approve=async(reference:CharacterReference)=>{await updateCharacterReference(reference.id,{review_status:'approved'});await load(character.id);};
   const activate=async(reference:CharacterReference)=>{await activateCharacterReference(character.id,reference.id);await load(character.id);};
+  const renameReference=async(reference:CharacterReference)=>{const label=editingReferenceLabel.trim();if(!label)return;try{await updateCharacterReference(reference.id,{label});setEditingReferenceId('');setEditingReferenceLabel('');await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'重命名参考图失败');}};
+  const removeReference=async(reference:CharacterReference)=>{const label=reference.label||labels[reference.reference_type];if(reference.is_active||!window.confirm(`删除参考图「${label}」？`))return;try{await deleteCharacterReference(reference.id);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'删除参考图失败');}};
   const addVariant=async(data:Parameters<typeof createAssetVariant>[1])=>{await createAssetVariant(character.id,data);await load(character.id);};
   const addEpisodeVariant=async(data:Parameters<typeof createAssetVariant>[1])=>{
     const master=variants.find(item=>item.kind==='master')??await createAssetVariant(character.id,{
@@ -186,11 +198,11 @@ export function CharacterWorkspace({projectId,characters,episodes=[]}:{projectId
       {progressText&&<span role="status" className="reference-generation-progress">{progressText}</span>}
     </div>
     {error&&<div className="form-error reference-set-error" role="alert"><span>{error}</span>{canRetry&&<button onClick={retry} disabled={generating}><RefreshCw size={14}/>继续未完成项</button>}</div>}
-    <div className="reference-grid">{visible.map(reference=><article key={reference.id} className={reference.is_active?'active':''}><img src={mediaUrl(reference.asset.media_url)} alt={`${character.name}${reference.label||'参考图'}`}/><div><span>{reference.label||labels[reference.reference_type]}</span><small>{reference.review_status==='approved'?'已批准':'待审核'}{reference.is_active?' · 使用中':''}</small></div><div className="reference-commands">{reference.review_status!=='approved'&&<button onClick={()=>approve(reference)}><Check size={14}/>批准</button>}{reference.review_status==='approved'&&!reference.is_active&&<button onClick={()=>activate(reference)}>设为使用</button>}</div></article>)}</div>
+    <div className="reference-grid">{visible.map(reference=>{const label=reference.label||labels[reference.reference_type];const editing=editingReferenceId===reference.id;return <article key={reference.id} className={reference.is_active?'active':''}><img src={mediaUrl(reference.asset.media_url)} alt={`${character.name}${label}`}/><div>{editing?<><input aria-label="参考图名称" value={editingReferenceLabel} onChange={event=>setEditingReferenceLabel(event.target.value)}/><button aria-label="保存参考图名称" onClick={()=>void renameReference(reference)}><Check size={14}/></button></>:<span>{label}</span>}<small>{reference.review_status==='approved'?'已批准':'待审核'}{reference.is_active?' · 使用中':''}</small></div><div className="reference-commands">{reference.review_status!=='approved'&&<button onClick={()=>approve(reference)}><Check size={14}/>批准</button>}{reference.review_status==='approved'&&!reference.is_active&&<button onClick={()=>activate(reference)}>设为使用</button>}<button aria-label={`重命名${label}`} onClick={()=>{setEditingReferenceId(reference.id);setEditingReferenceLabel(label);}}><Pencil size={14}/></button><button aria-label={`删除${label}`} title={reference.is_active?'使用中的参考图不能删除':'删除参考图'} disabled={reference.is_active} onClick={()=>void removeReference(reference)}><Trash2 size={14}/></button></div></article>;})}</div>
   </section>;
 
   if(view!=='catalog')return <CharacterMasterView
-    characters={characters}
+    characters={workspaceCharacters}
     character={character}
     references={references}
     variants={variants}
