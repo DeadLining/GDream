@@ -20,6 +20,7 @@ export function buildRemotionRenderArgs(outputPath, stagedProps, browserExecutab
   const args = [
     'remotion', 'render', 'src/index.tsx', 'ComicEpisode', outputPath,
     '--props', stagedProps, '--codec', 'h264', '--crf', '20',
+    '--concurrency=1', '--timeout=120000',
   ];
   if (browserExecutable) {
     args.push(
