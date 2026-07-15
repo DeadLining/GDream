@@ -4,8 +4,8 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {ReviewPanel} from '../components/ReviewPanel';
 import type {EpisodeDetail, ProductionReadiness} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({threads:vi.fn(),createThread:vi.fn(),message:vi.fn(),patch:vi.fn(),updateShot:vi.fn(),getAsset:vi.fn(),startRender:vi.fn(),candidate:vi.fn(),candidates:vi.fn(),gate:vi.fn(),approve:vi.fn(),publish:vi.fn(),poll:vi.fn()}));
-vi.mock('../lib/api',()=>({listReviewThreads:mocks.threads,createReviewThread:mocks.createThread,createReviewMessage:mocks.message,updateReviewThread:mocks.patch,updateShot:mocks.updateShot,getAsset:mocks.getAsset,startRender:mocks.startRender,createReleaseCandidate:mocks.candidate,listReleaseCandidates:mocks.candidates,getReleaseGate:mocks.gate,approveReleaseCandidate:mocks.approve,publishReleaseCandidate:mocks.publish,mediaUrl:(path:string)=>path}));
+const mocks=vi.hoisted(()=>({threads:vi.fn(),createThread:vi.fn(),message:vi.fn(),patch:vi.fn(),updateShot:vi.fn(),getAsset:vi.fn(),startRender:vi.fn(),candidate:vi.fn(),candidates:vi.fn(),renderReview:vi.fn(),gate:vi.fn(),approve:vi.fn(),publish:vi.fn(),visualThreads:vi.fn(),createVisualThread:vi.fn(),visualMessage:vi.fn(),visualGenerate:vi.fn(),poll:vi.fn()}));
+vi.mock('../lib/api',()=>({listReviewThreads:mocks.threads,createReviewThread:mocks.createThread,createReviewMessage:mocks.message,updateReviewThread:mocks.patch,updateShot:mocks.updateShot,getAsset:mocks.getAsset,startRender:mocks.startRender,createReleaseCandidate:mocks.candidate,listReleaseCandidates:mocks.candidates,getRenderReview:mocks.renderReview,getReleaseGate:mocks.gate,approveReleaseCandidate:mocks.approve,publishReleaseCandidate:mocks.publish,listVisualReviewThreads:mocks.visualThreads,createVisualReviewThread:mocks.createVisualThread,createVisualReviewMessage:mocks.visualMessage,startVisualReviewGeneration:mocks.visualGenerate,mediaUrl:(path:string)=>path}));
 vi.mock('../lib/jobs',()=>({pollJob:mocks.poll}));
 
 const episode: EpisodeDetail = {
@@ -29,7 +29,7 @@ const readiness: ProductionReadiness = {
 };
 
 describe('ReviewPanel', () => {
-  beforeEach(()=>{mocks.getAsset.mockResolvedValue({id:'asset-1',media_url:'/media/frame.png'});mocks.candidates.mockResolvedValue([]);});
+  beforeEach(()=>{mocks.getAsset.mockResolvedValue({id:'asset-1',media_url:'/media/frame.png'});mocks.candidates.mockResolvedValue([]);mocks.renderReview.mockRejectedValue(new Error('No render review'));mocks.visualThreads.mockResolvedValue([]);});
   afterEach(()=>{cleanup();vi.clearAllMocks();});
 
   it('derives one row per blocker shot and deduplicates blocker labels', () => {
@@ -68,6 +68,9 @@ describe('ReviewPanel', () => {
     expect(screen.getByRole('region', {name: '多轨时间线'})).toBeVisible();
     expect(screen.getByText('连续性检查')).toBeVisible();
     expect(screen.getByRole('button', {name: '批准并登记'})).toBeDisabled();
+    const ruler=screen.getByLabelText('多轨时间线').querySelector('.timeline-ruler');
+    expect(ruler).toHaveTextContent('0:10');
+    expect(ruler).not.toHaveTextContent('1:00');
   });
 
   it('uses compact header groups and a bounded preview-media hook', async () => {
@@ -87,10 +90,23 @@ describe('ReviewPanel', () => {
     render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={() => {}} />);
 
     expect(await screen.findByDisplayValue('V3 · 下一终审候选')).toBeVisible();
-    expect(screen.getByText('黑帧检查').parentElement).toHaveTextContent('待终审渲染');
-    expect(screen.getByText('音频峰值').parentElement).toHaveTextContent('尚无检测器');
-    expect(screen.getByText('片尾信息').parentElement).toHaveTextContent('尚无检测器');
+    expect(screen.getByRole('button',{name:'终审成片'})).toBeVisible();
     expect(screen.queryByText('终审版本 V4')).not.toBeInTheDocument();
+  });
+
+  it('previews and downloads a persisted final candidate with real QC results',async()=>{
+    mocks.threads.mockResolvedValue([]);
+    mocks.candidates.mockResolvedValue([{id:'release-2',episode_id:'episode-1',version:'V2',render_path:'projects/p/episodes/e/renders/v2.mp4',qc_snapshot:{},status:'draft',created_at:'',updated_at:''}]);
+    mocks.renderReview.mockResolvedValue({id:'review-render',episode_id:'episode-1',job_id:'render-job',render_path:'projects/p/episodes/e/renders/v2.mp4',overall_pass:true,subtitle_present:false,black_frame_positions:[],silence_ranges:[],ffprobe_json:{streams:[{codec_type:'video'},{codec_type:'audio'}]},findings:[{code:'no_subtitle_stream',severity:'info'}],slideshow_risk:{score:.42,level:'warning',dimensions:{},triggered:['motion']},created_at:''});
+    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'终审成片'}));
+    expect(await screen.findByLabelText('终审成片视频')).toHaveAttribute('src','/media/projects/p/episodes/e/renders/v2.mp4');
+    expect(screen.getByRole('link',{name:'下载成片'})).toHaveAttribute('href','/media/projects/p/episodes/e/renders/v2.mp4');
+    expect(screen.getByText('黑帧检查').parentElement).toHaveTextContent('通过');
+    expect(screen.getByText('音频静音').parentElement).toHaveTextContent('通过');
+    expect(screen.getByText('字幕轨道').parentElement).toHaveTextContent('未检测到独立字幕流');
+    expect(screen.getByText('动态风险').parentElement).toHaveTextContent('中');
   });
 
   it('routes a blocker row to the existing shot selection callback', async () => {
@@ -104,13 +120,14 @@ describe('ReviewPanel', () => {
   });
 
   it('loads persisted review threads, sends a message, and resolves the selected issue', async()=>{
-    const thread={id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:2.5,severity:'critical' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[]};
+    const thread={id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:2.5,severity:'critical' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[{id:'old-message',thread_id:'review-1',author_kind:'user' as const,content:'下巴轮廓偏离主设定',created_at:''}]};
     mocks.threads.mockResolvedValue([thread]);
     mocks.message.mockResolvedValue({id:'message-1',thread_id:'review-1',author_kind:'user',content:'恢复主设定脸型',created_at:''});
     mocks.patch.mockResolvedValue({...thread,status:'resolved'});
     render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={vi.fn()}/>);
 
     expect(await screen.findByRole('button',{name:'角色脸型漂移 镜头评论'})).toBeVisible();
+    expect(screen.getByText('下巴轮廓偏离主设定')).toBeVisible();
     await userEvent.type(screen.getByLabelText('添加审阅评论'),'恢复主设定脸型');
     await userEvent.click(screen.getByRole('button',{name:'发送评论'}));
     await waitFor(()=>expect(mocks.message).toHaveBeenCalledWith('review-1',{author_kind:'user',content:'恢复主设定脸型'}));
@@ -184,23 +201,45 @@ describe('ReviewPanel', () => {
     expect(video).not.toHaveProperty('muted',true);
   });
 
-  it('renders, gates, approves, and publishes a ready episode', async()=>{
+  it('starts review-aware AI generation when requesting shot changes',async()=>{
+    const thread={id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:2.5,severity:'major' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[{id:'message-1',thread_id:'review-1',author_kind:'user' as const,content:'恢复主设定脸型',created_at:''}]};
+    const visualThread={id:'visual-1',episode_id:'episode-1',shot_id:'shot-1',source_asset_id:'asset-1',title:'终审修改',status:'open' as const,modification_scope:'shot' as const,created_at:'',updated_at:'',annotations:[],messages:[],candidates:[]};
+    mocks.threads.mockResolvedValue([thread]);
+    mocks.updateShot.mockResolvedValue({...episode.scenes[0].shots[0],review_status:'needs_changes'});
+    mocks.visualThreads.mockResolvedValue([visualThread]);
+    mocks.visualMessage.mockResolvedValue({id:'visual-message',thread_id:'visual-1',author_kind:'user',content:'角色脸型漂移\n恢复主设定脸型',created_at:''});
+    mocks.visualGenerate.mockResolvedValue({job_id:'visual-job',status:'queued'});
+    mocks.poll.mockResolvedValue({id:'visual-job',status:'succeeded',result_metadata:{candidate_id:'candidate-1'}});
+    const focusedReadiness={...readiness,blockers:{missing_panels:[],unapproved_shots:['shot-1'],missing_speech:[]}};
+    render(<ReviewPanel episode={episode} readiness={focusedReadiness} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'要求修改'}));
+
+    await waitFor(()=>expect(mocks.visualGenerate).toHaveBeenCalledWith('visual-1'));
+    expect(mocks.visualMessage).toHaveBeenCalledWith('visual-1',expect.objectContaining({author_kind:'user',content:expect.stringContaining('角色脸型漂移')}));
+    expect(await screen.findByText('修改候选已生成，请到视觉审阅确认')).toBeVisible();
+  });
+
+  it('renders a preview before separately gating, approving, and publishing it', async()=>{
     const readyEpisode:EpisodeDetail={...episode,scenes:episode.scenes.map(scene=>({...scene,shots:scene.shots.map((shot,index)=>({...shot,active_panel_asset_id:`asset-${index+1}`,review_status:'approved'}))}))};
     const ready:ProductionReadiness={...readiness,ready:true,ready_counts:{panels:3,approved:3,speech:0},blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}};
     mocks.threads.mockResolvedValue([]);
     mocks.startRender.mockResolvedValue({job_id:'render-job',status:'queued'});
-    mocks.candidates.mockResolvedValue([{id:'old-release',episode_id:'episode-1',version:'V2',render_path:'old.mp4',qc_snapshot:{},status:'draft',created_at:'',updated_at:''}]);
-    mocks.poll.mockResolvedValue({id:'render-job',status:'succeeded',result_metadata:{output_path:'projects/p/episodes/e/renders/final.mp4',probe:{black_frames:0}}});
+    mocks.candidates.mockResolvedValue([]);
+    mocks.poll.mockResolvedValue({id:'render-job',status:'succeeded',result_metadata:{output_path:'projects/p/episodes/e/renders/final.mp4',probe:{black_frames:0},review:{overall_pass:true}}});
     mocks.candidate.mockResolvedValue({id:'release-1',episode_id:'episode-1',version:'V3',render_path:'projects/p/episodes/e/renders/final.mp4',qc_snapshot:{black_frames:0},status:'draft',created_at:'',updated_at:''});
     mocks.gate.mockResolvedValue({ready:true,production_ready:true,production_blockers:{},open_critical_threads:[]});
     mocks.approve.mockResolvedValue({id:'release-1',status:'approved'});
     mocks.publish.mockResolvedValue({id:'publication-1',candidate_id:'release-1',platform:'internal_master',idempotency_key:'episode-1:release-1:internal_master',external_reference:'internal://release-1',status:'published',created_at:'',published_at:''});
     render(<ReviewPanel episode={readyEpisode} readiness={ready} onSelectShot={vi.fn()}/>);
 
-    await userEvent.click(screen.getByRole('button',{name:'批准并登记'}));
+    await userEvent.click(screen.getByRole('button',{name:'生成终审预览'}));
 
     await waitFor(()=>expect(mocks.startRender).toHaveBeenCalledWith('episode-1'));
-    expect(mocks.candidate).toHaveBeenCalledWith('episode-1',expect.objectContaining({version:'V3',render_path:'projects/p/episodes/e/renders/final.mp4'}));
+    expect(mocks.candidate).toHaveBeenCalledWith('episode-1',expect.objectContaining({version:'V1',render_path:'projects/p/episodes/e/renders/final.mp4'}));
+    expect(await screen.findByLabelText('终审成片视频')).toHaveAttribute('src','/media/projects/p/episodes/e/renders/final.mp4');
+
+    await userEvent.click(screen.getByRole('button',{name:'批准并登记'}));
     expect(mocks.gate).toHaveBeenCalledWith('release-1');
     expect(mocks.approve).toHaveBeenCalledWith('release-1');
     expect(mocks.publish).toHaveBeenCalledWith('release-1',{platform:'internal_master',idempotency_key:'episode-1:release-1:internal_master'});
