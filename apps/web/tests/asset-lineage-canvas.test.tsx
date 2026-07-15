@@ -81,6 +81,17 @@ describe('AssetLineageCanvas', () => {
     expect(await screen.findByText('已启动 2 集的画面重生成')).toBeVisible();
   });
 
+  it('keeps legacy impact responses without episode groups reviewable', async () => {
+    const onAnalyzeImpact=vi.fn().mockResolvedValue({shots:[],assets:[],usage_count:0});
+    render(<AssetLineageCanvas character={character} references={[reference]} variants={variants} onAnalyzeImpact={onAnalyzeImpact}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'分析影响范围'}));
+
+    expect(await screen.findByRole('dialog',{name:'下游影响范围'})).toBeVisible();
+    expect(screen.getByText('共 0 个镜头，分布在 0 集')).toBeVisible();
+    expect(screen.getByText('当前变更没有已绑定镜头。')).toBeVisible();
+  });
+
   it('requires impact confirmation before saving a referenced state change', async () => {
     const onAnalyzeImpact=vi.fn().mockResolvedValue(impact);
     const onUpdateState=vi.fn().mockResolvedValue(undefined);
