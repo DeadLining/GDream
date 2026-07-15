@@ -9,7 +9,7 @@ const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(
 vi.mock('../lib/api',()=>mocks);
 const overrideTransform={position:[2,0,0],rotation:[0,.5,0],scale:[1,1,1]} as const;
 const movedCamera={position:[2,2.4,6] as [number,number,number],target:[0,.9,0] as [number,number,number],rotation:[-.1,.25,0] as [number,number,number]};
-vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable,mode,transformMode,snapEnabled,objects,onSelectObject,onTransform,onCameraChange}:{editable:boolean;mode:string;transformMode:string;snapEnabled:boolean;objects:Array<{id:string;visible:boolean}>;onSelectObject:(id:string|null)=>void;onTransform:(id:string,transform:typeof overrideTransform)=>void;onCameraChange?:(camera:typeof movedCamera)=>void})=><div data-testid="director-canvas" data-editable={String(editable)} data-mode={mode} data-transform-mode={transformMode} data-snap-enabled={String(snapEnabled)} data-visible={String(objects[0]?.visible)}><button onClick={()=>objects[0]&&onSelectObject(objects[0].id)}>选择画布对象</button><button onClick={()=>onSelectObject(null)}>清空画布选择</button><button onClick={()=>objects[0]&&onTransform(objects[0].id,overrideTransform)}>移动对象</button><button onClick={()=>onCameraChange?.(movedCamera)}>移动相机</button></div> }));
+vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable,mode,transformMode,snapEnabled,objects,onSelectObject,onTransform,onCameraChange}:{editable:boolean;mode:string;transformMode:string;snapEnabled:boolean;objects:Array<{id:string;visible:boolean;appearance:Record<string,unknown>}>;onSelectObject:(id:string|null)=>void;onTransform:(id:string,transform:typeof overrideTransform)=>void;onCameraChange?:(camera:typeof movedCamera)=>void})=><div data-testid="director-canvas" data-editable={String(editable)} data-mode={mode} data-transform-mode={transformMode} data-snap-enabled={String(snapEnabled)} data-visible={String(objects[0]?.visible)} data-model-url={String(objects[0]?.appearance.model_url??'')}><button onClick={()=>objects[0]&&onSelectObject(objects[0].id)}>选择画布对象</button><button onClick={()=>onSelectObject(null)}>清空画布选择</button><button onClick={()=>objects[0]&&onTransform(objects[0].id,overrideTransform)}>移动对象</button><button onClick={()=>onCameraChange?.(movedCamera)}>移动相机</button></div> }));
 
 const scene:Scene={id:'scene-1',position:1,location:'天台',time_of_day:'night',summary:'对峙',continuity_state:{},estimated_duration_seconds:10,shots:[{id:'shot-1',position:1,shot_type:'medium',duration_seconds:5,composition:'对峙',camera_motion:'static',character_state:{},image_prompt:'',negative_prompt:'',active_panel_asset_id:null,review_status:'draft',render_status:'pending',dialogue:[]}]};
 const directorObject={id:'object-1',stage_id:'stage-1',kind:'primitive' as const,source_type:'placeholder' as const,source_id:null,label:'方块',position:1,transform:{position:[0,0,0] as [number,number,number],rotation:[0,0,0] as [number,number,number],scale:[1,1,1] as [number,number,number]},appearance:{},metadata:{},visible:true};
@@ -217,5 +217,22 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getByRole('button',{name:'同步场景资产'}));
     await waitFor(()=>expect(mocks.syncDirectorAssets).toHaveBeenCalledWith('stage-1',1,assets.map(item=>item.key)));
     expect(await screen.findByText('已同步 1 / 2')).toBeVisible();
+  });
+  it('renders the effective variant model when the selected shot changes',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,source_id:'master-representation',label:'林夏',appearance:{model_url:'/media/master.glb'},metadata:{character_id:'char-1',representation_id:'master-representation'},transform:{...directorObject.transform,position:[3,0,1] as [number,number,number]}};
+    const secondShot={...scene.shots[0],id:'shot-2',position:2,composition:'受伤特写'};
+    const scopedScene={...scene,shots:[scene.shots[0],secondShot]};
+    const scopedStage={...stage,objects:[characterObject],shot_cameras:[stage.shot_cameras[0],{...stage.shot_cameras[0],id:'camera-2',shot_id:'shot-2'}]};
+    const episodeAsset={key:'character:char-1:representation:episode',kind:'character',source_type:'model',source_id:'episode-representation',asset_id:'episode-asset',label:'林夏',media_url:'/media/episode.glb',media_type:'model/gltf-binary',metadata:{character_id:'char-1',variant_id:'variant-1',state_id:null,representation_id:'episode-representation'}} as const;
+    const stateAsset={...episodeAsset,key:'character:char-1:representation:injured',source_id:'injured-representation',asset_id:'injured-asset',media_url:'/media/injured.glb',metadata:{...episodeAsset.metadata,state_id:'state-1',representation_id:'injured-representation'}} as const;
+    mocks.getDirectorStage.mockResolvedValue(scopedStage);
+    mocks.getDirectorAssets.mockImplementation(async(_stageId:string,shotId?:string)=>shotId==='shot-2'?[stateAsset]:[episodeAsset]);
+    const view=render(<DirectorWorkspace scene={scopedScene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    expect(await screen.findByTestId('director-canvas')).toHaveAttribute('data-model-url','/media/episode.glb');
+    view.rerender(<DirectorWorkspace scene={scopedScene} selectedShotId="shot-2" mobile={false} onSelectShot={vi.fn()}/>);
+
+    await waitFor(()=>expect(mocks.getDirectorAssets).toHaveBeenLastCalledWith('stage-1','shot-2'));
+    expect(screen.getByTestId('director-canvas')).toHaveAttribute('data-model-url','/media/injured.glb');
   });
 });
