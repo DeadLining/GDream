@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
 from comic_studio.assets import AssetStore
+from comic_studio.services.panel_freshness import PanelFreshnessService
 from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
@@ -40,6 +41,8 @@ class VideoService:
         panel = self.session.get(models.Asset, shot.active_panel_asset_id)
         if panel is None or panel.kind != f"panel:{shot.id}":
             raise ValueError("active_panel_invalid")
+        if PanelFreshnessService(self.session).inspect(shot.id, panel).is_stale:
+            raise ValueError("active_panel_stale")
         compiled = ShotInputCompiler(self.session).compile(
             shot.id, usage_kinds={"video", "reference"}
         )

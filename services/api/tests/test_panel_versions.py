@@ -142,6 +142,13 @@ def test_panel_versions_mark_changed_generation_inputs_stale(client):
         )
         shot_id = shot.id
 
+    with client.app.state.session_factory() as session:
+        after_registration = ShotInputCompiler(session).compile(
+            shot_id, usage_kinds={"panel", "reference"}
+        )
+    assert after_registration.snapshot == compiled.snapshot
+    assert after_registration.snapshot_hash == compiled.snapshot_hash
+
     current = client.get(f"/api/shots/{shot_id}/panels")
     assert current.status_code == 200
     assert current.json()[0]["id"] == asset.id

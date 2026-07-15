@@ -49,7 +49,7 @@ export function ProductOverview({project, episode, readiness, readinessByEpisode
     approved:totals.approved+item.ready_counts.approved,
   }),{shots:0,panels:0,approved:0});
   const percentage=(readyCount:number,total:number)=>total?Math.round(readyCount/total*100):projectReadiness.length?0:null;
-  const blockerCount=(item:ProductionReadiness)=>item.blockers.missing_panels.length+item.blockers.unapproved_shots.length+item.blockers.missing_speech.length+(item.blockers.missing_videos?.length??0);
+  const blockerCount=(item:ProductionReadiness)=>item.blockers.missing_panels.length+(item.blockers.stale_panels?.length??0)+item.blockers.unapproved_shots.length+item.blockers.missing_speech.length+(item.blockers.missing_videos?.length??0);
   const projectBlockerCount=projectReadiness.reduce((total,item)=>total+blockerCount(item),0);
   const storyboardProgress=percentage(projectTotals.panels,projectTotals.shots);
   const generationProgress=percentage(projectTotals.panels+projectTotals.approved,projectTotals.shots*2);

@@ -15,6 +15,16 @@ class ShotInputReferenceError(ValueError):
     pass
 
 
+def _canonical_snapshot_value(value: Any) -> Any:
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _canonical_snapshot_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_canonical_snapshot_value(item) for item in value]
+    return value
+
+
 @dataclass(frozen=True)
 class CompiledShotInput:
     snapshot: dict[str, Any]
@@ -26,7 +36,7 @@ class CompiledShotInput:
     @property
     def snapshot_hash(self) -> str:
         canonical = json.dumps(
-            self.snapshot,
+            _canonical_snapshot_value(self.snapshot),
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),

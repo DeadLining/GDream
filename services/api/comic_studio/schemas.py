@@ -921,6 +921,10 @@ class AssetRead(BaseModel):
     height: int | None
     duration_seconds: float | None
     created_at: datetime
+    is_stale: bool = False
+    stale_reason: Literal[
+        "missing_provenance", "inputs_changed", "inputs_unavailable"
+    ] | None = None
 
 
 LibraryAssetKind = Literal["scene", "prop", "costume", "sound"]

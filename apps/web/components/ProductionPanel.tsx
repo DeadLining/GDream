@@ -242,6 +242,7 @@ export function ProductionPanel({
       <div><span className="eyebrow">批量生产</span><h1>剧集生产队列</h1></div>
       {displayedReadiness && <div className="readiness-summary">
         <span>缺少画面 {displayedReadiness.blockers.missing_panels.length}</span>
+        <span>过期画面 {displayedReadiness.blockers.stale_panels?.length ?? 0}</span>
         <span>未审核 {displayedReadiness.blockers.unapproved_shots.length}</span>
         <span>缺少配音 {displayedReadiness.blockers.missing_speech.length}</span>
         <span>缺少视频 {displayedReadiness.blockers.missing_videos?.length ?? 0}</span>

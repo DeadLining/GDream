@@ -345,8 +345,11 @@ button { color: inherit; }
   border: 2px solid var(--color-accent) !important;
   box-shadow: 0 0 0 2px var(--color-accent-bg);
 }
+.panel-versions button.stale { border-color: var(--color-warning) !important; }
 .panel-versions i { background: var(--color-accent-strong) !important; }
 .panel-versions span { background: rgb(15 23 42 / 0.85) !important; color: #fff !important; border-radius: var(--radius-sm); backdrop-filter: blur(8px); }
+.panel-versions em { position:absolute; top:4px; left:4px; padding:2px 5px; border-radius:var(--radius-sm); background:var(--color-warning-bg); color:var(--color-warning-text); font-size:9px; font-style:normal; font-weight:800; }
+.panel-stale-notice { margin:10px 0 0; padding:9px 10px; border-left:3px solid var(--color-warning); background:var(--color-warning-bg); color:var(--color-warning-text); font-size:10px; line-height:1.45; }
 
 /* —— 对话框 —— */
 .dialog-backdrop {
@@ -885,4 +888,3 @@ html { scrollbar-gutter: stable; }
   display: inline-flex;
   align-items: center;
 }
-

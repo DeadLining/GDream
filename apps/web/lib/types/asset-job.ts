@@ -7,6 +7,7 @@ export type Asset = {
   id: string; kind: string; media_url: string; media_type: string; provider: string;
   model: string; generation_attempt: number; review_status: string; width: number | null;
   height: number | null; duration_seconds: number | null; created_at: string;
+  is_stale?: boolean; stale_reason?: 'missing_provenance'|'inputs_changed'|'inputs_unavailable'|null;
 };
 export type LibraryAssetKind='scene'|'prop'|'costume'|'sound';
 export type LibraryAsset={

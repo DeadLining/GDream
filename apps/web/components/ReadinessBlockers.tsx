@@ -19,6 +19,7 @@ export function ReadinessBlockers({
       <h2 id="readiness-blockers-heading">{ready ? <CircleCheck size={15}/> : <AlertTriangle size={15}/>} {ready ? '素材已就绪' : '渲染阻塞'}</h2>
       {!ready && <ul>
         <li>缺少画面 {blockers.missing_panels.length}</li>
+        <li>过期画面 {blockers.stale_panels?.length ?? 0}</li>
         <li>未审核镜头 {blockers.unapproved_shots.length}</li>
         <li>缺少配音 {blockers.missing_speech.length}</li>
       </ul>}

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
+from comic_studio.services.panel_freshness import PanelFreshnessService
 
 
 class RenderingService:
@@ -85,6 +86,8 @@ class RenderingService:
                 panel = self.session.get(models.Asset, shot.active_panel_asset_id)
                 if panel is None:
                     raise ValueError(f"Shot {shot.id} panel asset is missing")
+                if PanelFreshnessService(self.session).inspect(shot.id, panel).is_stale:
+                    raise ValueError(f"Shot {shot.id} panel is stale")
                 panel_path = (self.data_root / panel.local_path).resolve()
                 if not panel_path.is_file():
                     raise ValueError(f"Shot {shot.id} panel file is missing")

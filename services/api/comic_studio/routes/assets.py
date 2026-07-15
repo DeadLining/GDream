@@ -3,13 +3,18 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from comic_studio import models, schemas
 from comic_studio.assets import AssetStore
 from comic_studio.jobs import JobStore
-from comic_studio.services.panels import PanelService
+from comic_studio.services.panel_freshness import PanelFreshnessService
 
 
 router = APIRouter(tags=["assets"])
 
 
-def asset_response(asset: models.Asset) -> schemas.AssetRead:
+def asset_response(
+    asset: models.Asset,
+    *,
+    is_stale: bool = False,
+    stale_reason: str | None = None,
+) -> schemas.AssetRead:
     return schemas.AssetRead(
         id=asset.id,
         kind=asset.kind,
@@ -23,6 +28,8 @@ def asset_response(asset: models.Asset) -> schemas.AssetRead:
         height=asset.height,
         duration_seconds=asset.duration_seconds,
         created_at=asset.created_at,
+        is_stale=is_stale,
+        stale_reason=stale_reason,
     )
 
 
@@ -83,7 +90,15 @@ def list_panel_versions(shot_id: str, request: Request):
         assets = AssetStore(session, request.app.state.settings.data_root).list_panel_versions(
             shot_id
         )
-        return [asset_response(asset) for asset in assets]
+        freshness = PanelFreshnessService(session).inspect_many(shot_id, assets)
+        return [
+            asset_response(
+                asset,
+                is_stale=freshness[asset.id].is_stale,
+                stale_reason=freshness[asset.id].reason,
+            )
+            for asset in assets
+        ]
 
 
 @router.put(

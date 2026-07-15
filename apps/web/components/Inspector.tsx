@@ -34,7 +34,14 @@ export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; c
   const generateVideo = async()=>{if(generatingVideo)return;setGeneratingVideo(true);setError('');setJob(null);try{const updated=await updateShot(shot.id,{video_prompt:form.video_prompt??'',negative_video_prompt:form.negative_video_prompt??''});setForm(updated);onShotUpdated?.(updated);const started=await startVideoGeneration(shot.id,true);const finished=await pollJob(started.job_id);setJob(finished);if(finished.status==='succeeded'){setVideos(await listVideoVersions(shot.id));onShotUpdated?.({...updated,active_video_asset_id:String(finished.result_metadata.asset_id??updated.active_video_asset_id)});}}catch(cause){setError(cause instanceof Error?cause.message:'视频生成失败');}finally{setGeneratingVideo(false);}};
   const selectVideo=async(assetId:string)=>{const updated=await activateVideo(shot.id,assetId);onShotUpdated?.(updated);setForm(updated);};
   const activePanel = assets.find(asset => asset.id === form.active_panel_asset_id);
-  const canGenerateVideo = Boolean(form.active_panel_asset_id && form.review_status === 'approved' && !generatingVideo);
+  const stalePanelMessage=activePanel?.is_stale
+    ?activePanel.stale_reason==='missing_provenance'
+      ?'当前画面缺少可验证的生成快照'
+      :activePanel.stale_reason==='inputs_unavailable'
+        ?'当前画面依赖的角色或导演输入已不可用'
+        :'当前画面使用的角色、场景或导演输入已变化'
+    :'';
+  const canGenerateVideo = Boolean(form.active_panel_asset_id && form.review_status === 'approved' && !activePanel?.is_stale && !generatingVideo);
 
   return <aside className="inspector">
     <div className="inspector-heading"><span>镜头检查器</span><h2>镜头 {shot.position}</h2><p>{shot.shot_type.replaceAll('_', ' ')} · {shot.duration_seconds} 秒</p></div>
@@ -52,7 +59,8 @@ export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; c
       <label htmlFor="shot-prompt">生成提示词</label><textarea id="shot-prompt" value={form.image_prompt} onChange={event => setForm({...form, image_prompt: event.target.value})} rows={5} className="prompt-field"/>
       <label className="field-spacer" htmlFor="shot-negative-prompt">负面提示词</label><textarea id="shot-negative-prompt" value={form.negative_prompt} onChange={event => setForm({...form, negative_prompt: event.target.value})} rows={2} className="prompt-field"/>
       {error && <p className="form-error">{error}</p>}
-      <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate} disabled={generatingPanel}><ImagePlus size={18}/>{generatingPanel?'生成中':'生成画面'}</button></div>
+      {stalePanelMessage&&<p className="panel-stale-notice" role="status">{stalePanelMessage}</p>}
+      <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate} disabled={generatingPanel}><ImagePlus size={18}/>{generatingPanel?'生成中':activePanel?.is_stale?'重新生成画面':'生成画面'}</button></div>
       <JobStatus job={job}/>
     </section>
     <PanelVersions assets={assets} activeId={form.active_panel_asset_id} onActivate={activate}/>
@@ -75,7 +83,7 @@ export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; c
       <textarea id="shot-video-prompt" aria-label="视频动态提示词" className="prompt-field" value={form.video_prompt??''} onChange={event=>setForm({...form,video_prompt:event.target.value})} rows={4} placeholder="例如：镜头缓慢推近，人物抬眼，衣角被风吹动，保持角色外观稳定"/>
       <label className="field-spacer" htmlFor="shot-negative-video-prompt">视频负面提示词</label>
       <textarea id="shot-negative-video-prompt" aria-label="视频负面提示词" className="prompt-field" value={form.negative_video_prompt??''} onChange={event=>setForm({...form,negative_video_prompt:event.target.value})} rows={2} placeholder="例如：闪烁、变形、额外肢体、镜头抖动"/>
-      {!form.active_panel_asset_id || form.review_status !== 'approved' ? <p className="video-generation-gate">先生成并选中一张画面，再将镜头审核为已通过。</p> : null}
+      {activePanel?.is_stale?<p className="video-generation-gate">当前画面已过期，请重新生成后再生成视频。</p>:!form.active_panel_asset_id || form.review_status !== 'approved' ? <p className="video-generation-gate">先生成并选中一张画面，再将镜头审核为已通过。</p> : null}
       <button className="primary-action video-generate" onClick={generateVideo} disabled={!canGenerateVideo} aria-label="使用首帧和提示词生成视频"><Film size={16}/>{generatingVideo?'正在生成视频':'使用首帧 + 提示词生成视频'}</button>
       <div className="video-versions">{videos.map(asset=><button key={asset.id} className={form.active_video_asset_id===asset.id?'active':''} onClick={()=>selectVideo(asset.id)}><video src={mediaUrl(asset.media_url)} muted playsInline controls/><span>V{asset.generation_attempt}</span></button>)}</div>
     </section>
