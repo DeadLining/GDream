@@ -8,7 +8,8 @@ import type {DirectorStage,Scene} from '../lib/types';
 const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
 vi.mock('../lib/api',()=>mocks);
 const overrideTransform={position:[2,0,0],rotation:[0,.5,0],scale:[1,1,1]} as const;
-vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable,mode,objects,onTransform}:{editable:boolean;mode:string;objects:Array<{id:string;visible:boolean}>;onTransform:(id:string,transform:typeof overrideTransform)=>void})=><button data-testid="director-canvas" data-editable={String(editable)} data-mode={mode} data-visible={String(objects[0]?.visible)} onClick={()=>objects[0]&&onTransform(objects[0].id,overrideTransform)}>移动对象</button> }));
+const movedCamera={position:[2,2.4,6] as [number,number,number],target:[0,.9,0] as [number,number,number],rotation:[-.1,.25,0] as [number,number,number]};
+vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable,mode,transformMode,objects,onTransform,onCameraChange}:{editable:boolean;mode:string;transformMode:string;objects:Array<{id:string;visible:boolean}>;onTransform:(id:string,transform:typeof overrideTransform)=>void;onCameraChange?:(camera:typeof movedCamera)=>void})=><div data-testid="director-canvas" data-editable={String(editable)} data-mode={mode} data-transform-mode={transformMode} data-visible={String(objects[0]?.visible)}><button onClick={()=>objects[0]&&onTransform(objects[0].id,overrideTransform)}>移动对象</button><button onClick={()=>onCameraChange?.(movedCamera)}>移动相机</button></div> }));
 
 const scene:Scene={id:'scene-1',position:1,location:'天台',time_of_day:'night',summary:'对峙',continuity_state:{},estimated_duration_seconds:10,shots:[{id:'shot-1',position:1,shot_type:'medium',duration_seconds:5,composition:'对峙',camera_motion:'static',character_state:{},image_prompt:'',negative_prompt:'',active_panel_asset_id:null,review_status:'draft',render_status:'pending',dialogue:[]}]};
 const directorObject={id:'object-1',stage_id:'stage-1',kind:'primitive' as const,source_type:'placeholder' as const,source_id:null,label:'方块',position:1,transform:{position:[0,0,0] as [number,number,number],rotation:[0,0,0] as [number,number,number],scale:[1,1,1] as [number,number,number]},appearance:{},metadata:{},visible:true};
@@ -49,6 +50,59 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getByLabelText('本镜头显示'));
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',2,{object_overrides:{'object-1':{transform:overrideTransform,visible:false}}}));
     expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
+  });
+  it('switches the selected object to rotate controls',async()=>{
+    mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'方块'}));
+    await userEvent.click(screen.getByRole('button',{name:'旋转对象'}));
+    expect(screen.getByTestId('director-canvas')).toHaveAttribute('data-transform-mode','rotate');
+  });
+  it('grounds the selected object as a shot override in camera mode',async()=>{
+    const elevatedObject={...directorObject,transform:{...directorObject.transform,position:[1,2,3] as [number,number,number]}};
+    const elevatedStage={...stage,objects:[elevatedObject]};
+    const groundedTransform={...elevatedObject.transform,position:[1,0,3] as [number,number,number]};
+    const savedCamera={...stage.shot_cameras[0],version:2,object_overrides:{'object-1':{transform:groundedTransform}}};
+    mocks.getDirectorStage.mockResolvedValue(elevatedStage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.updateDirectorCamera.mockResolvedValue(savedCamera);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'方块'}));
+    await userEvent.click(screen.getByRole('button',{name:'对象落地'}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{transform:groundedTransform}}}));
+    expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
+  });
+  it('centers the selected object in the main scene layout',async()=>{
+    const offsetObject={...directorObject,transform:{position:[4,1,-3] as [number,number,number],rotation:[0,.5,0] as [number,number,number],scale:[1.2,1.2,1.2] as [number,number,number]}};
+    const offsetStage={...stage,objects:[offsetObject]};
+    const centeredTransform={...offsetObject.transform,position:[0,1,0] as [number,number,number]};
+    mocks.getDirectorStage.mockResolvedValue(offsetStage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.updateDirectorObject.mockResolvedValue({...offsetObject,transform:centeredTransform});
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'方块'}));
+    await userEvent.click(screen.getByRole('button',{name:'场景居中'}));
+    await waitFor(()=>expect(mocks.updateDirectorObject).toHaveBeenCalledWith('object-1',1,{transform:centeredTransform}));
+    expect(mocks.updateDirectorCamera).not.toHaveBeenCalled();
+  });
+  it('persists the navigated camera pose together with focal length',async()=>{
+    const savedCamera={...stage.shot_cameras[0],...movedCamera,version:2,focal_length_mm:65};
+    mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.updateDirectorCamera.mockResolvedValue(savedCamera);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'移动相机'}));
+    await userEvent.clear(screen.getByLabelText('焦距'));
+    await userEvent.type(screen.getByLabelText('焦距'),'65');
+    await userEvent.click(screen.getByRole('button',{name:'保存相机'}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{...movedCamera,focal_length_mm:65}));
+  });
+  it('stores a character pose preset on the selected shot',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true}};
+    const characterStage={...stage,objects:[characterObject]};
+    const posedCamera={...stage.shot_cameras[0],version:2,object_overrides:{'object-1':{pose_preset:'action'}}};
+    mocks.getDirectorStage.mockResolvedValue(characterStage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.updateDirectorCamera.mockResolvedValue(posedCamera);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+    await userEvent.selectOptions(screen.getByLabelText('角色姿态'),'action');
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{pose_preset:'action'}}}));
   });
   it('resets shot overrides and confirms object deletion',async()=>{
     const overridden={...stage,shot_cameras:[{...stage.shot_cameras[0],object_overrides:{'object-1':{visible:false}}}]};

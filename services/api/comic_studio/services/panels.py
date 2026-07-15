@@ -65,6 +65,14 @@ class PanelService:
             )
             present_character_ids.update(compiled.character_ids)
         reference_assets: list[models.Asset] = []
+        for preview_id in dict.fromkeys(
+            compiled.director_preview_asset_id
+            for compiled in compiled_inputs
+            if compiled.director_preview_asset_id
+        ):
+            preview = self.session.get(models.Asset, preview_id)
+            if preview is not None:
+                reference_assets.append(preview)
         if present_character_ids:
             references = list(
                 self.session.scalars(
@@ -133,20 +141,25 @@ class PanelService:
             loader = get_art_style_loader()
             style_prefix = loader.get_prefix(style_id)
             style_negative = loader.get_negative(style_id)
-        panel_descriptions = "\n".join(
-            "\n".join(
-                filter(
-                    None,
-                    [
-                        f"{index}. Shot: {shot.composition}. {shot.image_prompt}",
-                        compiled.prompt_constraints,
-                    ],
+        reference_indices = {
+            asset.id: index for index, asset in enumerate(reference_assets, start=1)
+        }
+        panel_description_items: list[str] = []
+        for index, (shot, compiled) in enumerate(
+            zip(shots, compiled_inputs), start=1
+        ):
+            lines = [f"{index}. Shot: {shot.composition}. {shot.image_prompt}"]
+            preview_index = reference_indices.get(compiled.director_preview_asset_id or "")
+            if preview_index is not None:
+                lines.append(
+                    f"Use reference image {preview_index} as the saved 3D director "
+                    f"composition for panel {index}. Preserve its camera angle, "
+                    "framing, subject placement, and spatial proportions."
                 )
-            )
-            for index, (shot, compiled) in enumerate(
-                zip(shots, compiled_inputs), start=1
-            )
-        )
+            if compiled.prompt_constraints:
+                lines.append(compiled.prompt_constraints)
+            panel_description_items.append("\n".join(lines))
+        panel_descriptions = "\n".join(panel_description_items)
         negative_constraints = self._combine_negative(
             ", ".join(dict.fromkeys(shot.negative_prompt for shot in shots if shot.negative_prompt)),
             style_negative,
@@ -223,6 +236,13 @@ class PanelService:
             line.character_id for line in shot.dialogue if line.character_id is not None
         } | set(compiled.character_ids)
         reference_assets: list[models.Asset] = []
+        director_preview = (
+            self.session.get(models.Asset, compiled.director_preview_asset_id)
+            if compiled.director_preview_asset_id
+            else None
+        )
+        if director_preview is not None:
+            reference_assets.append(director_preview)
         if present_character_ids:
             references = list(
                 self.session.scalars(
@@ -323,6 +343,14 @@ class PanelService:
         if review_context and review_context.get("source_asset_id"):
             review_source = self.session.get(
                 models.Asset, review_context["source_asset_id"]
+            )
+        if director_preview is not None and review_source is None:
+            preview_index = 2 if tail_asset is not None else 1
+            prompt = (
+                f"{prompt}\n\nComposition reference: use the saved 3D director preview "
+                f"(reference image {preview_index}) for camera angle, framing, subject "
+                "placement, and spatial proportions. Preserve character identity and "
+                "the requested visual style from the other references and prompt."
             )
         reference_inputs = []
         annotated_reference = False

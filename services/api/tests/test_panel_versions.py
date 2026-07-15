@@ -262,6 +262,66 @@ def test_generate_panel_injects_previous_shot_tail_frame(db_session, tmp_path):
     assert asset.request_metadata["reference_asset_ids"][0] == f"tail:{tail.id}"
 
 
+def test_generate_panel_uses_saved_director_preview_as_composition_reference(
+    db_session, tmp_path
+):
+    project, shot = seed_shot(db_session)
+    stage = models.DirectorStage(scene_id=shot.scene_id, environment={})
+    db_session.add(stage)
+    db_session.flush()
+    camera = models.ShotCamera(
+        stage_id=stage.id,
+        shot_id=shot.id,
+        position=[1, 2, 6],
+        target=[0, 1, 0],
+        rotation=[0, 0, 0],
+        focal_length_mm=50,
+        shot_size="medium",
+        camera_motion="static",
+    )
+    db_session.add(camera)
+    db_session.flush()
+    preview = models.Asset(
+        project_id=project.id,
+        kind=f"director_preview:{camera.id}",
+        local_path=f"projects/{project.id}/director/{stage.id}/{camera.id}.png",
+        media_type="image/png",
+        provider="director",
+        model="threejs",
+        checksum="e" * 64,
+    )
+    db_session.add(preview)
+    db_session.flush()
+    camera.preview_asset_id = preview.id
+    db_session.commit()
+    preview_path = tmp_path / preview.local_path
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+    preview_path.write_bytes(PNG)
+
+    class Provider:
+        model = "test-image"
+        references = None
+        prompt = ""
+
+        async def edit(self, prompt, references, size="1024x1536", quality="auto"):
+            self.prompt = prompt
+            self.references = references
+            return ImageResult(PNG, media_type="image/png")
+
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("director preview must use image edit generation")
+
+    provider = Provider()
+    asset = asyncio.run(
+        PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
+    )
+
+    assert provider.references == [(PNG, "image/png")]
+    assert "3d director preview" in provider.prompt.lower()
+    assert asset.request_metadata["reference_asset_ids"][0] == preview.id
+    assert asset.request_metadata["input_snapshot"]["director"]["camera"]["preview_asset_id"] == preview.id
+
+
 def test_generate_panel_compiles_bound_variant_state_and_director_input(
     db_session, tmp_path
 ):
@@ -408,7 +468,8 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
                         "position": [2, 0, 0],
                         "rotation": [0, 0.5, 0],
                         "scale": [1.2, 1.2, 1.2],
-                    }
+                    },
+                    "pose_preset": "action",
                 },
                 hidden_prop.id: {"visible": False},
             },
@@ -432,6 +493,7 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "85mm" in provider.prompt
     assert "林夏" in provider.prompt
     assert "position [2, 0, 0]" in provider.prompt
+    assert "pose action" in provider.prompt
     assert "隐藏证物箱" not in provider.prompt
     assert "camera position [1, 2, 6]" in provider.prompt
     assert "target [0, 1, 0]" in provider.prompt
@@ -444,6 +506,7 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert snapshot["asset_bindings"][0]["state_id"] == state.id
     assert snapshot["director"]["camera"]["focal_length_mm"] == 85
     assert snapshot["director"]["objects"][0]["transform"]["position"] == [2, 0, 0]
+    assert snapshot["director"]["objects"][0]["appearance"]["pose_preset"] == "action"
     assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id, costume_asset.id]
     assert costume_media.id in asset.request_metadata["reference_asset_ids"]
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64

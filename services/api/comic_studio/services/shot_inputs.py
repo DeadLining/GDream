@@ -21,6 +21,7 @@ class CompiledShotInput:
     prompt_constraints: str
     character_ids: frozenset[str]
     reference_asset_ids: tuple[str, ...]
+    director_preview_asset_id: str | None
 
     @property
     def snapshot_hash(self) -> str:
@@ -215,6 +216,21 @@ class ShotInputCompiler:
             )
 
         director = self._director_snapshot(shot)
+        director_preview_asset_id = None
+        preview_asset_id = (
+            director["camera"].get("preview_asset_id")
+            if director["camera"]
+            else None
+        )
+        if preview_asset_id:
+            preview_asset = self.session.get(models.Asset, preview_asset_id)
+            if preview_asset is None or preview_asset.project_id != project.id:
+                raise ShotInputReferenceError(
+                    "Director preview asset must belong to the shot project"
+                )
+            if not preview_asset.media_type.startswith("image/"):
+                raise ShotInputReferenceError("Director preview asset must be an image")
+            director_preview_asset_id = preview_asset.id
         if director["camera"]:
             camera = director["camera"]
             prompt_lines.append(
@@ -237,7 +253,8 @@ class ShotInputCompiler:
                 f"source {item['source_type']}:{item['source_id'] or 'none'}; "
                 f"position {self._format_vector(transform.get('position', [0, 0, 0]))}; "
                 f"rotation {self._format_vector(transform.get('rotation', [0, 0, 0]))}; "
-                f"scale {self._format_vector(transform.get('scale', [1, 1, 1]))}"
+                f"scale {self._format_vector(transform.get('scale', [1, 1, 1]))}; "
+                f"pose {item['appearance'].get('pose_preset', 'neutral')}"
             )
         prompt_constraints = (
             "Bound production inputs:\n" + "\n".join(prompt_lines)
@@ -277,6 +294,7 @@ class ShotInputCompiler:
             prompt_constraints=prompt_constraints,
             character_ids=frozenset(character_ids),
             reference_asset_ids=tuple(dict.fromkeys(reference_asset_ids)),
+            director_preview_asset_id=director_preview_asset_id,
         )
 
     def _variant_lineage(
@@ -315,6 +333,9 @@ class ShotInputCompiler:
             visible = override.get("visible", item.visible)
             if not visible:
                 continue
+            appearance = dict(item.appearance or {})
+            if override.get("pose_preset"):
+                appearance["pose_preset"] = override["pose_preset"]
             objects.append(
                 {
                     "id": item.id,
@@ -323,7 +344,7 @@ class ShotInputCompiler:
                     "source_id": item.source_id,
                     "label": item.label,
                     "transform": override.get("transform", item.transform),
-                    "appearance": item.appearance,
+                    "appearance": appearance,
                     "visible": visible,
                 }
             )

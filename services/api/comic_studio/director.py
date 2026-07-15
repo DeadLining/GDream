@@ -47,6 +47,7 @@ class DirectorStagePatch(StrictDirectorModel):
 class DirectorObjectOverride(StrictDirectorModel):
     transform:Transform|None=None
     visible:bool|None=None
+    pose_preset:Literal["neutral","dialogue","action","injured"]|None=None
 
 
 class ShotCameraPatch(StrictDirectorModel):

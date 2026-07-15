@@ -4,7 +4,14 @@ export function applyDirectorObjectOverrides(objects:DirectorObject[],overrides:
   return objects.map(object=>{
     const override=overrides[object.id];
     if(!override)return object;
-    return {...object,transform:override.transform??object.transform,visible:override.visible??object.visible};
+    return {
+      ...object,
+      transform:override.transform??object.transform,
+      visible:override.visible??object.visible,
+      appearance:override.pose_preset
+        ? {...object.appearance,pose_preset:override.pose_preset}
+        : object.appearance,
+    };
   });
 }
 
