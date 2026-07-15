@@ -217,12 +217,14 @@ class EpisodeAIRunService:
             (item for item in run.stages if item.position > stage.position and item.status == "pending"),
             None,
         )
-        if next_stage is None:
+        if run.status == "cancelled":
+            pass
+        elif next_stage is None:
             run.status = "completed"
             run.active_slot = None
             run.progress = 100
         else:
             run.current_stage = next_stage.stage
-            run.status = "queued"
+            run.status = "paused" if run.pause_requested else "queued"
         run.error = ""
         return self._save(run)
