@@ -185,6 +185,21 @@ describe('ReviewPanel', () => {
     expect(onEpisodeChanged).toHaveBeenCalled();
   });
 
+  it('numbers timeline shots continuously across scenes',async()=>{
+    mocks.threads.mockResolvedValue([]);
+    const secondScene={...episode.scenes[0],id:'scene-2',position:2,location:'雨巷深处',shots:[{...episode.scenes[0].shots[2],id:'shot-4',position:1}]};
+    const multiSceneEpisode={...episode,scenes:[{...episode.scenes[0],shots:episode.scenes[0].shots.slice(0,2)},secondScene]};
+    const onSelectShot=vi.fn();
+    render(<ReviewPanel episode={multiSceneEpisode} readiness={readiness} onSelectShot={onSelectShot}/>);
+
+    const timeline=within(screen.getByLabelText('多轨时间线'));
+    const buttons=[1,2,3].map(index=>timeline.getByRole('button',{name:`镜头 ${index}`}));
+    expect(buttons.map(button=>button.textContent)).toEqual(['镜头 01场景 01','镜头 02场景 01','镜头 03场景 02']);
+
+    await userEvent.click(buttons[2]);
+    expect(onSelectShot).toHaveBeenCalledWith('shot-4');
+  });
+
   it('controls real video playback and mute state', async () => {
     mocks.threads.mockResolvedValue([]);
     mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
