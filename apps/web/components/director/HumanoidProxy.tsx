@@ -1,11 +1,11 @@
 'use client';
 
-import {useEffect,useRef} from 'react';
-import {useFrame} from '@react-three/fiber';
+import {useRef} from 'react';
 import type {Group} from 'three';
-import {directorAnimationMotion} from '../../lib/director-animations';
+import {directorAnimationDuration,directorAnimationMotion} from '../../lib/director-animations';
 import {humanoidPoseRotation,type HumanoidBoneId} from '../../lib/director-humanoid';
 import type {DirectorAnimationClip,DirectorObject,DirectorPosePreset,Vector3} from '../../lib/types';
+import {useDirectorProxyAnimationTime} from './useDirectorProxyAnimationTime';
 
 const clamp=(value:unknown,fallback:number,min:number,max:number)=>typeof value==='number'&&Number.isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
 
@@ -18,6 +18,7 @@ export function HumanoidProxy({object}:{object:DirectorObject}){
   const body=clamp(appearance.proxy_body_width,1,.7,1.4);
   const animation=(typeof appearance.animation_clip==='string'?appearance.animation_clip:'idle') as DirectorAnimationClip;
   const playing=appearance.animation_playing===true;
+  const animationTime=typeof appearance.animation_time_seconds==='number'&&Number.isFinite(appearance.animation_time_seconds)?appearance.animation_time_seconds:0;
   const rotation=(bone:HumanoidBoneId)=>humanoidPoseRotation(pose,bone);
   const rootRef=useRef<Group>(null);
   const hipsRef=useRef<Group>(null);
@@ -28,19 +29,18 @@ export function HumanoidProxy({object}:{object:DirectorObject}){
   const leftLegRef=useRef<Group>(null);
   const rightLegRef=useRef<Group>(null);
   const setRotation=(target:Group|null,base:Vector3,delta:Vector3)=>target?.rotation?.set(base[0]+delta[0],base[1]+delta[1],base[2]+delta[2]);
-  const applyMotion=(time:number|null)=>{
-    const motion=time===null?null:directorAnimationMotion(animation,time);
-    if(rootRef.current?.position)rootRef.current.position.y=motion?.rootY??0;
-    setRotation(hipsRef.current,rotation('Hips'),[0,motion?.rootYaw??0,0]);
-    setRotation(chestRef.current,rotation('Chest'),[0,motion?.chestYaw??0,0]);
-    setRotation(headRef.current,rotation('Head'),[0,motion?.headYaw??0,0]);
-    setRotation(leftArmRef.current,rotation('LeftUpperArm'),[motion?.leftArm??0,0,0]);
-    setRotation(rightArmRef.current,rotation('RightUpperArm'),[motion?.rightArm??0,0,0]);
-    setRotation(leftLegRef.current,rotation('LeftUpperLeg'),[motion?.leftLeg??0,0,0]);
-    setRotation(rightLegRef.current,rotation('RightUpperLeg'),[motion?.rightLeg??0,0,0]);
+  const applyMotion=(time:number)=>{
+    const motion=directorAnimationMotion(animation,time);
+    if(rootRef.current?.position)rootRef.current.position.y=motion.rootY;
+    setRotation(hipsRef.current,rotation('Hips'),[0,motion.rootYaw,0]);
+    setRotation(chestRef.current,rotation('Chest'),[0,motion.chestYaw,0]);
+    setRotation(headRef.current,rotation('Head'),[0,motion.headYaw,0]);
+    setRotation(leftArmRef.current,rotation('LeftUpperArm'),[motion.leftArm,0,0]);
+    setRotation(rightArmRef.current,rotation('RightUpperArm'),[motion.rightArm,0,0]);
+    setRotation(leftLegRef.current,rotation('LeftUpperLeg'),[motion.leftLeg,0,0]);
+    setRotation(rightLegRef.current,rotation('RightUpperLeg'),[motion.rightLeg,0,0]);
   };
-  useEffect(()=>applyMotion(null),[animation,playing,pose]);
-  useFrame(({clock})=>{if(playing)applyMotion(clock.getElapsedTime());});
+  useDirectorProxyAnimationTime({animation,durationSeconds:directorAnimationDuration(animation),playing,timeSeconds:animationTime,applyTime:applyMotion,renderKey:pose});
   const joint=(radius=.055)=><mesh><sphereGeometry args={[radius,10,8]}/><meshStandardMaterial color="#263238"/></mesh>;
   const limb=(length:number,radius=.075)=><mesh position={[0,-length/2,0]} castShadow><capsuleGeometry args={[radius,Math.max(.01,length-radius*2),5,8]}/><meshStandardMaterial color={color} roughness={.72}/></mesh>;
   return <group ref={rootRef} name={`humanoid-rig-${object.id}`} scale={[height,height,height]} userData={{rigType:'standard_humanoid'}}>

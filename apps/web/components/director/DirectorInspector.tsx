@@ -2,7 +2,7 @@
 
 import {useEffect,useState} from 'react';
 import {AlignCenter,ArrowDownToLine,Copy,Magnet,Move3D,Pause,Play,Rotate3D,RotateCcw,Save,Scaling,Trash2} from 'lucide-react';
-import {DIRECTOR_ANIMATION_CLIPS} from '../../lib/director-animations';
+import {DIRECTOR_ANIMATION_CLIPS,directorAnimationDuration} from '../../lib/director-animations';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
 import {DIRECTOR_PROXY_RIGS,isAnimatedDirectorProxy,resolveDirectorProxyRig} from '../../lib/director-proxies';
 import type {DirectorEnvironmentSettings} from '../../lib/director-environment';
@@ -126,6 +126,9 @@ export function DirectorInspector({
   const pose=(typeof object?.appearance.pose_preset==='string'?object.appearance.pose_preset:'neutral') as DirectorPosePreset;
   const animation=(typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'idle') as DirectorAnimationClip;
   const animationPlaying=object?.appearance.animation_playing===true;
+  const storedAnimationTime=typeof object?.appearance.animation_time_seconds==='number'&&Number.isFinite(object.appearance.animation_time_seconds)?object.appearance.animation_time_seconds:0;
+  const proxyAnimationDuration=directorAnimationDuration(animation);
+  const proxyAnimationTime=Math.min(proxyAnimationDuration,Math.max(0,storedAnimationTime));
   const modelUrl=typeof object?.appearance.model_url==='string'?object.appearance.model_url.trim():'';
   const proxyRig=object?resolveDirectorProxyRig(object):'prop_box';
   const usesProxy=Boolean(object&&!modelUrl&&object.kind!=='background'&&object.kind!=='light');
@@ -135,7 +138,6 @@ export function DirectorInspector({
   const storedImportedAnimation=typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'';
   const importedAnimation=importedClips.some(item=>item.name===storedImportedAnimation)?storedImportedAnimation:importedClips[0]?.name??'';
   const importedDuration=importedClips.find(item=>item.name===importedAnimation)?.duration_seconds??0;
-  const storedAnimationTime=typeof object?.appearance.animation_time_seconds==='number'&&Number.isFinite(object.appearance.animation_time_seconds)?object.appearance.animation_time_seconds:0;
   const importedAnimationTime=Math.min(importedDuration,Math.max(0,storedAnimationTime));
   const poseable=Boolean(object?.kind==='character'&&(humanoidProxy||(object.source_type==='model'&&object.metadata.has_skeleton)));
   const bodyControls=[
@@ -167,7 +169,11 @@ export function DirectorInspector({
       </>}
       {cameraMode&&animatedProxy&&<div className="director-animation-controls">
         <label htmlFor="director-animation">动画片段</label>
-        <div><select id="director-animation" value={animation} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select><button type="button" className="command-button" aria-label={animationPlaying?'暂停动画':'播放动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button></div>
+        <select id="director-animation" value={animation} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>
+        <label htmlFor="director-proxy-animation-time">代理动画时间</label>
+        <input id="director-proxy-animation-time" type="range" min="0" max={proxyAnimationDuration} step="0.01" value={proxyAnimationTime} onChange={event=>onAnimationTimeChange(Number(event.target.value))}/>
+        <output>{formatNumber(proxyAnimationTime,2)} / {formatNumber(proxyAnimationDuration,2)} 秒</output>
+        <div><button type="button" className="command-button" aria-label={animationPlaying?'暂停动画':'播放动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button><button type="button" className="command-button" aria-label="重置代理动画" onClick={onAnimationReset}><RotateCcw size={14}/></button></div>
       </div>}
       {cameraMode&&modelUrl&&importedClips.length>0&&<div className="director-animation-controls">
         <label htmlFor="director-imported-animation">导入动画片段</label>

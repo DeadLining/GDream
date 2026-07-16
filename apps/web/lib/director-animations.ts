@@ -1,13 +1,15 @@
 import type {DirectorAnimationClip} from './types';
 
-export const DIRECTOR_ANIMATION_CLIPS:Array<{id:DirectorAnimationClip;label:string}>=[
-  {id:'idle',label:'待机'},
-  {id:'walk',label:'行走'},
-  {id:'run',label:'奔跑'},
-  {id:'talk',label:'说话'},
-  {id:'turn',label:'转身'},
-  {id:'injured',label:'负伤移动'},
+export const DIRECTOR_ANIMATION_CLIPS:Array<{id:DirectorAnimationClip;label:string;duration_seconds:number}>=[
+  {id:'idle',label:'待机',duration_seconds:2},
+  {id:'walk',label:'行走',duration_seconds:2},
+  {id:'run',label:'奔跑',duration_seconds:2},
+  {id:'talk',label:'说话',duration_seconds:2},
+  {id:'turn',label:'转身',duration_seconds:2},
+  {id:'injured',label:'负伤移动',duration_seconds:2},
 ];
+
+export const directorAnimationDuration=(clip:DirectorAnimationClip)=>DIRECTOR_ANIMATION_CLIPS.find(item=>item.id===clip)?.duration_seconds??2;
 
 export type DirectorAnimationMotion={
   rootY:number;
