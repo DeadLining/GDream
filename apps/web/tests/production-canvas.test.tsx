@@ -14,6 +14,7 @@ vi.mock('@xyflow/react',()=>({
 
 import {ProductionCanvas} from '../components/production-canvas/ProductionCanvas';
 import type {EpisodeProductionGraph} from '../lib/types';
+import {readAllStyles} from './_styles';
 
 const graph:EpisodeProductionGraph={
   episode_id:'episode-1',project_id:'project-1',
@@ -28,6 +29,10 @@ const graph:EpisodeProductionGraph={
     {id:'binding-video',project_id:'project-1',capability:'video',name:'default',workflow_id:'comfy-video',workflow_version:4,input_mapping_version:1,enabled:true},
   ],
 };
+
+it('keeps production nodes clickable when connection hit areas cross them',()=>{
+  expect(readAllStyles()).toMatch(/\.production-canvas-v2\s+\.react-flow__edge-interaction\s*\{[^}]*pointer-events:\s*none[^}]*\}/s);
+});
 
 it('renders scene groups, peer shots, shared assets, and the selected shot chain',async()=>{
   render(<ProductionCanvas graph={graph} selectedShotId="shot-2" onSelectShot={vi.fn()}/>);
