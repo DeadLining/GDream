@@ -4,6 +4,7 @@ import {useEffect,useState} from 'react';
 import {AlignCenter,ArrowDownToLine,Copy,Magnet,Move3D,Pause,Play,Rotate3D,RotateCcw,Save,Scaling,Trash2} from 'lucide-react';
 import {DIRECTOR_ANIMATION_CLIPS,directorAnimationDuration} from '../../lib/director-animations';
 import {DIRECTOR_FACIAL_EXPRESSIONS} from '../../lib/director-expressions';
+import {mapHumanoidBoneName} from '../../lib/director-humanoid';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
 import {DIRECTOR_PROXY_RIGS,isAnimatedDirectorProxy,resolveDirectorProxyRig} from '../../lib/director-proxies';
 import type {DirectorEnvironmentSettings} from '../../lib/director-environment';
@@ -161,6 +162,13 @@ export function DirectorInspector({
   const storedGaze=object?.appearance.gaze_target;
   const gazeTarget=Array.isArray(storedGaze)&&storedGaze.length===3&&storedGaze.every(value=>typeof value==='number'&&Number.isFinite(value))?storedGaze as Vector3:null;
   const defaultGazeTarget:Vector3=object?[object.transform.position[0],object.transform.position[1]+1.65,object.transform.position[2]+2]:[0,1.65,2];
+  const skeletons=Array.isArray(object?.metadata.skeletons)?object.metadata.skeletons:[];
+  const importedHeadControllable=skeletons.some(item=>{
+    if(!item||typeof item!=='object')return false;
+    const joints=(item as Record<string,unknown>).joints;
+    return Array.isArray(joints)&&joints.some(name=>typeof name==='string'&&(mapHumanoidBoneName(name)==='Head'||mapHumanoidBoneName(name)==='Neck'));
+  });
+  const headControllable=humanoidProxy||Boolean(modelUrl&&importedHeadControllable);
   const bodyControls=[
     ['proxy_height','角色身高',.75,1.3],
     ['proxy_shoulder_width','肩宽',.7,1.35],
@@ -187,13 +195,13 @@ export function DirectorInspector({
         <select id="director-pose" value={pose} onChange={event=>onPoseChange(event.target.value as DirectorPosePreset)}>
           {DIRECTOR_POSE_PRESETS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
-        <div className="director-animation-controls">
+        {headControllable&&<div className="director-animation-controls">
           <span>头部与视线</span>
           <label htmlFor="director-head-yaw"><span>头部左右</span><input id="director-head-yaw" type="range" aria-label="头部左右" min="-90" max="90" step="1" value={headYaw} disabled={animationSaving} onChange={event=>onHeadDirectionChange('head_yaw_degrees',Number(event.target.value))}/><output>{formatNumber(headYaw,0)}°</output></label>
           <label htmlFor="director-head-pitch"><span>头部俯仰</span><input id="director-head-pitch" type="range" aria-label="头部俯仰" min="-60" max="60" step="1" value={headPitch} disabled={animationSaving} onChange={event=>onHeadDirectionChange('head_pitch_degrees',Number(event.target.value))}/><output>{formatNumber(headPitch,0)}°</output></label>
           <label className="director-checkbox"><input type="checkbox" aria-label="使用视线目标" checked={gazeTarget!==null} disabled={animationSaving} onChange={event=>onGazeTargetChange(event.target.checked?defaultGazeTarget:null)}/><span>使用视线目标</span></label>
           {gazeTarget&&<div className="director-transform-row" key={`${object.id}-${gazeTarget.join(',')}`}><span>视线目标</span>{axes.map((axis,index)=><label key={axis}><small>{axis}</small><input type="number" aria-label={`视线目标 ${axis}`} step="0.1" defaultValue={formatNumber(gazeTarget[index],2)} disabled={animationSaving} onBlur={event=>{const value=Number(event.currentTarget.value);if(Number.isFinite(value))onGazeTargetChange(gazeTarget.map((item,itemIndex)=>itemIndex===index?value:item) as Vector3);}}/></label>)}</div>}
-        </div>
+        </div>}
       </>}
       {cameraMode&&humanoidProxy&&<><label htmlFor="director-facial-expression">表情预设</label><select id="director-facial-expression" value={facialExpression} disabled={animationSaving} onChange={event=>onFacialExpressionChange(event.target.value as DirectorFacialExpression)}>{DIRECTOR_FACIAL_EXPRESSIONS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></>}
       {cameraMode&&modelUrl&&importedMorphTargets.length>0&&<div className="director-animation-controls">
