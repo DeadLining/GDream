@@ -26,6 +26,33 @@ def _glb(document: dict | None = None) -> bytes:
     return struct.pack("<4sII", b"glTF", 2, 12 + len(chunk)) + chunk
 
 
+def _animated_glb() -> bytes:
+    return _glb(
+        {
+            "asset": {"version": "2.0"},
+            "scene": 0,
+            "scenes": [{"nodes": [0]}],
+            "nodes": [
+                {"name": "Root"},
+                {"name": "Hips", "mesh": 0},
+                {"name": "Spine"},
+            ],
+            "meshes": [{"primitives": []}],
+            "skins": [{"name": "Humanoid", "skeleton": 0, "joints": [1, 2]}],
+            "accessors": [{"max": [2.5]}, {}],
+            "animations": [
+                {
+                    "name": "Walk",
+                    "samplers": [{"input": 0, "output": 1}],
+                    "channels": [
+                        {"sampler": 0, "target": {"node": 1, "path": "translation"}}
+                    ],
+                }
+            ],
+        }
+    )
+
+
 def _character(client):
     project = client.post(
         "/api/projects",
@@ -76,6 +103,38 @@ def test_glb_upload_creates_active_character_representation(client):
     assert [item["id"] for item in listed.json()] == [representation["id"]]
 
 
+def test_glb_upload_describes_skeletons_and_animation_clips(client):
+    _project, character = _character(client)
+
+    response = client.post(
+        f"/api/characters/{character['id']}/3d-representations",
+        files={"file": ("animated.glb", _animated_glb(), "model/gltf-binary")},
+    )
+
+    assert response.status_code == 201
+    representation = response.json()
+    assert representation["has_skeleton"] is True
+    assert representation["metadata"]["skin_count"] == 1
+    assert representation["metadata"]["joint_count"] == 2
+    assert representation["metadata"]["skeletons"] == [
+        {
+            "name": "Humanoid",
+            "root": "Root",
+            "joint_count": 2,
+            "joints": ["Hips", "Spine"],
+        }
+    ]
+    assert representation["metadata"]["animation_clips"] == [
+        {
+            "name": "Walk",
+            "duration_seconds": 2.5,
+            "channel_count": 1,
+            "target_nodes": ["Hips"],
+            "target_paths": ["translation"],
+        }
+    ]
+
+
 def test_glb_upload_rejects_external_resources(client):
     _project, character = _character(client)
     content = _glb(
@@ -123,7 +182,7 @@ def test_director_catalog_prefers_active_character_glb(client):
         scene_id = scene.id
     uploaded = client.post(
         f"/api/characters/{character['id']}/3d-representations",
-        files={"file": ("linxia.glb", _glb(), "model/gltf-binary")},
+        files={"file": ("linxia.glb", _animated_glb(), "model/gltf-binary")},
     ).json()
     stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
 
@@ -133,6 +192,8 @@ def test_director_catalog_prefers_active_character_glb(client):
     assert character_asset["source_type"] == "model"
     assert character_asset["asset_id"] == uploaded["asset_id"]
     assert character_asset["media_type"] == "model/gltf-binary"
+    assert character_asset["metadata"]["joint_count"] == 2
+    assert character_asset["metadata"]["animation_clips"][0]["name"] == "Walk"
     synced = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",
         json={

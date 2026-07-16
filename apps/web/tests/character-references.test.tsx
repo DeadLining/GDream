@@ -297,6 +297,17 @@ it('uploads a GLB proxy from the character master setting',async()=>{
   expect(screen.getByText('1,200 三角面')).toBeVisible();
 });
 
+it('shows detected skeleton and animation clip details for a GLB',async()=>{
+  const representation={id:'rep-rigged',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-rigged',label:'林夏绑定模型',format:'glb',version:2,is_active:true,review_status:'approved',model_url:'/media/linxia-rigged.glb',mesh_count:1,triangle_count:3200,material_count:2,has_skeleton:true,bounds:{},metadata:{skin_count:1,joint_count:24,skeletons:[{name:'Humanoid',root:'Root',joint_count:24,joints:['Hips','Spine']}],animation_clips:[{name:'Walk',duration_seconds:2.5,channel_count:12,target_nodes:['Hips'],target_paths:['translation']}]},created_at:'',updated_at:''};
+  mocks.representations.mockResolvedValue([representation]);
+  render(<CharacterWorkspace characters={[character]}/>);
+
+  await userEvent.click(await screen.findByRole('button',{name:/林夏/}));
+
+  expect(await screen.findByText('1 套骨骼 · 24 个关节')).toBeVisible();
+  expect(screen.getByText('动画片段：Walk（2.5 秒）')).toBeVisible();
+});
+
 it('uploads a GLB for a selected episode state scope',async()=>{
   const stateRepresentation={id:'rep-state',character_id:'c1',variant_id:'v2',state_id:'s1',asset_id:'model-state',label:'左臂擦伤代理',format:'glb',version:2,is_active:true,review_status:'approved',model_url:'/media/injured.glb',mesh_count:1,triangle_count:1400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
   mocks.uploadRepresentation.mockResolvedValue(stateRepresentation);
