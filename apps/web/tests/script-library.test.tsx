@@ -27,7 +27,7 @@ beforeEach(()=>{
   mocks.removeRevision.mockResolvedValue(undefined);
   mocks.finalize.mockResolvedValue({...document,status:'ready',current_revision:{...revision(),status:'finalized'}});
   mocks.stream.mockImplementation(async(_id,_data,handlers)=>{handlers.onChunk({text:'AI 新版本',revision_id:'r2',persisted_length:6});handlers.onDone({revision_id:'r2'});});
-  mocks.upload.mockResolvedValue({...document,title:'story',source_type:'upload',revision_count:2,current_revision_id:'r2',current_revision:{...revision('第二版','new'),id:'r2',revision_number:2,status:'finalized',creation_method:'upload'}});mocks.revisions.mockResolvedValue([{...revision(),status:'finalized'}]);mocks.restore.mockResolvedValue({...document,current_revision:{...revision(),id:'r2',revision_number:2,status:'finalized'}});
+  mocks.upload.mockResolvedValue({...document,title:'story',source_type:'upload',revision_count:2,current_revision_id:'r2',current_revision:{...revision('第二版','new'),id:'r2',revision_number:2,status:'finalized',creation_method:'upload'}});mocks.revisions.mockResolvedValue([document.current_revision]);mocks.restore.mockResolvedValue({...document,current_revision_id:'r2',current_revision:{...revision(),id:'r2',revision_number:2,status:'finalized'}});
   mocks.volumes.mockResolvedValue([{id:'v1',project_id:'p1',position:1,title:'海底异变',summary:'',created_at:'',updated_at:'',episodes:[{id:'e1',project_id:'p1',volume_id:'v1',position:1,title:'第一集',premise:'',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''}]}]);
   mocks.storylines.mockResolvedValue([{id:'l1',project_id:'p1',title:'真实时间裂缝',kind:'foreshadowing',color:'#B9473E',description:'',created_at:'',updated_at:'',events:[{id:'ev1',storyline_id:'l1',episode_id:'e1',scene_id:null,shot_id:null,position:1,stage:'setup',title:'海螺发光',description:'',setup_event_id:null,payoff_event_id:null,metadata:{},created_at:'',updated_at:''}]}]);
 });
@@ -102,8 +102,14 @@ it('switches to a historical markdown preview and can restore or delete it',asyn
   vi.stubGlobal('confirm',vi.fn(()=>true));
   const current={...revision('# 第二版'),id:'r2',revision_number:2,status:'finalized' as const,creation_method:'ai'};
   const first={...revision('# 第一版'),id:'r1',revision_number:1,status:'finalized' as const};
+  const restored={...first,id:'r3',revision_number:3,creation_method:'restore'};
   mocks.get.mockResolvedValueOnce({...document,status:'ready',current_revision_id:'r2',current_revision:current,revision_count:2});
   mocks.revisions.mockResolvedValue([current,first]);
+  mocks.restore.mockImplementationOnce(async()=>{
+    mocks.get.mockResolvedValue({...document,status:'ready',current_revision_id:'r3',current_revision:restored,revision_count:3});
+    mocks.revisions.mockResolvedValue([restored,current,first]);
+    return {...document,status:'ready',current_revision_id:'r3',current_revision:restored,revision_count:3};
+  });
   render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
 
   await user.click(await screen.findByRole('button',{name:'查看版本 1'}));

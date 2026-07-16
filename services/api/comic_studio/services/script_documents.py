@@ -307,6 +307,33 @@ class ScriptDocumentService:
         self.session.refresh(restored)
         return restored
 
+    def delete_revision(self, document_id: str, revision_id: str) -> None:
+        document = self._load(document_id)
+        revision = next(
+            (item for item in document.revisions if item.id == revision_id), None
+        )
+        if revision is None:
+            raise KeyError(revision_id)
+        if document.current_revision_id == revision.id:
+            raise RuntimeError("current_revision_cannot_be_deleted")
+        if self.session.scalar(
+            select(func.count(models.ScriptImport.id)).where(
+                models.ScriptImport.script_revision_id == revision.id
+            )
+        ):
+            raise RuntimeError("revision_has_imports")
+        source_file_path = revision.source_file_path
+        self.session.delete(revision)
+        self.session.commit()
+        if self.file_store is not None and source_file_path:
+            remaining = self.session.scalar(
+                select(func.count(models.ScriptRevision.id)).where(
+                    models.ScriptRevision.source_file_path == source_file_path
+                )
+            )
+            if not remaining:
+                self.file_store.remove(source_file_path)
+
     def delete(self, document_id: str) -> None:
         document = self._load(document_id)
         episodes = list(

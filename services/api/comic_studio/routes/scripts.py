@@ -245,6 +245,26 @@ def restore_script(script_id: str, revision_id: str, session: SessionDependency)
         raise _not_found(exc) from exc
 
 
+@router.delete(
+    "/api/scripts/{script_id}/revisions/{revision_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_script_revision(
+    script_id: str, revision_id: str, request: Request
+):
+    with request.app.state.session_factory() as session:
+        service = ScriptDocumentService(
+            session, ScriptFileStore(request.app.state.settings.data_root)
+        )
+        try:
+            service.delete_revision(script_id, revision_id)
+        except KeyError as exc:
+            raise _not_found(exc) from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.delete("/api/scripts/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_script(script_id: str, request: Request):
     with request.app.state.session_factory() as session:

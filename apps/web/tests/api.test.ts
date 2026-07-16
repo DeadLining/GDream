@@ -4,6 +4,7 @@ import {
   apiRequest,
   createScript,
   deleteScript,
+  deleteScriptRevision,
   generateCharacterReferenceSet,
   generateModel3D,
   createCharacter,
@@ -266,6 +267,16 @@ describe('script library api', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {status:204})));
 
     await expect(deleteScript('script-1')).resolves.toBeUndefined();
+  });
+
+  it('reports an empty revision deletion failure without throwing a JSON parse error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {status:502})));
+
+    await expect(deleteScriptRevision('script-1','revision-1')).rejects.toMatchObject({
+      name:'ApiError',
+      status:502,
+      message:'请求失败 (502)',
+    });
   });
 });
 

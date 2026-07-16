@@ -11,6 +11,7 @@ export const patchScript=(id:string,data:ScriptPatch)=>apiRequest<ScriptDocument
 export const finalizeScript=(id:string)=>apiRequest<ScriptDocument>(`/api/scripts/${id}/finalize`,json('POST'));
 export const listScriptRevisions=(id:string)=>apiRequest<ScriptRevision[]>(`/api/scripts/${id}/revisions`);
 export const restoreScriptRevision=(id:string,revisionId:string)=>apiRequest<ScriptDocument>(`/api/scripts/${id}/revisions/${revisionId}/restore`,json('POST'));
+export const deleteScriptRevision=(id:string,revisionId:string)=>apiRequest<void>(`/api/scripts/${id}/revisions/${revisionId}`,json('DELETE'));
 export const parseScript=(id:string)=>apiRequest<ScriptImport>(`/api/scripts/${id}/parse`,json('POST'));
 export async function deleteScript(id:string):Promise<void>{
   let response:Response;
