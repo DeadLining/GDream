@@ -22,7 +22,7 @@ const episode: EpisodeDetail = {
   id: 'episode-1', project_id: 'project-1', title: '雨夜追踪', premise: '林默追查失踪芯片。',
   target_duration_seconds: 60, status: 'draft', created_at: '', updated_at: '',
   scenes: [{
-    id: 'scene-1', position: 1, location: '旧城巷道', time_of_day: 'night', summary: '林默发现追踪者。',
+    id: 'scene-1', position: 1, location: '旧城巷道', time_of_day: 'night', summary: '林默发现追踪者。', reference_asset_id:'scene-asset-1', reference_asset_name:'旧城雨巷', reference_media_url:'/media/alley.png', reference_media_type:'image/png',
     continuity_state: {}, estimated_duration_seconds: 15, shots,
   }],
 };
@@ -35,6 +35,7 @@ describe('Storyboard', () => {
     expect(screen.getByRole('heading', {name: '旧城巷道'})).toBeVisible();
     expect(screen.getByText('场景 1')).toBeVisible();
     expect(screen.getByText('林默发现追踪者。')).toBeVisible();
+    expect(screen.getByRole('img',{name:'旧城巷道场景参考图'})).toHaveAttribute('src','/media/alley.png');
     expect(screen.getByText('15s')).toBeVisible();
     expect(screen.queryByRole('button', {name: '重新生成分镜'})).not.toBeInTheDocument();
   });

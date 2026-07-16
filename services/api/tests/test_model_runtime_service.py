@@ -131,8 +131,10 @@ class FakeImageAdapter:
 
     def __init__(self):
         self.fail_side = True
+        self.generated_prompts = []
 
-    async def generate(self, _prompt, size="1024x1536", quality="auto"):
+    async def generate(self, prompt, size="1024x1536", quality="auto"):
+        self.generated_prompts.append((prompt, size))
         return ImageResult(PNG)
 
     async def edit(
@@ -185,6 +187,34 @@ def image_runtime(tmp_path):
         session.commit()
         character_id = character.id
     return service, adapter, character_id
+
+
+@pytest.mark.anyio
+async def test_library_scene_asset_generation_uses_image_runtime_and_persists_media(tmp_path):
+    service, adapter, character_id = image_runtime(tmp_path)
+    with service.session_factory() as session:
+        character = session.get(models.Character, character_id)
+        library_asset = models.LibraryAsset(
+            project_id=character.project_id,
+            kind="scene",
+            name="雨夜天台",
+            description="霓虹灯下的暴雨天台",
+            tags=["雨夜", "城市"],
+        )
+        session.add(library_asset)
+        session.commit()
+        asset_id = library_asset.id
+
+    result = await service.execute_image("library_asset", asset_id, {"activate": True})
+
+    assert result["library_asset_id"] == asset_id
+    assert result["media_url"].endswith(".png")
+    assert adapter.generated_prompts[0][1] == "1536x1024"
+    assert "雨夜天台" in adapter.generated_prompts[0][0]
+    with service.session_factory() as session:
+        stored = session.get(models.LibraryAsset, asset_id)
+        assert stored.media_asset_id == result["asset_id"]
+        assert stored.media_asset.provider == "gpt-image"
 
 
 @pytest.mark.anyio

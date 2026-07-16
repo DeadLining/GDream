@@ -86,6 +86,23 @@ def test_image_runtime_returns_normalized_accepted_job(client):
     assert runtime.created[0] is Capability.IMAGE
 
 
+def test_image_runtime_accepts_a_library_asset_target(client):
+    runtime = FakeRuntime()
+    client.app.state.model_runtime = runtime
+
+    response = client.post(
+        "/api/model-runtime/image",
+        json={"target_type": "library_asset", "target_id": "scene-asset-1"},
+    )
+
+    assert response.status_code == 202
+    assert runtime.created[:3] == (
+        Capability.IMAGE,
+        "library_asset",
+        "scene-asset-1",
+    )
+
+
 def test_character_reference_set_mode_is_passed_to_runtime(client):
     runtime = FakeRuntime()
     client.app.state.model_runtime = runtime

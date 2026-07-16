@@ -127,3 +127,15 @@ it('generates and approves a 3D candidate for an image-backed prop',async()=>{
   await user.click(await screen.findByRole('button',{name:'批准使用 3D 候选'}));
   expect(onApprove).toHaveBeenCalledWith('job-prop');
 });
+
+it('shows scene thumbnails and generates a scene reference image with AI',async()=>{
+  const user=userEvent.setup();
+  const onGenerate=vi.fn().mockResolvedValue(undefined);
+  const sceneAssets=assets.map(item=>item.id==='la1'?{...item,media_asset_id:'scene-media-1',media_url:'/media/rooftop.png',media_type:'image/png'}:item);
+  render(<AssetCatalogView characters={[character]} character={character} references={[]} variants={[]} libraryAssets={sceneAssets} onSelect={vi.fn()} onOpen={vi.fn()} onGenerateLibraryAssetImage={onGenerate}/>);
+
+  await user.click(screen.getByRole('button',{name:'场景 2'}));
+  expect(screen.getByRole('img',{name:'雨夜天台缩略图'})).toHaveAttribute('src','/media/rooftop.png');
+  await user.click(screen.getByRole('button',{name:'AI 生成场景参考图'}));
+  expect(onGenerate).toHaveBeenCalledWith('la1');
+});

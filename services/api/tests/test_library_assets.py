@@ -159,6 +159,12 @@ def test_library_assets_bind_explicitly_to_scenes(client):
     prop_asset = create_asset(project["id"], "prop", "银色证物箱")
     foreign_asset = create_asset(other_project["id"], "prop", "外部道具")
 
+    uploaded_scene = client.post(
+        f"/api/library-assets/{scene_asset['id']}/media",
+        files={"file": ("rooftop.png", _png(), "image/png")},
+    )
+    assert uploaded_scene.status_code == 201
+
     assert client.put(
         f"/api/scenes/{scene_id}/library-assets/{scene_asset['id']}"
     ).status_code == 204
@@ -172,6 +178,12 @@ def test_library_assets_bind_explicitly_to_scenes(client):
     bound = client.get(f"/api/scenes/{scene_id}/library-assets")
     assert bound.status_code == 200
     assert [item["name"] for item in bound.json()] == ["霓虹天台", "银色证物箱"]
+    episode_detail = client.get(f"/api/episodes/{episode['id']}")
+    reference = episode_detail.json()["scenes"][0]
+    assert reference["reference_asset_id"] == scene_asset["id"]
+    assert reference["reference_asset_name"] == "霓虹天台"
+    assert reference["reference_media_type"] == "image/png"
+    assert reference["reference_media_url"].endswith(".png")
 
     foreign = client.put(
         f"/api/scenes/{scene_id}/library-assets/{foreign_asset['id']}"

@@ -26,7 +26,7 @@ const episode: EpisodeDetail = {
   id: 'episode-1', project_id: 'project-1', title: '穿越时空', premise: '发现时间裂缝',
   target_duration_seconds: 60, status: 'planned', created_at: '', updated_at: '',
   scenes: [
-    {id: 'scene-1', position: 1, location: '废弃实验室', time_of_day: 'night', summary: '发现怀表', continuity_state: {weather: 'rain'}, estimated_duration_seconds: 28, shots: [
+    {id: 'scene-1', position: 1, location: '废弃实验室', time_of_day: 'night', summary: '发现怀表', continuity_state: {weather: 'rain'}, estimated_duration_seconds: 28, reference_asset_id:'asset-scene', reference_asset_name:'雨夜实验室', reference_media_url:'/media/lab.png', reference_media_type:'image/png', shots: [
       {id: 'shot-1', position: 1, shot_type: 'wide_shot', duration_seconds: 8, composition: '进入实验室', camera_motion: 'push_in', character_state: {}, image_prompt: '', negative_prompt: '', active_panel_asset_id: null, review_status: 'draft', render_status: 'pending', dialogue: []},
     ]},
     {id: 'scene-2', position: 2, location: '时间裂缝', time_of_day: 'dawn', summary: '裂缝启动', continuity_state: {}, estimated_duration_seconds: 32, shots: [
@@ -70,6 +70,8 @@ describe('SceneWorkspace', () => {
     render(<SceneWorkspace episode={episode} onOpenShot={onOpenShot}/>);
 
     expect(screen.getByRole('heading', {name: '废弃实验室'})).toBeVisible();
+    expect(screen.getByRole('img',{name:'废弃实验室场景参考图'})).toHaveAttribute('src','/media/lab.png');
+    expect(screen.getByRole('img',{name:'场景 废弃实验室 参考图'})).toHaveAttribute('src','/media/lab.png');
     expect(screen.getByText('进入实验室')).toBeVisible();
 
     await userEvent.click(screen.getByRole('button', {name: '场景 02 时间裂缝'}));
