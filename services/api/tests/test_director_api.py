@@ -56,6 +56,39 @@ def test_camera_object_overrides_are_scoped_and_cleaned_when_object_is_deleted(d
     assert service.get_stage(stage.id).shot_cameras[0].object_overrides=={}
 
 
+def test_camera_object_overrides_store_imported_animation_timeline(db_session):
+    scene = _scene(db_session)
+    service = DirectorStageService(db_session)
+    stage = service.get_or_create_stage(scene.id)
+    created = service.create_object(
+        stage.id,
+        1,
+        DirectorObjectCreate(kind="character", source_type="model", label="林夏"),
+    )
+    camera = stage.shot_cameras[0]
+
+    overridden = service.update_camera(
+        stage.id,
+        camera.shot_id,
+        camera.version,
+        ShotCameraPatch(
+            object_overrides={
+                created.id: {
+                    "animation_clip": "Walk Cycle",
+                    "animation_playing": False,
+                    "animation_time_seconds": 1.25,
+                }
+            }
+        ),
+    )
+
+    assert overridden.object_overrides[created.id] == {
+        "animation_clip": "Walk Cycle",
+        "animation_playing": False,
+        "animation_time_seconds": 1.25,
+    }
+
+
 def test_camera_object_overrides_reject_objects_from_another_stage(db_session):
     first_scene=_scene(db_session);service=DirectorStageService(db_session);first=service.get_or_create_stage(first_scene.id)
     second_scene=_scene(db_session);second=service.get_or_create_stage(second_scene.id)
