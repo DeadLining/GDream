@@ -15,8 +15,9 @@ function Placeholder({object}:{object:DirectorObjectDto}){
   const animationClip=typeof object.appearance.animation_clip==='string'?object.appearance.animation_clip:'';
   const animationPlaying=object.appearance.animation_playing===true;
   const animationTimeSeconds=typeof object.appearance.animation_time_seconds==='number'?object.appearance.animation_time_seconds:0;
+  const morphTargetWeights=object.appearance.morph_target_weights&&typeof object.appearance.morph_target_weights==='object'?Object.fromEntries(Object.entries(object.appearance.morph_target_weights as Record<string,unknown>).flatMap(([name,value])=>typeof value==='number'&&Number.isFinite(value)?[[name,value]]:[])):undefined;
   const proxy=<DirectorProxy object={object}/>;
-  if(modelUrl)return <GlbModel url={modelUrl} scale={modelScale} offsetY={modelOffsetY} posePreset={posePreset} animationClip={animationClip} animationPlaying={animationPlaying} animationTimeSeconds={animationTimeSeconds} fallback={proxy}/>;
+  if(modelUrl)return <GlbModel url={modelUrl} scale={modelScale} offsetY={modelOffsetY} posePreset={posePreset} morphTargetWeights={morphTargetWeights} animationClip={animationClip} animationPlaying={animationPlaying} animationTimeSeconds={animationTimeSeconds} fallback={proxy}/>;
   const imageUrl=typeof object.appearance.image_url==='string'?object.appearance.image_url:'';
   if(object.kind==='background'&&imageUrl){const aspect=typeof object.appearance.aspect_ratio==='number'?object.appearance.aspect_ratio:1.5;return <DreiImage url={imageUrl} position={[0,1,0]} scale={[aspect*1.8,1.8]} transparent toneMapped={false}/>;}
   const color=typeof object.appearance.color==='string'?object.appearance.color:object.kind==='character'?'#d76b4b':'#5b8ca8';

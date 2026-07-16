@@ -271,13 +271,28 @@ class ShotInputCompiler:
             if not item["visible"]:
                 continue
             transform = item["transform"]
+            expression = item["appearance"].get("facial_expression", "neutral")
+            morph_weights = item["appearance"].get("morph_target_weights", {})
+            morph_summary = (
+                ", ".join(
+                    f"{name}={self._format_number(weight)}"
+                    for name, weight in sorted(morph_weights.items())
+                    if isinstance(name, str)
+                    and isinstance(weight, (int, float))
+                    and not isinstance(weight, bool)
+                )
+                if isinstance(morph_weights, dict)
+                else ""
+            )
             prompt_lines.append(
                 f"- Director object: {item['kind']} {item['label']}; "
                 f"source {item['source_type']}:{item['source_id'] or 'none'}; "
                 f"position {self._format_vector(transform.get('position', [0, 0, 0]))}; "
                 f"rotation {self._format_vector(transform.get('rotation', [0, 0, 0]))}; "
                 f"scale {self._format_vector(transform.get('scale', [1, 1, 1]))}; "
-                f"pose {item['appearance'].get('pose_preset', 'neutral')}"
+                f"pose {item['appearance'].get('pose_preset', 'neutral')}; "
+                f"expression {expression}"
+                f"{f'; morph targets {morph_summary}' if morph_summary else ''}"
             )
         prompt_constraints = (
             "Bound production inputs:\n" + "\n".join(prompt_lines)
@@ -357,8 +372,9 @@ class ShotInputCompiler:
             if not visible:
                 continue
             appearance = dict(item.appearance or {})
-            if override.get("pose_preset"):
-                appearance["pose_preset"] = override["pose_preset"]
+            for key in ("pose_preset", "facial_expression", "morph_target_weights"):
+                if key in override:
+                    appearance[key] = override[key]
             objects.append(
                 {
                     "id": item.id,

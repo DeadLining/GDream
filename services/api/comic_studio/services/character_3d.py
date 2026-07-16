@@ -28,6 +28,7 @@ class Character3DRepresentationService:
     MAX_JOINTS = 1024
     MAX_ANIMATIONS = 256
     MAX_ANIMATION_CHANNELS = 4096
+    MAX_MORPH_TARGETS = 256
     JSON_CHUNK = 0x4E4F534A
 
     def __init__(self, session: Session, data_root: Path):
@@ -359,10 +360,36 @@ class Character3DRepresentationService:
         ):
             raise Character3DRepresentationError("glb_too_complex")
         triangle_count = 0
+        morph_targets: list[str] = []
+        morph_target_slots = 0
         bounds_min: list[float] | None = None
         bounds_max: list[float] | None = None
         for mesh in meshes:
-            for primitive in mesh.get("primitives", []) if isinstance(mesh, dict) else []:
+            primitives = mesh.get("primitives", []) if isinstance(mesh, dict) else []
+            if not isinstance(primitives, list):
+                primitives = []
+            target_count = max(
+                (
+                    len(primitive.get("targets", []))
+                    for primitive in primitives
+                    if isinstance(primitive, dict)
+                    and isinstance(primitive.get("targets", []), list)
+                ),
+                default=0,
+            )
+            morph_target_slots += target_count
+            if morph_target_slots > cls.MAX_MORPH_TARGETS:
+                raise Character3DRepresentationError("glb_too_complex")
+            extras = mesh.get("extras", {}) if isinstance(mesh, dict) else {}
+            target_names = extras.get("targetNames", []) if isinstance(extras, dict) else []
+            if not isinstance(target_names, list):
+                target_names = []
+            for target_index in range(target_count):
+                raw_name = target_names[target_index] if target_index < len(target_names) else None
+                name = cls._label(raw_name, str(target_index))
+                if name not in morph_targets:
+                    morph_targets.append(name)
+            for primitive in primitives:
                 accessor_index = primitive.get("indices")
                 if isinstance(accessor_index, int) and accessor_index < len(accessors):
                     triangle_count += int(accessors[accessor_index].get("count", 0)) // 3
@@ -462,6 +489,8 @@ class Character3DRepresentationService:
                 "animation_count": len(animations),
                 "skin_count": len(skins),
                 "joint_count": len(joint_indexes),
+                "morph_target_count": len(morph_targets),
+                "morph_targets": morph_targets,
                 "skeletons": skeletons,
                 "animation_clips": animation_clips,
             },

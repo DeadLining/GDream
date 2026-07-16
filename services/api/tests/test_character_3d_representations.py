@@ -4,7 +4,10 @@ import struct
 import pytest
 
 from comic_studio import models
-from comic_studio.services.character_3d import Character3DRepresentationService
+from comic_studio.services.character_3d import (
+    Character3DRepresentationError,
+    Character3DRepresentationService,
+)
 from comic_studio.services.character_references import CharacterReferenceService
 from tests.test_character_references import PNG
 
@@ -17,13 +20,7 @@ def _glb(document: dict | None = None) -> bytes:
             "scene": 0,
             "scenes": [{"nodes": [0]}],
             "nodes": [{"mesh": 0, "name": "Proxy"}],
-            "meshes": [
-                {
-                    "name": "Face",
-                    "extras": {"targetNames": ["Smile", "Blink"]},
-                    "primitives": [{"attributes": {}, "targets": [{}, {}]}],
-                }
-            ],
+            "meshes": [{"primitives": []}],
         },
         separators=(",", ":"),
     ).encode()
@@ -43,7 +40,13 @@ def _animated_glb() -> bytes:
                 {"name": "Hips", "mesh": 0},
                 {"name": "Spine"},
             ],
-            "meshes": [{"primitives": []}],
+            "meshes": [
+                {
+                    "name": "Face",
+                    "extras": {"targetNames": ["Smile", "Blink"]},
+                    "primitives": [{"attributes": {}, "targets": [{}, {}]}],
+                }
+            ],
             "skins": [{"name": "Humanoid", "skeleton": 0, "joints": [1, 2]}],
             "accessors": [{"max": [2.5]}, {}],
             "animations": [
@@ -158,6 +161,21 @@ def test_glb_upload_rejects_external_resources(client):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "glb_external_resources_not_allowed"
+
+
+def test_glb_inspection_rejects_excessive_morph_target_slots():
+    document = {
+        "asset": {"version": "2.0"},
+        "meshes": [
+            {
+                "extras": {"targetNames": ["Smile"] * 257},
+                "primitives": [{"attributes": {}, "targets": [{}] * 257}],
+            }
+        ],
+    }
+
+    with pytest.raises(Character3DRepresentationError, match="glb_too_complex"):
+        Character3DRepresentationService.inspect_glb(_glb(document))
 
 
 def test_director_catalog_prefers_active_character_glb(client):

@@ -3,10 +3,11 @@
 import {useEffect,useState} from 'react';
 import {AlignCenter,ArrowDownToLine,Copy,Magnet,Move3D,Pause,Play,Rotate3D,RotateCcw,Save,Scaling,Trash2} from 'lucide-react';
 import {DIRECTOR_ANIMATION_CLIPS,directorAnimationDuration} from '../../lib/director-animations';
+import {DIRECTOR_FACIAL_EXPRESSIONS} from '../../lib/director-expressions';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
 import {DIRECTOR_PROXY_RIGS,isAnimatedDirectorProxy,resolveDirectorProxyRig} from '../../lib/director-proxies';
 import type {DirectorEnvironmentSettings} from '../../lib/director-environment';
-import type {DirectorAnimationClip,DirectorObject,DirectorPosePreset,DirectorProxyRig,DirectorTransformMode,ShotCamera,Transform,Vector3} from '../../lib/types';
+import type {DirectorAnimationClip,DirectorFacialExpression,DirectorObject,DirectorPosePreset,DirectorProxyRig,DirectorTransformMode,ShotCamera,Transform,Vector3} from '../../lib/types';
 import {DirectorEnvironmentControls} from './DirectorEnvironmentControls';
 
 const transformTools=[
@@ -75,6 +76,9 @@ export function DirectorInspector({
   onCameraChange,
   onSaveCamera,
   onPoseChange,
+  onFacialExpressionChange,
+  onMorphTargetWeightChange,
+  onMorphTargetReset,
   onBodyProfileChange,
   onProxyRigChange,
   onAnimationChange,
@@ -108,6 +112,9 @@ export function DirectorInspector({
   onCameraChange:(value:number)=>void;
   onSaveCamera:()=>void;
   onPoseChange:(pose:DirectorPosePreset)=>void;
+  onFacialExpressionChange:(expression:DirectorFacialExpression)=>void;
+  onMorphTargetWeightChange:(name:string,weight:number)=>void;
+  onMorphTargetReset:()=>void;
   onBodyProfileChange:(key:'proxy_height'|'proxy_shoulder_width'|'proxy_body_width',value:number)=>void;
   onProxyRigChange:(rig:DirectorProxyRig)=>void;
   onAnimationChange:(clip:DirectorAnimationClip)=>void;
@@ -126,6 +133,7 @@ export function DirectorInspector({
   const [labelDraft,setLabelDraft]=useState(object?.label??'');
   useEffect(()=>setLabelDraft(object?.label??''),[object?.id,object?.label]);
   const pose=(typeof object?.appearance.pose_preset==='string'?object.appearance.pose_preset:'neutral') as DirectorPosePreset;
+  const facialExpression=(typeof object?.appearance.facial_expression==='string'?object.appearance.facial_expression:'neutral') as DirectorFacialExpression;
   const animation=(typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'idle') as DirectorAnimationClip;
   const animationPlaying=object?.appearance.animation_playing===true;
   const storedAnimationTime=typeof object?.appearance.animation_time_seconds==='number'&&Number.isFinite(object.appearance.animation_time_seconds)?object.appearance.animation_time_seconds:0;
@@ -141,6 +149,8 @@ export function DirectorInspector({
   const importedAnimation=importedClips.some(item=>item.name===storedImportedAnimation)?storedImportedAnimation:importedClips[0]?.name??'';
   const importedDuration=importedClips.find(item=>item.name===importedAnimation)?.duration_seconds??0;
   const importedAnimationTime=Math.min(importedDuration,Math.max(0,storedAnimationTime));
+  const importedMorphTargets=Array.from(new Set((Array.isArray(object?.metadata.morph_targets)?object.metadata.morph_targets:[]).filter((name):name is string=>typeof name==='string'&&Boolean(name.trim())).map(name=>name.trim())));
+  const morphTargetWeights=object?.appearance.morph_target_weights&&typeof object.appearance.morph_target_weights==='object'?object.appearance.morph_target_weights as Record<string,unknown>:{};
   const poseable=Boolean(object?.kind==='character'&&(humanoidProxy||(object.source_type==='model'&&object.metadata.has_skeleton)));
   const bodyControls=[
     ['proxy_height','角色身高',.75,1.3],
@@ -169,6 +179,12 @@ export function DirectorInspector({
           {DIRECTOR_POSE_PRESETS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
       </>}
+      {cameraMode&&humanoidProxy&&<><label htmlFor="director-facial-expression">表情预设</label><select id="director-facial-expression" value={facialExpression} disabled={animationSaving} onChange={event=>onFacialExpressionChange(event.target.value as DirectorFacialExpression)}>{DIRECTOR_FACIAL_EXPRESSIONS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></>}
+      {cameraMode&&modelUrl&&importedMorphTargets.length>0&&<div className="director-animation-controls">
+        <span>模型表情</span>
+        {importedMorphTargets.map((name,index)=>{const stored=morphTargetWeights[name];const value=typeof stored==='number'&&Number.isFinite(stored)?Math.min(1,Math.max(0,stored)):0;return <label key={name} htmlFor={`director-morph-${index}`}><span>{name}</span><input id={`director-morph-${index}`} type="range" aria-label={`表情 ${name}`} min="0" max="1" step="0.01" value={value} disabled={animationSaving} onChange={event=>onMorphTargetWeightChange(name,Number(event.target.value))}/><output>{formatNumber(value,2)}</output></label>;})}
+        <button type="button" className="command-button" aria-label="重置模型表情" disabled={animationSaving} onClick={onMorphTargetReset}><RotateCcw size={14}/></button>
+      </div>}
       {cameraMode&&animatedProxy&&<div className="director-animation-controls">
         <label htmlFor="director-animation">动画片段</label>
         <select id="director-animation" value={animation} disabled={animationSaving} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>

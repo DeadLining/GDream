@@ -304,6 +304,8 @@ class DirectorAssetCatalogService:
                                 for key in (
                                     "skin_count",
                                     "joint_count",
+                                    "morph_target_count",
+                                    "morph_targets",
                                     "skeletons",
                                     "animation_clips",
                                 )

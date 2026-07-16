@@ -48,9 +48,24 @@ class DirectorObjectOverride(StrictDirectorModel):
     transform:Transform|None=None
     visible:bool|None=None
     pose_preset:Literal["neutral","dialogue","action","injured"]|None=None
+    facial_expression:Literal["neutral","happy","sad","angry","surprised"]|None=None
+    morph_target_weights:dict[str,float]|None=None
     animation_clip:str|None=Field(default=None,min_length=1,max_length=160)
     animation_playing:bool|None=None
     animation_time_seconds:float|None=Field(default=None,ge=0,le=86400)
+
+    @field_validator("morph_target_weights")
+    @classmethod
+    def morph_weights(cls,value:dict[str,float]|None):
+        if value is None:return value
+        if len(value)>256:raise ValueError("too_many_morph_targets")
+        normalized={}
+        for name,weight in value.items():
+            clean=name.strip()
+            if not clean or len(clean)>160:raise ValueError("invalid_morph_target_name")
+            if weight<0 or weight>1:raise ValueError("invalid_morph_target_weight")
+            normalized[clean]=weight
+        return normalized
 
 
 class ShotCameraPatch(StrictDirectorModel):

@@ -3,8 +3,9 @@
 import {useRef} from 'react';
 import type {Group} from 'three';
 import {directorAnimationDuration,directorAnimationMotion} from '../../lib/director-animations';
+import {directorExpressionFace} from '../../lib/director-expressions';
 import {humanoidPoseRotation,type HumanoidBoneId} from '../../lib/director-humanoid';
-import type {DirectorAnimationClip,DirectorObject,DirectorPosePreset,Vector3} from '../../lib/types';
+import type {DirectorAnimationClip,DirectorFacialExpression,DirectorObject,DirectorPosePreset,Vector3} from '../../lib/types';
 import {useDirectorProxyAnimationTime} from './useDirectorProxyAnimationTime';
 
 const clamp=(value:unknown,fallback:number,min:number,max:number)=>typeof value==='number'&&Number.isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
@@ -13,6 +14,8 @@ export function HumanoidProxy({object}:{object:DirectorObject}){
   const appearance=object.appearance;
   const color=typeof appearance.color==='string'?appearance.color:'#d76b4b';
   const pose=(typeof appearance.pose_preset==='string'?appearance.pose_preset:'neutral') as DirectorPosePreset;
+  const expression=(typeof appearance.facial_expression==='string'?appearance.facial_expression:'neutral') as DirectorFacialExpression;
+  const face=directorExpressionFace(expression);
   const height=clamp(appearance.proxy_height,1,.75,1.3);
   const shoulders=clamp(appearance.proxy_shoulder_width,1,.7,1.35);
   const body=clamp(appearance.proxy_body_width,1,.7,1.4);
@@ -54,6 +57,13 @@ export function HumanoidProxy({object}:{object:DirectorObject}){
             {limb(.12,.045)}
             <group ref={headRef} name="humanoid-bone-Head" position={[0,.17,0]} rotation={rotation('Head')}>
               {joint(.06)}<mesh position={[0,.1,0]} castShadow><sphereGeometry args={[.16,12,10]}/><meshStandardMaterial color={color} roughness={.72}/></mesh>
+              <group name="humanoid-face">
+                <mesh name="humanoid-face-left-eye" position={[.055,.14,.145]} scale={[1,face.eyeScaleY,1]}><sphereGeometry args={[.018,8,6]}/><meshStandardMaterial color="#182126"/></mesh>
+                <mesh name="humanoid-face-right-eye" position={[-.055,.14,.145]} scale={[1,face.eyeScaleY,1]}><sphereGeometry args={[.018,8,6]}/><meshStandardMaterial color="#182126"/></mesh>
+                <mesh name="humanoid-face-left-brow" position={[.055,.185,.14]} rotation={[0,0,face.leftBrowRotation]}><boxGeometry args={[.055,.009,.012]}/><meshStandardMaterial color="#263238"/></mesh>
+                <mesh name="humanoid-face-right-brow" position={[-.055,.185,.14]} rotation={[0,0,face.rightBrowRotation]}><boxGeometry args={[.055,.009,.012]}/><meshStandardMaterial color="#263238"/></mesh>
+                <mesh name="humanoid-face-mouth" position={[0,face.mouthY,.15]} scale={[face.mouthScaleX,face.mouthScaleY,1]}><boxGeometry args={[.07,.014,.012]}/><meshStandardMaterial color="#6e3030"/></mesh>
+              </group>
             </group>
           </group>
           <group ref={leftArmRef} name="humanoid-bone-LeftUpperArm" position={[.25*shoulders,.08,0]} rotation={rotation('LeftUpperArm')}>

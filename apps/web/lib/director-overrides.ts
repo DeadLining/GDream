@@ -31,6 +31,8 @@ export function applyDirectorObjectOverrides(objects:DirectorObject[],overrides:
       appearance:{
         ...object.appearance,
         ...(override.pose_preset?{pose_preset:override.pose_preset}:{}),
+        ...(override.facial_expression?{facial_expression:override.facial_expression}:{}),
+        ...(override.morph_target_weights!==undefined?{morph_target_weights:override.morph_target_weights}:{}),
         ...(override.animation_clip?{animation_clip:override.animation_clip}:{}),
         ...(override.animation_playing!==undefined?{animation_playing:override.animation_playing}:{}),
         ...(override.animation_time_seconds!==undefined?{animation_time_seconds:override.animation_time_seconds}:{}),
