@@ -1,11 +1,11 @@
 import React from 'react';
-import {cleanup,render,screen,waitFor,within} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {DirectorWorkspace} from '../components/director/DirectorWorkspace';
 import type {DirectorStage,Scene} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
+const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
 vi.mock('../lib/api',()=>mocks);
 const overrideTransform={position:[2,0,0],rotation:[0,.5,0],scale:[1,1,1]} as const;
 const movedCamera={position:[2,2.4,6] as [number,number,number],target:[0,.9,0] as [number,number,number],rotation:[-.1,.25,0] as [number,number,number]};
@@ -319,6 +319,21 @@ describe('DirectorWorkspace',()=>{
 
     await waitFor(()=>expect(mocks.createDirectorObject).toHaveBeenCalledWith('stage-1',1,{kind:'primitive',source_type:'library_asset',source_id:'asset-1',label:'机械犬 副本',transform:{...catalogObject.transform,position:[.5,0,0]},appearance:{color:'#777'},metadata:{proxy_rig:'quadruped'},visible:true}));
     expect(screen.getByRole('button',{name:'机械犬 副本'})).toBeVisible();
+  });
+  it('persists environment, ground, and lighting controls on the stage',async()=>{
+    const environment={background_color:'#263238',ground:'grid',ground_color:'#40545c',ambient_light:.85,key_light_color:'#ffffff',key_light_intensity:1.4};
+    const currentStage={...stage,environment};
+    mocks.getDirectorStage.mockResolvedValue(currentStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorStage.mockImplementation(async(_id:string,_version:number,next:Record<string,unknown>)=>({...currentStage,version:2,environment:next}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    fireEvent.change(await screen.findByLabelText('背景颜色'),{target:{value:'#112233'}});
+    await userEvent.selectOptions(screen.getByLabelText('地面样式'),'solid');
+    fireEvent.change(screen.getByLabelText('环境光强度'),{target:{value:'0.4'}});
+    fireEvent.change(screen.getByLabelText('主光强度'),{target:{value:'1.1'}});
+    await userEvent.click(screen.getByRole('button',{name:'保存环境设置'}));
+
+    await waitFor(()=>expect(mocks.updateDirectorStage).toHaveBeenCalledWith('stage-1',1,{...environment,background_color:'#112233',ground:'solid',ambient_light:.4,key_light_intensity:1.1}));
   });
   it('renders the effective variant model when the selected shot changes',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,source_id:'master-representation',label:'林夏',appearance:{model_url:'/media/master.glb'},metadata:{character_id:'char-1',representation_id:'master-representation'},transform:{...directorObject.transform,position:[3,0,1] as [number,number,number]}};

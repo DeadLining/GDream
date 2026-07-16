@@ -15,6 +15,7 @@ import {
   createDirectorStage,
   createDirectorSuggestion,
   getDirectorStage,
+  updateDirectorStage,
   updateDirectorCamera,
   uploadDirectorPreview,
   createVolume,
@@ -249,6 +250,15 @@ describe('director api', () => {
       '/api/director-stages/stage-1/shots/shot-1/apply-to-shot',
     ]);
     expect(fetchMock.mock.calls[2][1]).toMatchObject({method:'PUT',body:JSON.stringify({expected_version:2,camera:{focal_length_mm:85}})});
+  });
+
+  it('updates director environment settings with optimistic locking',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+
+    await updateDirectorStage('stage-1',3,{background_color:'#112233',ground:'solid'});
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/director-stages/stage-1',expect.objectContaining({method:'PATCH',body:JSON.stringify({expected_version:3,stage:{environment:{background_color:'#112233',ground:'solid'}}})}));
   });
 
   it('uploads previews as multipart without forcing a JSON content type', async () => {

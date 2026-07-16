@@ -101,4 +101,15 @@ describe('DirectorCanvas',()=>{
     expect(onTransform).toHaveBeenCalledTimes(1);
     expect(onTransform).toHaveBeenCalledWith('character-1',{position:[2,0,0],rotation:[0,.2,0],scale:[1,1,1]});
   });
+
+  it('renders the persisted background, ground, and lighting environment',()=>{
+    const view=render(<DirectorCanvas objects={[]} camera={camera} selectedObjectId={null} mode="world" environment={{background_color:'#112233',ground:'solid',ground_color:'#334455',ambient_light:.4,key_light_color:'#ddeeff',key_light_intensity:1.1}} onTransform={vi.fn()}/>);
+
+    expect(view.container.querySelector('color')).toHaveAttribute('args','#112233');
+    expect(view.container.querySelector('ambientlight')).toHaveAttribute('intensity','0.4');
+    expect(view.container.querySelector('directionallight')).toHaveAttribute('color','#ddeeff');
+    expect(view.container.querySelector('directionallight')).toHaveAttribute('intensity','1.1');
+    expect(view.container.querySelector('[name="director-ground"]')).toBeInTheDocument();
+    expect(view.container.querySelector('gridhelper')).not.toBeInTheDocument();
+  });
 });
