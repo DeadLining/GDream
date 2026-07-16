@@ -106,7 +106,7 @@
 .master-character-list button span, .master-character-list button small, .lineage-character-list button span, .lineage-character-list button small { display: block; }
 .master-character-list button small, .lineage-character-list button small { margin-top: 3px; color: var(--color-muted); font-size: var(--fs-xs); font-weight: 400; }
 .master-setting-page > .master-character-list { min-height: 0; overflow: hidden; }
-.master-setting-content { min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: 50px 42px minmax(0, 1fr) 142px; overflow: hidden; padding: var(--space-2) var(--space-3); }
+.master-setting-content { min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: auto auto auto auto; align-content: start; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: var(--space-2) var(--space-3) var(--space-5); }
 .master-setting-page-embedded .master-setting-content { grid-template-rows: 50px 42px minmax(0, 1fr); }
 .master-setting-content > header { min-height: 50px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); border-bottom: 1px solid var(--color-line); }
 .master-setting-content h1 { margin: 0; font-size: var(--fs-xl); }
@@ -116,7 +116,7 @@
 .master-tabs button { min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 var(--space-3); }
 .master-tabs button.active { border-bottom-color: var(--color-accent); font-weight: 700; }
 .master-visual-assets { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(190px, .8fr); gap: var(--space-2); padding-top: var(--space-2); }
-.master-image-grid { min-height: 0; height: 100%; display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.master-image-grid { min-height: 420px; display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); grid-template-rows: repeat(2, minmax(180px, 1fr)); gap: var(--space-2); }
 .character-model-section { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(112px, auto) minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); }
 .character-model-section > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-2); border-bottom: 1px solid var(--color-line); }
 .character-model-section > header { align-items: stretch; flex-direction: column; justify-content: center; gap: 4px; }.character-model-section > header div { min-width: 0; display: grid; }
@@ -137,12 +137,12 @@
 .master-image-grid article > span { position: absolute; z-index: 1; top: var(--space-2); left: var(--space-2); border-radius: var(--radius-sm); background: rgb(25 27 29 / 78%); color: white; padding: 3px 6px; font-size: 9px; }
 .master-image-grid img { width: 100%; height: 100%; object-fit: cover; }
 .master-image-grid article > div { width: 100%; height: 100%; display: grid; place-content: center; justify-items: center; gap: var(--space-1); color: var(--color-muted); }
-.identity-bible { min-height: 0; display: grid; grid-template-rows: 28px minmax(0, 1fr); margin-top: var(--space-2); overflow: hidden; }
+.identity-bible { min-height: 0; display: grid; grid-template-rows: auto auto; margin-top: var(--space-3); overflow: visible; }
 .identity-bible h2 { margin: 0; font-size: var(--fs-base); }
 .identity-bible > div { min-height: 0; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--color-line); border-left: 1px solid var(--color-line); }
-.identity-bible article { min-width: 0; min-height: 0; overflow: hidden; padding: var(--space-2); border-right: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); background: var(--color-surface); }
+.identity-bible article { min-width: 0; min-height: 0; overflow: visible; padding: var(--space-2); border-right: 1px solid var(--color-line); border-bottom: 1px solid var(--color-line); background: var(--color-surface); }
 .identity-bible article span { color: var(--color-muted); font-size: var(--fs-xs); font-weight: 700; }
-.identity-bible article p { display: -webkit-box; overflow: hidden; margin: 2px 0 0; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--fs-xs); line-height: 1.4; }
+.identity-bible article p { display: block; overflow: visible; margin: 2px 0 0; overflow-wrap: anywhere; font-size: var(--fs-xs); line-height: 1.4; }
 .reference-manager { grid-row: 3 / 5; min-height: 0; overflow: hidden; padding-top: var(--space-1); }
 .master-embedded-workspace { min-width: 0; min-height: 0; overflow: hidden; padding-top: var(--space-2); }
 .master-embedded-workspace > * { height: 100%; }
@@ -152,7 +152,7 @@
 .master-embedded-workspace .lineage-inspector h3 { margin-bottom: var(--space-1); }
 .master-embedded-workspace .lineage-inspector-actions { gap: var(--space-1); margin-top: var(--space-2); }
 .master-embedded-workspace .lineage-inspector-actions button { min-height: var(--control-h-md); }
-.master-setting-page > .master-setting-inspector { min-height: 0; overflow: hidden; padding: var(--space-3); }
+.master-setting-page > .master-setting-inspector { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-3); }
 .master-setting-page > .master-setting-inspector dl { margin: var(--space-2) 0; }
 .master-setting-page > .master-setting-inspector dl > div { min-height: 28px; }
 .master-setting-inspector > section { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--color-line); }
@@ -215,7 +215,7 @@
 .asset-lineage-page-layout > .asset-lineage-workspace { min-width: 0; }
 
 @media (max-width: 1350px) {
-  .master-image-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); }
+  .master-image-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); grid-template-rows: repeat(3, minmax(150px, 1fr)); }
 }
 
 @media (max-width: 1100px) {
