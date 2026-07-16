@@ -6,10 +6,11 @@ import {GlbModel} from '../components/shared/GlbModel';
 
 const animationAction=vi.hoisted(()=>({reset:vi.fn(),play:vi.fn(),paused:true,time:0}));
 const useAnimations=vi.hoisted(()=>vi.fn(()=>({actions:{Walk:animationAction},mixer:{update:vi.fn()}})));
+const cloneView=vi.hoisted(()=>vi.fn(()=> <div data-testid="animated-model"/>));
 
 vi.mock('@react-three/fiber',()=>({useFrame:vi.fn()}));
 vi.mock('@react-three/drei',()=>({
-  Clone:()=> <div data-testid="animated-model"/>,
+  Clone:cloneView,
   useAnimations,
   useGLTF:()=>({scene:new Group(),animations:[{name:'Walk'}]}),
 }));
@@ -20,6 +21,7 @@ it('plays and seeks an imported GLB animation action',()=>{
   const view=render(<GlbModel url="/media/linxia.glb" animationClip="Walk" animationPlaying animationTimeSeconds={1.25} fallback={<span>fallback</span>}/>);
 
   expect(useAnimations).toHaveBeenCalled();
+  expect(cloneView).not.toHaveBeenCalled();
   expect(animationAction.reset).toHaveBeenCalled();
   expect(animationAction.play).toHaveBeenCalled();
   expect(animationAction.paused).toBe(false);
