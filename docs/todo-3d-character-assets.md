@@ -129,7 +129,7 @@ Acceptance criteria:
 - [x] Support image-to-3D generation from approved multi-view character references, using a deterministic contact sheet for providers that accept one image input while preserving every source asset and view type in generation provenance.
 - [x] Persist asynchronous generation jobs, progress, retryability, provider metadata, and sanitized failures.
 - [x] Validate and normalize generated outputs before they become selectable assets.
-- [ ] Add repair, decimation, texture optimization, and thumbnail processing.
+- [x] Post-process generated GLBs with conservative repair/deduplication, static-mesh decimation, 2048px texture optimization, rig protection, and deterministic 512px source thumbnails before candidates are persisted.
 - [x] Require explicit user approval before replacing an active character representation or project prop model.
 
 This phase is optional because uploaded models and standard proxies are sufficient for the initial director workflow.

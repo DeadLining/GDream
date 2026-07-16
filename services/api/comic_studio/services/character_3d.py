@@ -58,6 +58,8 @@ class Character3DRepresentationService:
         provider: str = "upload",
         model: str = "local-glb",
         request_metadata: dict[str, Any] | None = None,
+        representation_metadata: dict[str, Any] | None = None,
+        thumbnail_content: bytes | None = None,
         variant_id: str | None = None,
         state_id: str | None = None,
     ):
@@ -70,6 +72,7 @@ class Character3DRepresentationService:
             state_id,
         )
         metrics = self.inspect_glb(content)
+        inspected_metadata = metrics.pop("representation_metadata")
         version = (
             self.session.scalar(
                 select(func.max(models.Character3DRepresentation.version)).where(
@@ -111,9 +114,31 @@ class Character3DRepresentationService:
             raise Character3DRepresentationError("asset_path_escape")
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(".glb.tmp")
+        thumbnail_destination: Path | None = None
+        thumbnail_temporary: Path | None = None
+        merged_representation_metadata = {
+            **inspected_metadata,
+            **(representation_metadata or {}),
+        }
+        if thumbnail_content is not None:
+            thumbnail_relative = relative.parent / "thumbnails" / f"{asset.id}.png"
+            thumbnail_destination = (self.data_root / thumbnail_relative).resolve()
+            if self.data_root not in thumbnail_destination.parents:
+                raise Character3DRepresentationError("asset_path_escape")
+            thumbnail_destination.parent.mkdir(parents=True, exist_ok=True)
+            thumbnail_temporary = thumbnail_destination.with_suffix(".png.tmp")
+            thumbnail_url = f"/media/{thumbnail_relative}"
+            asset.request_metadata = {
+                **asset.request_metadata,
+                "thumbnail_url": thumbnail_url,
+            }
+            merged_representation_metadata["thumbnail_url"] = thumbnail_url
         try:
             temporary.write_bytes(content)
             os.replace(temporary, destination)
+            if thumbnail_destination is not None and thumbnail_temporary is not None:
+                thumbnail_temporary.write_bytes(thumbnail_content)
+                os.replace(thumbnail_temporary, thumbnail_destination)
             asset.local_path = str(relative)
             if activate:
                 self.session.execute(
@@ -131,6 +156,7 @@ class Character3DRepresentationService:
                 version=version,
                 is_active=activate,
                 review_status=review_status,
+                representation_metadata=merged_representation_metadata,
                 **metrics,
             )
             self.session.add(representation)
@@ -147,6 +173,10 @@ class Character3DRepresentationService:
             self.session.rollback()
             temporary.unlink(missing_ok=True)
             destination.unlink(missing_ok=True)
+            if thumbnail_temporary is not None:
+                thumbnail_temporary.unlink(missing_ok=True)
+            if thumbnail_destination is not None:
+                thumbnail_destination.unlink(missing_ok=True)
             raise
         return self.get(representation.id)
 

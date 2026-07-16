@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from comic_studio import models
 from comic_studio.providers.model_3d_base import Model3DResult
 from comic_studio.services.character_3d import Character3DRepresentationService
+from comic_studio.services.model_3d_postprocess import Model3DPostProcessor
 
 
 class Model3DGenerationError(ValueError):
@@ -30,10 +31,17 @@ class Model3DGenerationService:
     CONTACT_SHEET_SIZE = (1024, 1536)
     CONTACT_SHEET_COLUMNS = 2
 
-    def __init__(self, session: Session, data_root: Path, provider):
+    def __init__(
+        self,
+        session: Session,
+        data_root: Path,
+        provider,
+        postprocessor: Model3DPostProcessor,
+    ):
         self.session = session
         self.data_root = data_root.resolve()
         self.provider = provider
+        self.postprocessor = postprocessor
 
     async def generate(
         self,
@@ -58,7 +66,7 @@ class Model3DGenerationService:
         )
         if not isinstance(result, Model3DResult):
             raise Model3DGenerationError("invalid_model3d_result")
-        Character3DRepresentationService.inspect_glb(result.content)
+        processed = self.postprocessor.process(result.content, content)
         provider_name = str(
             getattr(self.provider, "provider_id", self.provider.__class__.__name__)
         )
@@ -75,7 +83,7 @@ class Model3DGenerationService:
                 self.data_root,
             ).upload(
                 target_id,
-                result.content,
+                processed.content,
                 label="AI 生成 3D 候选",
                 activate=False,
                 review_status="draft",
@@ -89,7 +97,10 @@ class Model3DGenerationService:
                     "reference_input_checksum": hashlib.sha256(content).hexdigest(),
                     "source_url": result.source_url,
                     "generation_kind": "image_to_3d",
+                    "postprocess": processed.metadata,
                 },
+                representation_metadata={"postprocess": processed.metadata},
+                thumbnail_content=processed.thumbnail,
                 variant_id=variant_id,
                 state_id=state_id,
             )
@@ -109,6 +120,9 @@ class Model3DGenerationService:
             target_id,
             references[0][1],
             result,
+            processed.content,
+            processed.thumbnail,
+            processed.metadata,
             provider_name,
             model_name,
         )
@@ -262,6 +276,9 @@ class Model3DGenerationService:
         library_asset_id: str,
         reference: models.Asset,
         result: Model3DResult,
+        content: bytes,
+        thumbnail_content: bytes,
+        postprocess_metadata: dict,
         provider_name: str,
         model_name: str,
     ) -> models.Asset:
@@ -289,10 +306,11 @@ class Model3DGenerationService:
                 "reference_asset_id": reference.id,
                 "source_url": result.source_url,
                 "generation_kind": "image_to_3d",
+                "postprocess": postprocess_metadata,
             },
             parent_asset_id=reference.id,
             generation_attempt=attempt,
-            checksum=hashlib.sha256(result.content).hexdigest(),
+            checksum=hashlib.sha256(content).hexdigest(),
             review_status="draft",
         )
         self.session.add(candidate)
@@ -310,14 +328,29 @@ class Model3DGenerationService:
             raise Model3DGenerationError("asset_path_escape")
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(".glb.tmp")
-        temporary.write_bytes(result.content)
-        os.replace(temporary, destination)
-        candidate.local_path = str(relative)
+        thumbnail_relative = relative.parent / "thumbnails" / f"{candidate.id}.png"
+        thumbnail_destination = (self.data_root / thumbnail_relative).resolve()
+        if self.data_root not in thumbnail_destination.parents:
+            raise Model3DGenerationError("asset_path_escape")
+        thumbnail_destination.parent.mkdir(parents=True, exist_ok=True)
+        thumbnail_temporary = thumbnail_destination.with_suffix(".png.tmp")
         try:
+            temporary.write_bytes(content)
+            os.replace(temporary, destination)
+            thumbnail_temporary.write_bytes(thumbnail_content)
+            os.replace(thumbnail_temporary, thumbnail_destination)
+            candidate.local_path = str(relative)
+            candidate.request_metadata = {
+                **candidate.request_metadata,
+                "thumbnail_url": f"/media/{thumbnail_relative}",
+            }
             self.session.commit()
         except Exception:
             self.session.rollback()
+            temporary.unlink(missing_ok=True)
             destination.unlink(missing_ok=True)
+            thumbnail_temporary.unlink(missing_ok=True)
+            thumbnail_destination.unlink(missing_ok=True)
             raise
         self.session.refresh(candidate)
         return candidate
@@ -354,6 +387,12 @@ class Model3DGenerationService:
             library_asset.asset_metadata = {
                 **library_asset.asset_metadata,
                 "reference_asset_id": reference_id,
+                "model3d_thumbnail_url": candidate.request_metadata.get(
+                    "thumbnail_url"
+                ),
+                "model3d_postprocess": candidate.request_metadata.get(
+                    "postprocess", {}
+                ),
             }
             library_asset.media_asset_id = candidate.id
             candidate.review_status = "approved"

@@ -9,5 +9,12 @@
   "scripts": {
     "test": "npm test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.4.1",
+    "@gltf-transform/extensions": "4.4.1",
+    "@gltf-transform/functions": "4.4.1",
+    "meshoptimizer": "1.0.1",
+    "sharp": "0.34.5"
   }
 }

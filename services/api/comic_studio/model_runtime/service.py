@@ -29,6 +29,7 @@ from comic_studio.services.speech import SpeechService
 from comic_studio.services.videos import VideoService
 from comic_studio.services.visual_review import VisualReviewService
 from comic_studio.services.model_3d import Model3DGenerationService
+from comic_studio.services.model_3d_postprocess import Model3DPostProcessor
 
 
 provider_testing_client_factory = default_client_factory
@@ -56,6 +57,7 @@ class ModelRuntimeService:
         *,
         mock_ssh_manager=None,
         narrator_speaker: str = "dylan",
+        model3d_postprocessor_factory=Model3DPostProcessor,
     ):
         self.channel_store = channel_store
         self.session_factory = session_factory
@@ -63,6 +65,7 @@ class ModelRuntimeService:
         self.adapters = adapters
         self.mock_ssh_manager = mock_ssh_manager
         self.narrator_speaker = narrator_speaker
+        self.model3d_postprocessor_factory = model3d_postprocessor_factory
 
     @staticmethod
     def _adapter_identity(adapter) -> tuple[str, str]:
@@ -335,6 +338,7 @@ class ModelRuntimeService:
                 session,
                 self.data_root,
                 self.adapters.create(Capability.MODEL_3D),
+                self.model3d_postprocessor_factory(self.data_root),
             ).generate(
                 target_type,
                 target_id,

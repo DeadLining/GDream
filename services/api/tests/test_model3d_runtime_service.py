@@ -65,7 +65,7 @@ class FakePostProcessor:
         assert thumbnail_source
         return ProcessedModel3D(
             content=_glb({"asset": {"version": "2.0", "generator": "optimized"}}),
-            thumbnail=_png((40, 80, 160)),
+            thumbnail=_png((40, 80, 160), size=(512, 512)),
             metadata={
                 "tool": "gltf-transform",
                 "version": "4.4.1",
@@ -118,9 +118,13 @@ def _postprocessing_runtime(tmp_path: Path):
     return service, session_factory
 
 
-def _png(color: tuple[int, int, int]) -> bytes:
+def _png(
+    color: tuple[int, int, int],
+    *,
+    size: tuple[int, int] = (8, 8),
+) -> bytes:
     output = BytesIO()
-    Image.new("RGB", (8, 8), color).save(output, format="PNG")
+    Image.new("RGB", size, color).save(output, format="PNG")
     return output.getvalue()
 
 
@@ -163,8 +167,10 @@ def _library_asset_reference(session_factory, data_root: Path) -> tuple[str, str
             story_bible="Story",
             visual_style="comic",
         )
+        session.add(project)
+        session.flush()
         reference = models.Asset(
-            project=project,
+            project_id=project.id,
             kind="library-asset-reference",
             local_path="",
             media_type="image/png",
