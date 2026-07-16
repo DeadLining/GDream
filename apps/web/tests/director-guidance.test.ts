@@ -49,17 +49,20 @@ describe('director guidance capture',()=>{
     const object=new Group();object.name='director-object-character-1';object.userData={kind:'character'};
     const material=new MeshStandardMaterial({color:'#ff0000'});object.add(new Mesh(new SphereGeometry(1),material));scene.add(object);
     const renderer={domElement:{width:800,height:600},render:vi.fn()};
+    const camera=new PerspectiveCamera(50,4/3,.1,1000);camera.position.set(0,0,5);camera.lookAt(0,0,0);camera.updateProjectionMatrix();camera.updateMatrixWorld();
     const capture=vi.fn(async()=>{
       expect(scene.overrideMaterial).toBeInstanceOf(MeshDepthMaterial);
       expect((scene.background as Color).getHexString()).toBe('000000');
+      expect(camera.near).toBeGreaterThan(.1);expect(camera.far).toBeLessThan(1000);
       return new Blob(['depth'],{type:'image/png'});
     });
 
-    const blob=await captureDirectorDepth({scene,camera:new PerspectiveCamera(),renderer,capture});
+    const blob=await captureDirectorDepth({scene,camera,renderer,capture});
 
     expect(blob.type).toBe('image/png');
     expect(scene.overrideMaterial).toBeNull();
     expect((scene.background as Color).getHexString()).toBe('123456');
+    expect(camera.near).toBe(.1);expect(camera.far).toBe(1000);
     expect(renderer.render).toHaveBeenCalledTimes(2);
   });
 
