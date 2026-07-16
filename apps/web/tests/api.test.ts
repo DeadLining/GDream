@@ -5,6 +5,7 @@ import {
   createScript,
   deleteScript,
   generateCharacterReferenceSet,
+  generateModel3D,
   createCharacter,
   updateCharacter,
   deleteCharacterReference,
@@ -196,6 +197,39 @@ describe('character reference api', () => {
         target_id: 'character-1',
         mode: 'reference_set',
         activate: true,
+      }),
+    }));
+  });
+
+  it('passes approved multi-view references to character 3D generation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      job_id: 'job-3d',
+      capability: 'model3d',
+      status: 'queued',
+    }), {
+      status: 202,
+      headers: {'content-type': 'application/json'},
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await generateModel3D(
+      'character',
+      'character-1',
+      'asset-front',
+      null,
+      null,
+      ['asset-front', 'asset-side', 'asset-back'],
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/model-runtime/model3d', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        target_type: 'character',
+        target_id: 'character-1',
+        reference_asset_id: 'asset-front',
+        reference_asset_ids: ['asset-front', 'asset-side', 'asset-back'],
+        variant_id: null,
+        state_id: null,
       }),
     }));
   });

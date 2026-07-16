@@ -142,6 +142,10 @@ def test_model3d_runtime_queues_a_non_activating_candidate(client):
             "target_type": "character",
             "target_id": "c1",
             "reference_asset_id": "asset-reference-1",
+            "reference_asset_ids": [
+                "asset-reference-1",
+                "asset-reference-side",
+            ],
         },
     )
 
@@ -155,7 +159,13 @@ def test_model3d_runtime_queues_a_non_activating_candidate(client):
         Capability.MODEL_3D,
         "character",
         "c1",
-        {"reference_asset_id": "asset-reference-1"},
+        {
+            "reference_asset_id": "asset-reference-1",
+            "reference_asset_ids": [
+                "asset-reference-1",
+                "asset-reference-side",
+            ],
+        },
     )
 
 
