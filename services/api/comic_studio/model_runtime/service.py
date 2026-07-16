@@ -328,6 +328,7 @@ class ModelRuntimeService:
         reference_asset_id: str | None,
         variant_id: str | None = None,
         state_id: str | None = None,
+        reference_asset_ids: list[str] | None = None,
     ):
         with self.session_factory() as session:
             return await Model3DGenerationService(
@@ -340,6 +341,7 @@ class ModelRuntimeService:
                 reference_asset_id,
                 variant_id,
                 state_id,
+                reference_asset_ids,
             )
 
     def create_media_job(
@@ -417,6 +419,7 @@ class ModelRuntimeService:
                     job.request_payload.get("reference_asset_id"),
                     job.request_payload.get("variant_id"),
                     job.request_payload.get("state_id"),
+                    job.request_payload.get("reference_asset_ids"),
                 )
             else:
                 result = await self.execute_video(

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+from io import BytesIO
 import os
 from pathlib import Path
 
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,17 @@ class Model3DGenerationError(ValueError):
 
 
 class Model3DGenerationService:
+    CHARACTER_VIEW_ORDER = {
+        "primary": 0,
+        "front": 1,
+        "three_quarter": 2,
+        "side": 3,
+        "back": 4,
+    }
+    MAX_CHARACTER_VIEWS = 4
+    CONTACT_SHEET_SIZE = (1024, 1536)
+    CONTACT_SHEET_COLUMNS = 2
+
     def __init__(self, session: Session, data_root: Path, provider):
         self.session = session
         self.data_root = data_root.resolve()
@@ -29,17 +42,19 @@ class Model3DGenerationService:
         reference_asset_id: str | None = None,
         variant_id: str | None = None,
         state_id: str | None = None,
+        reference_asset_ids: list[str] | None = None,
     ) -> dict:
-        reference = self._reference_asset(
+        references = self._reference_assets(
             target_type,
             target_id,
             reference_asset_id,
+            reference_asset_ids or [],
         )
-        content = self._read_reference(reference)
+        content, media_type, filename, input_mode = self._provider_input(references)
         result = await self.provider.generate_model(
             content,
-            reference.media_type,
-            Path(reference.local_path).name,
+            media_type,
+            filename,
         )
         if not isinstance(result, Model3DResult):
             raise Model3DGenerationError("invalid_model3d_result")
@@ -48,6 +63,12 @@ class Model3DGenerationService:
             getattr(self.provider, "provider_id", self.provider.__class__.__name__)
         )
         model_name = str(getattr(self.provider, "model", ""))
+        reference_ids = [asset.id for _reference, asset in references]
+        reference_types = [
+            reference.reference_type
+            for reference, _asset in references
+            if reference is not None
+        ]
         if target_type == "character":
             representation = Character3DRepresentationService(
                 self.session,
@@ -61,7 +82,11 @@ class Model3DGenerationService:
                 provider=provider_name,
                 model=model_name,
                 request_metadata={
-                    "reference_asset_id": reference.id,
+                    "reference_asset_id": reference_ids[0],
+                    "reference_asset_ids": reference_ids,
+                    "reference_types": reference_types,
+                    "reference_input_mode": input_mode,
+                    "reference_input_checksum": hashlib.sha256(content).hexdigest(),
                     "source_url": result.source_url,
                     "generation_kind": "image_to_3d",
                 },
@@ -82,7 +107,7 @@ class Model3DGenerationService:
             }
         candidate = self._save_library_candidate(
             target_id,
-            reference,
+            references[0][1],
             result,
             provider_name,
             model_name,
@@ -97,16 +122,22 @@ class Model3DGenerationService:
             "is_active": False,
         }
 
-    def _reference_asset(
+    def _reference_assets(
         self,
         target_type: str,
         target_id: str,
         reference_asset_id: str | None,
-    ) -> models.Asset:
+        reference_asset_ids: list[str],
+    ) -> list[tuple[models.CharacterReference | None, models.Asset]]:
         if target_type == "character":
             character = self.session.get(models.Character, target_id)
             if character is None:
                 raise KeyError(target_id)
+            requested_ids = list(dict.fromkeys(reference_asset_ids))
+            if reference_asset_id and reference_asset_id not in requested_ids:
+                requested_ids.insert(0, reference_asset_id)
+            if len(requested_ids) > self.MAX_CHARACTER_VIEWS:
+                raise Model3DGenerationError("too_many_character_reference_views")
             statement = (
                 select(models.CharacterReference)
                 .where(
@@ -118,16 +149,43 @@ class Model3DGenerationService:
                     models.CharacterReference.created_at.desc(),
                 )
             )
-            if reference_asset_id:
+            if requested_ids:
                 statement = statement.where(
-                    models.CharacterReference.asset_id == reference_asset_id
+                    models.CharacterReference.asset_id.in_(requested_ids)
                 )
-            reference = self.session.scalar(statement.limit(1))
-            if reference is None:
+                references = list(self.session.scalars(statement))
+                if len(references) != len(requested_ids):
+                    error = (
+                        "approved_character_reference_required"
+                        if len(requested_ids) == 1 and not reference_asset_ids
+                        else "approved_character_references_required"
+                    )
+                    raise Model3DGenerationError(error)
+                references.sort(
+                    key=lambda item: (
+                        self.CHARACTER_VIEW_ORDER.get(item.reference_type, 99),
+                        item.created_at,
+                        item.id,
+                    )
+                )
+            else:
+                reference = self.session.scalar(statement.limit(1))
+                references = [reference] if reference is not None else []
+            if not references:
                 raise Model3DGenerationError(
                     "approved_character_reference_required"
                 )
-            asset = self.session.get(models.Asset, reference.asset_id)
+            result = []
+            for reference in references:
+                asset = self.session.get(models.Asset, reference.asset_id)
+                if (
+                    asset is None
+                    or asset.project_id != character.project_id
+                    or not asset.media_type.startswith("image/")
+                ):
+                    raise Model3DGenerationError("model3d_reference_must_be_image")
+                result.append((reference, asset))
+            return result
         elif target_type == "library_asset":
             library_asset = self.session.get(models.LibraryAsset, target_id)
             if library_asset is None:
@@ -144,7 +202,7 @@ class Model3DGenerationService:
             raise Model3DGenerationError("unsupported_model3d_target")
         if asset is None or not asset.media_type.startswith("image/"):
             raise Model3DGenerationError("model3d_reference_must_be_image")
-        return asset
+        return [(None, asset)]
 
     def _read_reference(self, asset: models.Asset) -> bytes:
         source = (self.data_root / asset.local_path).resolve()
@@ -154,6 +212,50 @@ class Model3DGenerationService:
         if not content or len(content) > 15 * 1024 * 1024:
             raise Model3DGenerationError("model3d_reference_invalid")
         return content
+
+    def _provider_input(
+        self,
+        references: list[tuple[models.CharacterReference | None, models.Asset]],
+    ) -> tuple[bytes, str, str, str]:
+        if len(references) == 1:
+            asset = references[0][1]
+            return (
+                self._read_reference(asset),
+                asset.media_type,
+                Path(asset.local_path).name,
+                "single_reference",
+            )
+        sheet = Image.new("RGB", self.CONTACT_SHEET_SIZE, "white")
+        cell_width = self.CONTACT_SHEET_SIZE[0] // self.CONTACT_SHEET_COLUMNS
+        cell_height = self.CONTACT_SHEET_SIZE[1] // 2
+        margin = 16
+        for index, (_reference, asset) in enumerate(references):
+            try:
+                with Image.open(BytesIO(self._read_reference(asset))) as source:
+                    rgba = source.convert("RGBA")
+            except (UnidentifiedImageError, OSError, ValueError) as exc:
+                raise Model3DGenerationError("model3d_reference_invalid") from exc
+            tile = Image.new(
+                "RGBA",
+                (cell_width - margin * 2, cell_height - margin * 2),
+                "white",
+            )
+            fitted = ImageOps.contain(rgba, tile.size)
+            tile.alpha_composite(
+                fitted,
+                ((tile.width - fitted.width) // 2, (tile.height - fitted.height) // 2),
+            )
+            x = (index % self.CONTACT_SHEET_COLUMNS) * cell_width + margin
+            y = (index // self.CONTACT_SHEET_COLUMNS) * cell_height + margin
+            sheet.paste(tile.convert("RGB"), (x, y))
+        output = BytesIO()
+        sheet.save(output, format="PNG", optimize=False, compress_level=9)
+        return (
+            output.getvalue(),
+            "image/png",
+            "character-multi-view.png",
+            "multi_view_contact_sheet",
+        )
 
     def _save_library_candidate(
         self,

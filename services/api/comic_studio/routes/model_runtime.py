@@ -209,6 +209,7 @@ def model3d(
         payload.target_id,
         {
             "reference_asset_id": payload.reference_asset_id,
+            "reference_asset_ids": payload.reference_asset_ids,
             **scope,
         },
     )

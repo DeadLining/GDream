@@ -105,6 +105,7 @@ class Model3DRuntimeRequest(BaseModel):
     target_type: Literal["character", "library_asset"]
     target_id: str
     reference_asset_id: str | None = None
+    reference_asset_ids: list[str] = Field(default_factory=list, max_length=4)
     variant_id: str | None = Field(default=None, max_length=36)
     state_id: str | None = Field(default=None, max_length=36)
 
@@ -112,4 +113,8 @@ class Model3DRuntimeRequest(BaseModel):
     def validate_character_scope(self):
         if self.target_type != "character" and (self.variant_id or self.state_id):
             raise ValueError("3D variant scope requires a character target")
+        if self.target_type != "character" and self.reference_asset_ids:
+            raise ValueError("Multi-view 3D input requires a character target")
+        if len(set(self.reference_asset_ids)) != len(self.reference_asset_ids):
+            raise ValueError("Multi-view 3D references must be unique")
         return self
