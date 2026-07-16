@@ -80,6 +80,12 @@ def _recording_runtime(tmp_path: Path):
     return service, session_factory, registry.provider
 
 
+def _png(color: tuple[int, int, int]) -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (8, 8), color).save(output, format="PNG")
+    return output.getvalue()
+
+
 def _character_reference(session_factory, data_root: Path) -> tuple[str, str]:
     with session_factory() as session:
         project = models.Project(
@@ -241,10 +247,13 @@ async def test_character_model3d_composes_approved_multi_view_references(tmp_pat
     with session_factory() as session:
         references = CharacterReferenceService(session, service.data_root)
         view_asset_ids = []
-        for reference_type in ("three_quarter", "side", "back"):
+        for reference_type, color in zip(
+            ("three_quarter", "side", "back"),
+            ((220, 20, 20), (20, 180, 20), (20, 20, 220)),
+        ):
             reference, asset = references.upload(
                 character_id,
-                PNG,
+                _png(color),
                 reference_type,
                 reference_type,
             )
@@ -278,6 +287,9 @@ async def test_character_model3d_composes_approved_multi_view_references(tmp_pat
     with Image.open(BytesIO(content)) as image:
         assert image.size == (1024, 1536)
         assert image.mode == "RGB"
+        assert image.getpixel((768, 384)) == (220, 20, 20)
+        assert image.getpixel((256, 1152)) == (20, 180, 20)
+        assert image.getpixel((768, 1152)) == (20, 20, 220)
     with session_factory() as session:
         representation = session.get(
             models.Character3DRepresentation,
