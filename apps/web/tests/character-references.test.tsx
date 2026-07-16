@@ -336,7 +336,9 @@ it('generates a reviewable 3D candidate for the selected state scope',async()=>{
 
   await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
 
-  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith('character','c1','a2','v2','s1'));
+  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith(
+    'character','c1','a2','v2','s1',['a2','a3','a4'],
+  ));
   expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
 });
 
@@ -350,7 +352,10 @@ it('generates a reviewable 3D candidate from an existing character reference',as
 
   await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
 
-  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith('character','c1','a2'));
+  expect(screen.getByText('将使用 3 张已批准视图')).toBeVisible();
+  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith(
+    'character','c1','a2',null,null,['a2','a3','a4'],
+  ));
   expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
   await user.click(screen.getByRole('button',{name:'批准使用 3D 候选'}));
   expect(await screen.findByRole('dialog',{name:'确认 3D 变更影响'})).toBeVisible();
