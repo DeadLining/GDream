@@ -82,5 +82,9 @@ test('@real-model given a theme, AI creates and registers a playable full episod
     {timeout:30_000,message:'Final episode MP4 should expose playable video metadata'},
   ).toBeGreaterThan(0);
 
+  await page.getByRole('button',{name:'剧本',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'创建项目剧本'})).toHaveCount(0);
+  await expect(page.getByRole('textbox',{name:'剧本正文'})).toHaveValue(/\S{100,}/);
+
   await page.screenshot({path: testInfo.outputPath('theme-to-video-complete.png'), fullPage: true});
 });
