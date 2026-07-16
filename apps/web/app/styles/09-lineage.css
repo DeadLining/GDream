@@ -115,7 +115,7 @@
 .master-tabs { display: flex; border-bottom: 1px solid var(--color-line); }
 .master-tabs button { min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 var(--space-3); }
 .master-tabs button.active { border-bottom-color: var(--color-accent); font-weight: 700; }
-.master-visual-assets { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(190px, .8fr); gap: var(--space-2); padding-top: var(--space-2); }
+.master-visual-assets { min-width: 0; min-height: 420px; display: grid; grid-template-columns: minmax(0, 2fr) minmax(190px, .8fr); gap: var(--space-2); padding-top: var(--space-2); }
 .master-image-grid { min-height: 420px; display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); grid-template-rows: repeat(2, minmax(180px, 1fr)); gap: var(--space-2); }
 .character-model-section { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(112px, auto) minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-surface); }
 .character-model-section > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 0 var(--space-2); border-bottom: 1px solid var(--color-line); }
@@ -215,6 +215,7 @@
 .asset-lineage-page-layout > .asset-lineage-workspace { min-width: 0; }
 
 @media (max-width: 1350px) {
+  .master-visual-assets { min-height: 466px; }
   .master-image-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); grid-template-rows: repeat(3, minmax(150px, 1fr)); }
 }
 
