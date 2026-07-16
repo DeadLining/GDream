@@ -12,6 +12,7 @@ from comic_studio.model_runtime.service import ModelRuntimeService
 from comic_studio.providers.model_3d_base import Model3DResult
 from comic_studio.services.character_references import CharacterReferenceService
 from comic_studio.services.model_3d import Model3DGenerationError
+from comic_studio.services.model_3d_postprocess import ProcessedModel3D
 from tests.test_character_3d_representations import _glb
 from tests.test_character_references import PNG
 
@@ -55,6 +56,26 @@ class RecordingRegistry:
         return self.provider
 
 
+class FakePostProcessor:
+    def process(self, content, thumbnail_source):
+        assert content == _glb()
+        assert thumbnail_source
+        return ProcessedModel3D(
+            content=_glb({"asset": {"version": "2.0", "generator": "optimized"}}),
+            thumbnail=_png((40, 80, 160)),
+            metadata={
+                "tool": "gltf-transform",
+                "version": "4.4.1",
+                "protected_rig": False,
+                "steps": ["dedup", "prune", "weld", "simplify", "texture_compress"],
+                "source_bytes": len(_glb()),
+                "output_bytes": len(_glb()),
+                "thumbnail_width": 512,
+                "thumbnail_height": 512,
+            },
+        )
+
+
 def _runtime(tmp_path: Path):
     session_factory = create_session_factory(f"sqlite:///{tmp_path / 'model3d.db'}")
     create_tables(session_factory)
@@ -78,6 +99,20 @@ def _recording_runtime(tmp_path: Path):
         adapters=registry,
     )
     return service, session_factory, registry.provider
+
+
+def _postprocessing_runtime(tmp_path: Path):
+    session_factory = create_session_factory(f"sqlite:///{tmp_path / 'model3d.db'}")
+    create_tables(session_factory)
+    registry = RecordingRegistry()
+    service = ModelRuntimeService(
+        channel_store=None,
+        session_factory=session_factory,
+        data_root=tmp_path / "data",
+        adapters=registry,
+        model3d_postprocessor_factory=lambda _data_root: FakePostProcessor(),
+    )
+    return service, session_factory
 
 
 def _png(color: tuple[int, int, int]) -> bytes:
@@ -335,3 +370,33 @@ async def test_character_model3d_rejects_unapproved_reference_in_multi_view_set(
             primary_asset_id,
             reference_asset_ids=[primary_asset_id, draft_asset.id],
         )
+
+
+@pytest.mark.anyio
+async def test_character_model3d_persists_processed_model_and_thumbnail(tmp_path):
+    service, session_factory = _postprocessing_runtime(tmp_path)
+    character_id, reference_asset_id = _character_reference(
+        session_factory, service.data_root
+    )
+
+    result = await service.execute_model3d(
+        "character",
+        character_id,
+        reference_asset_id,
+    )
+
+    with session_factory() as session:
+        representation = session.get(
+            models.Character3DRepresentation,
+            result["representation_id"],
+        )
+        model_path = service.data_root / representation.asset.local_path
+        assert b'"generator":"optimized"' in model_path.read_bytes()
+        postprocess = representation.asset.request_metadata["postprocess"]
+        assert postprocess["tool"] == "gltf-transform"
+        thumbnail_url = representation.representation_metadata["thumbnail_url"]
+        assert thumbnail_url.endswith(f"/{representation.asset_id}.png")
+        thumbnail_path = service.data_root / thumbnail_url.removeprefix("/media/")
+        assert thumbnail_path.is_file()
+        with Image.open(thumbnail_path) as thumbnail:
+            assert thumbnail.size == (512, 512)
