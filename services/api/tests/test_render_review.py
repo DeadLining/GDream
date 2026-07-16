@@ -278,6 +278,60 @@ def test_render_review_route_404_for_unknown_episode(client):
     assert response.status_code == 404
 
 
+def test_render_job_persists_review_with_its_job_id(client, monkeypatch):
+    from comic_studio import models
+    from comic_studio.jobs import JobStore
+    from comic_studio.routes.renders import run_render_job
+
+    project = client.post(
+        "/api/projects",
+        json={
+            "title": "项目",
+            "logline": "梗概",
+            "story_bible": "设定",
+            "visual_style": "漫画",
+            "aspect_ratio": "9:16",
+        },
+    ).json()
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "第一集", "premise": "测试", "target_duration_seconds": 60},
+    ).json()
+    with client.app.state.session_factory() as session:
+        job = JobStore(session).create(
+            "render_episode", "episode", episode["id"], {}
+        )
+        job_id = job.id
+
+    captured = {}
+    monkeypatch.setattr(
+        "comic_studio.routes.renders.RenderingService.render",
+        lambda self, episode_id, output: {"streams": [{"codec_type": "video"}]},
+    )
+
+    def fake_review(self, output, episode_id, *, job_id=None):
+        captured["job_id"] = job_id
+        return object()
+
+    monkeypatch.setattr(
+        "comic_studio.routes.renders.RenderReviewService.review_render",
+        fake_review,
+    )
+    monkeypatch.setattr(
+        "comic_studio.services.render_review.review_to_payload",
+        lambda record: {"overall_pass": True},
+    )
+
+    run_render_job(client.app, job_id, episode["id"])
+
+    with client.app.state.session_factory() as session:
+        persisted = session.get(models.Job, job_id)
+        assert persisted is not None
+        assert persisted.status == "succeeded"
+        assert persisted.result_metadata["review"]["overall_pass"] is True
+    assert captured["job_id"] == job_id
+
+
 # --- M2.4 Slideshow risk -------------------------------------------------
 
 
