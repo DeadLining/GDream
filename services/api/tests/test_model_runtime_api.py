@@ -37,10 +37,6 @@ class FakeRuntime:
         self.approved_model3d_job_id = job_id
         return {"review_status": "approved", "is_active": True}
 
-    def approve_model3d_job(self, job_id):
-        self.approved_model3d_job_id = job_id
-        return {"review_status": "approved", "is_active": True}
-
     async def health(self):
         return {
             "capabilities": {},
@@ -192,17 +188,6 @@ def test_model3d_runtime_returns_the_latest_persisted_target_job(client):
     assert response.status_code == 200
     assert response.json()["id"] == "job-latest"
     assert runtime.latest_target == ("library_asset", "prop-1")
-
-
-def test_model3d_runtime_approves_a_completed_candidate(client):
-    runtime = FakeRuntime()
-    client.app.state.model_runtime = runtime
-
-    response = client.post("/api/model-runtime/model3d/jobs/job-3d/approve")
-
-    assert response.status_code == 200
-    assert response.json() == {"review_status": "approved", "is_active": True}
-    assert runtime.approved_model3d_job_id == "job-3d"
 
 
 def test_model3d_runtime_approves_a_completed_candidate(client):
