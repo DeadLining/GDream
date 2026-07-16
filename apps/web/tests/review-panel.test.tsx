@@ -208,7 +208,7 @@ describe('ReviewPanel', () => {
     const videoEpisode:EpisodeDetail={...episode,scenes:[{...episode.scenes[0],shots:[{...episode.scenes[0].shots[0],active_video_asset_id:'video-1'}]}]};
     render(<ReviewPanel episode={videoEpisode} readiness={{...readiness,blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}}} onSelectShot={vi.fn()}/>);
 
-    const video=await screen.findByLabelText('当前镜头视频');
+    const video=await screen.findByLabelText<HTMLVideoElement>('当前镜头视频');
     expect(video).toHaveClass('review-player-media');
     await userEvent.click(screen.getByRole('button',{name:'播放'}));
     expect(play).toHaveBeenCalled();
@@ -229,7 +229,7 @@ describe('ReviewPanel', () => {
     mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
     render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
 
-    const video=await screen.findByLabelText('当前镜头视频');
+    const video=await screen.findByLabelText<HTMLVideoElement>('当前镜头视频');
     Object.defineProperty(video,'currentTime',{configurable:true,writable:true,value:2});
     fireEvent.timeUpdate(video);
 
@@ -241,7 +241,7 @@ describe('ReviewPanel', () => {
     mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
     render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
 
-    const video=await screen.findByLabelText('当前镜头视频');
+    const video=await screen.findByLabelText<HTMLVideoElement>('当前镜头视频');
     const dialogue=screen.getByRole('button',{name:'对白 小心路滑'});
     const subtitle=screen.getByRole('button',{name:'字幕 小心路滑'});
     expect(dialogue).toHaveStyle({left:'25%',width:'50%'});
@@ -257,7 +257,7 @@ describe('ReviewPanel', () => {
     mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
     render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
 
-    const video=await screen.findByLabelText('当前镜头视频');
+    const video=await screen.findByLabelText<HTMLVideoElement>('当前镜头视频');
     Object.defineProperty(video,'currentTime',{configurable:true,writable:true,value:1.75});
     fireEvent.timeUpdate(video);
     await userEvent.click(screen.getByRole('button',{name:'新建终审评论'}));
