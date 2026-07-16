@@ -13,6 +13,22 @@ from comic_studio.services.skill_loader import get_skill_loader
 from comic_studio.services.visual_review_markup import render_visual_review_markup
 
 
+# Four grid shots can each contribute one preview plus four guidance images.
+MAX_PANEL_REFERENCE_IMAGES = 24
+DIRECTOR_GUIDANCE_LABELS = {
+    "silhouette": "silhouette guidance",
+    "skeleton_pose": "skeleton pose guidance",
+    "depth": "depth guidance",
+    "object_mask": "object mask guidance",
+}
+DIRECTOR_GUIDANCE_CONSTRAINTS = {
+    "silhouette": "subject boundaries and occlusion",
+    "skeleton_pose": "body pose and joint placement",
+    "depth": "relative depth, foreground separation, and occlusion",
+    "object_mask": "per-object boundaries, visibility, and overlap",
+}
+
+
 class PanelService:
     def __init__(
         self,
@@ -122,7 +138,7 @@ class PanelService:
             asset = self.session.get(models.Asset, asset_id)
             if asset is not None and asset.id not in {item.id for item in reference_assets}:
                 reference_assets.append(asset)
-        reference_assets = reference_assets[:4]
+        reference_assets = reference_assets[:MAX_PANEL_REFERENCE_IMAGES]
         character_by_id = {character.id: character for character in project.characters}
         character_rules = "\n".join(
             f"- {character.name} [{character.body_plan}]: {character.appearance_bible}. "
@@ -164,15 +180,13 @@ class PanelService:
                 guidance_index = reference_indices.get(guidance_asset_id)
                 if guidance_index is None:
                     continue
-                label = (
-                    "silhouette guidance"
-                    if guidance_kind == "silhouette"
-                    else "skeleton pose guidance"
+                label = DIRECTOR_GUIDANCE_LABELS.get(guidance_kind, "guidance")
+                constraint = DIRECTOR_GUIDANCE_CONSTRAINTS.get(
+                    guidance_kind, "composition"
                 )
                 lines.append(
                     f"Use reference image {guidance_index} as the 3D director {label} "
-                    f"for panel {index}. Preserve the indicated subject boundaries, "
-                    "occlusion, and body pose."
+                    f"for panel {index}. Preserve the indicated {constraint}."
                 )
             if compiled.prompt_constraints:
                 lines.append(compiled.prompt_constraints)
@@ -308,7 +322,7 @@ class PanelService:
             asset = self.session.get(models.Asset, asset_id)
             if asset is not None and asset.id not in {item.id for item in reference_assets}:
                 reference_assets.append(asset)
-        reference_assets = reference_assets[:4]
+        reference_assets = reference_assets[:MAX_PANEL_REFERENCE_IMAGES]
         from comic_studio.services.art_style_loader import get_art_style_loader
 
         character_rules = "\n".join(
@@ -387,14 +401,13 @@ class PanelService:
                 guidance_index = reference_indices.get(guidance_asset_id)
                 if guidance_index is None:
                     continue
-                label = (
-                    "silhouette guidance"
-                    if guidance_kind == "silhouette"
-                    else "skeleton pose guidance"
+                label = DIRECTOR_GUIDANCE_LABELS.get(guidance_kind, "guidance")
+                constraint = DIRECTOR_GUIDANCE_CONSTRAINTS.get(
+                    guidance_kind, "composition"
                 )
                 guidance_lines.append(
                     f"Use reference image {guidance_index} as the 3D director {label}; "
-                    "preserve subject boundaries, occlusion, and body pose."
+                    f"preserve {constraint}."
                 )
             if guidance_lines:
                 prompt = f"{prompt}\n\n" + "\n".join(guidance_lines)

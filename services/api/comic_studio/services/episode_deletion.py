@@ -70,6 +70,8 @@ class EpisodeDeletionService:
             *(f"director_preview:{camera_id}" for camera_id in camera_ids),
             *(f"director_guidance:silhouette:{camera_id}" for camera_id in camera_ids),
             *(f"director_guidance:skeleton_pose:{camera_id}" for camera_id in camera_ids),
+            *(f"director_guidance:depth:{camera_id}" for camera_id in camera_ids),
+            *(f"director_guidance:object_mask:{camera_id}" for camera_id in camera_ids),
         }
         assets = (
             list(

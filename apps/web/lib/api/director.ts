@@ -2,7 +2,7 @@
 // Do not edit manually; regenerate via the split script if api.ts changes.
 
 import { API_BASE, ApiError, apiRequest, json } from './core';
-import type { Asset, DirectorApplyField, DirectorAsset, DirectorObject, DirectorRevision, DirectorStage, DirectorSuggestion, DirectorSuggestionKind, Shot, ShotCamera } from '../types';
+import type { Asset, DirectorApplyField, DirectorAsset, DirectorGuidanceKind, DirectorObject, DirectorRevision, DirectorStage, DirectorSuggestion, DirectorSuggestionKind, Shot, ShotCamera } from '../types';
 import type { Transform } from '../types';
 
 export const createDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`,json('POST'));
@@ -25,7 +25,7 @@ export async function uploadDirectorPreview(cameraId:string,preview:Blob):Promis
   if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'预览上传失败');throw new ApiError(detail,response.status,detail);}
   return response.json() as Promise<Asset>;
 }
-export async function uploadDirectorGuidance(cameraId:string,guidanceKind:'silhouette'|'skeleton_pose',guidance:Blob):Promise<Asset>{
+export async function uploadDirectorGuidance(cameraId:string,guidanceKind:DirectorGuidanceKind,guidance:Blob):Promise<Asset>{
   const form=new FormData();form.set('file',guidance,`${guidanceKind}.png`);
   let response:Response;
   try{response=await fetch(`${API_BASE}/api/director-cameras/${cameraId}/guidance/${guidanceKind}`,{method:'POST',body:form});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}

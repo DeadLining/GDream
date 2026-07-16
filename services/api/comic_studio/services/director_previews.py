@@ -13,7 +13,7 @@ from comic_studio import models
 
 
 MAX_DIRECTOR_PREVIEW_BYTES = 5 * 1024 * 1024
-DIRECTOR_GUIDANCE_KINDS = {"silhouette", "skeleton_pose"}
+DIRECTOR_GUIDANCE_KINDS = {"silhouette", "skeleton_pose", "depth", "object_mask"}
 
 
 class DirectorPreviewError(ValueError):

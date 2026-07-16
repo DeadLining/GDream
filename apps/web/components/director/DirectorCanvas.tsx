@@ -5,7 +5,7 @@ import {OrbitControls} from '@react-three/drei';
 import {useEffect,useRef} from 'react';
 import type {DirectorObject as DirectorObjectDto,DirectorTransformMode,ShotCamera,Transform} from '../../lib/types';
 import {resolveDirectorEnvironment} from '../../lib/director-environment';
-import {captureDirectorSilhouette,renderDirectorSkeletonGuidance,type DirectorGuidanceCapture} from '../../lib/director-guidance';
+import {captureDirectorDepth,captureDirectorObjectMask,captureDirectorSilhouette,renderDirectorSkeletonGuidance,type DirectorGuidanceCapture} from '../../lib/director-guidance';
 import {DirectorFallback} from './DirectorFallback';
 import {DirectorObject} from './DirectorObject';
 
@@ -47,9 +47,12 @@ function GuidanceCaptureRegistration({onReady}:{onReady?:(capture:DirectorGuidan
   const gl=useThree(state=>state.gl);
   useEffect(()=>{
     if(!onReady)return;
-    const capture:DirectorGuidanceCapture=kind=>kind==='silhouette'
-      ?captureDirectorSilhouette({scene,camera,renderer:gl})
-      :renderDirectorSkeletonGuidance(scene,camera,gl.domElement.width,gl.domElement.height);
+    const capture:DirectorGuidanceCapture=kind=>{
+      if(kind==='silhouette')return captureDirectorSilhouette({scene,camera,renderer:gl});
+      if(kind==='skeleton_pose')return renderDirectorSkeletonGuidance(scene,camera,gl.domElement.width,gl.domElement.height);
+      if(kind==='depth')return captureDirectorDepth({scene,camera,renderer:gl});
+      return captureDirectorObjectMask({scene,camera,renderer:gl});
+    };
     onReady(capture);
     return()=>onReady(null);
   },[camera,gl,onReady,scene]);

@@ -249,6 +249,9 @@ def test_episode_deletion_removes_director_preview_asset_and_file(
     assert skeleton.id in result.impact.asset_ids
     assert depth.id in result.impact.asset_ids
     assert object_mask.id in result.impact.asset_ids
-    assert db_session.get(models.Asset, asset.id) is None
+    assert all(
+        db_session.get(models.Asset, item.id) is None
+        for item in (asset, silhouette, skeleton, depth, object_mask)
+    )
     assert not preview_path.exists()
     assert all(not path.exists() for path in guidance_paths)

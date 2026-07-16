@@ -1,25 +1,37 @@
-import {Color,MeshBasicMaterial,Vector3 as ThreeVector3,type Camera,type Material,type Object3D,type Scene} from 'three';
+import {BasicDepthPacking,Color,MeshBasicMaterial,MeshDepthMaterial,Vector3 as ThreeVector3,type Camera,type Material,type Object3D,type Scene} from 'three';
 import {captureDirectorPreview} from './director-preview';
 import {HUMANOID_BONES,mapHumanoidBoneName,type HumanoidBoneId} from './director-humanoid';
+import type {DirectorGuidanceKind} from './types';
 
-export type DirectorGuidanceKind='silhouette'|'skeleton_pose';
+export type {DirectorGuidanceKind} from './types';
 export type DirectorGuidanceCapture=(kind:DirectorGuidanceKind)=>Promise<Blob>;
 
 type RendererLike={domElement:Pick<HTMLCanvasElement,'width'|'height'>;render:(scene:Scene,camera:Camera)=>void};
 
+const shouldHideFromGuidance=(object:Object3D)=>{
+  const stageKind=object.name.startsWith('director-object-')?object.userData.kind:null;
+  return stageKind==='background'||stageKind==='light'||object.name==='director-ground'||'isGridHelper' in object||'isLine' in object||'isPoints' in object;
+};
+
+const hideGuidanceExclusions=(scene:Scene)=>{
+  const visibility=new Map<Object3D,boolean>();
+  scene.traverse(object=>{
+    if(!shouldHideFromGuidance(object))return;
+    visibility.set(object,object.visible);object.visible=false;
+  });
+  return visibility;
+};
+
+const restoreVisibility=(visibility:Map<Object3D,boolean>)=>{
+  for(const [object,visible] of visibility)object.visible=visible;
+};
+
 export async function captureDirectorSilhouette({scene,camera,renderer,capture=captureDirectorPreview}:{scene:Scene;camera:Camera;renderer:RendererLike;capture?:(canvas:HTMLCanvasElement)=>Promise<Blob>}):Promise<Blob>{
   const background=scene.background;
-  const visibility=new Map<Object3D,boolean>();
+  const visibility=hideGuidanceExclusions(scene);
   const materials=new Map<Object3D,Material|Material[]>();
   const silhouetteMaterial=new MeshBasicMaterial({color:'#000000'});
   scene.traverse(object=>{
-    const isStageObject=object.name.startsWith('director-object-');
-    if(isStageObject&&(object.userData.kind==='background'||object.userData.kind==='light')){
-      visibility.set(object,object.visible);object.visible=false;
-    }
-    if(object.name==='director-ground'||'isGridHelper' in object||'isLine' in object||'isPoints' in object){
-      visibility.set(object,object.visible);object.visible=false;
-    }
     if('isMesh' in object&&object.isMesh&&'material' in object){
       const mesh=object as Object3D&{material:Material|Material[]};
       materials.set(object,mesh.material);mesh.material=silhouetteMaterial;
@@ -31,10 +43,56 @@ export async function captureDirectorSilhouette({scene,camera,renderer,capture=c
     return await capture(renderer.domElement as HTMLCanvasElement);
   }finally{
     for(const [object,material] of materials)(object as Object3D&{material:Material|Material[]}).material=material;
-    for(const [object,visible] of visibility)object.visible=visible;
+    restoreVisibility(visibility);
     scene.background=background;
     renderer.render(scene,camera);
     silhouetteMaterial.dispose();
+  }
+}
+
+export async function captureDirectorDepth({scene,camera,renderer,capture=captureDirectorPreview}:{scene:Scene;camera:Camera;renderer:RendererLike;capture?:(canvas:HTMLCanvasElement)=>Promise<Blob>}):Promise<Blob>{
+  const background=scene.background;
+  const overrideMaterial=scene.overrideMaterial;
+  const visibility=hideGuidanceExclusions(scene);
+  const depthMaterial=new MeshDepthMaterial({depthPacking:BasicDepthPacking});
+  scene.background=new Color('#000000');scene.overrideMaterial=depthMaterial;
+  try{
+    renderer.render(scene,camera);
+    return await capture(renderer.domElement as HTMLCanvasElement);
+  }finally{
+    scene.overrideMaterial=overrideMaterial;
+    restoreVisibility(visibility);
+    scene.background=background;
+    renderer.render(scene,camera);
+    depthMaterial.dispose();
+  }
+}
+
+export async function captureDirectorObjectMask({scene,camera,renderer,capture=captureDirectorPreview}:{scene:Scene;camera:Camera;renderer:RendererLike;capture?:(canvas:HTMLCanvasElement)=>Promise<Blob>}):Promise<Blob>{
+  const background=scene.background;
+  const visibility=hideGuidanceExclusions(scene);
+  const materials=new Map<Object3D,Material|Material[]>();
+  const maskMaterials:MeshBasicMaterial[]=[];
+  const roots:Object3D[]=[];
+  scene.traverse(object=>{if(object.name.startsWith('director-object-')&&!shouldHideFromGuidance(object)&&object.visible)roots.push(object);});
+  roots.forEach((root,index)=>{
+    const color=new Color().setHSL((index*.61803398875)%1,.78,.55);
+    const maskMaterial=new MeshBasicMaterial({color,toneMapped:false});maskMaterials.push(maskMaterial);
+    root.traverse(object=>{
+      if(!('isMesh' in object&&object.isMesh&&'material' in object))return;
+      const mesh=object as Object3D&{material:Material|Material[]};materials.set(object,mesh.material);mesh.material=maskMaterial;
+    });
+  });
+  scene.background=new Color('#000000');
+  try{
+    renderer.render(scene,camera);
+    return await capture(renderer.domElement as HTMLCanvasElement);
+  }finally{
+    for(const [object,material] of materials)(object as Object3D&{material:Material|Material[]}).material=material;
+    restoreVisibility(visibility);
+    scene.background=background;
+    renderer.render(scene,camera);
+    maskMaterials.forEach(material=>material.dispose());
   }
 }
 

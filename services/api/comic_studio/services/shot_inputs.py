@@ -263,7 +263,7 @@ class ShotInputCompiler:
         )
         if not isinstance(guidance_ids, dict):
             guidance_ids = {}
-        for guidance_kind in ("silhouette", "skeleton_pose"):
+        for guidance_kind in ("silhouette", "skeleton_pose", "depth", "object_mask"):
             guidance_asset_id = guidance_ids.get(guidance_kind)
             if not guidance_asset_id:
                 continue
