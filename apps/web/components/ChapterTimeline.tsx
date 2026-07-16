@@ -81,6 +81,7 @@ export function ChapterTimeline({scriptDocumentId, onChaptersChanged, onExtracti
       setChapters(response.chapters);
       onChaptersChanged?.(response.chapters);
       setExpanded(new Set());
+      await onExtractionComplete?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '重新切分失败');
     } finally {
