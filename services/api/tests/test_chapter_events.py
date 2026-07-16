@@ -353,6 +353,14 @@ def test_extract_events_route_syncs_idempotent_storyline_events(client):
     assert len(storylines) == 1
     assert len(storylines[0]["events"]) == 1
 
+    reextracted = client.post(
+        f"/api/scripts/{script['id']}/chapters/reextract",
+        json={"force": True},
+    )
+    assert reextracted.status_code == 200
+    assert reextracted.json()["chapters"][0]["extraction_status"] == "pending"
+    assert client.get(f"/api/projects/{project['id']}/storylines").json() == []
+
 
 def test_episode_chapter_events_route_returns_empty_without_script(client):
     project = client.post(
