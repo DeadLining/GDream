@@ -43,6 +43,11 @@ type ScriptImport = JsonObject & {
   error: string;
   structured_draft: {characters: JsonObject[]; episodes: JsonObject[]};
 };
+type ScriptDocument = JsonObject & {
+  id: string;
+  current_revision: {id: string};
+  latest_import_id: string | null;
+};
 
 export type ThemeToVideoResult = {
   theme: string;
@@ -252,23 +257,38 @@ export async function runThemeToVideoPipeline({request, theme, timeoutMs, onStag
     return parseScriptSse(await response.text());
   });
 
-  const scriptImport = await stage('create-script-import', async () => responseJson<JsonObject & {id: string}>(
-    await request.post(`/api/projects/${project.id}/script-imports`, {
-      data: {mode: 'auto', text: scriptText},
+  const scriptDocument = await stage('persist-ai-script', async () => responseJson<ScriptDocument>(
+    await request.post(`/api/projects/${project.id}/scripts`, {
+      data: {title: `${project.title} 剧本`, source_type: 'ai', content: scriptText},
       timeout: 30_000,
     }),
-    'Create script import',
+    'Persist AI script',
   ));
 
   const parsedImport = await stage(
     'ai-structure-parse',
-    () => parseImportWithRetries(request, scriptImport.id, timeoutMs, onStage),
+    async () => {
+      onStage?.('ai-structure-parse-attempt-1');
+      const response = await request.post(`/api/scripts/${scriptDocument.id}/parse`, {
+        timeout: Math.min(timeoutMs, 10 * 60 * 1000),
+      });
+      if (response.ok()) return response.json() as Promise<ScriptImport>;
+      const current = await responseJson<ScriptDocument>(
+        await request.get(`/api/scripts/${scriptDocument.id}`, {timeout: 30_000}),
+        'Load persisted script after parse failure',
+      );
+      if (!current.latest_import_id) {
+        const body = (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 1000);
+        throw new Error(`AI structure parsing failed with HTTP ${response.status()}: ${body || 'empty response'}`);
+      }
+      return parseImportWithRetries(request, current.latest_import_id, timeoutMs, onStage);
+    },
   );
   const draft = parsedImport.structured_draft;
   if (!draft?.episodes?.length) throw new Error('AI structure parser returned no episodes');
 
   await stage('confirm-ai-structure', async () => responseJson<JsonObject>(
-    await request.post(`/api/script-imports/${scriptImport.id}/confirm`, {
+    await request.post(`/api/script-imports/${parsedImport.id}/confirm`, {
       data: {character_mappings: {}},
       timeout: 30_000,
     }),
