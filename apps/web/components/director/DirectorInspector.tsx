@@ -82,7 +82,7 @@ export function DirectorInspector({
       <input id="director-focal" aria-label="焦距" type="number" min="12" max="200" value={camera.focal_length_mm} onChange={event=>onCameraChange(Number(event.target.value))}/>
       <label>机位</label><div className="director-vector">{camera.position.map((value,index)=><output key={index}>{formatNumber(value,2)}</output>)}</div>
       <label>看向</label><div className="director-vector">{camera.target.map((value,index)=><output key={index}>{formatNumber(value,2)}</output>)}</div>
-      <button className="command-button" onClick={onSaveCamera}><Save size={14}/>保存镜头视角</button>
+      <button className="command-button" aria-label="保存相机" onClick={onSaveCamera}><Save size={14}/>保存镜头视角</button>
     </section>
   </aside>;
 }
