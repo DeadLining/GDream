@@ -25,7 +25,11 @@ it('plays and seeks an imported GLB animation action',()=>{
   expect(animationAction.paused).toBe(false);
   expect(animationAction.time).toBe(1.25);
 
-  view.rerender(<GlbModel url="/media/linxia.glb" animationClip="Walk" animationPlaying={false} animationTimeSeconds={2} fallback={<span>fallback</span>}/>);
+  animationAction.time=1.75;
+  view.rerender(<GlbModel url="/media/linxia.glb" animationClip="Walk" animationPlaying={false} animationTimeSeconds={1.25} fallback={<span>fallback</span>}/>);
   expect(animationAction.paused).toBe(true);
+  expect(animationAction.time).toBe(1.75);
+
+  view.rerender(<GlbModel url="/media/linxia.glb" animationClip="Walk" animationPlaying={false} animationTimeSeconds={2} fallback={<span>fallback</span>}/>);
   expect(animationAction.time).toBe(2);
 });
