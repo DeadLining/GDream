@@ -5,7 +5,7 @@ import {ScriptLibrary} from '../components/ScriptLibrary';
 import type {ScriptDocument, ScriptDocumentSummary} from '../lib/types';
 
 const mocks=vi.hoisted(()=>({
-  list:vi.fn(),get:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),removeRevision:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),
+  list:vi.fn(),get:vi.fn(),project:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),removeRevision:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),
 }));
 
 vi.mock('../lib/api',async importOriginal=>({
@@ -14,7 +14,7 @@ vi.mock('../lib/api',async importOriginal=>({
   patchScript:mocks.patch,deleteScript:mocks.remove,uploadScript:mocks.upload,
   finalizeScript:mocks.finalize,streamDocumentScript:mocks.stream,
   listScriptRevisions:mocks.revisions,restoreScriptRevision:mocks.restore,deleteScriptRevision:mocks.removeRevision,
-  listVolumes:mocks.volumes,listStorylines:mocks.storylines,
+  listVolumes:mocks.volumes,listStorylines:mocks.storylines,getProject:mocks.project,
 }));
 
 const revision=(content='第一集',checksum='old')=>({id:'r1',document_id:'s1',revision_number:1,status:'working' as const,content,checksum,creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'',generation_brief:'',generation_metadata:{},created_at:'2026-07-12T00:00:00Z'});
@@ -23,6 +23,7 @@ const summary:ScriptDocumentSummary={...document};
 
 beforeEach(()=>{
   mocks.list.mockResolvedValue([summary]);mocks.get.mockResolvedValue(document);
+  mocks.project.mockResolvedValue({id:'p1',title:'项目',logline:'',story_bible:'',visual_style:'漫画',aspect_ratio:'9:16',language:'zh-CN',characters:[],episodes:[{id:'e1',project_id:'p1',volume_id:'v1',position:1,title:'第一集',premise:'',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''}],created_at:'',updated_at:''});
   mocks.create.mockResolvedValue(document);mocks.patch.mockImplementation(async(_id,data)=>({...document,title:data.title??document.title,current_revision:{...document.current_revision,content:data.content??document.current_revision.content,checksum:'new'}}));mocks.remove.mockResolvedValue(undefined);
   mocks.removeRevision.mockResolvedValue(undefined);
   mocks.finalize.mockResolvedValue({...document,status:'ready',current_revision:{...revision(),status:'finalized'}});

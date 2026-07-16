@@ -267,12 +267,17 @@ def test_extract_events_route_reports_provider_failure_without_keys(client):
         json={"content": text, "expected_checksum": script["current_revision"]["checksum"]},
     )
     client.post(f"/api/scripts/{script['id']}/chapters/reextract", json={"force": True})
+
+    class FailingChapterRuntime:
+        async def extract_chapter_events(self, _context):
+            raise TimeoutError("provider timeout")
+
+    client.app.state.model_runtime = FailingChapterRuntime()
     response = client.post(
         f"/api/scripts/{script['id']}/chapters/extract-events",
         json={},
     )
-    # The route always returns 200; failures are recorded per-chapter because
-    # no provider API key is configured in the test environment.
+    # The route always returns 200; provider failures are recorded per chapter.
     assert response.status_code == 200
     body = response.json()
     assert body["extracted"] == []

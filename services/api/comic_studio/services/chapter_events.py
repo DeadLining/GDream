@@ -287,6 +287,112 @@ class ChapterEventService:
         self.session.flush()
         return chapter
 
+    def sync_storyline(self, script_document_id: str) -> models.Storyline | None:
+        """Rebuild the system-managed storyline from extracted chapter beats."""
+
+        document = self.session.scalar(
+            select(models.ScriptDocument).where(
+                models.ScriptDocument.id == script_document_id
+            )
+        )
+        if document is None:
+            raise KeyError(script_document_id)
+
+        episodes = list(
+            self.session.scalars(
+                select(models.Episode)
+                .where(models.Episode.project_id == document.project_id)
+                .order_by(models.Episode.position, models.Episode.created_at)
+            )
+        )
+        if not episodes:
+            return None
+
+        marker = f"[system:chapter-extraction:{script_document_id}]"
+        storyline = self.session.scalar(
+            select(models.Storyline).where(
+                models.Storyline.project_id == document.project_id,
+                models.Storyline.description == marker,
+            )
+        )
+        if storyline is None:
+            storyline = models.Storyline(
+                project_id=document.project_id,
+                title="AI 章节事件",
+                kind="foreshadowing",
+                color="#B9473E",
+                description=marker,
+            )
+            self.session.add(storyline)
+            self.session.flush()
+
+        existing_events = list(
+            self.session.scalars(
+                select(models.StorylineEvent).where(
+                    models.StorylineEvent.storyline_id == storyline.id
+                )
+            )
+        )
+        generated_events = [
+            event
+            for event in existing_events
+            if (
+                event.event_metadata.get("source") == "chapter_extraction"
+                and event.event_metadata.get("script_document_id")
+                == script_document_id
+            )
+        ]
+        for event in generated_events:
+            self.session.delete(event)
+        self.session.flush()
+
+        reserved_positions = {
+            event.position
+            for event in existing_events
+            if event not in generated_events
+        }
+        next_position = 1
+        chapters = [
+            chapter
+            for chapter in self.list_chapters(script_document_id)
+            if chapter.extraction_status == "extracted"
+        ]
+        for chapter in chapters:
+            summary = chapter.event_summary or {}
+            beats = list(summary.get("beats") or [])
+            for beat_index, beat in enumerate(beats):
+                while next_position in reserved_positions:
+                    next_position += 1
+                episode = episodes[min(chapter.chapter_index, len(episodes) - 1)]
+                metadata = {
+                    "source": "chapter_extraction",
+                    "script_document_id": script_document_id,
+                    "chapter_id": chapter.id,
+                    "chapter_index": chapter.chapter_index,
+                    "beat_order": beat.get("order", beat_index + 1),
+                    "characters": list(beat.get("characters") or []),
+                    "stakes": str(beat.get("stakes") or ""),
+                    "conflicts": list(summary.get("conflicts") or []),
+                    "open_threads": list(summary.get("open_threads") or []),
+                    "payoff_candidates": list(
+                        summary.get("payoff_candidates") or []
+                    ),
+                }
+                event = models.StorylineEvent(
+                    storyline_id=storyline.id,
+                    episode_id=episode.id,
+                    position=next_position,
+                    stage="setup" if beat_index == 0 else "development",
+                    title=str(beat.get("summary") or chapter.title or "章节事件")[:200],
+                    description=str(beat.get("stakes") or ""),
+                    event_metadata=metadata,
+                )
+                self.session.add(event)
+                reserved_positions.add(next_position)
+                next_position += 1
+        self.session.flush()
+        return storyline
+
 
 def build_extraction_context(
     chapter: models.ScriptChapter,
@@ -296,6 +402,7 @@ def build_extraction_context(
     """Build the context payload handed to the TEXT provider."""
 
     return {
+        "chapter_id": chapter.id,
         "chapter_index": chapter.chapter_index,
         "chapter_title": chapter.title or "",
         "chapter_text": chapter.source_text,

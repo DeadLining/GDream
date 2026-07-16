@@ -200,6 +200,8 @@ async def extract_events(
                     "error": str(error),
                 }
             )
+    if extracted:
+        service.sync_storyline(document.id)
     session.commit()
     return ChapterExtractResponse(extracted=extracted, failed=failed)
 

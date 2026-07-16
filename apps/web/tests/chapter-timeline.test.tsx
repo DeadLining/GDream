@@ -30,6 +30,7 @@ it('renders the original chapter fragment as markdown',async()=>{
   render(<ChapterTimeline scriptDocumentId="script-1"/>);
 
   await user.click(await screen.findByRole('button',{name:/第 1 章/}));
+  await user.click(screen.getByText('查看原文片段'));
   expect(screen.getByRole('heading',{name:'雨夜'})).toBeVisible();
   expect(screen.getByText('林夏',{selector:'strong'})).toBeVisible();
 });

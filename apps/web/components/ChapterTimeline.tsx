@@ -2,6 +2,8 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {BookOpen, RefreshCw, Sparkles, ChevronDown, ChevronRight} from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   extractChapterEvents,
   listChapters,
@@ -17,6 +19,7 @@ type Props = {
   scriptDocumentId: string;
   /** Optional callback when chapters change (e.g. to refresh downstream UI). */
   onChaptersChanged?: (chapters: ScriptChapter[]) => void;
+  onExtractionComplete?: () => void | Promise<void>;
 };
 
 const STATUS_LABEL: Record<ChapterExtractionStatus, string> = {
@@ -33,7 +36,7 @@ const STATUS_CLASS: Record<ChapterExtractionStatus, string> = {
   skipped: 'chapter-badge-skipped',
 };
 
-export function ChapterTimeline({scriptDocumentId, onChaptersChanged}: Props) {
+export function ChapterTimeline({scriptDocumentId, onChaptersChanged, onExtractionComplete}: Props) {
   const [chapters, setChapters] = useState<ScriptChapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -92,6 +95,7 @@ export function ChapterTimeline({scriptDocumentId, onChaptersChanged}: Props) {
       const response = await extractChapterEvents(scriptDocumentId);
       // Merge: refresh full list to reflect status changes on all rows.
       await refresh(scriptDocumentId);
+      await onExtractionComplete?.();
       if (response.failed.length > 0) {
         setError(`${response.failed.length} 章提取失败，可单独重试`);
       }
@@ -107,6 +111,7 @@ export function ChapterTimeline({scriptDocumentId, onChaptersChanged}: Props) {
     try {
       await extractChapterEvents(scriptDocumentId, {chapter_ids: [chapterId]});
       await refresh(scriptDocumentId);
+      await onExtractionComplete?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '事件提取失败');
     }
@@ -219,7 +224,11 @@ export function ChapterTimeline({scriptDocumentId, onChaptersChanged}: Props) {
                     <div className="chapter-source">
                       <details>
                         <summary>查看原文片段</summary>
-                        <pre>{chapter.source_text.slice(0, 800)}{chapter.source_text.length > 800 ? '…' : ''}</pre>
+                        <article className="chapter-source-content">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {chapter.source_text.slice(0, 800) + (chapter.source_text.length > 800 ? '…' : '')}
+                          </ReactMarkdown>
+                        </article>
                       </details>
                     </div>
                     {chapter.extraction_status !== 'extracted' && (

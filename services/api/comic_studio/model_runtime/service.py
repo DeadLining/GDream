@@ -247,6 +247,42 @@ class ModelRuntimeService:
     async def parse_script_import(self, context: dict):
         return await self.adapters.create(Capability.TEXT).parse_script_import(context)
 
+    async def extract_chapter_events(self, context: dict):
+        adapter = self.adapters.create(Capability.TEXT)
+        provider, model = self._adapter_identity(adapter)
+        channel = self._safe_channel(Capability.TEXT)
+        decision_log = self._build_decision_log(Capability.TEXT, adapter, channel)
+        with self.session_factory() as session:
+            invocation = InvocationRepository(session).start(
+                Capability.TEXT,
+                provider,
+                model,
+                target_type="script_chapter",
+                target_id=str(context.get("chapter_id", "")),
+                decision_log=decision_log,
+            )
+        started = perf_counter()
+        try:
+            result = await adapter.extract_chapter_events(context)
+            with self.session_factory() as session:
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="succeeded",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                )
+            return result
+        except Exception as error:
+            runtime_error = classify_provider_error(error, Capability.TEXT, provider)
+            with self.session_factory() as session:
+                InvocationRepository(session).finish(
+                    invocation.id,
+                    status="failed",
+                    elapsed_ms=round((perf_counter() - started) * 1000),
+                    error_code=runtime_error.code.value,
+                    retryable=runtime_error.retryable,
+                )
+            raise runtime_error from error
+
     async def execute_image(
         self,
         target_type: str,
