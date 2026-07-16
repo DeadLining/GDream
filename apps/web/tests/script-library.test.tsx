@@ -5,7 +5,7 @@ import {ScriptLibrary} from '../components/ScriptLibrary';
 import type {ScriptDocument, ScriptDocumentSummary} from '../lib/types';
 
 const mocks=vi.hoisted(()=>({
-  list:vi.fn(),get:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),
+  list:vi.fn(),get:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),removeRevision:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),
 }));
 
 vi.mock('../lib/api',async importOriginal=>({
@@ -13,7 +13,7 @@ vi.mock('../lib/api',async importOriginal=>({
   listScripts:mocks.list,getScript:mocks.get,createScript:mocks.create,
   patchScript:mocks.patch,deleteScript:mocks.remove,uploadScript:mocks.upload,
   finalizeScript:mocks.finalize,streamDocumentScript:mocks.stream,
-  listScriptRevisions:mocks.revisions,restoreScriptRevision:mocks.restore,
+  listScriptRevisions:mocks.revisions,restoreScriptRevision:mocks.restore,deleteScriptRevision:mocks.removeRevision,
   listVolumes:mocks.volumes,listStorylines:mocks.storylines,
 }));
 
@@ -24,6 +24,7 @@ const summary:ScriptDocumentSummary={...document};
 beforeEach(()=>{
   mocks.list.mockResolvedValue([summary]);mocks.get.mockResolvedValue(document);
   mocks.create.mockResolvedValue(document);mocks.patch.mockImplementation(async(_id,data)=>({...document,title:data.title??document.title,current_revision:{...document.current_revision,content:data.content??document.current_revision.content,checksum:'new'}}));mocks.remove.mockResolvedValue(undefined);
+  mocks.removeRevision.mockResolvedValue(undefined);
   mocks.finalize.mockResolvedValue({...document,status:'ready',current_revision:{...revision(),status:'finalized'}});
   mocks.stream.mockImplementation(async(_id,_data,handlers)=>{handlers.onChunk({text:'AI 新版本',revision_id:'r2',persisted_length:6});handlers.onDone({revision_id:'r2'});});
   mocks.upload.mockResolvedValue({...document,title:'story',source_type:'upload',revision_count:2,current_revision_id:'r2',current_revision:{...revision('第二版','new'),id:'r2',revision_number:2,status:'finalized',creation_method:'upload'}});mocks.revisions.mockResolvedValue([{...revision(),status:'finalized'}]);mocks.restore.mockResolvedValue({...document,current_revision:{...revision(),id:'r2',revision_number:2,status:'finalized'}});
@@ -94,6 +95,40 @@ it('uploads a new version into the same script and restores history',async()=>{
   expect(await screen.findByText('版本 1')).toBeVisible();
   await user.click(screen.getByRole('button',{name:'恢复版本 1'}));
   await waitFor(()=>expect(mocks.restore).toHaveBeenCalledWith('s1','r1'));
+});
+
+it('switches to a historical markdown preview and can restore or delete it',async()=>{
+  const user=userEvent.setup();
+  vi.stubGlobal('confirm',vi.fn(()=>true));
+  const current={...revision('# 第二版'),id:'r2',revision_number:2,status:'finalized' as const,creation_method:'ai'};
+  const first={...revision('# 第一版'),id:'r1',revision_number:1,status:'finalized' as const};
+  mocks.get.mockResolvedValueOnce({...document,status:'ready',current_revision_id:'r2',current_revision:current,revision_count:2});
+  mocks.revisions.mockResolvedValue([current,first]);
+  render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
+
+  await user.click(await screen.findByRole('button',{name:'查看版本 1'}));
+  expect(screen.getByRole('heading',{name:'第一版'})).toBeVisible();
+  expect(screen.queryByRole('textbox',{name:'剧本正文'})).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:'恢复版本 1'}));
+  await waitFor(()=>expect(mocks.restore).toHaveBeenCalledWith('s1','r1'));
+
+  await user.click(screen.getByRole('button',{name:'查看版本 1'}));
+  await user.click(screen.getByRole('button',{name:'删除版本 1'}));
+  await waitFor(()=>expect(mocks.removeRevision).toHaveBeenCalledWith('s1','r1'));
+});
+
+it('renders finalized markdown by default and switches the current version into edit mode',async()=>{
+  const user=userEvent.setup();
+  const current={...revision('# 第二版\n\n**正文**'),id:'r2',revision_number:2,status:'finalized' as const,creation_method:'ai'};
+  mocks.get.mockResolvedValueOnce({...document,status:'ready',current_revision_id:'r2',current_revision:current});
+  mocks.revisions.mockResolvedValue([current]);
+  render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
+
+  expect(await screen.findByRole('heading',{name:'第二版'})).toBeVisible();
+  expect(screen.queryByRole('textbox',{name:'剧本正文'})).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:'编辑正文'}));
+  expect(screen.getByRole('textbox',{name:'剧本正文'})).toHaveValue('# 第二版\n\n**正文**');
+  expect(screen.getByRole('button',{name:'AI 生成新版本'})).toHaveClass('script-ai-version-button');
 });
 
 it('opens the storyline canvas without replacing the script document',async()=>{

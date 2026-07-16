@@ -211,6 +211,45 @@ def test_script_document_service_restores_as_new_finalized_revision(db_session):
     assert document.current_revision_id == restored.id
 
 
+def test_script_document_service_deletes_unreferenced_historical_revision(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "剧本", "paste", "第一版", "paste")
+    first = service.finalize(document.id)
+    second = service.save(document.id, "第二版", first.checksum)
+    service.finalize(document.id)
+
+    service.delete_revision(document.id, first.id)
+
+    assert db_session.get(models.ScriptRevision, first.id) is None
+    assert db_session.get(models.ScriptRevision, second.id) is not None
+    assert document.current_revision_id == second.id
+
+
+def test_script_document_service_blocks_current_or_imported_revision_delete(db_session):
+    project = _project(db_session)
+    service = ScriptDocumentService(db_session)
+    document = service.create(project.id, "剧本", "paste", "第一版", "paste")
+    first = service.finalize(document.id)
+    current = service.save(document.id, "第二版", first.checksum)
+    script_import = models.ScriptImport(
+        project_id=project.id,
+        script_revision_id=first.id,
+        status="ready",
+        mode="auto",
+        source_format="paste",
+        checksum=first.checksum,
+        extracted_text=first.content,
+    )
+    db_session.add(script_import)
+    db_session.commit()
+
+    with pytest.raises(RuntimeError, match="current_revision_cannot_be_deleted"):
+        service.delete_revision(document.id, current.id)
+    with pytest.raises(RuntimeError, match="revision_has_imports"):
+        service.delete_revision(document.id, first.id)
+
+
 def test_script_document_service_renames_document(db_session):
     project = _project(db_session)
     service = ScriptDocumentService(db_session)
@@ -329,6 +368,21 @@ def test_script_document_routes_create_list_save_restore_and_delete(client):
     history = client.get(f"/api/scripts/{script_id}/revisions")
     assert history.status_code == 200
     assert [item["revision_number"] for item in history.json()] == [3, 2, 1]
+
+    deleted_revision = client.delete(
+        f"/api/scripts/{script_id}/revisions/{original_revision['id']}"
+    )
+    assert deleted_revision.status_code == 204
+    assert [
+        item["revision_number"]
+        for item in client.get(f"/api/scripts/{script_id}/revisions").json()
+    ] == [3, 2]
+
+    current_delete = client.delete(
+        f"/api/scripts/{script_id}/revisions/{restored.json()['current_revision']['id']}"
+    )
+    assert current_delete.status_code == 409
+    assert current_delete.json()["detail"] == "current_revision_cannot_be_deleted"
 
     deleted = client.delete(f"/api/scripts/{script_id}")
     assert deleted.status_code == 204
