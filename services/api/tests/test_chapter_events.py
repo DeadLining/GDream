@@ -280,6 +280,75 @@ def test_extract_events_route_reports_provider_failure_without_keys(client):
     assert "chapter_id" in body["failed"][0]
 
 
+def test_extract_events_route_syncs_idempotent_storyline_events(client):
+    project, script = _make_project_and_script(client)
+    volume = client.post(
+        f"/api/projects/{project['id']}/volumes",
+        json={"position": 1, "title": "第一卷", "summary": ""},
+    ).json()
+    episode = client.post(
+        f"/api/volumes/{volume['id']}/episodes",
+        json={
+            "position": 1,
+            "title": "第一集",
+            "premise": "开端",
+            "target_duration_seconds": 60,
+        },
+    ).json()
+    text = "第一章 雨夜\n\n# 雨夜\n\n**林夏**发现一枚发光海螺。"
+    client.patch(
+        f"/api/scripts/{script['id']}",
+        json={"content": text, "expected_checksum": script["current_revision"]["checksum"]},
+    )
+    client.post(f"/api/scripts/{script['id']}/chapters/reextract", json={"force": True})
+
+    class FakeChapterRuntime:
+        async def extract_chapter_events(self, context):
+            return {
+                "chapter_index": context["chapter_index"],
+                "title": context["chapter_title"],
+                "beats": [
+                    {
+                        "order": 1,
+                        "summary": "林夏发现发光海螺",
+                        "characters": ["林夏"],
+                        "stakes": "海螺来历不明",
+                    }
+                ],
+                "conflicts": ["林夏必须隐瞒海螺"],
+                "open_threads": ["海螺为何发光"],
+                "payoff_candidates": ["海螺揭示时间裂缝"],
+                "character_mentions": ["林夏"],
+            }
+
+    client.app.state.model_runtime = FakeChapterRuntime()
+    first = client.post(
+        f"/api/scripts/{script['id']}/chapters/extract-events",
+        json={},
+    )
+    assert first.status_code == 200
+    assert len(first.json()["extracted"]) == 1
+
+    storylines = client.get(f"/api/projects/{project['id']}/storylines").json()
+    assert len(storylines) == 1
+    assert storylines[0]["title"] == "AI 章节事件"
+    assert len(storylines[0]["events"]) == 1
+    event = storylines[0]["events"][0]
+    assert event["episode_id"] == episode["id"]
+    assert event["title"] == "林夏发现发光海螺"
+    assert event["metadata"]["source"] == "chapter_extraction"
+
+    chapter_id = first.json()["extracted"][0]["id"]
+    second = client.post(
+        f"/api/scripts/{script['id']}/chapters/extract-events",
+        json={"chapter_ids": [chapter_id]},
+    )
+    assert second.status_code == 200
+    storylines = client.get(f"/api/projects/{project['id']}/storylines").json()
+    assert len(storylines) == 1
+    assert len(storylines[0]["events"]) == 1
+
+
 def test_episode_chapter_events_route_returns_empty_without_script(client):
     project = client.post(
         "/api/projects",

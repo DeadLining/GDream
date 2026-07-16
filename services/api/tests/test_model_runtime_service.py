@@ -18,6 +18,7 @@ class FakeTextAdapter:
         self.chunks = chunks or []
         self.error = error
         self.suggestion_context = None
+        self.chapter_context = None
 
     async def stream_script(self, _context):
         if self.error:
@@ -35,6 +36,18 @@ class FakeTextAdapter:
             "overrides": {"injury": "left-arm"},
             "state_kind": "injury",
             "assistant_message": "建议创建为伤势状态。",
+        }
+
+    async def extract_chapter_events(self, context):
+        self.chapter_context = context
+        return {
+            "chapter_index": context["chapter_index"],
+            "title": context.get("chapter_title") or None,
+            "beats": [],
+            "conflicts": [],
+            "open_threads": [],
+            "payoff_candidates": [],
+            "character_mentions": [],
         }
 
 
@@ -92,6 +105,25 @@ async def test_asset_variant_suggestion_uses_the_registered_text_adapter(tmp_pat
     assert result["state_kind"] == "injury"
     assert adapter.suggestion_context == {"message": "挨打后左臂擦伤"}
     assert service.list_invocations(10)[0].status == "succeeded"
+
+
+@pytest.mark.anyio
+async def test_chapter_event_extraction_uses_registered_text_adapter(tmp_path):
+    adapter = FakeTextAdapter()
+    service = runtime(tmp_path, adapter)
+    context = {
+        "chapter_index": 2,
+        "chapter_title": "反转",
+        "chapter_text": "真相浮出水面。",
+    }
+
+    result = await service.extract_chapter_events(context)
+
+    assert result["chapter_index"] == 2
+    assert adapter.chapter_context == context
+    invocation = service.list_invocations(10)[0]
+    assert invocation.status == "succeeded"
+    assert invocation.target_type == "script_chapter"
 
 
 class FakeImageAdapter:
