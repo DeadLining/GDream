@@ -42,12 +42,14 @@ export function StorylineCanvas({scriptTitle,volumes,unassignedEpisodes=[],story
   const [zoom,setZoom]=useState(100);
   const [lineDraft,setLineDraft]=useState<StorylineDraft>(emptyLineDraft);
   const [eventDraft,setEventDraft]=useState<EventDraft>({episode_id:episodes[0]?.id??'',scene_id:null,shot_id:null,position:Math.max(0,...allEvents.map(item=>item.event.position))+1,stage:'setup',title:'',description:'',setup_event_id:null,payoff_event_id:null,metadata:{}});
-  const selected=allEvents.find(item=>item.event.id===selectedId)??allEvents[0]??null;
-  const activeLine=storylines.find(line=>line.id===lineId)??selected?.line??storylines[0]??null;
   const visibleLines=lineId==='all'?storylines:storylines.filter(line=>line.id===lineId);
   const normalizedQuery=query.trim().toLocaleLowerCase();
   const matchesQuery=(event:StorylineEvent,line:Storyline)=>!normalizedQuery||[event.title,event.description,line.title,...Object.values(event.metadata).flatMap(value=>Array.isArray(value)?value:[value])].join(' ').toLocaleLowerCase().includes(normalizedQuery);
-  const visibleEventCount=visibleLines.reduce((count,line)=>count+line.events.filter(event=>matchesQuery(event,line)).length,0);
+  const filteredEvents=visibleLines.flatMap(line=>line.events.filter(event=>matchesQuery(event,line)).map(event=>({event,line}))).sort((a,b)=>a.event.position-b.event.position);
+  const selectionPool=lineId==='all'&&!normalizedQuery?allEvents:filteredEvents;
+  const selected=selectionPool.find(item=>item.event.id===selectedId)??selectionPool[0]??null;
+  const activeLine=storylines.find(line=>line.id===lineId)??selected?.line??storylines[0]??null;
+  const visibleEventCount=filteredEvents.length;
   const eventById=new Map(allEvents.map(item=>[item.event.id,item.event]));
   const episodeMap=new Map(displayVolumes.flatMap(volume=>volume.episodes.map(episode=>[episode.id,{episode,volume}] as const)));
 
