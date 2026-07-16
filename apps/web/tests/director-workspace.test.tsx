@@ -288,6 +288,23 @@ describe('DirectorWorkspace',()=>{
 
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{facial_expression:'happy'}}}));
   });
+  it('stores head direction and an optional gaze target on only the selected shot',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{},metadata:{proxy_rig:'standard_humanoid'}};
+    mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorCamera.mockImplementation(async(_stageId:string,_shotId:string,version:number,patch:{object_overrides:Record<string,unknown>})=>({...stage.shot_cameras[0],...patch,version:version+1}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+
+    fireEvent.change(screen.getByLabelText('头部左右'),{target:{value:'30'}});
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{head_yaw_degrees:30}}}));
+    await userEvent.click(screen.getByLabelText('使用视线目标'));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',2,{object_overrides:{'object-1':{head_yaw_degrees:30,gaze_target:[0,1.65,2]}}}));
+    expect(screen.getByLabelText('视线目标 X')).toHaveValue(0);
+    expect(screen.getByLabelText('视线目标 Y')).toHaveValue(1.65);
+    expect(screen.getByLabelText('视线目标 Z')).toHaveValue(2);
+    expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
+  });
   it('stores and resets imported GLB morph target weights on the selected shot',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true,morph_targets:['Smile','Blink']}};
     mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);

@@ -1,5 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {DIRECTOR_ANIMATION_CLIPS,directorAnimationMotion} from '../lib/director-animations';
+import {directorHeadRotation} from '../lib/director-head-gaze';
 import {HUMANOID_BONES,humanoidPoseRotation} from '../lib/director-humanoid';
 
 describe('standard humanoid director rig',()=>{
@@ -38,5 +39,27 @@ describe('standard humanoid director rig',()=>{
     expect(directorAnimationMotion('idle',0).rootY).not.toBe(
       directorAnimationMotion('idle',.5).rootY,
     );
+  });
+
+  it('combines explicit head direction with a world-space gaze target',()=>{
+    expect(directorHeadRotation({
+      headYawDegrees:30,
+      headPitchDegrees:-10,
+      gazeTarget:null,
+      objectPosition:[0,0,0],
+      objectRotation:[0,0,0],
+      headHeight:1.6,
+    })).toEqual([-(10*Math.PI/180),30*Math.PI/180,0]);
+
+    const gaze=directorHeadRotation({
+      headYawDegrees:0,
+      headPitchDegrees:0,
+      gazeTarget:[2,1.6,2],
+      objectPosition:[0,0,0],
+      objectRotation:[0,0,0],
+      headHeight:1.6,
+    });
+    expect(gaze[0]).toBeCloseTo(0);
+    expect(gaze[1]).toBeCloseTo(Math.PI/4);
   });
 });

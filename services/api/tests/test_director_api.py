@@ -44,12 +44,15 @@ def test_camera_object_overrides_are_scoped_and_cleaned_when_object_is_deleted(d
     scene=_scene(db_session);service=DirectorStageService(db_session);stage=service.get_or_create_stage(scene.id)
     created=service.create_object(stage.id,1,DirectorObjectCreate(kind="character",source_type="placeholder",label="林夏"))
     camera=stage.shot_cameras[0]
-    overridden=service.update_camera(stage.id,camera.shot_id,camera.version,ShotCameraPatch(object_overrides={created.id:{"transform":{"position":[2,0,0],"rotation":[0,0,0],"scale":[1,1,1]},"visible":False,"pose_preset":"action","facial_expression":"happy","morph_target_weights":{"Smile":0.75},"animation_clip":"walk","animation_playing":True}}))
+    overridden=service.update_camera(stage.id,camera.shot_id,camera.version,ShotCameraPatch(object_overrides={created.id:{"transform":{"position":[2,0,0],"rotation":[0,0,0],"scale":[1,1,1]},"visible":False,"pose_preset":"action","facial_expression":"happy","morph_target_weights":{"Smile":0.75},"head_yaw_degrees":35,"head_pitch_degrees":-12,"gaze_target":[1,1.7,4],"animation_clip":"walk","animation_playing":True}}))
     assert overridden.object_overrides[created.id]["transform"]["position"]==[2.0,0.0,0.0]
     assert overridden.object_overrides[created.id]["visible"] is False
     assert overridden.object_overrides[created.id]["pose_preset"] == "action"
     assert overridden.object_overrides[created.id]["facial_expression"] == "happy"
     assert overridden.object_overrides[created.id]["morph_target_weights"] == {"Smile": 0.75}
+    assert overridden.object_overrides[created.id]["head_yaw_degrees"] == 35
+    assert overridden.object_overrides[created.id]["head_pitch_degrees"] == -12
+    assert overridden.object_overrides[created.id]["gaze_target"] == [1.0, 1.7, 4.0]
     assert overridden.object_overrides[created.id]["animation_clip"] == "walk"
     assert overridden.object_overrides[created.id]["animation_playing"] is True
 
@@ -57,6 +60,12 @@ def test_camera_object_overrides_are_scoped_and_cleaned_when_object_is_deleted(d
         ShotCameraPatch(
             object_overrides={created.id: {"morph_target_weights": {"Smile": 1.01}}}
         )
+    with pytest.raises(ValueError):
+        ShotCameraPatch(object_overrides={created.id: {"head_yaw_degrees": 90.01}})
+    with pytest.raises(ValueError):
+        ShotCameraPatch(object_overrides={created.id: {"head_pitch_degrees": -60.01}})
+    with pytest.raises(ValueError):
+        ShotCameraPatch(object_overrides={created.id: {"gaze_target": [1, 2]}})
 
     service.delete_object(created.id,2)
 
