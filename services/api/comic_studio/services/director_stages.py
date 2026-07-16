@@ -140,12 +140,22 @@ class DirectorStageService:
         stage=self.get_stage(stage_id);revision=self.session.get(models.DirectorRevision,revision_id)
         if revision is None or revision.stage_id!=stage.id:raise KeyError(revision_id)
         if stage.version!=expected_version:raise DirectorVersionConflict(stage.version)
-        self._record_revision(stage)
+        camera=next((item for item in stage.shot_cameras if item.id==revision.shot_camera_id),None)
+        camera_snapshot=revision.camera_snapshot or {}
+        self._record_revision(stage,camera=camera if camera_snapshot else None)
         snapshot=revision.stage_snapshot;stage.environment=snapshot.get("environment",{})
+        object_data=snapshot.get("objects",[]);restored_object_ids={data["id"] for data in object_data}
         for item in list(stage.objects):self.session.delete(item)
         self.session.flush()
-        for data in snapshot.get("objects",[]):
+        for data in object_data:
             self.session.add(models.DirectorObject(id=data["id"],stage_id=stage.id,kind=data["kind"],source_type=data["source_type"],source_id=data.get("source_id"),label=data["label"],position=data.get("position",0),transform=data["transform"],appearance=data.get("appearance",{}),object_metadata=data.get("metadata",{}),visible=data.get("visible",True)))
+        for shot_camera in stage.shot_cameras:
+            shot_camera.object_overrides={key:value for key,value in shot_camera.object_overrides.items() if key in restored_object_ids}
+        if camera is not None and camera_snapshot:
+            for key,value in camera_snapshot.items():
+                if key=="object_overrides":value={object_id:override for object_id,override in value.items() if object_id in restored_object_ids}
+                if key!="version":setattr(camera,key,value)
+            camera.version+=1
         stage.version+=1;self.session.flush()
         from comic_studio.services.asset_usage_bindings import AssetUsageBindingService
         AssetUsageBindingService(self.session).refresh_for_stage(stage.id)
