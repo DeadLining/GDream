@@ -21,6 +21,7 @@ import {
   updateDirectorStage,
   updateDirectorCamera,
   uploadDirectorPreview,
+  uploadDirectorGuidance,
   createVolume,
   deleteVolume,
   createStoryline,
@@ -290,6 +291,15 @@ describe('director api', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBeInstanceOf(FormData);
     expect(init.headers).toBeUndefined();
+  });
+
+  it('uploads typed director guidance as multipart', async () => {
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+    const blob=new Blob(['png'],{type:'image/png'});
+    await uploadDirectorGuidance('camera-1','skeleton_pose',blob);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/director-cameras/camera-1/guidance/skeleton_pose');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBeInstanceOf(FormData);
   });
 });
 

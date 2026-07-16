@@ -1,13 +1,14 @@
 import React from 'react';
-import {Group} from 'three';
+import {Group,Scene} from 'three';
 import {cleanup,fireEvent,render,within} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {DirectorCanvas} from '../components/director/DirectorCanvas';
 import type {DirectorObject,ShotCamera} from '../lib/types';
 
 const threeCamera={position:{set:vi.fn()},rotation:{set:vi.fn()},fov:50,updateProjectionMatrix:vi.fn()};
+const threeState={camera:threeCamera,scene:new Scene(),gl:{domElement:{width:800,height:600},render:vi.fn()}};
 const useGLTFCall=vi.hoisted(()=>vi.fn());
-vi.mock('@react-three/fiber',()=>({Canvas:({children,onPointerMissed}:React.PropsWithChildren<{onPointerMissed?:()=>void}>)=> <div data-testid="r3f-canvas" onClick={()=>onPointerMissed?.()}>{children}</div>,useFrame:vi.fn(),useThree:(select:(state:{camera:typeof threeCamera})=>unknown)=>select({camera:threeCamera})}));
+vi.mock('@react-three/fiber',()=>({Canvas:({children,onPointerMissed}:React.PropsWithChildren<{onPointerMissed?:()=>void}>)=> <div data-testid="r3f-canvas" onClick={()=>onPointerMissed?.()}>{children}</div>,useFrame:vi.fn(),useThree:(select:(state:typeof threeState)=>unknown)=>select(threeState)}));
 vi.mock('@react-three/drei',()=>({
   Clone:({object}:{object:{name:string}})=><div data-testid="director-model" data-name={object.name}/>,
   Image:({url}:{url:string})=><div data-testid="director-image" data-url={url}/>,
@@ -49,6 +50,13 @@ describe('DirectorCanvas',()=>{
     for(const bone of ['Hips','Spine','Head','LeftUpperArm','RightUpperArm','LeftUpperLeg','RightUpperLeg']){
       expect(view.container.querySelector(`[name="humanoid-bone-${bone}"]`)).toBeInTheDocument();
     }
+  });
+
+  it('registers silhouette and skeleton guidance capture from the live three scene',()=>{
+    const onGuidanceCaptureReady=vi.fn();
+    render(<DirectorCanvas objects={[objects[0]]} camera={camera} selectedObjectId={null} mode="world" onTransform={vi.fn()} onGuidanceCaptureReady={onGuidanceCaptureReady}/>);
+
+    expect(onGuidanceCaptureReady).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it('renders explicit quadruped, bird, and primitive 3D proxy templates',()=>{

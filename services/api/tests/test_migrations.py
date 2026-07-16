@@ -165,6 +165,9 @@ def test_fresh_database_upgrades_to_current_schema(tmp_path):
     assert "regenerate_videos" in {
         column["name"] for column in inspector.get_columns("production_runs")
     }
+    assert "guidance_asset_ids" in {
+        column["name"] for column in inspector.get_columns("shot_cameras")
+    }
 
 
 def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):

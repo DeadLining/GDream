@@ -341,10 +341,35 @@ def test_generate_panel_uses_saved_director_preview_as_composition_reference(
     db_session.add(preview)
     db_session.flush()
     camera.preview_asset_id = preview.id
+    silhouette = models.Asset(
+        project_id=project.id,
+        kind=f"director_guidance:silhouette:{camera.id}",
+        local_path=f"projects/{project.id}/director/{stage.id}/{camera.id}-silhouette.png",
+        media_type="image/png",
+        provider="director",
+        model="threejs",
+        checksum="f" * 64,
+    )
+    skeleton = models.Asset(
+        project_id=project.id,
+        kind=f"director_guidance:skeleton_pose:{camera.id}",
+        local_path=f"projects/{project.id}/director/{stage.id}/{camera.id}-skeleton_pose.png",
+        media_type="image/png",
+        provider="director",
+        model="threejs",
+        checksum="a" * 64,
+    )
+    db_session.add_all([silhouette, skeleton])
+    db_session.flush()
+    camera.guidance_asset_ids = {
+        "silhouette": silhouette.id,
+        "skeleton_pose": skeleton.id,
+    }
     db_session.commit()
-    preview_path = tmp_path / preview.local_path
-    preview_path.parent.mkdir(parents=True, exist_ok=True)
-    preview_path.write_bytes(PNG)
+    for item in (preview, silhouette, skeleton):
+        path = tmp_path / item.local_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(PNG)
 
     class Provider:
         model = "test-image"
@@ -364,10 +389,17 @@ def test_generate_panel_uses_saved_director_preview_as_composition_reference(
         PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
     )
 
-    assert provider.references == [(PNG, "image/png")]
+    assert provider.references == [(PNG, "image/png")] * 3
     assert "3d director preview" in provider.prompt.lower()
-    assert asset.request_metadata["reference_asset_ids"][0] == preview.id
+    assert "silhouette guidance" in provider.prompt.lower()
+    assert "skeleton pose guidance" in provider.prompt.lower()
+    assert asset.request_metadata["reference_asset_ids"][:3] == [
+        preview.id,
+        silhouette.id,
+        skeleton.id,
+    ]
     assert asset.request_metadata["input_snapshot"]["director"]["camera"]["preview_asset_id"] == preview.id
+    assert asset.request_metadata["input_snapshot"]["director"]["camera"]["guidance_asset_ids"] == camera.guidance_asset_ids
 
 
 def test_generate_panel_compiles_bound_variant_state_and_director_input(

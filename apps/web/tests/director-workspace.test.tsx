@@ -5,11 +5,12 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {DirectorWorkspace} from '../components/director/DirectorWorkspace';
 import type {DirectorStage,Scene} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({ApiError:class ApiError extends Error{constructor(message:string,public status=500,public detail=''){super(message);}},getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),listDirectorRevisions:vi.fn(),restoreDirectorRevision:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
+const mocks=vi.hoisted(()=>({ApiError:class ApiError extends Error{constructor(message:string,public status=500,public detail=''){super(message);}},getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),listDirectorRevisions:vi.fn(),restoreDirectorRevision:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn(),uploadDirectorPreview:vi.fn(),uploadDirectorGuidance:vi.fn()}));
 vi.mock('../lib/api',()=>mocks);
+const guidanceCapture=vi.hoisted(()=>vi.fn());
 const overrideTransform={position:[2,0,0],rotation:[0,.5,0],scale:[1,1,1]} as const;
 const movedCamera={position:[2,2.4,6] as [number,number,number],target:[0,.9,0] as [number,number,number],rotation:[-.1,.25,0] as [number,number,number]};
-vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable,mode,transformMode,snapEnabled,objects,onSelectObject,onTransform,onCameraChange}:{editable:boolean;mode:string;transformMode:string;snapEnabled:boolean;objects:Array<{id:string;visible:boolean;appearance:Record<string,unknown>}>;onSelectObject:(id:string|null)=>void;onTransform:(id:string,transform:typeof overrideTransform)=>void;onCameraChange?:(camera:typeof movedCamera)=>void})=><div data-testid="director-canvas" data-editable={String(editable)} data-mode={mode} data-transform-mode={transformMode} data-snap-enabled={String(snapEnabled)} data-visible={String(objects[0]?.visible)} data-model-url={String(objects[0]?.appearance.model_url??'')}><button onClick={()=>objects[0]&&onSelectObject(objects[0].id)}>选择画布对象</button><button onClick={()=>onSelectObject(null)}>清空画布选择</button><button onClick={()=>objects[0]&&onTransform(objects[0].id,overrideTransform)}>移动对象</button><button onClick={()=>onCameraChange?.(movedCamera)}>移动相机</button></div> }));
+vi.mock('../components/director/DirectorCanvas',()=>({DirectorCanvas:({editable,mode,transformMode,snapEnabled,objects,onSelectObject,onTransform,onCameraChange,onGuidanceCaptureReady}:{editable:boolean;mode:string;transformMode:string;snapEnabled:boolean;objects:Array<{id:string;visible:boolean;appearance:Record<string,unknown>}>;onSelectObject:(id:string|null)=>void;onTransform:(id:string,transform:typeof overrideTransform)=>void;onCameraChange?:(camera:typeof movedCamera)=>void;onGuidanceCaptureReady?:(capture:typeof guidanceCapture)=>void})=>{React.useEffect(()=>{onGuidanceCaptureReady?.(guidanceCapture);},[onGuidanceCaptureReady]);return <div data-testid="director-canvas" data-editable={String(editable)} data-mode={mode} data-transform-mode={transformMode} data-snap-enabled={String(snapEnabled)} data-visible={String(objects[0]?.visible)} data-model-url={String(objects[0]?.appearance.model_url??'')}><button onClick={()=>objects[0]&&onSelectObject(objects[0].id)}>选择画布对象</button><button onClick={()=>onSelectObject(null)}>清空画布选择</button><button onClick={()=>objects[0]&&onTransform(objects[0].id,overrideTransform)}>移动对象</button><button onClick={()=>onCameraChange?.(movedCamera)}>移动相机</button></div>;}}));
 
 const scene:Scene={id:'scene-1',position:1,location:'天台',time_of_day:'night',summary:'对峙',continuity_state:{},estimated_duration_seconds:10,shots:[{id:'shot-1',position:1,shot_type:'medium',duration_seconds:5,composition:'对峙',camera_motion:'static',character_state:{},image_prompt:'',negative_prompt:'',active_panel_asset_id:null,review_status:'draft',render_status:'pending',dialogue:[]}]};
 const directorObject={id:'object-1',stage_id:'stage-1',kind:'primitive' as const,source_type:'placeholder' as const,source_id:null,label:'方块',position:1,transform:{position:[0,0,0] as [number,number,number],rotation:[0,0,0] as [number,number,number],scale:[1,1,1] as [number,number,number]},appearance:{},metadata:{},visible:true};
@@ -37,6 +38,20 @@ describe('DirectorWorkspace',()=>{
     expect(await screen.findByRole('heading',{name:'3D 导演台'})).toBeVisible();
     await userEvent.click(screen.getAllByRole('button',{name:'添加占位物'})[0]);
     await waitFor(()=>expect(mocks.createDirectorObject).toHaveBeenCalledWith('stage-1',1,expect.objectContaining({label:'新道具'})));
+  });
+  it('captures and uploads silhouette and skeleton pose guidance for the selected shot',async()=>{
+    guidanceCapture.mockImplementation(async(kind:string)=>new Blob([kind],{type:'image/png'}));
+    mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.uploadDirectorGuidance
+      .mockResolvedValueOnce({id:'silhouette-1'})
+      .mockResolvedValueOnce({id:'skeleton-1'});
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'保存角色轮廓图'}));
+    await waitFor(()=>expect(mocks.uploadDirectorGuidance).toHaveBeenCalledWith('camera-1','silhouette',expect.any(Blob)));
+    await userEvent.click(screen.getByRole('button',{name:'保存骨架姿态图'}));
+    await waitFor(()=>expect(mocks.uploadDirectorGuidance).toHaveBeenCalledWith('camera-1','skeleton_pose',expect.any(Blob)));
+    expect(guidanceCapture.mock.calls.map(call=>call[0])).toEqual(['silhouette','skeleton_pose']);
   });
   it('adds one selected catalog asset without removing existing stage assets',async()=>{
     const existingCharacter={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',metadata:{catalog_key:'character:c1'}};

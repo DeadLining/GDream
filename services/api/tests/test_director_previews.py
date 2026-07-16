@@ -105,6 +105,35 @@ def test_save_replaces_old_preview_asset_and_file(db_session, tmp_path):
     assert first_path.read_bytes() == _png(color=(0, 255, 0, 255))
 
 
+def test_save_guidance_tracks_and_replaces_each_kind_independently(db_session, tmp_path):
+    camera, _project = _camera(db_session)
+    service = DirectorPreviewService(db_session, tmp_path)
+
+    first_silhouette = service.save_guidance(
+        camera.id, "silhouette", _png(color=(0, 0, 0, 255)), "image/png"
+    )
+    skeleton = service.save_guidance(
+        camera.id, "skeleton_pose", _png(color=(0, 255, 255, 255)), "image/png"
+    )
+    second_silhouette = service.save_guidance(
+        camera.id, "silhouette", _png(color=(255, 255, 255, 255)), "image/png"
+    )
+
+    stored = db_session.get(models.ShotCamera, camera.id)
+    assert stored.guidance_asset_ids == {
+        "silhouette": second_silhouette.id,
+        "skeleton_pose": skeleton.id,
+    }
+    assert db_session.get(models.Asset, first_silhouette.id) is None
+    assert second_silhouette.kind == f"director_guidance:silhouette:{camera.id}"
+    assert skeleton.kind == f"director_guidance:skeleton_pose:{camera.id}"
+    assert (tmp_path / second_silhouette.local_path).is_file()
+    assert (tmp_path / skeleton.local_path).is_file()
+
+    with pytest.raises(DirectorPreviewError, match="invalid_guidance_kind"):
+        service.save_guidance(camera.id, "depth", _png(), "image/png")
+
+
 def test_save_cleans_written_file_when_commit_fails(db_session, tmp_path, monkeypatch):
     camera, _project = _camera(db_session)
 
@@ -139,6 +168,24 @@ def test_preview_upload_route_returns_public_asset(client):
     assert "local_path" not in response.json()
 
 
+def test_guidance_upload_route_returns_public_asset(client):
+    from tests.test_director_api import _scene_via_client
+
+    scene_id, _shot_id = _scene_via_client(client)
+    stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
+    camera_id = stage["shot_cameras"][0]["id"]
+
+    response = client.post(
+        f"/api/director-cameras/{camera_id}/guidance/silhouette",
+        files={"file": ("silhouette.png", _png(), "image/png")},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["kind"] == f"director_guidance:silhouette:{camera_id}"
+    refreshed = client.get(f"/api/scenes/{scene_id}/director-stage").json()
+    assert refreshed["shot_cameras"][0]["guidance_asset_ids"]["silhouette"] == response.json()["id"]
+
+
 def test_episode_deletion_removes_director_preview_asset_and_file(
     db_session, tmp_path
 ):
@@ -147,11 +194,21 @@ def test_episode_deletion_removes_director_preview_asset_and_file(
     asset = DirectorPreviewService(db_session, tmp_path).save(
         camera.id, _png(), "image/png"
     )
+    silhouette = DirectorPreviewService(db_session, tmp_path).save_guidance(
+        camera.id, "silhouette", _png(color=(0, 0, 0, 255)), "image/png"
+    )
+    skeleton = DirectorPreviewService(db_session, tmp_path).save_guidance(
+        camera.id, "skeleton_pose", _png(color=(0, 255, 255, 255)), "image/png"
+    )
     preview_path = tmp_path / asset.local_path
+    guidance_paths = [tmp_path / silhouette.local_path, tmp_path / skeleton.local_path]
 
     result = EpisodeDeletionService(db_session, tmp_path).delete(episode_id)
 
     assert result is not None
     assert asset.id in result.impact.asset_ids
+    assert silhouette.id in result.impact.asset_ids
+    assert skeleton.id in result.impact.asset_ids
     assert db_session.get(models.Asset, asset.id) is None
     assert not preview_path.exists()
+    assert all(not path.exists() for path in guidance_paths)
