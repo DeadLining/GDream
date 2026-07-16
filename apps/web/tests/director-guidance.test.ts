@@ -1,6 +1,6 @@
-import {Group,Mesh,MeshStandardMaterial,PerspectiveCamera,Scene,SphereGeometry} from 'three';
+import {Color,Group,Mesh,MeshDepthMaterial,MeshStandardMaterial,PerspectiveCamera,Scene,SphereGeometry} from 'three';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {captureDirectorSilhouette,renderDirectorSkeletonGuidance} from '../lib/director-guidance';
+import {captureDirectorDepth,captureDirectorObjectMask,captureDirectorSilhouette,renderDirectorSkeletonGuidance} from '../lib/director-guidance';
 
 describe('director guidance capture',()=>{
   afterEach(()=>vi.restoreAllMocks());
@@ -42,5 +42,46 @@ describe('director guidance capture',()=>{
     expect(blob.type).toBe('image/png');
     expect(calls.lineTo).toBeGreaterThan(0);
     expect(calls.arc).toBeGreaterThanOrEqual(3);
+  });
+
+  it('renders foreground geometry with a depth material and restores the scene',async()=>{
+    const scene=new Scene();scene.background=new Color('#123456');
+    const object=new Group();object.name='director-object-character-1';object.userData={kind:'character'};
+    const material=new MeshStandardMaterial({color:'#ff0000'});object.add(new Mesh(new SphereGeometry(1),material));scene.add(object);
+    const renderer={domElement:{width:800,height:600},render:vi.fn()};
+    const capture=vi.fn(async()=>{
+      expect(scene.overrideMaterial).toBeInstanceOf(MeshDepthMaterial);
+      expect((scene.background as Color).getHexString()).toBe('000000');
+      return new Blob(['depth'],{type:'image/png'});
+    });
+
+    const blob=await captureDirectorDepth({scene,camera:new PerspectiveCamera(),renderer,capture});
+
+    expect(blob.type).toBe('image/png');
+    expect(scene.overrideMaterial).toBeNull();
+    expect((scene.background as Color).getHexString()).toBe('123456');
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+  });
+
+  it('assigns a distinct flat color to each foreground object mask and restores materials',async()=>{
+    const scene=new Scene();
+    const first=new Group();first.name='director-object-character-1';first.userData={kind:'character'};
+    const second=new Group();second.name='director-object-prop-1';second.userData={kind:'prop'};
+    const firstMaterial=new MeshStandardMaterial({color:'#ff0000'});const secondMaterial=new MeshStandardMaterial({color:'#00ff00'});
+    const firstMesh=new Mesh(new SphereGeometry(1),firstMaterial);const secondMesh=new Mesh(new SphereGeometry(1),secondMaterial);
+    first.add(firstMesh);second.add(secondMesh);scene.add(first,second);
+    const renderer={domElement:{width:800,height:600},render:vi.fn()};
+    const capture=vi.fn(async()=>{
+      const firstColor=(firstMesh.material as {color:{getHexString:()=>string}}).color.getHexString();
+      const secondColor=(secondMesh.material as {color:{getHexString:()=>string}}).color.getHexString();
+      expect(firstColor).not.toBe('000000');expect(secondColor).not.toBe('000000');expect(firstColor).not.toBe(secondColor);
+      return new Blob(['mask'],{type:'image/png'});
+    });
+
+    const blob=await captureDirectorObjectMask({scene,camera:new PerspectiveCamera(),renderer,capture});
+
+    expect(blob.type).toBe('image/png');
+    expect(firstMesh.material).toBe(firstMaterial);expect(secondMesh.material).toBe(secondMaterial);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
   });
 });

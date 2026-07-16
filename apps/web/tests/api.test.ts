@@ -300,6 +300,9 @@ describe('director api', () => {
     await uploadDirectorGuidance('camera-1','skeleton_pose',blob);
     expect(fetchMock.mock.calls[0][0]).toBe('/api/director-cameras/camera-1/guidance/skeleton_pose');
     expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBeInstanceOf(FormData);
+
+    await uploadDirectorGuidance('camera-1','object_mask',blob);
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/director-cameras/camera-1/guidance/object_mask');
   });
 });
 

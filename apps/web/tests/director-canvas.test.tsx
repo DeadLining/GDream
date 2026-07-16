@@ -52,7 +52,7 @@ describe('DirectorCanvas',()=>{
     }
   });
 
-  it('registers silhouette and skeleton guidance capture from the live three scene',()=>{
+  it('registers silhouette, skeleton, depth, and object-mask capture from the live three scene',()=>{
     const onGuidanceCaptureReady=vi.fn();
     render(<DirectorCanvas objects={[objects[0]]} camera={camera} selectedObjectId={null} mode="world" onTransform={vi.fn()} onGuidanceCaptureReady={onGuidanceCaptureReady}/>);
 

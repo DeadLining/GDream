@@ -359,14 +359,34 @@ def test_generate_panel_uses_saved_director_preview_as_composition_reference(
         model="threejs",
         checksum="a" * 64,
     )
-    db_session.add_all([silhouette, skeleton])
+    depth = models.Asset(
+        project_id=project.id,
+        kind=f"director_guidance:depth:{camera.id}",
+        local_path=f"projects/{project.id}/director/{stage.id}/{camera.id}-depth.png",
+        media_type="image/png",
+        provider="director",
+        model="threejs",
+        checksum="b" * 64,
+    )
+    object_mask = models.Asset(
+        project_id=project.id,
+        kind=f"director_guidance:object_mask:{camera.id}",
+        local_path=f"projects/{project.id}/director/{stage.id}/{camera.id}-object_mask.png",
+        media_type="image/png",
+        provider="director",
+        model="threejs",
+        checksum="c" * 64,
+    )
+    db_session.add_all([silhouette, skeleton, depth, object_mask])
     db_session.flush()
     camera.guidance_asset_ids = {
         "silhouette": silhouette.id,
         "skeleton_pose": skeleton.id,
+        "depth": depth.id,
+        "object_mask": object_mask.id,
     }
     db_session.commit()
-    for item in (preview, silhouette, skeleton):
+    for item in (preview, silhouette, skeleton, depth, object_mask):
         path = tmp_path / item.local_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(PNG)
@@ -389,14 +409,18 @@ def test_generate_panel_uses_saved_director_preview_as_composition_reference(
         PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
     )
 
-    assert provider.references == [(PNG, "image/png")] * 3
+    assert provider.references == [(PNG, "image/png")] * 5
     assert "3d director preview" in provider.prompt.lower()
     assert "silhouette guidance" in provider.prompt.lower()
     assert "skeleton pose guidance" in provider.prompt.lower()
-    assert asset.request_metadata["reference_asset_ids"][:3] == [
+    assert "depth guidance" in provider.prompt.lower()
+    assert "object mask guidance" in provider.prompt.lower()
+    assert asset.request_metadata["reference_asset_ids"][:5] == [
         preview.id,
         silhouette.id,
         skeleton.id,
+        depth.id,
+        object_mask.id,
     ]
     assert asset.request_metadata["input_snapshot"]["director"]["camera"]["preview_asset_id"] == preview.id
     assert asset.request_metadata["input_snapshot"]["director"]["camera"]["guidance_asset_ids"] == camera.guidance_asset_ids

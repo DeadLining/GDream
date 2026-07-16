@@ -39,19 +39,25 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getAllByRole('button',{name:'添加占位物'})[0]);
     await waitFor(()=>expect(mocks.createDirectorObject).toHaveBeenCalledWith('stage-1',1,expect.objectContaining({label:'新道具'})));
   });
-  it('captures and uploads silhouette and skeleton pose guidance for the selected shot',async()=>{
+  it('captures and uploads silhouette, skeleton, depth, and object-mask guidance for the selected shot',async()=>{
     guidanceCapture.mockImplementation(async(kind:string)=>new Blob([kind],{type:'image/png'}));
     mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);
     mocks.uploadDirectorGuidance
       .mockResolvedValueOnce({id:'silhouette-1'})
-      .mockResolvedValueOnce({id:'skeleton-1'});
+      .mockResolvedValueOnce({id:'skeleton-1'})
+      .mockResolvedValueOnce({id:'depth-1'})
+      .mockResolvedValueOnce({id:'mask-1'});
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
 
     await userEvent.click(await screen.findByRole('button',{name:'保存角色轮廓图'}));
     await waitFor(()=>expect(mocks.uploadDirectorGuidance).toHaveBeenCalledWith('camera-1','silhouette',expect.any(Blob)));
     await userEvent.click(screen.getByRole('button',{name:'保存骨架姿态图'}));
     await waitFor(()=>expect(mocks.uploadDirectorGuidance).toHaveBeenCalledWith('camera-1','skeleton_pose',expect.any(Blob)));
-    expect(guidanceCapture.mock.calls.map(call=>call[0])).toEqual(['silhouette','skeleton_pose']);
+    await userEvent.click(screen.getByRole('button',{name:'保存深度图'}));
+    await waitFor(()=>expect(mocks.uploadDirectorGuidance).toHaveBeenCalledWith('camera-1','depth',expect.any(Blob)));
+    await userEvent.click(screen.getByRole('button',{name:'保存对象遮罩图'}));
+    await waitFor(()=>expect(mocks.uploadDirectorGuidance).toHaveBeenCalledWith('camera-1','object_mask',expect.any(Blob)));
+    expect(guidanceCapture.mock.calls.map(call=>call[0])).toEqual(['silhouette','skeleton_pose','depth','object_mask']);
   });
   it('adds one selected catalog asset without removing existing stage assets',async()=>{
     const existingCharacter={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',metadata:{catalog_key:'character:c1'}};
