@@ -3,11 +3,11 @@
 ## Status
 
 - Priority: Active
-- Current state: The director uses visible low-poly 3D proxies by default: standard humanoid, quadruped, bird, box, cylinder, and sphere templates. It supports persistent humanoid body proportions plus shot-scoped procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. GLB upload processing records skeleton roots, joint names, animation clip durations, channel counts, target nodes, and target paths; the character workspace and director asset catalog expose those summaries. Users can add one production asset without replacing existing stage objects, then rename, hide, duplicate, or delete each scene instance. Stage-level background color, ground style and color, ambient light, and key light controls are persisted and rendered immediately. Revision history can restore stage and camera snapshots as new versions, while optimistic-lock conflicts offer an explicit reload path. Backgrounds may remain images.
+- Current state: The director uses visible low-poly 3D proxies by default: standard humanoid, quadruped, bird, box, cylinder, and sphere templates. It supports persistent humanoid body proportions plus shot-scoped procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. GLB upload processing records skeleton roots, joint names, animation clip durations, channel counts, target nodes, and target paths; the character workspace and director asset catalog expose those summaries. Imported clips can be selected, played, paused without losing the current frame, scrubbed to a persisted time, and reset per shot. Users can add one production asset without replacing existing stage objects, then rename, hide, duplicate, or delete each scene instance. Stage-level background color, ground style and color, ambient light, and key light controls are persisted and rendered immediately. Revision history can restore stage and camera snapshots as new versions, while optimistic-lock conflicts offer an explicit reload path. Backgrounds may remain images.
 - Shot binding traceability: Each `AssetVariantUsage` persists its effective variant, state, 3D representation and version, linked director object, resolution status, and refresh timestamp. Mutation paths refresh these bindings when lineage, models, or director objects change.
 - Impact recovery: Variant, state, and 3D approval flows show affected episodes, scenes, and shots before mutation. Users can choose to save only or save and regenerate; forced panel-only production runs start strictly after the mutation succeeds, with partial episode failures reported without misreporting the saved change as failed.
 - Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
-- Remaining boundary: AI generation currently uses one selected reference image. Imported GLB animation playback and timeline control, rig repair, multi-view reconstruction, decimation, texture optimization, and editable state-level material or geometry overrides remain open.
+- Remaining boundary: AI generation currently uses one selected reference image. Procedural proxy timeline scrubbing and reset, rig repair, multi-view reconstruction, decimation, texture optimization, and editable state-level material or geometry overrides remain open.
 
 ## Goal
 
@@ -90,7 +90,8 @@ Acceptance criteria:
 - [x] Provide a reusable pose library.
 - [x] Add an animation clip picker for humanoid, quadruped, and bird proxies.
 - [x] Add explicit quadruped and bird proxy templates plus reusable primitive templates for unfinished props.
-- [ ] Complete animation timeline scrubbing and explicit reset; pose application plus playback and pause are available for the standard proxy.
+- [x] Add imported GLB animation selection, playback, pause, persisted timeline scrubbing, and explicit reset.
+- [ ] Add timeline scrubbing and explicit reset for procedural proxy animations; clip selection plus playback and pause are available.
 - [ ] Add basic facial expression or blend-shape controls when available.
 - [ ] Add gaze target and head direction controls.
 - [x] Expand camera editing to position, target, rotation, focal length, clipping range, shot size, and motion metadata.
