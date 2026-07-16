@@ -696,6 +696,7 @@ describe('Workspace', () => {
     expect(workspaceStyles).toMatch(/\.center-state p, \.episode-empty p\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.empty-inspector\s*\{[^}]*color:\s*var\(--muted-strong\)/);
     expect(workspaceStyles).toMatch(/\.command-button\s*\{[^}]*background:\s*var\(--accent-strong\)/);
+    expect(workspaceStyles).toMatch(/\.storyboard-director-action\s*\{[^}]*background:\s*var\(--surface\)[^}]*color:\s*var\(--ink\)/);
     expect(workspaceStyles).toMatch(/\.inspector-actions \.primary-action[^}]*background:\s*var\(--accent-strong\)/);
   });
 
