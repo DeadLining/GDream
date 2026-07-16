@@ -243,6 +243,25 @@ describe('DirectorWorkspace',()=>{
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',5,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:false,animation_time_seconds:0}}}));
     expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
   });
+  it('locks procedural animation controls while a shot override is saving',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{proxy_height:1},metadata:{proxy_rig:'standard_humanoid'}};
+    const characterStage={...stage,objects:[characterObject]};
+    let resolveSave:(camera:DirectorStage['shot_cameras'][number])=>void=()=>{};
+    mocks.getDirectorStage.mockResolvedValue(characterStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorCamera.mockReturnValue(new Promise(resolve=>{resolveSave=resolve;}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+
+    await userEvent.selectOptions(screen.getByLabelText('动画片段'),'walk');
+
+    expect(screen.getByLabelText('动画片段')).toBeDisabled();
+    expect(screen.getByLabelText('代理动画时间')).toBeDisabled();
+    expect(screen.getByRole('button',{name:'播放动画'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'重置代理动画'})).toBeDisabled();
+    resolveSave({...stage.shot_cameras[0],version:2,object_overrides:{'object-1':{animation_clip:'walk',animation_playing:false,animation_time_seconds:0}}});
+    await waitFor(()=>expect(screen.getByLabelText('动画片段')).toBeEnabled());
+  });
   it('controls an imported GLB animation clip and timeline on the selected shot',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true,animation_clips:[{name:'Walk',duration_seconds:2.5},{name:'Turn',duration_seconds:1.2}]}};
     const characterStage={...stage,objects:[characterObject]};
