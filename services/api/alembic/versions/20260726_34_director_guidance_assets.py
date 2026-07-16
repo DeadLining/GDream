@@ -11,15 +11,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("shot_cameras") as batch:
-        batch.add_column(
-            sa.Column(
-                "guidance_asset_ids",
-                sa.JSON(),
-                nullable=False,
-                server_default=sa.text("'{}'"),
-            )
+    op.add_column(
+        "shot_cameras",
+        sa.Column(
+            "guidance_asset_ids",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
         )
+    )
 
 
 def downgrade() -> None:
