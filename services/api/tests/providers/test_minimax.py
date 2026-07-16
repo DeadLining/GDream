@@ -373,12 +373,21 @@ async def test_minimax_streams_readable_script_from_anthropic_events():
             chunk
             async for chunk in MiniMaxProvider(
                 api_key="secret", client=client
-            ).stream_script({"project": {"title": "雨夜"}, "brief": "三集"})
+            ).stream_script(
+                {
+                    "project": {"title": "雨夜"},
+                    "brief": "加强冲突",
+                    "existing_draft": "旧版本正文",
+                }
+            )
         ]
 
     assert chunks == ["第一集：雨夜", "\n场景一"]
     assert captured["body"]["stream"] is True
     assert "readable Chinese dynamic-comic script" in captured["body"]["system"]
+    user_prompt = captured["body"]["messages"][0]["content"]
+    assert "complete replacement script" in user_prompt
+    assert "not a continuation or diff" in user_prompt
 
 
 @pytest.mark.anyio
