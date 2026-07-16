@@ -45,3 +45,11 @@ def test_hostbridge_daemon_socket_expands_prefixed_tilde_override(monkeypatch):
     assert settings.hostbridge_daemon_socket == (
         Path.home() / ".hostbridge/custom.sock"
     ).resolve()
+
+
+def test_qwen_narrator_speaker_accepts_environment_override(monkeypatch):
+    monkeypatch.setenv("QWEN_TTS_NARRATOR_SPEAKER", "vivian")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.qwen_tts_narrator_speaker == "vivian"

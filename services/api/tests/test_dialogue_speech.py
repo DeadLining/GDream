@@ -108,10 +108,15 @@ def test_speech_synthesizes_narration_with_default_voice(db_session, tmp_path):
     provider = FakeTTS()
 
     asset = asyncio.run(
-        SpeechService(db_session, tmp_path, provider).synthesize_dialogue(line.id)
+        SpeechService(
+            db_session,
+            tmp_path,
+            provider,
+            narrator_speaker="vivian",
+        ).synthesize_dialogue(line.id)
     )
 
     db_session.refresh(line)
-    assert provider.request["speaker"] == "dylan"
+    assert provider.request["speaker"] == "vivian"
     assert provider.request["instruction"] == "环境音叙事，音量由弱入强。"
     assert line.audio_asset_id == asset.id

@@ -133,3 +133,51 @@ def test_render_manifest_includes_bound_scene_sound(db_session, tmp_path):
             "volume": 0.25,
         }
     ]
+
+
+def test_render_subtitles_use_absolute_episode_timeline():
+    manifest = {
+        "shots": [
+            {
+                "durationSeconds": 5,
+                "dialogue": [
+                    {
+                        "text": "第一行\r\n第二行",
+                        "startSeconds": 1,
+                        "durationSeconds": 2,
+                    }
+                ],
+            },
+            {
+                "durationSeconds": 3,
+                "dialogue": [
+                    {
+                        "text": "下一镜头",
+                        "startSeconds": 0.5,
+                        "durationSeconds": 1,
+                    }
+                ],
+            },
+        ]
+    }
+
+    subtitles = RenderingService.build_srt(manifest)
+
+    assert "00:00:01,000 --> 00:00:03,000" in subtitles
+    assert "第一行\n第二行" in subtitles
+    assert "00:00:05,500 --> 00:00:06,500" in subtitles
+
+
+def test_render_subtitles_skip_empty_text():
+    manifest = {
+        "shots": [
+            {
+                "durationSeconds": 2,
+                "dialogue": [
+                    {"text": "  ", "startSeconds": 0, "durationSeconds": 1}
+                ],
+            }
+        ]
+    }
+
+    assert RenderingService.build_srt(manifest) == ""
