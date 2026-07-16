@@ -221,7 +221,7 @@ describe('ReviewPanel', () => {
     expect(video).not.toHaveProperty('muted',true);
     const mute=screen.getByRole('button',{name:'静音'});
     expect(mute).toHaveAttribute('aria-pressed','false');
-    expect(mute.querySelector('.lucide-volume-2')).toBeInTheDocument();
+    expect(mute.querySelector('.lucide-volume2')).toBeInTheDocument();
   });
 
   it('moves a valid episode playhead with real media time',async()=>{
