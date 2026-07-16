@@ -4,11 +4,11 @@ import {dirname} from 'node:path';
 
 import {expect, request as playwrightRequest, test} from '@playwright/test';
 
-import {runThemeToVideoPipeline, type ThemeToVideoResult} from './support/real-model-pipeline';
+import {resolveRealModelTimeoutMs, runThemeToVideoPipeline, type ThemeToVideoResult} from './support/real-model-pipeline';
 
 
 const enabled = process.env.AI_COMIC_E2E_REAL_MODELS === '1';
-const timeoutMs = Number(process.env.AI_COMIC_E2E_TIMEOUT_MS ?? 30 * 60 * 1000);
+const timeoutMs = resolveRealModelTimeoutMs(process.env.AI_COMIC_E2E_TIMEOUT_MS);
 const defaultTheme = [
   '旧城里，一名钟表修复师发现：每修好一块停摆的表，',
   '就会短暂看到失踪妹妹留下的一条新线索。',

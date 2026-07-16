@@ -76,6 +76,12 @@ type FullEpisodeClosure = {
   release: {candidate: {id: string}; gate: {ready: boolean}; publication: {id: string; status: string}};
 };
 
+const DEFAULT_REAL_MODEL_TIMEOUT_MS = 120 * 60 * 1000;
+
+export function resolveRealModelTimeoutMs(value: string | undefined): number {
+  return Number(value ?? DEFAULT_REAL_MODEL_TIMEOUT_MS);
+}
+
 const wait = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
 
 async function responseJson<T>(response: APIResponse, label: string): Promise<T> {

@@ -26,6 +26,7 @@ The runner uses isolated ports and data by default:
 - Web: `http://127.0.0.1:3100`
 - API: `http://127.0.0.1:8100`
 - Runtime: `.runtime/e2e-real`
+- Timeout: 120 minutes (override with `AI_COMIC_E2E_TIMEOUT_MS`)
 
 It reads `data/provider-channels.json` in place and does not copy API keys into
 the isolated runtime. Override the input theme or locations when needed:
