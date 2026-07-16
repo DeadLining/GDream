@@ -137,6 +137,34 @@ it('renders finalized markdown by default and switches the current version into 
   expect(screen.getByRole('button',{name:'AI 生成新版本'})).toHaveClass('script-ai-version-button');
 });
 
+it('opens the new AI version before streaming chunks into its editor',async()=>{
+  const user=userEvent.setup();
+  const next={...revision('', 'next'),id:'r2',revision_number:2,status:'working' as const,creation_method:'ai'};
+  let finish:()=>void=()=>{};
+  mocks.stream.mockImplementationOnce(async(_id,_data,handlers)=>{
+    handlers.onStarted(next);
+    handlers.onChunk({text:'# 新版本',revision_id:'r2',persisted_length:5});
+    await new Promise<void>(resolve=>{finish=resolve;});
+    handlers.onDone({revision_id:'r2'});
+  });
+  render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
+
+  await user.click(await screen.findByRole('button',{name:'AI 生成新版本'}));
+  await user.type(screen.getByRole('textbox',{name:'AI 创作条件'}),'加强悬疑');
+  await user.click(screen.getByRole('button',{name:'开始生成'}));
+
+  expect(await screen.findByRole('button',{name:'查看版本 2'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('textbox',{name:'剧本正文'})).toHaveValue('# 新版本');
+  expect(screen.queryByRole('textbox',{name:'AI 创作条件'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'停止生成'})).toBeVisible();
+
+  const finalized={...next,status:'finalized' as const,content:'# 新版本'};
+  mocks.get.mockResolvedValue({...document,status:'ready',revision_count:2,current_revision_id:'r2',current_revision:finalized});
+  mocks.revisions.mockResolvedValue([finalized,document.current_revision]);
+  finish();
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'停止生成'})).not.toBeInTheDocument());
+});
+
 it('opens the storyline canvas without replacing the script document',async()=>{
   render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
   expect(await screen.findByLabelText('剧本正文')).toHaveValue('第一集');

@@ -128,9 +128,11 @@ def test_document_stream_persists_chunks_and_finalizes_revision(client):
 
     assert response.status_code == 200
     events = _events(response.text)
-    assert [event for event, _ in events] == ["chunk", "chunk", "done"]
-    assert events[0][1]["revision_id"] == revision_id
-    assert events[1][1]["persisted_length"] == len("第一集：雨夜\n场景一")
+    assert [event for event, _ in events] == ["started", "chunk", "chunk", "done"]
+    assert events[0][1]["revision"]["id"] == revision_id
+    assert events[0][1]["revision"]["status"] == "working"
+    assert events[1][1]["revision_id"] == revision_id
+    assert events[2][1]["persisted_length"] == len("第一集：雨夜\n场景一")
     detail = client.get(f"/api/scripts/{script['id']}").json()
     assert detail["current_revision"]["content"] == "第一集：雨夜\n场景一"
     assert detail["current_revision"]["status"] == "finalized"
@@ -162,7 +164,9 @@ def test_document_stream_uses_finalized_version_as_ai_revision_source(client):
 
     assert response.status_code == 200
     events = _events(response.text)
-    assert events[0][1]["revision_id"] != old_revision_id
+    assert events[0][0] == "started"
+    assert events[0][1]["revision"]["id"] != old_revision_id
+    assert events[1][1]["revision_id"] != old_revision_id
     detail = client.get(f"/api/scripts/{script['id']}").json()
     assert detail["current_revision"]["revision_number"] == 2
     assert detail["current_revision"]["content"] == "全新版本"
