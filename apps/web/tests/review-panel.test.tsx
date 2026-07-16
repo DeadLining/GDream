@@ -1,4 +1,4 @@
-import {cleanup, render, screen, waitFor, within} from '@testing-library/react';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {ReviewPanel} from '../components/ReviewPanel';
@@ -27,6 +27,8 @@ const readiness: ProductionReadiness = {
   totals: {shots: 3, dialogue: 0}, ready_counts: {panels: 2, approved: 1, speech: 0},
   blockers: {missing_panels: ['shot-2'], unapproved_shots: ['shot-2', 'shot-3'], missing_speech: []},
 };
+const readyReadiness:ProductionReadiness={...readiness,ready:true,ready_counts:{panels:3,approved:3,speech:1},blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}};
+const timedEpisode:EpisodeDetail={...episode,scenes:[{...episode.scenes[0],shots:episode.scenes[0].shots.map((shot,index)=>index===0?{...shot,active_video_asset_id:'video-1',dialogue:[{id:'line-1',character_id:null,position:1,text:'小心路滑',subtitle_text:'小心路滑',emotion:'tense',performance_instruction:'',audio_asset_id:'audio-1',start_seconds:1,duration_seconds:2}]}:{...shot,review_status:'approved'})}]};
 
 describe('ReviewPanel', () => {
   beforeEach(()=>{mocks.getAsset.mockResolvedValue({id:'asset-1',media_url:'/media/frame.png'});mocks.candidates.mockResolvedValue([]);mocks.renderReview.mockRejectedValue(new Error('No render review'));mocks.visualThreads.mockResolvedValue([]);});
@@ -199,6 +201,64 @@ describe('ReviewPanel', () => {
     expect(pause).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button',{name:'取消静音'}));
     expect(video).not.toHaveProperty('muted',true);
+  });
+
+  it('moves a valid episode playhead with real media time',async()=>{
+    mocks.threads.mockResolvedValue([]);
+    mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
+    render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
+
+    const video=await screen.findByLabelText('当前镜头视频');
+    Object.defineProperty(video,'currentTime',{configurable:true,writable:true,value:2});
+    fireEvent.timeUpdate(video);
+
+    expect(screen.getByLabelText('时间线播放头')).toHaveStyle({left:'20%'});
+  });
+
+  it('renders timed dialogue and subtitle clips and seeks from them',async()=>{
+    mocks.threads.mockResolvedValue([]);
+    mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
+    render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
+
+    const video=await screen.findByLabelText('当前镜头视频');
+    const dialogue=screen.getByRole('button',{name:'对白 小心路滑'});
+    const subtitle=screen.getByRole('button',{name:'字幕 小心路滑'});
+    expect(dialogue).toHaveStyle({left:'25%',width:'50%'});
+    expect(subtitle).toHaveStyle({left:'25%',width:'50%'});
+
+    await userEvent.click(dialogue);
+    expect(video.currentTime).toBe(1);
+    expect(screen.getByLabelText('时间线播放头')).toHaveStyle({left:'10%'});
+  });
+
+  it('uses the current playback position for a new review comment',async()=>{
+    mocks.threads.mockResolvedValue([]);
+    mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
+    render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
+
+    const video=await screen.findByLabelText('当前镜头视频');
+    Object.defineProperty(video,'currentTime',{configurable:true,writable:true,value:1.75});
+    fireEvent.timeUpdate(video);
+    await userEvent.click(screen.getByRole('button',{name:'新建终审评论'}));
+
+    expect(screen.getByRole('spinbutton',{name:'时间码秒数'})).toHaveValue(1.75);
+  });
+
+  it('keeps final-preview playback on the absolute episode timeline',async()=>{
+    mocks.threads.mockResolvedValue([]);
+    mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
+    mocks.candidates.mockResolvedValue([{id:'release-2',episode_id:'episode-1',version:'V2',render_path:'projects/p/episodes/e/renders/v2.mp4',qc_snapshot:{},status:'draft',created_at:'',updated_at:''}]);
+    mocks.renderReview.mockResolvedValue({id:'review-render',episode_id:'episode-1',job_id:'render-job',render_path:'projects/p/episodes/e/renders/v2.mp4',overall_pass:true,subtitle_present:true,black_frame_positions:[],silence_ranges:[],ffprobe_json:{},findings:[],slideshow_risk:null,created_at:''});
+    render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
+
+    const timeline=within(screen.getByLabelText('多轨时间线'));
+    await userEvent.click(timeline.getAllByRole('button',{name:'镜头 3'})[0]);
+    await userEvent.click(await screen.findByRole('button',{name:'终审成片'}));
+    const video=await screen.findByLabelText('终审成片视频');
+    Object.defineProperty(video,'currentTime',{configurable:true,writable:true,value:2});
+    fireEvent.timeUpdate(video);
+
+    expect(screen.getByLabelText('时间线播放头')).toHaveStyle({left:'20%'});
   });
 
   it('starts review-aware AI generation when requesting shot changes',async()=>{
