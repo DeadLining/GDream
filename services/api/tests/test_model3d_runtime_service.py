@@ -11,7 +11,10 @@ from comic_studio.model_runtime.contracts import Capability
 from comic_studio.model_runtime.service import ModelRuntimeService
 from comic_studio.providers.model_3d_base import Model3DResult
 from comic_studio.services.character_references import CharacterReferenceService
-from comic_studio.services.model_3d import Model3DGenerationError
+from comic_studio.services.model_3d import (
+    Model3DGenerationError,
+    Model3DGenerationService,
+)
 from comic_studio.services.model_3d_postprocess import ProcessedModel3D
 from tests.test_character_3d_representations import _glb
 from tests.test_character_references import PNG
@@ -150,6 +153,45 @@ def _character_reference(session_factory, data_root: Path) -> tuple[str, str]:
         reference.is_active = True
         session.commit()
         return character.id, asset.id
+
+
+def _library_asset_reference(session_factory, data_root: Path) -> tuple[str, str]:
+    with session_factory() as session:
+        project = models.Project(
+            title="3D prop generation",
+            logline="Generate a prop proxy",
+            story_bible="Story",
+            visual_style="comic",
+        )
+        reference = models.Asset(
+            project=project,
+            kind="library-asset-reference",
+            local_path="",
+            media_type="image/png",
+            provider="upload",
+            model="local",
+            request_metadata={},
+            checksum="reference-checksum",
+            review_status="approved",
+        )
+        library_asset = models.LibraryAsset(
+            project=project,
+            kind="prop",
+            name="Pocket watch",
+            description="",
+            tags=[],
+            asset_metadata={},
+        )
+        session.add_all([project, reference, library_asset])
+        session.flush()
+        relative = Path("projects") / project.id / "references" / f"{reference.id}.png"
+        destination = data_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(PNG)
+        reference.local_path = str(relative)
+        library_asset.asset_metadata = {"reference_asset_id": reference.id}
+        session.commit()
+        return library_asset.id, reference.id
 
 
 @pytest.mark.anyio
@@ -400,3 +442,41 @@ async def test_character_model3d_persists_processed_model_and_thumbnail(tmp_path
         assert thumbnail_path.is_file()
         with Image.open(thumbnail_path) as thumbnail:
             assert thumbnail.size == (512, 512)
+
+
+@pytest.mark.anyio
+async def test_library_model3d_persists_processed_candidate_thumbnail_on_approval(
+    tmp_path,
+):
+    service, session_factory = _postprocessing_runtime(tmp_path)
+    library_asset_id, reference_asset_id = _library_asset_reference(
+        session_factory,
+        service.data_root,
+    )
+
+    result = await service.execute_model3d(
+        "library_asset",
+        library_asset_id,
+        reference_asset_id,
+    )
+
+    with session_factory() as session:
+        candidate = session.get(models.Asset, result["asset_id"])
+        model_path = service.data_root / candidate.local_path
+        assert b'"generator":"optimized"' in model_path.read_bytes()
+        postprocess = candidate.request_metadata["postprocess"]
+        assert postprocess["tool"] == "gltf-transform"
+        thumbnail_url = candidate.request_metadata["thumbnail_url"]
+        assert thumbnail_url.endswith(f"/{candidate.id}.png")
+        thumbnail_path = service.data_root / thumbnail_url.removeprefix("/media/")
+        assert thumbnail_path.is_file()
+
+        Model3DGenerationService.approve(
+            session,
+            "library_asset",
+            library_asset_id,
+            result,
+        )
+        library_asset = session.get(models.LibraryAsset, library_asset_id)
+        assert library_asset.asset_metadata["model3d_thumbnail_url"] == thumbnail_url
+        assert library_asset.asset_metadata["model3d_postprocess"] == postprocess
