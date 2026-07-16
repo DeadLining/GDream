@@ -305,6 +305,16 @@ describe('DirectorWorkspace',()=>{
     expect(screen.getByLabelText('视线目标 Z')).toHaveValue(2);
     expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
   });
+  it('hides head controls when an imported skeleton has no mapped head or neck bone',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'方块角色',appearance:{model_url:'/media/cube.glb'},metadata:{has_skeleton:true,skeletons:[{root:'Hips',joints:['Hips']}]}};
+    mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'方块角色'}));
+
+    expect(screen.queryByLabelText('头部左右')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('使用视线目标')).not.toBeInTheDocument();
+  });
   it('stores and resets imported GLB morph target weights on the selected shot',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true,morph_targets:['Smile','Blink']}};
     mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);
