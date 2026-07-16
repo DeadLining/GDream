@@ -258,6 +258,17 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getByRole('button',{name:'重置导入动画'}));
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',4,{object_overrides:{'object-1':{animation_clip:'Turn',animation_playing:false,animation_time_seconds:0}}}));
   });
+  it('starts the first imported clip when play is pressed before choosing one',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true,animation_clips:[{name:'Walk',duration_seconds:2.5}]}};
+    mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorCamera.mockImplementation(async(_stageId:string,_shotId:string,version:number,patch:{object_overrides:Record<string,unknown>})=>({...stage.shot_cameras[0],...patch,version:version+1}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+    await userEvent.click(screen.getByRole('button',{name:'播放导入动画'}));
+
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{animation_clip:'Walk',animation_playing:true,animation_time_seconds:0}}}));
+  });
   it('resets shot overrides and confirms object deletion',async()=>{
     const overridden={...stage,shot_cameras:[{...stage.shot_cameras[0],object_overrides:{'object-1':{visible:false}}}]};
     mocks.getDirectorStage.mockResolvedValue(overridden);mocks.getDirectorAssets.mockResolvedValue([]);mocks.updateDirectorCamera.mockResolvedValue({...overridden.shot_cameras[0],version:2,object_overrides:{}});mocks.deleteDirectorObject.mockResolvedValue(undefined);
