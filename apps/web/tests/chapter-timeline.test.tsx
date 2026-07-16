@@ -44,3 +44,13 @@ it('notifies the parent after extracting chapter events',async()=>{
 
   expect(onExtractionComplete).toHaveBeenCalledTimes(1);
 });
+
+it('notifies the parent after re-splitting chapters',async()=>{
+  const user=userEvent.setup();
+  const onExtractionComplete=vi.fn();
+  render(<ChapterTimeline scriptDocumentId="script-1" onExtractionComplete={onExtractionComplete}/>);
+
+  await user.click(await screen.findByRole('button',{name:'重新切分'}));
+
+  expect(onExtractionComplete).toHaveBeenCalledTimes(1);
+});
