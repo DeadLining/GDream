@@ -12,7 +12,8 @@ vi.mock('@react-three/drei',()=>({
   Image:({url}:{url:string})=><div data-testid="director-image" data-url={url}/>,
   OrbitControls:({enabled,onEnd}:{enabled:boolean;onEnd?:(event:unknown)=>void})=><button data-testid="orbit" data-enabled={String(enabled)} onClick={()=>onEnd?.({target:{object:{position:{x:2,y:3,z:4},rotation:{x:.1,y:.2,z:.3}},target:{x:0,y:1,z:0}}})}>移动镜头</button>,
   TransformControls:({children,mode,translationSnap,rotationSnap,scaleSnap,onObjectChange,onMouseUp}:React.PropsWithChildren<{mode:string;translationSnap?:number|null;rotationSnap?:number|null;scaleSnap?:number|null;onObjectChange?:()=>void;onMouseUp?:()=>void}>)=><div data-testid="transform-controls" data-mode={mode} data-translation-snap={translationSnap??''} data-rotation-snap={rotationSnap??''} data-scale-snap={scaleSnap??''} onClick={()=>{const current=document.querySelector('[name="director-object-character-1"]') as unknown as {position:{x:number;y:number;z:number};rotation:{x:number;y:number;z:number};scale:{x:number;y:number;z:number}};current.position={x:1,y:0,z:0};current.rotation={x:0,y:.2,z:0};current.scale={x:1,y:1,z:1};onObjectChange?.();current.position={x:2,y:0,z:0};onObjectChange?.();onMouseUp?.();}}>{children}</div>,
-  useGLTF:(url:string)=>{const scene=new Group();scene.name=url;return {scene};},
+  useAnimations:()=>({actions:{},mixer:{update:vi.fn()}}),
+  useGLTF:(url:string)=>{const scene=new Group();scene.name=url;return {scene,animations:[]};},
 }));
 
 const camera:ShotCamera={id:'camera-1',stage_id:'stage-1',shot_id:'shot-1',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:50,near:.1,far:1000,shot_size:'medium',camera_motion:'static',framing_guides:{},object_overrides:{},preview_asset_id:null};

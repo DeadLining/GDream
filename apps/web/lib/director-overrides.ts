@@ -33,6 +33,7 @@ export function applyDirectorObjectOverrides(objects:DirectorObject[],overrides:
         ...(override.pose_preset?{pose_preset:override.pose_preset}:{}),
         ...(override.animation_clip?{animation_clip:override.animation_clip}:{}),
         ...(override.animation_playing!==undefined?{animation_playing:override.animation_playing}:{}),
+        ...(override.animation_time_seconds!==undefined?{animation_time_seconds:override.animation_time_seconds}:{}),
       },
     };
   });

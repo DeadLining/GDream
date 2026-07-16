@@ -48,8 +48,9 @@ class DirectorObjectOverride(StrictDirectorModel):
     transform:Transform|None=None
     visible:bool|None=None
     pose_preset:Literal["neutral","dialogue","action","injured"]|None=None
-    animation_clip:Literal["idle","walk","run","talk","turn","injured"]|None=None
+    animation_clip:str|None=Field(default=None,min_length=1,max_length=160)
     animation_playing:bool|None=None
+    animation_time_seconds:float|None=Field(default=None,ge=0,le=86400)
 
 
 class ShotCameraPatch(StrictDirectorModel):

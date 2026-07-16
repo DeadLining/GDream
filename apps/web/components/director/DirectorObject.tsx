@@ -12,8 +12,11 @@ function Placeholder({object}:{object:DirectorObjectDto}){
   const modelScale=typeof object.appearance.model_scale==='number'?object.appearance.model_scale:1;
   const modelOffsetY=typeof object.appearance.model_offset_y==='number'?object.appearance.model_offset_y:0;
   const posePreset=(typeof object.appearance.pose_preset==='string'?object.appearance.pose_preset:'neutral') as DirectorPosePreset;
+  const animationClip=typeof object.appearance.animation_clip==='string'?object.appearance.animation_clip:'';
+  const animationPlaying=object.appearance.animation_playing===true;
+  const animationTimeSeconds=typeof object.appearance.animation_time_seconds==='number'?object.appearance.animation_time_seconds:0;
   const proxy=<DirectorProxy object={object}/>;
-  if(modelUrl)return <GlbModel url={modelUrl} scale={modelScale} offsetY={modelOffsetY} posePreset={posePreset} fallback={proxy}/>;
+  if(modelUrl)return <GlbModel url={modelUrl} scale={modelScale} offsetY={modelOffsetY} posePreset={posePreset} animationClip={animationClip} animationPlaying={animationPlaying} animationTimeSeconds={animationTimeSeconds} fallback={proxy}/>;
   const imageUrl=typeof object.appearance.image_url==='string'?object.appearance.image_url:'';
   if(object.kind==='background'&&imageUrl){const aspect=typeof object.appearance.aspect_ratio==='number'?object.appearance.aspect_ratio:1.5;return <DreiImage url={imageUrl} position={[0,1,0]} scale={[aspect*1.8,1.8]} transparent toneMapped={false}/>;}
   const color=typeof object.appearance.color==='string'?object.appearance.color:object.kind==='character'?'#d76b4b':'#5b8ca8';

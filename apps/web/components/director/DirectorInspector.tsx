@@ -17,6 +17,7 @@ const transformTools=[
 
 const axes=['X','Y','Z'] as const;
 type TransformDraft={position:[string,string,string];rotation:[string,string,string];scale:[string,string,string]};
+type ImportedAnimationClip={name:string;duration_seconds:number};
 
 const formatNumber=(value:number,precision=4)=>String(Number(value.toFixed(precision)));
 const createDraft=(transform:Transform):TransformDraft=>({
@@ -24,6 +25,15 @@ const createDraft=(transform:Transform):TransformDraft=>({
   rotation:transform.rotation.map(value=>formatNumber(value*180/Math.PI,2)) as TransformDraft['rotation'],
   scale:transform.scale.map(value=>formatNumber(value)) as TransformDraft['scale'],
 });
+const importedAnimationClips=(object:DirectorObject|null):ImportedAnimationClip[]=>{
+  const clips=Array.isArray(object?.metadata.animation_clips)?object.metadata.animation_clips:[];
+  return clips.flatMap(item=>{
+    if(!item||typeof item!=='object')return[];
+    const clip=item as Record<string,unknown>;
+    if(typeof clip.name!=='string'||!clip.name.trim()||typeof clip.duration_seconds!=='number'||!Number.isFinite(clip.duration_seconds)||clip.duration_seconds<0)return[];
+    return[{name:clip.name,duration_seconds:clip.duration_seconds}];
+  });
+};
 
 function TransformEditor({transform,onCommit}:{transform:Transform;onCommit:(transform:Transform)=>void}){
   const [draft,setDraft]=useState<TransformDraft>(()=>createDraft(transform));
@@ -67,7 +77,10 @@ export function DirectorInspector({
   onBodyProfileChange,
   onProxyRigChange,
   onAnimationChange,
+  onImportedAnimationChange,
   onAnimationPlayingChange,
+  onAnimationTimeChange,
+  onAnimationReset,
   onShotVisibilityChange,
   onSceneVisibilityChange,
   onRenameObject,
@@ -96,7 +109,10 @@ export function DirectorInspector({
   onBodyProfileChange:(key:'proxy_height'|'proxy_shoulder_width'|'proxy_body_width',value:number)=>void;
   onProxyRigChange:(rig:DirectorProxyRig)=>void;
   onAnimationChange:(clip:DirectorAnimationClip)=>void;
+  onImportedAnimationChange:(clip:string)=>void;
   onAnimationPlayingChange:(playing:boolean)=>void;
+  onAnimationTimeChange:(timeSeconds:number)=>void;
+  onAnimationReset:()=>void;
   onShotVisibilityChange:(visible:boolean)=>void;
   onSceneVisibilityChange:(visible:boolean)=>void;
   onRenameObject:(label:string)=>void;
@@ -115,6 +131,12 @@ export function DirectorInspector({
   const usesProxy=Boolean(object&&!modelUrl&&object.kind!=='background'&&object.kind!=='light');
   const humanoidProxy=usesProxy&&proxyRig==='standard_humanoid';
   const animatedProxy=usesProxy&&isAnimatedDirectorProxy(proxyRig);
+  const importedClips=importedAnimationClips(object);
+  const storedImportedAnimation=typeof object?.appearance.animation_clip==='string'?object.appearance.animation_clip:'';
+  const importedAnimation=importedClips.some(item=>item.name===storedImportedAnimation)?storedImportedAnimation:importedClips[0]?.name??'';
+  const importedDuration=importedClips.find(item=>item.name===importedAnimation)?.duration_seconds??0;
+  const storedAnimationTime=typeof object?.appearance.animation_time_seconds==='number'&&Number.isFinite(object.appearance.animation_time_seconds)?object.appearance.animation_time_seconds:0;
+  const importedAnimationTime=Math.min(importedDuration,Math.max(0,storedAnimationTime));
   const poseable=Boolean(object?.kind==='character'&&(humanoidProxy||(object.source_type==='model'&&object.metadata.has_skeleton)));
   const bodyControls=[
     ['proxy_height','角色身高',.75,1.3],
@@ -146,6 +168,14 @@ export function DirectorInspector({
       {cameraMode&&animatedProxy&&<div className="director-animation-controls">
         <label htmlFor="director-animation">动画片段</label>
         <div><select id="director-animation" value={animation} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select><button type="button" className="command-button" aria-label={animationPlaying?'暂停动画':'播放动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button></div>
+      </div>}
+      {cameraMode&&modelUrl&&importedClips.length>0&&<div className="director-animation-controls">
+        <label htmlFor="director-imported-animation">导入动画片段</label>
+        <select id="director-imported-animation" value={importedAnimation} onChange={event=>onImportedAnimationChange(event.target.value)}>{importedClips.map(item=><option key={item.name} value={item.name}>{item.name}</option>)}</select>
+        <label htmlFor="director-animation-time">动画时间</label>
+        <input id="director-animation-time" type="range" min="0" max={importedDuration} step="0.01" value={importedAnimationTime} onChange={event=>onAnimationTimeChange(Number(event.target.value))}/>
+        <output>{formatNumber(importedAnimationTime,2)} / {formatNumber(importedDuration,2)} 秒</output>
+        <div><button type="button" className="command-button" aria-label={animationPlaying?'暂停导入动画':'播放导入动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button><button type="button" className="command-button" aria-label="重置导入动画" onClick={onAnimationReset}><RotateCcw size={14}/></button></div>
       </div>}
       {cameraMode&&<>
         <label className="director-checkbox"><input type="checkbox" aria-label="本镜头显示" checked={object.visible} onChange={event=>onShotVisibilityChange(event.target.checked)}/><span>本镜头显示</span></label>
