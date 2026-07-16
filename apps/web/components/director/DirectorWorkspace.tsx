@@ -35,6 +35,7 @@ export function DirectorWorkspace({scene,selectedShotId,mobile,onSelectShot,onSh
   const [suggesting,setSuggesting]=useState(false);
   const [applying,setApplying]=useState(false);
   const [capturing,setCapturing]=useState(false);
+  const [loadAttempt,setLoadAttempt]=useState(0);
   const viewportRef=useRef<HTMLElement>(null);
 
   useEffect(()=>{
@@ -46,7 +47,7 @@ export function DirectorWorkspace({scene,selectedShotId,mobile,onSelectShot,onSh
       .catch(cause=>{if(current)setError(cause instanceof Error?cause.message:'无法加载导演台');})
       .finally(()=>{if(current)setBusy(false);});
     return()=>{current=false;};
-  },[scene.id]);
+  },[scene.id,loadAttempt]);
 
   const camera=stage?.shot_cameras.find(item=>item.shot_id===selectedShotId)??stage?.shot_cameras[0]??null;
   const shot=scene.shots.find(item=>item.id===selectedShotId)??scene.shots[0];
@@ -103,7 +104,7 @@ export function DirectorWorkspace({scene,selectedShotId,mobile,onSelectShot,onSh
   const capturePreview=async()=>{if(!stage||!camera||capturing)return;const canvas=viewportRef.current?.querySelector('canvas');if(!canvas){setError('3D 画布尚未就绪');return;}setCapturing(true);try{const asset=await uploadDirectorPreview(camera.id,await captureDirectorPreview(canvas));setStage({...stage,shot_cameras:stage.shot_cameras.map(item=>item.id===camera.id?{...item,preview_asset_id:asset.id}:item)});}catch(cause){setError(cause instanceof Error?cause.message:'预览保存失败');}finally{setCapturing(false);}};
 
   if(busy)return <main className="director-loading"><LoaderCircle className="planning-spinner"/><span>正在加载 3D 导演台</span></main>;
-  if(!stage||!camera)return <main className="director-loading"><strong>导演台不可用</strong><span>{error||'当前场景没有镜头'}</span></main>;
+  if(!stage||!camera)return <main className="director-loading"><strong>导演台不可用</strong><span>{error||'当前场景没有镜头'}</span>{error&&<button className="command-button" aria-label="重新连接导演台" onClick={()=>setLoadAttempt(value=>value+1)}><RefreshCw size={15}/>重新连接</button>}</main>;
   return <main className="director-workspace">
     <header className="director-toolbar">
       <div>{onBackToProduction&&<button className="command-button director-back-action" aria-label="返回生产画布" onClick={onBackToProduction}><ArrowLeft size={15}/>返回</button>}<Box size={18}/><h1>3D 导演台</h1><span>{scene.location}</span></div>
