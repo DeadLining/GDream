@@ -226,6 +226,7 @@ class ChapterEventService:
             raise KeyError(script_document_id)
 
         if replace:
+            self.clear_synced_storyline(script_document_id, project_id=document.project_id)
             existing = self.session.scalars(
                 select(models.ScriptChapter).where(
                     models.ScriptChapter.script_document_id == script_document_id
@@ -286,6 +287,30 @@ class ChapterEventService:
         self.session.add(chapter)
         self.session.flush()
         return chapter
+
+    def clear_synced_storyline(
+        self,
+        script_document_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> bool:
+        if project_id is None:
+            document = self.session.get(models.ScriptDocument, script_document_id)
+            if document is None:
+                raise KeyError(script_document_id)
+            project_id = document.project_id
+        storyline = self.session.scalar(
+            select(models.Storyline).where(
+                models.Storyline.project_id == project_id,
+                models.Storyline.description
+                == f"[system:chapter-extraction:{script_document_id}]",
+            )
+        )
+        if storyline is None:
+            return False
+        self.session.delete(storyline)
+        self.session.flush()
+        return True
 
     def sync_storyline(self, script_document_id: str) -> models.Storyline | None:
         """Rebuild the system-managed storyline from extracted chapter beats."""
