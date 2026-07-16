@@ -205,7 +205,8 @@
 .publish-gate .publish-status { color: var(--success-strong); background: var(--color-success-bg); }
 .publish-gate .publish-error { color: var(--danger-strong); background: var(--color-danger-bg); }
 @media (max-width: 700px) { .narrative-inline-form { grid-template-columns: minmax(0,1fr); }.narrative-inline-form > header { grid-column: 1; }.episode-operations-heading-actions > span { display: none; } }
-.storyboard-director-action { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; border-color: var(--line-strong); background: var(--surface); }
+.storyboard-director-action { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
+.storyboard-director-action:hover:not(:disabled) { border-color: var(--accent-strong); background: var(--surface-subtle); color: var(--accent-strong); }
 .production-config, .production-queue { min-width: 0; }
 .production-section-heading { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; }
 .production-section-heading > div { display: grid; gap: 2px; }
