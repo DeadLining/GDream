@@ -39,6 +39,7 @@ describe('StorylineCanvas', () => {
 
     expect(screen.queryByRole('button',{name:'金属海螺异动'})).not.toBeInTheDocument();
     expect(screen.getByRole('button',{name:'首次稳定裂缝'})).toBeVisible();
+    expect(screen.getByRole('heading',{name:'首次稳定裂缝'})).toBeVisible();
   });
 
   it('zooms, fits, and focuses the first unresolved event', async () => {
