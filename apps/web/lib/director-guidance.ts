@@ -80,6 +80,22 @@ export async function captureDirectorDepth({scene,camera,renderer,capture=captur
   const visibility=hideGuidanceExclusions(scene);
   const depthMaterial=new MeshDepthMaterial({depthPacking:BasicDepthPacking});
   const restoreClipping=fitDepthClipping(scene,camera);
+  const depthCamera=camera as Camera&{near?:number;far?:number;isOrthographicCamera?:boolean};
+  const depthNear=depthCamera.near??.1;const depthFar=depthCamera.far??1000;
+  const viewZFunction=depthCamera.isOrthographicCamera?'orthographicDepthToViewZ':'perspectiveDepthToViewZ';
+  depthMaterial.onBeforeCompile=shader=>{
+    shader.uniforms.directorDepthNear={value:depthNear};shader.uniforms.directorDepthFar={value:depthFar};
+    shader.fragmentShader=shader.fragmentShader.replace(
+      'gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );',
+      `float directorViewZ = ${viewZFunction}( fragCoordZ, directorDepthNear, directorDepthFar );
+      float directorLinearDepth = viewZToOrthographicDepth( directorViewZ, directorDepthNear, directorDepthFar );
+      gl_FragColor = vec4( vec3( 1.0 - directorLinearDepth ), opacity );`,
+    ).replace(
+      '#include <packing>',
+      '#include <packing>\nuniform float directorDepthNear;\nuniform float directorDepthFar;',
+    );
+  };
+  depthMaterial.customProgramCacheKey=()=>`director-linear-depth-${viewZFunction}`;
   scene.background=new Color('#000000');scene.overrideMaterial=depthMaterial;
   try{
     renderer.render(scene,camera);
