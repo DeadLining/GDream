@@ -1,6 +1,6 @@
 'use client';
 
-import {Clone,useAnimations,useGLTF} from '@react-three/drei';
+import {useAnimations,useGLTF} from '@react-three/drei';
 import {Component,Suspense,useEffect,useMemo,useRef,type ErrorInfo,type ReactNode} from 'react';
 import {cloneDirectorModelWithPose} from '../../lib/director-poses';
 import type {DirectorPosePreset} from '../../lib/types';
@@ -36,7 +36,7 @@ function LoadedGlb({url,scale,offsetY,posePreset,animationClip,animationPlaying,
     lastSeek.current={action,time};
     mixer.update(0);
   },[action,animationTimeSeconds,mixer]);
-  return <group position={[0,offsetY,0]} scale={scale}><Clone object={posedScene}/></group>;
+  return <group position={[0,offsetY,0]} scale={scale}><primitive object={posedScene}/></group>;
 }
 
 export function GlbModel({url,scale=1,offsetY=0,posePreset='neutral',animationClip='',animationPlaying=false,animationTimeSeconds=0,fallback}:{url:string;scale?:number;offsetY?:number;posePreset?:DirectorPosePreset;animationClip?:string;animationPlaying?:boolean;animationTimeSeconds?:number;fallback:ReactNode}){
