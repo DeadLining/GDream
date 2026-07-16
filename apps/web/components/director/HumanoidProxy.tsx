@@ -4,6 +4,7 @@ import {useRef} from 'react';
 import type {Group} from 'three';
 import {directorAnimationDuration,directorAnimationMotion} from '../../lib/director-animations';
 import {directorExpressionFace} from '../../lib/director-expressions';
+import {resolveDirectorHeadRotation} from '../../lib/director-head-gaze';
 import {humanoidPoseRotation,type HumanoidBoneId} from '../../lib/director-humanoid';
 import type {DirectorAnimationClip,DirectorFacialExpression,DirectorObject,DirectorPosePreset,Vector3} from '../../lib/types';
 import {useDirectorProxyAnimationTime} from './useDirectorProxyAnimationTime';
@@ -22,6 +23,7 @@ export function HumanoidProxy({object}:{object:DirectorObject}){
   const animation=(typeof appearance.animation_clip==='string'?appearance.animation_clip:'idle') as DirectorAnimationClip;
   const playing=appearance.animation_playing===true;
   const animationTime=typeof appearance.animation_time_seconds==='number'&&Number.isFinite(appearance.animation_time_seconds)?appearance.animation_time_seconds:0;
+  const headRotation=resolveDirectorHeadRotation(object);
   const rotation=(bone:HumanoidBoneId)=>humanoidPoseRotation(pose,bone);
   const rootRef=useRef<Group>(null);
   const hipsRef=useRef<Group>(null);
@@ -37,13 +39,13 @@ export function HumanoidProxy({object}:{object:DirectorObject}){
     if(rootRef.current?.position)rootRef.current.position.y=motion.rootY;
     setRotation(hipsRef.current,rotation('Hips'),[0,motion.rootYaw,0]);
     setRotation(chestRef.current,rotation('Chest'),[0,motion.chestYaw,0]);
-    setRotation(headRef.current,rotation('Head'),[0,motion.headYaw,0]);
+    setRotation(headRef.current,rotation('Head'),[headRotation[0],motion.headYaw+headRotation[1],headRotation[2]]);
     setRotation(leftArmRef.current,rotation('LeftUpperArm'),[motion.leftArm,0,0]);
     setRotation(rightArmRef.current,rotation('RightUpperArm'),[motion.rightArm,0,0]);
     setRotation(leftLegRef.current,rotation('LeftUpperLeg'),[motion.leftLeg,0,0]);
     setRotation(rightLegRef.current,rotation('RightUpperLeg'),[motion.rightLeg,0,0]);
   };
-  useDirectorProxyAnimationTime({animation,durationSeconds:directorAnimationDuration(animation),playing,timeSeconds:animationTime,applyTime:applyMotion,renderKey:pose});
+  useDirectorProxyAnimationTime({animation,durationSeconds:directorAnimationDuration(animation),playing,timeSeconds:animationTime,applyTime:applyMotion,renderKey:`${pose}:${headRotation.join(',')}`});
   const joint=(radius=.055)=><mesh><sphereGeometry args={[radius,10,8]}/><meshStandardMaterial color="#263238"/></mesh>;
   const limb=(length:number,radius=.075)=><mesh position={[0,-length/2,0]} castShadow><capsuleGeometry args={[radius,Math.max(.01,length-radius*2),5,8]}/><meshStandardMaterial color={color} roughness={.72}/></mesh>;
   return <group ref={rootRef} name={`humanoid-rig-${object.id}`} scale={[height,height,height]} userData={{rigType:'standard_humanoid'}}>

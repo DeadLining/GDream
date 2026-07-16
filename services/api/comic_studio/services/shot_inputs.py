@@ -273,6 +273,9 @@ class ShotInputCompiler:
             transform = item["transform"]
             expression = item["appearance"].get("facial_expression", "neutral")
             morph_weights = item["appearance"].get("morph_target_weights", {})
+            head_yaw = item["appearance"].get("head_yaw_degrees")
+            head_pitch = item["appearance"].get("head_pitch_degrees")
+            gaze_target = item["appearance"].get("gaze_target")
             morph_summary = (
                 ", ".join(
                     f"{name}={self._format_number(weight)}"
@@ -293,6 +296,8 @@ class ShotInputCompiler:
                 f"pose {item['appearance'].get('pose_preset', 'neutral')}; "
                 f"expression {expression}"
                 f"{f'; morph targets {morph_summary}' if morph_summary else ''}"
+                f"{f'; head direction yaw {self._format_number(head_yaw or 0)} degrees, pitch {self._format_number(head_pitch or 0)} degrees' if isinstance(head_yaw, (int, float)) or isinstance(head_pitch, (int, float)) else ''}"
+                f"{f'; gaze target {self._format_vector(gaze_target)}' if isinstance(gaze_target, (list, tuple)) else ''}"
             )
         prompt_constraints = (
             "Bound production inputs:\n" + "\n".join(prompt_lines)
@@ -372,7 +377,7 @@ class ShotInputCompiler:
             if not visible:
                 continue
             appearance = dict(item.appearance or {})
-            for key in ("pose_preset", "facial_expression", "morph_target_weights"):
+            for key in ("pose_preset", "facial_expression", "morph_target_weights", "head_yaw_degrees", "head_pitch_degrees", "gaze_target"):
                 if key in override:
                     appearance[key] = override[key]
             objects.append(

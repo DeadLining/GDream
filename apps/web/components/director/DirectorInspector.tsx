@@ -76,6 +76,8 @@ export function DirectorInspector({
   onCameraChange,
   onSaveCamera,
   onPoseChange,
+  onHeadDirectionChange,
+  onGazeTargetChange,
   onFacialExpressionChange,
   onMorphTargetWeightChange,
   onMorphTargetReset,
@@ -112,6 +114,8 @@ export function DirectorInspector({
   onCameraChange:(value:number)=>void;
   onSaveCamera:()=>void;
   onPoseChange:(pose:DirectorPosePreset)=>void;
+  onHeadDirectionChange:(key:'head_yaw_degrees'|'head_pitch_degrees',value:number)=>void;
+  onGazeTargetChange:(target:Vector3|null)=>void;
   onFacialExpressionChange:(expression:DirectorFacialExpression)=>void;
   onMorphTargetWeightChange:(name:string,weight:number)=>void;
   onMorphTargetReset:()=>void;
@@ -152,6 +156,11 @@ export function DirectorInspector({
   const importedMorphTargets=Array.from(new Set((Array.isArray(object?.metadata.morph_targets)?object.metadata.morph_targets:[]).filter((name):name is string=>typeof name==='string'&&Boolean(name.trim())).map(name=>name.trim())));
   const morphTargetWeights=object?.appearance.morph_target_weights&&typeof object.appearance.morph_target_weights==='object'?object.appearance.morph_target_weights as Record<string,unknown>:{};
   const poseable=Boolean(object?.kind==='character'&&(humanoidProxy||(object.source_type==='model'&&object.metadata.has_skeleton)));
+  const headYaw=typeof object?.appearance.head_yaw_degrees==='number'&&Number.isFinite(object.appearance.head_yaw_degrees)?Math.min(90,Math.max(-90,object.appearance.head_yaw_degrees)):0;
+  const headPitch=typeof object?.appearance.head_pitch_degrees==='number'&&Number.isFinite(object.appearance.head_pitch_degrees)?Math.min(60,Math.max(-60,object.appearance.head_pitch_degrees)):0;
+  const storedGaze=object?.appearance.gaze_target;
+  const gazeTarget=Array.isArray(storedGaze)&&storedGaze.length===3&&storedGaze.every(value=>typeof value==='number'&&Number.isFinite(value))?storedGaze as Vector3:null;
+  const defaultGazeTarget:Vector3=object?[object.transform.position[0],object.transform.position[1]+1.65,object.transform.position[2]+2]:[0,1.65,2];
   const bodyControls=[
     ['proxy_height','角色身高',.75,1.3],
     ['proxy_shoulder_width','肩宽',.7,1.35],
@@ -178,6 +187,13 @@ export function DirectorInspector({
         <select id="director-pose" value={pose} onChange={event=>onPoseChange(event.target.value as DirectorPosePreset)}>
           {DIRECTOR_POSE_PRESETS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
+        <div className="director-animation-controls">
+          <span>头部与视线</span>
+          <label htmlFor="director-head-yaw"><span>头部左右</span><input id="director-head-yaw" type="range" aria-label="头部左右" min="-90" max="90" step="1" value={headYaw} disabled={animationSaving} onChange={event=>onHeadDirectionChange('head_yaw_degrees',Number(event.target.value))}/><output>{formatNumber(headYaw,0)}°</output></label>
+          <label htmlFor="director-head-pitch"><span>头部俯仰</span><input id="director-head-pitch" type="range" aria-label="头部俯仰" min="-60" max="60" step="1" value={headPitch} disabled={animationSaving} onChange={event=>onHeadDirectionChange('head_pitch_degrees',Number(event.target.value))}/><output>{formatNumber(headPitch,0)}°</output></label>
+          <label className="director-checkbox"><input type="checkbox" aria-label="使用视线目标" checked={gazeTarget!==null} disabled={animationSaving} onChange={event=>onGazeTargetChange(event.target.checked?defaultGazeTarget:null)}/><span>使用视线目标</span></label>
+          {gazeTarget&&<div className="director-transform-row" key={`${object.id}-${gazeTarget.join(',')}`}><span>视线目标</span>{axes.map((axis,index)=><label key={axis}><small>{axis}</small><input type="number" aria-label={`视线目标 ${axis}`} step="0.1" defaultValue={formatNumber(gazeTarget[index],2)} disabled={animationSaving} onBlur={event=>{const value=Number(event.currentTarget.value);if(Number.isFinite(value))onGazeTargetChange(gazeTarget.map((item,itemIndex)=>itemIndex===index?value:item) as Vector3);}}/></label>)}</div>}
+        </div>
       </>}
       {cameraMode&&humanoidProxy&&<><label htmlFor="director-facial-expression">表情预设</label><select id="director-facial-expression" value={facialExpression} disabled={animationSaving} onChange={event=>onFacialExpressionChange(event.target.value as DirectorFacialExpression)}>{DIRECTOR_FACIAL_EXPRESSIONS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select></>}
       {cameraMode&&modelUrl&&importedMorphTargets.length>0&&<div className="director-animation-controls">

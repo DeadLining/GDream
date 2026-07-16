@@ -50,6 +50,9 @@ class DirectorObjectOverride(StrictDirectorModel):
     pose_preset:Literal["neutral","dialogue","action","injured"]|None=None
     facial_expression:Literal["neutral","happy","sad","angry","surprised"]|None=None
     morph_target_weights:dict[str,float]|None=None
+    head_yaw_degrees:float|None=Field(default=None,ge=-90,le=90)
+    head_pitch_degrees:float|None=Field(default=None,ge=-60,le=60)
+    gaze_target:list[float]|None=None
     animation_clip:str|None=Field(default=None,min_length=1,max_length=160)
     animation_playing:bool|None=None
     animation_time_seconds:float|None=Field(default=None,ge=0,le=86400)
@@ -66,6 +69,12 @@ class DirectorObjectOverride(StrictDirectorModel):
             if weight<0 or weight>1:raise ValueError("invalid_morph_target_weight")
             normalized[clean]=weight
         return normalized
+
+    @field_validator("gaze_target")
+    @classmethod
+    def gaze_vector(cls,value:list[float]|None):
+        if value is not None and len(value)!=3:raise ValueError("vector3_required")
+        return value
 
 
 class ShotCameraPatch(StrictDirectorModel):
