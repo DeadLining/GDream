@@ -15,6 +15,8 @@ import {
   createDirectorStage,
   createDirectorSuggestion,
   getDirectorStage,
+  listDirectorRevisions,
+  restoreDirectorRevision,
   updateDirectorStage,
   updateDirectorCamera,
   uploadDirectorPreview,
@@ -259,6 +261,17 @@ describe('director api', () => {
     await updateDirectorStage('stage-1',3,{background_color:'#112233',ground:'solid'});
 
     expect(fetchMock).toHaveBeenCalledWith('/api/director-stages/stage-1',expect.objectContaining({method:'PATCH',body:JSON.stringify({expected_version:3,stage:{environment:{background_color:'#112233',ground:'solid'}}})}));
+  });
+
+  it('lists and restores director revisions with optimistic locking',async()=>{
+    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify([]),{status:200,headers:{'content-type':'application/json'}}));
+    vi.stubGlobal('fetch',fetchMock);
+
+    await listDirectorRevisions('stage-1');
+    await restoreDirectorRevision('stage-1','revision-1',4);
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/director-stages/stage-1/revisions');
+    expect(fetchMock.mock.calls[1]).toEqual(['/api/director-stages/stage-1/revisions/revision-1/restore',expect.objectContaining({method:'POST',body:JSON.stringify({expected_version:4})})]);
   });
 
   it('uploads previews as multipart without forcing a JSON content type', async () => {

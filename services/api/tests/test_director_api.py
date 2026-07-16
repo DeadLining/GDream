@@ -139,6 +139,20 @@ def test_director_routes_update_delete_and_restore_objects(client):
     assert restored.json()["objects"][0]["id"]==created["id"]
 
 
+def test_director_revision_restore_reapplies_camera_snapshot_as_a_new_version(client):
+    scene_id,shot_id=_scene_via_client(client)
+    stage=client.post(f"/api/scenes/{scene_id}/director-stage").json()
+    updated=client.put(f"/api/director-stages/{stage['id']}/shots/{shot_id}/camera",json={"expected_version":1,"camera":{"focal_length_mm":85}}).json()
+    revision=client.get(f"/api/director-stages/{stage['id']}/revisions").json()[-1]
+
+    restored=client.post(f"/api/director-stages/{stage['id']}/revisions/{revision['id']}/restore",json={"expected_version":stage["version"]})
+
+    assert restored.status_code==200
+    restored_camera=restored.json()["shot_cameras"][0]
+    assert restored_camera["focal_length_mm"]==50
+    assert restored_camera["version"]==updated["version"]+1
+
+
 def test_director_asset_catalog_and_sync_use_real_character_references(client):
     scene_id, _shot_id = _scene_via_client(client)
     with client.app.state.session_factory() as session:

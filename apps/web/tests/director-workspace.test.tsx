@@ -5,7 +5,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {DirectorWorkspace} from '../components/director/DirectorWorkspace';
 import type {DirectorStage,Scene} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
+const mocks=vi.hoisted(()=>({ApiError:class ApiError extends Error{constructor(message:string,public status:number,public detail:string){super(message);}},getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),listDirectorRevisions:vi.fn(),restoreDirectorRevision:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
 vi.mock('../lib/api',()=>mocks);
 const overrideTransform={position:[2,0,0],rotation:[0,.5,0],scale:[1,1,1]} as const;
 const movedCamera={position:[2,2.4,6] as [number,number,number],target:[0,.9,0] as [number,number,number],rotation:[-.1,.25,0] as [number,number,number]};
@@ -334,6 +334,37 @@ describe('DirectorWorkspace',()=>{
     await userEvent.click(screen.getByRole('button',{name:'保存环境设置'}));
 
     await waitFor(()=>expect(mocks.updateDirectorStage).toHaveBeenCalledWith('stage-1',1,{...environment,background_color:'#112233',ground:'solid',ambient_light:.4,key_light_intensity:1.1}));
+  });
+  it('lists director revisions and restores a selected stage snapshot',async()=>{
+    const currentStage={...stage,version:2,environment:{background_color:'#263238'}};
+    const restoredStage={...stage,version:3,environment:{background_color:'#112233'}};
+    const revision={id:'revision-1',stage_id:'stage-1',shot_camera_id:null,stage_snapshot:{version:1,environment:restoredStage.environment,objects:[]},camera_snapshot:{},reason:'manual_save',created_at:'2026-07-16T08:00:00Z'};
+    mocks.getDirectorStage.mockResolvedValue(currentStage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.listDirectorRevisions.mockResolvedValue([revision]);mocks.restoreDirectorRevision.mockResolvedValue(restoredStage);
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'修订历史'}));
+    expect(await screen.findByRole('dialog',{name:'导演台修订历史'})).toBeVisible();
+    expect(screen.getByText('版本 1')).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'恢复版本 1'}));
+
+    await waitFor(()=>expect(mocks.restoreDirectorRevision).toHaveBeenCalledWith('stage-1','revision-1',2));
+    expect(await screen.findByLabelText('背景颜色')).toHaveValue('#112233');
+  });
+  it('shows a recoverable conflict prompt and reloads the latest stage',async()=>{
+    const latestStage={...stage,version:4,environment:{background_color:'#445566'}};
+    mocks.getDirectorStage.mockResolvedValueOnce(stage).mockResolvedValue(latestStage);mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorStage.mockRejectedValue(new mocks.ApiError('conflict',409,'{"code":"director_version_conflict","latest_version":4}'));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'保存环境设置'}));
+    const conflict=await screen.findByRole('alertdialog',{name:'导演台版本冲突'});
+    expect(within(conflict).getByText(/版本 4/)).toBeVisible();
+    await userEvent.click(within(conflict).getByRole('button',{name:'重新加载最新舞台'}));
+
+    await waitFor(()=>expect(mocks.getDirectorStage).toHaveBeenCalledTimes(2));
+    expect(await screen.findByLabelText('背景颜色')).toHaveValue('#445566');
+    expect(screen.queryByRole('alertdialog',{name:'导演台版本冲突'})).not.toBeInTheDocument();
   });
   it('renders the effective variant model when the selected shot changes',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,source_id:'master-representation',label:'林夏',appearance:{model_url:'/media/master.glb'},metadata:{character_id:'char-1',representation_id:'master-representation'},transform:{...directorObject.transform,position:[3,0,1] as [number,number,number]}};
