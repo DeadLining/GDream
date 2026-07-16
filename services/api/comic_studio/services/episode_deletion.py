@@ -68,6 +68,8 @@ class EpisodeDeletionService:
             *(f"video:{shot_id}" for shot_id in shot_ids),
             *(f"dialogue:{dialogue_id}" for dialogue_id in dialogue_ids),
             *(f"director_preview:{camera_id}" for camera_id in camera_ids),
+            *(f"director_guidance:silhouette:{camera_id}" for camera_id in camera_ids),
+            *(f"director_guidance:skeleton_pose:{camera_id}" for camera_id in camera_ids),
         }
         assets = (
             list(

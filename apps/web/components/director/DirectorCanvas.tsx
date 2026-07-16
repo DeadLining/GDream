@@ -5,6 +5,7 @@ import {OrbitControls} from '@react-three/drei';
 import {useEffect,useRef} from 'react';
 import type {DirectorObject as DirectorObjectDto,DirectorTransformMode,ShotCamera,Transform} from '../../lib/types';
 import {resolveDirectorEnvironment} from '../../lib/director-environment';
+import {captureDirectorSilhouette,renderDirectorSkeletonGuidance,type DirectorGuidanceCapture} from '../../lib/director-guidance';
 import {DirectorFallback} from './DirectorFallback';
 import {DirectorObject} from './DirectorObject';
 
@@ -40,7 +41,22 @@ function CameraNavigation({shotCamera,mode,onCameraChange}:{shotCamera:ShotCamer
   return <OrbitControls ref={controlsRef} enabled target={shotCamera.target} makeDefault onEnd={handleEnd}/>;
 }
 
-export function DirectorCanvas({objects,camera,environment={},selectedObjectId,mode,transformMode='translate',snapEnabled=false,onSelectObject,onTransform,onCameraChange,editable=true}:{objects:DirectorObjectDto[];camera:ShotCamera;environment?:Record<string,unknown>;selectedObjectId:string|null;mode:DirectorCanvasMode;transformMode?:DirectorTransformMode;snapEnabled?:boolean;onSelectObject?:(id:string|null)=>void;onTransform:(id:string,transform:Transform)=>void;onCameraChange?:(camera:DirectorCameraPose)=>void;editable?:boolean}){
+function GuidanceCaptureRegistration({onReady}:{onReady?:(capture:DirectorGuidanceCapture|null)=>void}){
+  const scene=useThree(state=>state.scene);
+  const camera=useThree(state=>state.camera);
+  const gl=useThree(state=>state.gl);
+  useEffect(()=>{
+    if(!onReady)return;
+    const capture:DirectorGuidanceCapture=kind=>kind==='silhouette'
+      ?captureDirectorSilhouette({scene,camera,renderer:gl})
+      :renderDirectorSkeletonGuidance(scene,camera,gl.domElement.width,gl.domElement.height);
+    onReady(capture);
+    return()=>onReady(null);
+  },[camera,gl,onReady,scene]);
+  return null;
+}
+
+export function DirectorCanvas({objects,camera,environment={},selectedObjectId,mode,transformMode='translate',snapEnabled=false,onSelectObject,onTransform,onCameraChange,onGuidanceCaptureReady,editable=true}:{objects:DirectorObjectDto[];camera:ShotCamera;environment?:Record<string,unknown>;selectedObjectId:string|null;mode:DirectorCanvasMode;transformMode?:DirectorTransformMode;snapEnabled?:boolean;onSelectObject?:(id:string|null)=>void;onTransform:(id:string,transform:Transform)=>void;onCameraChange?:(camera:DirectorCameraPose)=>void;onGuidanceCaptureReady?:(capture:DirectorGuidanceCapture|null)=>void;editable?:boolean}){
   const settings=resolveDirectorEnvironment(environment);
   return <div className="director-canvas-shell">
     <Canvas shadows dpr={[1,2]} camera={{position:camera.position,near:camera.near,far:camera.far,fov:Math.max(12,Math.min(80,2*Math.atan(36/(2*camera.focal_length_mm))*180/Math.PI))}} fallback={<DirectorFallback/>} gl={{preserveDrawingBuffer:true,alpha:false}} onPointerMissed={()=>onSelectObject?.(null)}>
@@ -50,6 +66,7 @@ export function DirectorCanvas({objects,camera,environment={},selectedObjectId,m
       {settings.ground!=='none'&&<mesh name="director-ground" receiveShadow rotation={[-Math.PI/2,0,0]}><planeGeometry args={[24,24]}/>{settings.ground==='solid'?<meshStandardMaterial color={settings.ground_color} roughness={.9}/>:<shadowMaterial opacity={0.18}/>}</mesh>}
       {objects.map(object=><DirectorObject key={object.id} object={object} selected={object.id===selectedObjectId} editable={editable} transformMode={transformMode} snapEnabled={snapEnabled} onSelect={()=>onSelectObject?.(object.id)} onTransform={transform=>onTransform(object.id,transform)}/>)}
       <CameraNavigation shotCamera={camera} mode={mode} onCameraChange={onCameraChange}/>
+      <GuidanceCaptureRegistration onReady={onGuidanceCaptureReady}/>
     </Canvas>
     <div className="director-frame-guide" aria-hidden="true"/>
   </div>;

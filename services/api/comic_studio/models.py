@@ -593,6 +593,7 @@ class ShotCamera(Base):
     framing_guides: Mapped[dict] = mapped_column(JSON, default=dict)
     object_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
     preview_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    guidance_asset_ids: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

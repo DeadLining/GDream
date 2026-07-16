@@ -13,6 +13,7 @@ from comic_studio import models
 
 
 MAX_DIRECTOR_PREVIEW_BYTES = 5 * 1024 * 1024
+DIRECTOR_GUIDANCE_KINDS = {"silhouette", "skeleton_pose"}
 
 
 class DirectorPreviewError(ValueError):
@@ -26,6 +27,27 @@ class DirectorPreviewService:
 
     def save(
         self, camera_id: str, content: bytes, media_type: str = "image/png"
+    ) -> models.Asset:
+        return self._save(camera_id, content, media_type, guidance_kind=None)
+
+    def save_guidance(
+        self,
+        camera_id: str,
+        guidance_kind: str,
+        content: bytes,
+        media_type: str = "image/png",
+    ) -> models.Asset:
+        if guidance_kind not in DIRECTOR_GUIDANCE_KINDS:
+            raise DirectorPreviewError("invalid_guidance_kind")
+        return self._save(camera_id, content, media_type, guidance_kind=guidance_kind)
+
+    def _save(
+        self,
+        camera_id: str,
+        content: bytes,
+        media_type: str,
+        *,
+        guidance_kind: str | None,
     ) -> models.Asset:
         camera = self.session.get(models.ShotCamera, camera_id)
         if camera is None:
@@ -47,31 +69,41 @@ class DirectorPreviewService:
             raise DirectorPreviewError("invalid_png") from exc
 
         project_id = camera.shot.scene.episode.project_id
+        asset_kind = (
+            f"director_guidance:{guidance_kind}:{camera.id}"
+            if guidance_kind
+            else f"director_preview:{camera.id}"
+        )
         attempt = (
             self.session.scalar(
                 select(func.count(models.Asset.id)).where(
                     models.Asset.project_id == project_id,
-                    models.Asset.kind == f"director_preview:{camera.id}",
+                    models.Asset.kind == asset_kind,
                 )
             )
             or 0
         )
-        old_asset = (
-            self.session.get(models.Asset, camera.preview_asset_id)
-            if camera.preview_asset_id
-            else None
+        old_asset_id = (
+            (camera.guidance_asset_ids or {}).get(guidance_kind)
+            if guidance_kind
+            else camera.preview_asset_id
         )
+        old_asset = self.session.get(models.Asset, old_asset_id) if old_asset_id else None
         old_path = self._asset_path(old_asset.local_path) if old_asset else None
         old_content = old_path.read_bytes() if old_path and old_path.is_file() else None
 
         asset = models.Asset(
             project_id=project_id,
-            kind=f"director_preview:{camera.id}",
+            kind=asset_kind,
             local_path="",
             media_type="image/png",
             provider="director",
             model="threejs",
-            request_metadata={"camera_id": camera.id, "stage_id": camera.stage_id},
+            request_metadata={
+                "camera_id": camera.id,
+                "stage_id": camera.stage_id,
+                **({"guidance_kind": guidance_kind} if guidance_kind else {}),
+            },
             generation_attempt=attempt + 1,
             checksum=hashlib.sha256(content).hexdigest(),
             width=width,
@@ -85,7 +117,7 @@ class DirectorPreviewService:
             / project_id
             / "director"
             / camera.stage_id
-            / f"{camera.id}.png"
+            / (f"{camera.id}-{guidance_kind}.png" if guidance_kind else f"{camera.id}.png")
         )
         destination = self._asset_path(str(relative))
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +126,13 @@ class DirectorPreviewService:
             temporary.write_bytes(content)
             os.replace(temporary, destination)
             asset.local_path = str(relative)
-            camera.preview_asset_id = asset.id
+            if guidance_kind:
+                camera.guidance_asset_ids = {
+                    **(camera.guidance_asset_ids or {}),
+                    guidance_kind: asset.id,
+                }
+            else:
+                camera.preview_asset_id = asset.id
             if old_asset is not None:
                 self.session.delete(old_asset)
             self.session.commit()

@@ -32,6 +32,7 @@ class CompiledShotInput:
     character_ids: frozenset[str]
     reference_asset_ids: tuple[str, ...]
     director_preview_asset_id: str | None
+    director_guidance_asset_ids: tuple[tuple[str, str], ...]
 
     @property
     def snapshot_hash(self) -> str:
@@ -240,6 +241,7 @@ class ShotInputCompiler:
 
         director = self._director_snapshot(shot)
         director_preview_asset_id = None
+        director_guidance_asset_ids: list[tuple[str, str]] = []
         preview_asset_id = (
             director["camera"].get("preview_asset_id")
             if director["camera"]
@@ -254,6 +256,25 @@ class ShotInputCompiler:
             if not preview_asset.media_type.startswith("image/"):
                 raise ShotInputReferenceError("Director preview asset must be an image")
             director_preview_asset_id = preview_asset.id
+        guidance_ids = (
+            director["camera"].get("guidance_asset_ids", {})
+            if director["camera"]
+            else {}
+        )
+        if not isinstance(guidance_ids, dict):
+            guidance_ids = {}
+        for guidance_kind in ("silhouette", "skeleton_pose"):
+            guidance_asset_id = guidance_ids.get(guidance_kind)
+            if not guidance_asset_id:
+                continue
+            guidance_asset = self.session.get(models.Asset, guidance_asset_id)
+            if guidance_asset is None or guidance_asset.project_id != project.id:
+                raise ShotInputReferenceError(
+                    "Director guidance asset must belong to the shot project"
+                )
+            if not guidance_asset.media_type.startswith("image/"):
+                raise ShotInputReferenceError("Director guidance asset must be an image")
+            director_guidance_asset_ids.append((guidance_kind, guidance_asset.id))
         if director["camera"]:
             camera = director["camera"]
             prompt_lines.append(
@@ -338,6 +359,7 @@ class ShotInputCompiler:
             character_ids=frozenset(character_ids),
             reference_asset_ids=tuple(dict.fromkeys(reference_asset_ids)),
             director_preview_asset_id=director_preview_asset_id,
+            director_guidance_asset_ids=tuple(director_guidance_asset_ids),
         )
 
     def _variant_lineage(
@@ -410,6 +432,7 @@ class ShotInputCompiler:
                     "framing_guides": camera.framing_guides,
                     "object_overrides": camera.object_overrides,
                     "preview_asset_id": camera.preview_asset_id,
+                    "guidance_asset_ids": camera.guidance_asset_ids,
                 }
                 if camera is not None
                 else None

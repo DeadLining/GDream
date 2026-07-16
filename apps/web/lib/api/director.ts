@@ -15,7 +15,7 @@ export const getDirectorAssets=(stageId:string,shotId?:string)=>apiRequest<Direc
 export const syncDirectorAssets=(stageId:string,expectedVersion:number,assetKeys:string[])=>apiRequest<DirectorStage>(`/api/director-stages/${stageId}/assets/sync`,json('POST',{expected_version:expectedVersion,asset_keys:assetKeys}));
 export const updateDirectorObject=(objectId:string,expectedVersion:number,object:Partial<Pick<DirectorObject,'label'|'transform'|'appearance'|'metadata'|'visible'>>)=>apiRequest<DirectorObject>(`/api/director-objects/${objectId}`,json('PATCH',{expected_version:expectedVersion,object}));
 export async function deleteDirectorObject(objectId:string,expectedVersion:number):Promise<void>{await apiRequest(`/api/director-objects/${objectId}`,json('DELETE',{expected_version:expectedVersion}));}
-export const updateDirectorCamera=(stageId:string,shotId:string,expectedVersion:number,camera:Partial<Omit<ShotCamera,'id'|'stage_id'|'shot_id'|'version'|'preview_asset_id'>>)=>apiRequest<ShotCamera>(`/api/director-stages/${stageId}/shots/${shotId}/camera`,json('PUT',{expected_version:expectedVersion,camera}));
+export const updateDirectorCamera=(stageId:string,shotId:string,expectedVersion:number,camera:Partial<Omit<ShotCamera,'id'|'stage_id'|'shot_id'|'version'|'preview_asset_id'|'guidance_asset_ids'>>)=>apiRequest<ShotCamera>(`/api/director-stages/${stageId}/shots/${shotId}/camera`,json('PUT',{expected_version:expectedVersion,camera}));
 export const createDirectorSuggestion=(stageId:string,shotId:string|null,kind:DirectorSuggestionKind)=>apiRequest<DirectorSuggestion>(`/api/director-stages/${stageId}/suggestions`,json('POST',{shot_id:shotId,kind}));
 export const applyDirectorSuggestionToShot=(stageId:string,shotId:string,suggestionId:string,fields:DirectorApplyField[])=>apiRequest<Shot>(`/api/director-stages/${stageId}/shots/${shotId}/apply-to-shot`,json('POST',{suggestion_id:suggestionId,fields}));
 export async function uploadDirectorPreview(cameraId:string,preview:Blob):Promise<Asset>{
@@ -23,5 +23,12 @@ export async function uploadDirectorPreview(cameraId:string,preview:Blob):Promis
   let response:Response;
   try{response=await fetch(`${API_BASE}/api/director-cameras/${cameraId}/preview`,{method:'POST',body:form});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
   if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'预览上传失败');throw new ApiError(detail,response.status,detail);}
+  return response.json() as Promise<Asset>;
+}
+export async function uploadDirectorGuidance(cameraId:string,guidanceKind:'silhouette'|'skeleton_pose',guidance:Blob):Promise<Asset>{
+  const form=new FormData();form.set('file',guidance,`${guidanceKind}.png`);
+  let response:Response;
+  try{response=await fetch(`${API_BASE}/api/director-cameras/${cameraId}/guidance/${guidanceKind}`,{method:'POST',body:form});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
+  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'导演辅助图上传失败');throw new ApiError(detail,response.status,detail);}
   return response.json() as Promise<Asset>;
 }

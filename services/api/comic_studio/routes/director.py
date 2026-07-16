@@ -114,6 +114,19 @@ async def upload_camera_preview(camera_id:str,request:Request):
         except DirectorPreviewError as exc:raise HTTPException(status_code=413 if str(exc)=="preview_too_large" else 422,detail=str(exc)) from exc
 
 
+@router.post("/api/director-cameras/{camera_id}/guidance/{guidance_kind}",status_code=status.HTTP_201_CREATED)
+async def upload_camera_guidance(camera_id:str,guidance_kind:str,request:Request):
+    form=await request.form();upload=form.get("file")
+    if upload is None or not hasattr(upload,"read"):
+        raise HTTPException(status_code=422,detail="file_required")
+    with request.app.state.session_factory() as session:
+        try:
+            asset=DirectorPreviewService(session,request.app.state.settings.data_root).save_guidance(camera_id,guidance_kind,await upload.read(),getattr(upload,"content_type","") or "")
+            return asset_response(asset)
+        except KeyError as exc:raise HTTPException(status_code=404,detail="Director camera not found") from exc
+        except DirectorPreviewError as exc:raise HTTPException(status_code=413 if str(exc)=="preview_too_large" else 422,detail=str(exc)) from exc
+
+
 @router.post("/api/director-stages/{stage_id}/suggestions",response_model=DirectorSuggestionRead,status_code=status.HTTP_201_CREATED)
 async def create_director_suggestion(stage_id:str,data:DirectorSuggestionCreateRequest,request:Request):
     with request.app.state.session_factory() as session:

@@ -65,14 +65,18 @@ class PanelService:
             )
             present_character_ids.update(compiled.character_ids)
         reference_assets: list[models.Asset] = []
-        for preview_id in dict.fromkeys(
-            compiled.director_preview_asset_id
-            for compiled in compiled_inputs
-            if compiled.director_preview_asset_id
-        ):
-            preview = self.session.get(models.Asset, preview_id)
-            if preview is not None:
-                reference_assets.append(preview)
+        director_reference_ids = []
+        for compiled in compiled_inputs:
+            if compiled.director_preview_asset_id:
+                director_reference_ids.append(compiled.director_preview_asset_id)
+            director_reference_ids.extend(
+                asset_id
+                for _kind, asset_id in compiled.director_guidance_asset_ids
+            )
+        for asset_id in dict.fromkeys(director_reference_ids):
+            director_asset = self.session.get(models.Asset, asset_id)
+            if director_asset is not None:
+                reference_assets.append(director_asset)
         if present_character_ids:
             references = list(
                 self.session.scalars(
@@ -155,6 +159,20 @@ class PanelService:
                     f"Use reference image {preview_index} as the saved 3D director "
                     f"composition for panel {index}. Preserve its camera angle, "
                     "framing, subject placement, and spatial proportions."
+                )
+            for guidance_kind, guidance_asset_id in compiled.director_guidance_asset_ids:
+                guidance_index = reference_indices.get(guidance_asset_id)
+                if guidance_index is None:
+                    continue
+                label = (
+                    "silhouette guidance"
+                    if guidance_kind == "silhouette"
+                    else "skeleton pose guidance"
+                )
+                lines.append(
+                    f"Use reference image {guidance_index} as the 3D director {label} "
+                    f"for panel {index}. Preserve the indicated subject boundaries, "
+                    "occlusion, and body pose."
                 )
             if compiled.prompt_constraints:
                 lines.append(compiled.prompt_constraints)
@@ -243,6 +261,10 @@ class PanelService:
         )
         if director_preview is not None:
             reference_assets.append(director_preview)
+        for _guidance_kind, guidance_asset_id in compiled.director_guidance_asset_ids:
+            guidance_asset = self.session.get(models.Asset, guidance_asset_id)
+            if guidance_asset is not None:
+                reference_assets.append(guidance_asset)
         if present_character_ids:
             references = list(
                 self.session.scalars(
@@ -344,14 +366,38 @@ class PanelService:
             review_source = self.session.get(
                 models.Asset, review_context["source_asset_id"]
             )
+        reference_indices = {
+            asset.id: index + (1 if tail_asset is not None else 0)
+            for index, asset in enumerate(reference_assets, start=1)
+        }
         if director_preview is not None and review_source is None:
-            preview_index = 2 if tail_asset is not None else 1
+            preview_index = reference_indices.get(director_preview.id)
+        else:
+            preview_index = None
+        if preview_index is not None:
             prompt = (
                 f"{prompt}\n\nComposition reference: use the saved 3D director preview "
                 f"(reference image {preview_index}) for camera angle, framing, subject "
                 "placement, and spatial proportions. Preserve character identity and "
                 "the requested visual style from the other references and prompt."
             )
+        if review_source is None and compiled.director_guidance_asset_ids:
+            guidance_lines = []
+            for guidance_kind, guidance_asset_id in compiled.director_guidance_asset_ids:
+                guidance_index = reference_indices.get(guidance_asset_id)
+                if guidance_index is None:
+                    continue
+                label = (
+                    "silhouette guidance"
+                    if guidance_kind == "silhouette"
+                    else "skeleton pose guidance"
+                )
+                guidance_lines.append(
+                    f"Use reference image {guidance_index} as the 3D director {label}; "
+                    "preserve subject boundaries, occlusion, and body pose."
+                )
+            if guidance_lines:
+                prompt = f"{prompt}\n\n" + "\n".join(guidance_lines)
         reference_inputs = []
         annotated_reference = False
         if review_source is not None:
