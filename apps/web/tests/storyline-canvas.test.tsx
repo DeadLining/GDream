@@ -19,6 +19,15 @@ describe('StorylineCanvas', () => {
     expect(screen.getByText('铺垫：金属海螺异动')).toBeVisible();
   });
 
+  it('renders storyline events for episodes that are not assigned to a volume', () => {
+    const episode={id:'e1',project_id:'p1',volume_id:null,position:1,title:'第一集',premise:'',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''};
+
+    render(<StorylineCanvas scriptTitle="穿越时空" volumes={[]} unassignedEpisodes={[episode]} storylines={storylines}/>);
+
+    expect(screen.getByText('未分卷')).toBeVisible();
+    expect(screen.getByRole('button',{name:'金属海螺异动'})).toBeVisible();
+  });
+
   it('creates a storyline and a cross-episode event from the canvas', async () => {
     const onCreateStoryline=vi.fn().mockResolvedValue(undefined);
     const onCreateEvent=vi.fn().mockResolvedValue(undefined);
