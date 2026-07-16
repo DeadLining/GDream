@@ -54,6 +54,9 @@ describe('director guidance capture',()=>{
       expect(scene.overrideMaterial).toBeInstanceOf(MeshDepthMaterial);
       expect((scene.background as Color).getHexString()).toBe('000000');
       expect(camera.near).toBeGreaterThan(.1);expect(camera.far).toBeLessThan(1000);
+      const shader={uniforms:{},fragmentShader:'gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );'};
+      (scene.overrideMaterial as MeshDepthMaterial).onBeforeCompile(shader as never,{} as never);
+      expect(shader.fragmentShader).toContain('perspectiveDepthToViewZ');
       return new Blob(['depth'],{type:'image/png'});
     });
 
