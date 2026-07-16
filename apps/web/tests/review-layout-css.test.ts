@@ -22,6 +22,6 @@ describe('review publish layout CSS',()=>{
   });
 
   it('keeps the mobile timeline playhead narrow',()=>{
-    expect(css).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.review-timeline\s*>\s*\.timeline-playhead\s*\{[^}]*min-width:\s*0[^}]*width:\s*2px/s);
+    expect(css).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.timeline-playhead-lane\s*>\s*\.timeline-playhead\s*\{[^}]*min-width:\s*0[^}]*width:\s*2px/s);
   });
 });
