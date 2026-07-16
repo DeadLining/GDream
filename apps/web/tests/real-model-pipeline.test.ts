@@ -1,9 +1,14 @@
 import {describe, expect, it} from 'vitest';
 
-import {assertFullEpisodeClosure, buildFullEpisodeExecutionPlan, hasImageSignature, hasMp4Signature, parseScriptSse} from '../e2e/support/real-model-pipeline';
+import {assertFullEpisodeClosure, buildFullEpisodeExecutionPlan, hasImageSignature, hasMp4Signature, parseScriptSse, resolveRealModelTimeoutMs} from '../e2e/support/real-model-pipeline';
 
 
 describe('real model E2E helpers', () => {
+  it('allows two hours for the default real-model release gate', () => {
+    expect(resolveRealModelTimeoutMs(undefined)).toBe(120 * 60 * 1000);
+    expect(resolveRealModelTimeoutMs('3600000')).toBe(3_600_000);
+  });
+
   it('reassembles streamed script chunks and surfaces provider errors', () => {
     expect(parseScriptSse([
       'event: chunk\ndata: {"text":"第一幕"}',
