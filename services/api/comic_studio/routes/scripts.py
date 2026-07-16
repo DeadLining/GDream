@@ -301,12 +301,21 @@ def stream_script_generation(
             document = service.get(script_id)
         except KeyError as exc:
             raise _not_found(exc) from exc
+        source_revision = _current(document)
+        source_revision_id = source_revision.id
+        source_content = source_revision.content
         try:
             current = service.prepare_generation(
                 document.id, payload.expected_revision_id, payload.brief
             )
         except ScriptRevisionConflict as exc:
             raise HTTPException(status_code=409, detail="revision_conflict") from exc
+        if current.id != source_revision_id:
+            current.generation_metadata = {
+                **current.generation_metadata,
+                "source_revision_id": source_revision_id,
+            }
+            session.commit()
         document = service.get(document.id)
         project = session.scalar(
             select(models.Project)
@@ -321,7 +330,7 @@ def stream_script_generation(
         context = {
             **build_script_project_context(project),
             "brief": payload.brief.strip(),
-            "existing_draft": current.content,
+            "existing_draft": source_content,
         }
     provider = request.app.state.provider_factory.create_llm()
 

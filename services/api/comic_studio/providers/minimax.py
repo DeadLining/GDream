@@ -438,7 +438,11 @@ class MiniMaxProvider:
                         {
                             "role": "user",
                             "content": (
-                                "Create or continue the readable script from this context:\n"
+                                "Create a complete readable script from this context. "
+                                "When existing_draft is non-empty, revise it according to "
+                                "brief and return the complete replacement script, not a "
+                                "continuation or diff. Preserve useful story facts unless the "
+                                "brief asks to change them.\n"
                                 + json.dumps(context, ensure_ascii=False)
                             ),
                         }
