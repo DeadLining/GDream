@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import struct
 from pathlib import Path
@@ -23,6 +24,10 @@ class Character3DRepresentationService:
     MAX_MESHES = 200
     MAX_MATERIALS = 200
     MAX_TRIANGLES = 2_000_000
+    MAX_SKINS = 64
+    MAX_JOINTS = 1024
+    MAX_ANIMATIONS = 256
+    MAX_ANIMATION_CHANNELS = 4096
     JSON_CHUNK = 0x4E4F534A
 
     def __init__(self, session: Session, data_root: Path):
@@ -343,9 +348,15 @@ class Character3DRepresentationService:
         meshes = document.get("meshes", [])
         materials = document.get("materials", [])
         accessors = document.get("accessors", [])
+        skins = document.get("skins", [])
+        animations = document.get("animations", [])
         if len(nodes) > cls.MAX_NODES or len(meshes) > cls.MAX_MESHES:
             raise Character3DRepresentationError("glb_too_complex")
-        if len(materials) > cls.MAX_MATERIALS:
+        if (
+            len(materials) > cls.MAX_MATERIALS
+            or len(skins) > cls.MAX_SKINS
+            or len(animations) > cls.MAX_ANIMATIONS
+        ):
             raise Character3DRepresentationError("glb_too_complex")
         triangle_count = 0
         bounds_min: list[float] | None = None
@@ -369,15 +380,109 @@ class Character3DRepresentationService:
                         bounds_max = maximum if bounds_max is None else [max(a, b) for a, b in zip(bounds_max, maximum)]
         if triangle_count > cls.MAX_TRIANGLES:
             raise Character3DRepresentationError("glb_too_complex")
+        skeletons: list[dict[str, Any]] = []
+        joint_indexes: set[int] = set()
+        for skin_index, skin in enumerate(skins):
+            if not isinstance(skin, dict):
+                continue
+            raw_joints = skin.get("joints", [])
+            if not isinstance(raw_joints, list) or len(raw_joints) > cls.MAX_JOINTS:
+                raise Character3DRepresentationError("glb_too_complex")
+            skin_joint_indexes = cls._valid_indexes(raw_joints, len(nodes))
+            joint_indexes.update(skin_joint_indexes)
+            skeletons.append(
+                {
+                    "name": cls._label(skin.get("name"), f"Skeleton {skin_index + 1}"),
+                    "root": cls._node_name(nodes, skin.get("skeleton")),
+                    "joint_count": len(skin_joint_indexes),
+                    "joints": [cls._node_name(nodes, index) for index in skin_joint_indexes],
+                }
+            )
+        if len(joint_indexes) > cls.MAX_JOINTS:
+            raise Character3DRepresentationError("glb_too_complex")
+        animation_clips: list[dict[str, Any]] = []
+        for animation_index, animation in enumerate(animations):
+            if not isinstance(animation, dict):
+                continue
+            channels = animation.get("channels", [])
+            samplers = animation.get("samplers", [])
+            if not isinstance(channels, list) or len(channels) > cls.MAX_ANIMATION_CHANNELS:
+                raise Character3DRepresentationError("glb_too_complex")
+            if not isinstance(samplers, list):
+                samplers = []
+            duration = 0.0
+            for sampler in samplers:
+                if not isinstance(sampler, dict):
+                    continue
+                accessor_index = sampler.get("input")
+                if not cls._valid_index(accessor_index, len(accessors)):
+                    continue
+                accessor = accessors[accessor_index]
+                maximum = accessor.get("max", []) if isinstance(accessor, dict) else []
+                if (
+                    isinstance(maximum, list)
+                    and maximum
+                    and isinstance(maximum[0], (int, float))
+                    and not isinstance(maximum[0], bool)
+                    and math.isfinite(maximum[0])
+                ):
+                    duration = max(duration, float(maximum[0]))
+            target_nodes: list[str] = []
+            target_paths: list[str] = []
+            for channel in channels:
+                target = channel.get("target", {}) if isinstance(channel, dict) else {}
+                if not isinstance(target, dict):
+                    continue
+                node_name = cls._node_name(nodes, target.get("node"))
+                if node_name and node_name not in target_nodes:
+                    target_nodes.append(node_name)
+                path = cls._label(target.get("path"), "")
+                if path and path not in target_paths:
+                    target_paths.append(path)
+            animation_clips.append(
+                {
+                    "name": cls._label(
+                        animation.get("name"), f"Animation {animation_index + 1}"
+                    ),
+                    "duration_seconds": duration,
+                    "channel_count": len(channels),
+                    "target_nodes": target_nodes,
+                    "target_paths": target_paths,
+                }
+            )
         bounds = {"min": bounds_min, "max": bounds_max} if bounds_min and bounds_max else {}
         return {
             "bounds": bounds,
             "mesh_count": len(meshes),
             "triangle_count": triangle_count,
             "material_count": len(materials),
-            "has_skeleton": bool(document.get("skins")),
+            "has_skeleton": bool(skins),
             "representation_metadata": {
                 "node_count": len(nodes),
-                "animation_count": len(document.get("animations", [])),
+                "animation_count": len(animations),
+                "skin_count": len(skins),
+                "joint_count": len(joint_indexes),
+                "skeletons": skeletons,
+                "animation_clips": animation_clips,
             },
         }
+
+    @staticmethod
+    def _label(value: Any, fallback: str) -> str:
+        return value.strip()[:160] if isinstance(value, str) and value.strip() else fallback
+
+    @staticmethod
+    def _valid_index(value: Any, length: int) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and 0 <= value < length
+
+    @classmethod
+    def _valid_indexes(cls, values: list[Any], length: int) -> list[int]:
+        return list(dict.fromkeys(value for value in values if cls._valid_index(value, length)))
+
+    @classmethod
+    def _node_name(cls, nodes: list[Any], index: Any) -> str:
+        if not cls._valid_index(index, len(nodes)):
+            return ""
+        node = nodes[index]
+        name = node.get("name") if isinstance(node, dict) else None
+        return cls._label(name, f"Node {index}")

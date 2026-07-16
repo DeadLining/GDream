@@ -265,6 +265,7 @@ class DirectorAssetCatalogService:
             )
             if representation is not None:
                 model_url = f"/media/{representation.asset.local_path}"
+                representation_metadata = representation.representation_metadata or {}
                 minimum = representation.bounds.get("min")
                 maximum = representation.bounds.get("max")
                 height = (
@@ -298,6 +299,16 @@ class DirectorAssetCatalogService:
                             "mesh_count": representation.mesh_count,
                             "triangle_count": representation.triangle_count,
                             "has_skeleton": representation.has_skeleton,
+                            **{
+                                key: representation_metadata[key]
+                                for key in (
+                                    "skin_count",
+                                    "joint_count",
+                                    "skeletons",
+                                    "animation_clips",
+                                )
+                                if key in representation_metadata
+                            },
                             "body_plan": character.body_plan,
                             "proxy_rig": proxy_rig,
                             "requires_3d_model": False,

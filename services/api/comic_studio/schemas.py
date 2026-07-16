@@ -1025,6 +1025,7 @@ class Character3DRepresentationRead(BaseModel):
     material_count: int
     has_skeleton: bool
     bounds: dict
+    metadata: dict
     created_at: datetime
     updated_at: datetime
 

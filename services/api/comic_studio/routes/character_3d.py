@@ -28,6 +28,7 @@ def _response(representation) -> schemas.Character3DRepresentationRead:
         material_count=representation.material_count,
         has_skeleton=representation.has_skeleton,
         bounds=representation.bounds,
+        metadata=representation.representation_metadata,
         created_at=representation.created_at,
         updated_at=representation.updated_at,
     )
