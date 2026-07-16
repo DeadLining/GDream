@@ -204,6 +204,9 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
     assert "active_video_asset_id" in {
         column["name"] for column in inspector.get_columns("shots")
     }
+    assert "guidance_asset_ids" in {
+        column["name"] for column in inspector.get_columns("shot_cameras")
+    }
 
 
 def test_single_script_migration_merges_duplicate_documents_and_adds_constraint(tmp_path):
