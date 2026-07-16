@@ -546,6 +546,8 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
                         "scale": [1.2, 1.2, 1.2],
                     },
                     "pose_preset": "action",
+                    "facial_expression": "happy",
+                    "morph_target_weights": {"Smile": 0.7},
                 },
                 hidden_prop.id: {"visible": False},
             },
@@ -570,6 +572,8 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "林夏" in provider.prompt
     assert "position [2, 0, 0]" in provider.prompt
     assert "pose action" in provider.prompt
+    assert "expression happy" in provider.prompt
+    assert "morph targets Smile=0.7" in provider.prompt
     assert "隐藏证物箱" not in provider.prompt
     assert "camera position [1, 2, 6]" in provider.prompt
     assert "target [0, 1, 0]" in provider.prompt
@@ -590,6 +594,8 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert snapshot["director"]["camera"]["focal_length_mm"] == 85
     assert snapshot["director"]["objects"][0]["transform"]["position"] == [2, 0, 0]
     assert snapshot["director"]["objects"][0]["appearance"]["pose_preset"] == "action"
+    assert snapshot["director"]["objects"][0]["appearance"]["facial_expression"] == "happy"
+    assert snapshot["director"]["objects"][0]["appearance"]["morph_target_weights"] == {"Smile": 0.7}
     assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id, costume_asset.id]
     assert costume_media.id in asset.request_metadata["reference_asset_ids"]
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64

@@ -262,6 +262,31 @@ describe('DirectorWorkspace',()=>{
     resolveSave({...stage.shot_cameras[0],version:2,object_overrides:{'object-1':{animation_clip:'walk',animation_playing:false,animation_time_seconds:0}}});
     await waitFor(()=>expect(screen.getByLabelText('动画片段')).toBeEnabled());
   });
+  it('stores a humanoid proxy facial expression on only the selected shot',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'character_reference' as const,label:'林夏',appearance:{},metadata:{proxy_rig:'standard_humanoid'}};
+    mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorCamera.mockImplementation(async(_stageId:string,_shotId:string,version:number,patch:{object_overrides:Record<string,unknown>})=>({...stage.shot_cameras[0],...patch,version:version+1}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+
+    await userEvent.selectOptions(screen.getByLabelText('表情预设'),'happy');
+
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{facial_expression:'happy'}}}));
+  });
+  it('stores and resets imported GLB morph target weights on the selected shot',async()=>{
+    const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true,morph_targets:['Smile','Blink']}};
+    mocks.getDirectorStage.mockResolvedValue({...stage,objects:[characterObject]});mocks.getDirectorAssets.mockResolvedValue([]);
+    mocks.updateDirectorCamera.mockImplementation(async(_stageId:string,_shotId:string,version:number,patch:{object_overrides:Record<string,unknown>})=>({...stage.shot_cameras[0],...patch,version:version+1}));
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'镜头'}));
+    await userEvent.click(screen.getByRole('button',{name:'林夏'}));
+
+    fireEvent.change(screen.getByLabelText('表情 Smile'),{target:{value:'.7'}});
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{morph_target_weights:{Smile:.7}}}}));
+    await userEvent.click(screen.getByRole('button',{name:'重置模型表情'}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',2,{object_overrides:{'object-1':{morph_target_weights:{}}}}));
+  });
   it('controls an imported GLB animation clip and timeline on the selected shot',async()=>{
     const characterObject={...directorObject,kind:'character' as const,source_type:'model' as const,label:'林夏',appearance:{model_url:'/media/linxia.glb'},metadata:{has_skeleton:true,animation_clips:[{name:'Walk',duration_seconds:2.5},{name:'Turn',duration_seconds:1.2}]}};
     const characterStage={...stage,objects:[characterObject]};

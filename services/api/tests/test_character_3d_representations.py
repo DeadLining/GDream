@@ -17,7 +17,13 @@ def _glb(document: dict | None = None) -> bytes:
             "scene": 0,
             "scenes": [{"nodes": [0]}],
             "nodes": [{"mesh": 0, "name": "Proxy"}],
-            "meshes": [{"primitives": []}],
+            "meshes": [
+                {
+                    "name": "Face",
+                    "extras": {"targetNames": ["Smile", "Blink"]},
+                    "primitives": [{"attributes": {}, "targets": [{}, {}]}],
+                }
+            ],
         },
         separators=(",", ":"),
     ).encode()
@@ -133,6 +139,7 @@ def test_glb_upload_describes_skeletons_and_animation_clips(client):
             "target_paths": ["translation"],
         }
     ]
+    assert representation["metadata"]["morph_targets"] == ["Smile", "Blink"]
 
 
 def test_glb_upload_rejects_external_resources(client):
@@ -194,6 +201,7 @@ def test_director_catalog_prefers_active_character_glb(client):
     assert character_asset["media_type"] == "model/gltf-binary"
     assert character_asset["metadata"]["joint_count"] == 2
     assert character_asset["metadata"]["animation_clips"][0]["name"] == "Walk"
+    assert character_asset["metadata"]["morph_targets"] == ["Smile", "Blink"]
     synced = client.post(
         f"/api/director-stages/{stage['id']}/assets/sync",
         json={
