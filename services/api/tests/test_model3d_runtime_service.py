@@ -1,6 +1,8 @@
 from pathlib import Path
+from io import BytesIO
 
 import pytest
+from PIL import Image
 from sqlalchemy import select
 
 from comic_studio import models
@@ -33,6 +35,26 @@ class FakeRegistry:
         return self.provider
 
 
+class RecordingMultiViewProvider:
+    model = "fake-multiview-model3d"
+
+    def __init__(self):
+        self.inputs = []
+
+    async def generate_model(self, image_bytes, media_type, filename):
+        self.inputs.append((image_bytes, media_type, filename))
+        return Model3DResult(_glb(), "https://models.example.com/multiview.glb")
+
+
+class RecordingRegistry:
+    def __init__(self):
+        self.provider = RecordingMultiViewProvider()
+
+    def create(self, capability):
+        assert capability is Capability.MODEL_3D
+        return self.provider
+
+
 def _runtime(tmp_path: Path):
     session_factory = create_session_factory(f"sqlite:///{tmp_path / 'model3d.db'}")
     create_tables(session_factory)
@@ -43,6 +65,19 @@ def _runtime(tmp_path: Path):
         adapters=FakeRegistry(),
     )
     return service, session_factory
+
+
+def _recording_runtime(tmp_path: Path):
+    session_factory = create_session_factory(f"sqlite:///{tmp_path / 'model3d.db'}")
+    create_tables(session_factory)
+    registry = RecordingRegistry()
+    service = ModelRuntimeService(
+        channel_store=None,
+        session_factory=session_factory,
+        data_root=tmp_path / "data",
+        adapters=registry,
+    )
+    return service, session_factory, registry.provider
 
 
 def _character_reference(session_factory, data_root: Path) -> tuple[str, str]:
@@ -194,4 +229,97 @@ async def test_character_model3d_rejects_an_unapproved_explicit_reference(tmp_pa
             "character",
             character_id,
             reference_asset_id,
+        )
+
+
+@pytest.mark.anyio
+async def test_character_model3d_composes_approved_multi_view_references(tmp_path):
+    service, session_factory, provider = _recording_runtime(tmp_path)
+    character_id, primary_asset_id = _character_reference(
+        session_factory, service.data_root
+    )
+    with session_factory() as session:
+        references = CharacterReferenceService(session, service.data_root)
+        view_asset_ids = []
+        for reference_type in ("three_quarter", "side", "back"):
+            reference, asset = references.upload(
+                character_id,
+                PNG,
+                reference_type,
+                reference_type,
+            )
+            reference.review_status = "approved"
+            view_asset_ids.append(asset.id)
+        session.commit()
+
+    job = service.create_media_job(
+        Capability.MODEL_3D,
+        "character",
+        character_id,
+        {
+            "reference_asset_id": primary_asset_id,
+            "reference_asset_ids": [
+                view_asset_ids[1],
+                primary_asset_id,
+                view_asset_ids[2],
+                view_asset_ids[0],
+            ],
+        },
+    )
+
+    await service.run_media_job(job.id)
+
+    succeeded = service.get_job(job.id)
+    assert succeeded.status == "succeeded"
+    assert len(provider.inputs) == 1
+    content, media_type, filename = provider.inputs[0]
+    assert media_type == "image/png"
+    assert filename == "character-multi-view.png"
+    with Image.open(BytesIO(content)) as image:
+        assert image.size == (1024, 1536)
+        assert image.mode == "RGB"
+    with session_factory() as session:
+        representation = session.get(
+            models.Character3DRepresentation,
+            succeeded.result_metadata["representation_id"],
+        )
+        metadata = representation.asset.request_metadata
+        assert metadata["reference_asset_ids"] == [
+            primary_asset_id,
+            view_asset_ids[0],
+            view_asset_ids[1],
+            view_asset_ids[2],
+        ]
+        assert metadata["reference_types"] == [
+            "primary",
+            "three_quarter",
+            "side",
+            "back",
+        ]
+        assert metadata["reference_input_mode"] == "multi_view_contact_sheet"
+        assert len(metadata["reference_input_checksum"]) == 64
+
+
+@pytest.mark.anyio
+async def test_character_model3d_rejects_unapproved_reference_in_multi_view_set(
+    tmp_path,
+):
+    service, session_factory, _provider = _recording_runtime(tmp_path)
+    character_id, primary_asset_id = _character_reference(
+        session_factory, service.data_root
+    )
+    with session_factory() as session:
+        _reference, draft_asset = CharacterReferenceService(
+            session, service.data_root
+        ).upload(character_id, PNG, "side", "Draft side")
+
+    with pytest.raises(
+        Model3DGenerationError,
+        match="approved_character_references_required",
+    ):
+        await service.execute_model3d(
+            "character",
+            character_id,
+            primary_asset_id,
+            reference_asset_ids=[primary_asset_id, draft_asset.id],
         )
