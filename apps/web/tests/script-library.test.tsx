@@ -45,7 +45,9 @@ it('offers only upload and AI generation when the project has no script',async()
   mocks.list.mockResolvedValueOnce([]);
   const user=userEvent.setup();
   render(<ScriptLibrary projectId="p1" onConfirmed={vi.fn()}/>);
-  expect(await screen.findByLabelText('上传剧本')).toBeVisible();
+  const upload=await screen.findByLabelText('上传剧本');
+  expect(upload).toHaveClass('sr-only');
+  expect(screen.getByText('上传剧本')).toBeVisible();
   await user.click(screen.getByRole('button',{name:'AI 根据条件生成'}));
   await user.type(screen.getByRole('textbox',{name:'AI 创作条件'}),'三集悬疑故事');
   await user.click(screen.getByRole('button',{name:'开始生成'}));
