@@ -5,7 +5,9 @@ import {AlignCenter,ArrowDownToLine,Copy,Magnet,Move3D,Pause,Play,Rotate3D,Rotat
 import {DIRECTOR_ANIMATION_CLIPS} from '../../lib/director-animations';
 import {DIRECTOR_POSE_PRESETS} from '../../lib/director-poses';
 import {DIRECTOR_PROXY_RIGS,isAnimatedDirectorProxy,resolveDirectorProxyRig} from '../../lib/director-proxies';
+import type {DirectorEnvironmentSettings} from '../../lib/director-environment';
 import type {DirectorAnimationClip,DirectorObject,DirectorPosePreset,DirectorProxyRig,DirectorTransformMode,ShotCamera,Transform,Vector3} from '../../lib/types';
+import {DirectorEnvironmentControls} from './DirectorEnvironmentControls';
 
 const transformTools=[
   {mode:'translate' as const,label:'平移对象',icon:Move3D},
@@ -46,6 +48,8 @@ function TransformEditor({transform,onCommit}:{transform:Transform;onCommit:(tra
 
 export function DirectorInspector({
   object,
+  environment,
+  environmentSaving,
   sceneVisible,
   camera,
   cameraMode,
@@ -68,10 +72,13 @@ export function DirectorInspector({
   onSceneVisibilityChange,
   onRenameObject,
   onDuplicateObject,
+  onSaveEnvironment,
   onResetShotOverride,
   onDeleteObject,
 }:{
   object:DirectorObject|null;
+  environment:Record<string,unknown>;
+  environmentSaving:boolean;
   sceneVisible:boolean;
   camera:ShotCamera;
   cameraMode:boolean;
@@ -94,6 +101,7 @@ export function DirectorInspector({
   onSceneVisibilityChange:(visible:boolean)=>void;
   onRenameObject:(label:string)=>void;
   onDuplicateObject:()=>void;
+  onSaveEnvironment:(settings:DirectorEnvironmentSettings)=>void;
   onResetShotOverride:()=>void;
   onDeleteObject:()=>void;
 }){
@@ -115,6 +123,7 @@ export function DirectorInspector({
   ] as const;
   return <aside className="director-inspector">
     <header><strong>{object?.label??'镜头相机'}</strong></header>
+    {!cameraMode&&<DirectorEnvironmentControls environment={environment} saving={environmentSaving} onSave={onSaveEnvironment}/>}
     {object&&<section>
       <div className="director-object-name"><input aria-label="对象名称" value={labelDraft} onChange={event=>setLabelDraft(event.target.value)}/><button type="button" className="command-button" aria-label="保存对象名称" disabled={!labelDraft.trim()||labelDraft.trim()===object.label} onClick={()=>onRenameObject(labelDraft.trim())}><Save size={14}/></button></div>
       <div className="director-transform-tools" role="toolbar" aria-label="对象变换工具">

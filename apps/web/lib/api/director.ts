@@ -7,6 +7,7 @@ import type { Transform } from '../types';
 
 export const createDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`,json('POST'));
 export const getDirectorStage=(sceneId:string)=>apiRequest<DirectorStage>(`/api/scenes/${sceneId}/director-stage`);
+export const updateDirectorStage=(stageId:string,expectedVersion:number,environment:Record<string,unknown>)=>apiRequest<DirectorStage>(`/api/director-stages/${stageId}`,json('PATCH',{expected_version:expectedVersion,stage:{environment}}));
 export const createDirectorObject=(stageId:string,expectedVersion:number,object:{kind:DirectorObject['kind'];source_type:DirectorObject['source_type'];source_id?:string|null;label:string;transform?:Transform;appearance?:Record<string,unknown>;metadata?:Record<string,unknown>;visible?:boolean})=>apiRequest<DirectorObject>(`/api/director-stages/${stageId}/objects`,json('POST',{expected_version:expectedVersion,object}));
 export const getDirectorAssets=(stageId:string,shotId?:string)=>apiRequest<DirectorAsset[]>(`/api/director-stages/${stageId}/assets${shotId?`?shot_id=${encodeURIComponent(shotId)}`:''}`);
 export const syncDirectorAssets=(stageId:string,expectedVersion:number,assetKeys:string[])=>apiRequest<DirectorStage>(`/api/director-stages/${stageId}/assets/sync`,json('POST',{expected_version:expectedVersion,asset_keys:assetKeys}));
