@@ -185,6 +185,7 @@ it('keeps the character master setting inside one viewport without panel scrollb
   expect(css).toMatch(/\.master-image-grid\s*\{[^}]*height:\s*100%[^}]*grid-template-rows:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[^}]*\}/s);
   expect(css).toMatch(/\.master-setting-page\s*>\s*\.master-setting-inspector\s*\{[^}]*overflow:\s*hidden[^}]*\}/s);
   expect(css).toMatch(/\.master-embedded-workspace\s+\.lineage-inspector\s*\{[^}]*overflow:\s*hidden[^}]*\}/s);
+  expect(css).toMatch(/\.character-model-section\s*\{[^}]*grid-template-rows:\s*minmax\(112px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto[^}]*\}/s);
 });
 
 it('keeps the full asset catalog reachable on mobile',()=>{
