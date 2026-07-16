@@ -3,7 +3,7 @@
 ## Status
 
 - Priority: Active
-- Current state: The director uses visible low-poly 3D proxies by default: standard humanoid, quadruped, bird, box, cylinder, and sphere templates. It supports persistent humanoid body proportions plus shot-scoped procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. Users can add one production asset without replacing existing stage objects, then rename, hide, duplicate, or delete each scene instance. Backgrounds may remain images.
+- Current state: The director uses visible low-poly 3D proxies by default: standard humanoid, quadruped, bird, box, cylinder, and sphere templates. It supports persistent humanoid body proportions plus shot-scoped procedural animation controls, loads validated GLB character and prop assets as optional upgrades, resolves master, episode-variant, and shot-state models deterministically, and persists transforms and cameras. Users can add one production asset without replacing existing stage objects, then rename, hide, duplicate, or delete each scene instance. Stage-level background color, ground style and color, ambient light, and key light controls are persisted and rendered immediately. Backgrounds may remain images.
 - Shot binding traceability: Each `AssetVariantUsage` persists its effective variant, state, 3D representation and version, linked director object, resolution status, and refresh timestamp. Mutation paths refresh these bindings when lineage, models, or director objects change.
 - Impact recovery: Variant, state, and 3D approval flows show affected episodes, scenes, and shots before mutation. Users can choose to save only or save and regenerate; forced panel-only production runs start strictly after the mutation succeeds, with partial episode failures reported without misreporting the saved change as failed.
 - Current generation path: `model3d` jobs use the hosted fal.ai TripoSR adapter. Local references are uploaded to fal CDN over HTTP, generated GLBs are downloaded and validated, and candidates require explicit approval before activation.
@@ -94,7 +94,7 @@ Acceptance criteria:
 - [ ] Add basic facial expression or blend-shape controls when available.
 - [ ] Add gaze target and head direction controls.
 - [x] Expand camera editing to position, target, rotation, focal length, clipping range, shot size, and motion metadata.
-- [ ] Add environment, background, ground, and light controls.
+- [x] Add environment, background, ground, and light controls.
 - [x] Connect the existing director undo/redo state to the actual workspace.
 - [ ] Expose revision history, restore, and optimistic-lock conflict handling in the UI.
 
