@@ -51,8 +51,11 @@ from comic_studio.routes.image_proxy import router as image_proxy_router
 from comic_studio.routes.library_assets import router as library_assets_router
 from comic_studio.routes.prompt_suggestions import router as prompt_suggestions_router
 from comic_studio.routes.character_3d import router as character_3d_router
+from comic_studio.routes.episode_ai_runs import router as episode_ai_runs_router
 from comic_studio import models
 from comic_studio.production import ProductionStore
+from comic_studio.services.episode_ai_orchestrator import EpisodeAIOrchestrator
+from comic_studio.services.episode_ai_stage_handlers import EpisodeAIStageHandlers
 from comic_studio.services.production_coordinator import ProductionCoordinator
 from comic_studio.services.panels import PanelService
 from comic_studio.services.speech import SpeechService
@@ -176,6 +179,7 @@ def create_app(
         recover_production_runs()
         recover_script_imports()
         recover_script_generations()
+        recover_episode_ai_runs()
         yield
 
     app = FastAPI(title="AI Comic Studio", lifespan=lifespan)
@@ -219,7 +223,19 @@ def create_app(
         settings.data_root,
         CapabilityAdapterRegistry(lambda: app.state.provider_factory),
         mock_ssh_manager=app.state.mock_ssh_manager,
+        narrator_speaker=settings.qwen_tts_narrator_speaker,
     )
+    app.state.episode_ai_stage_handlers = EpisodeAIStageHandlers(
+        session_factory,
+        settings.data_root,
+        app.state.model_runtime,
+        compositor_root=settings.compositor_root,
+    )
+    episode_ai_orchestrator = EpisodeAIOrchestrator(
+        session_factory,
+        app.state.episode_ai_stage_handlers.mapping(),
+    )
+    app.state.episode_ai_orchestrator = episode_ai_orchestrator
     from comic_studio.services.art_style_loader import get_art_style_loader
 
     app.state.art_style_loader = get_art_style_loader()
@@ -277,6 +293,11 @@ def create_app(
         return recovered
 
     app.state.recover_script_generations = recover_script_generations
+
+    def recover_episode_ai_runs():
+        return episode_ai_orchestrator.recover_interrupted()
+
+    app.state.recover_episode_ai_runs = recover_episode_ai_runs
 
     async def produce_panel(item):
         target_type = getattr(item, "target_type", "shot")
@@ -341,6 +362,7 @@ def create_app(
     app.include_router(library_assets_router)
     app.include_router(prompt_suggestions_router)
     app.include_router(character_3d_router)
+    app.include_router(episode_ai_runs_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")
 
     @app.get("/api/health")

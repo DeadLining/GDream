@@ -1,3 +1,5 @@
+import json
+import subprocess
 from pathlib import Path
 
 from comic_studio import models
@@ -155,3 +157,101 @@ def test_render_manifest_includes_bound_scene_sound(db_session, tmp_path):
             "volume": 0.25,
         }
     ]
+
+
+def test_render_subtitles_use_absolute_episode_timeline():
+    manifest = {
+        "shots": [
+            {
+                "durationSeconds": 5,
+                "dialogue": [
+                    {
+                        "text": "第一行\r\n第二行",
+                        "startSeconds": 1,
+                        "durationSeconds": 2,
+                    }
+                ],
+            },
+            {
+                "durationSeconds": 3,
+                "dialogue": [
+                    {
+                        "text": "下一镜头",
+                        "startSeconds": 0.5,
+                        "durationSeconds": 1,
+                    }
+                ],
+            },
+        ]
+    }
+
+    subtitles = RenderingService.build_srt(manifest)
+
+    assert "00:00:01,000 --> 00:00:03,000" in subtitles
+    assert "第一行\n第二行" in subtitles
+    assert "00:00:05,500 --> 00:00:06,500" in subtitles
+
+
+def test_render_subtitles_skip_empty_text():
+    manifest = {
+        "shots": [
+            {
+                "durationSeconds": 2,
+                "dialogue": [
+                    {"text": "  ", "startSeconds": 0, "durationSeconds": 1}
+                ],
+            }
+        ]
+    }
+
+    assert RenderingService.build_srt(manifest) == ""
+
+
+def test_render_muxes_independent_mov_text_subtitle(db_session, tmp_path, monkeypatch):
+    episode = seed_episode(db_session, tmp_path)
+    shot = episode.scenes[0].shots[0]
+    line = models.DialogueLine(
+        shot=shot,
+        character_id=None,
+        position=1,
+        text="雨还没有停。",
+        subtitle_text="雨还没有停。",
+        emotion="calm",
+        performance_instruction="",
+        start_seconds=0.5,
+        duration_seconds=1.5,
+    )
+    db_session.add(line)
+    db_session.commit()
+    commands = []
+
+    def fake_run(command, **kwargs):
+        commands.append(command)
+        if command[0] == "node":
+            Path(command[-1]).write_bytes(b"\x00\x00\x00\x18ftypmp42video")
+        elif command[0] == "ffmpeg":
+            Path(command[-1]).write_bytes(b"\x00\x00\x00\x18ftypmp42subtitled")
+        elif command[0] == "ffprobe":
+            has_subtitle = any(item[0] == "ffmpeg" for item in commands)
+            streams = [{"codec_type": "video", "codec_name": "h264"}]
+            if has_subtitle:
+                streams.append({"codec_type": "subtitle", "codec_name": "mov_text"})
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"streams": streams, "format": {"duration": "5"}}),
+            )
+        return subprocess.CompletedProcess(command, 0, stdout="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    output = tmp_path / "episode.mp4"
+
+    report = RenderingService(db_session, tmp_path, tmp_path).render(
+        episode.id,
+        output,
+    )
+
+    ffmpeg_command = next(command for command in commands if command[0] == "ffmpeg")
+    assert "mov_text" in ffmpeg_command
+    assert any(stream["codec_type"] == "subtitle" for stream in report["streams"])
+    assert output.read_bytes().endswith(b"subtitled")

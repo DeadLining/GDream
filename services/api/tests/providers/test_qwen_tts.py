@@ -80,9 +80,38 @@ async def test_qwen_tts_sends_character_performance_contract():
     body = json.loads(request.content)
     assert request.url.path == "/v1/audio/speech"
     assert body["model"] == "Qwen3-TTS-12Hz-1.7B-CustomVoice"
-    assert body["speaker"] == "Dylan"
+    assert body["speaker"] == "dylan"
     assert body["instruct"] == "低声、紧张、快速"
     assert audio == WAV_BYTES
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("speaker", "expected_speaker"),
+    [
+        ("成年男性低音", "dylan"),
+        ("成年女性轻声", "vivian"),
+        ("Dylan", "dylan"),
+    ],
+)
+async def test_qwen_tts_resolves_character_voice_descriptions_to_supported_speakers(
+    speaker,
+    expected_speaker,
+):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200, content=WAV_BYTES, headers={"content-type": "audio/wav"}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://tts.local"
+    ) as client:
+        await QwenTTSProvider(client=client).synthesize("测试", speaker)
+
+    assert captured["body"]["speaker"] == expected_speaker
 
 
 @pytest.mark.anyio
@@ -152,7 +181,7 @@ async def test_qwen_tts_falls_back_to_hostbridge_ssh_on_transport_failure():
     data_line = next(line for line in config.splitlines() if line.startswith("data = "))
     escaped_data = data_line.removeprefix('data = "').removesuffix('"')
     remote_payload = json.loads(json.loads(f'"{escaped_data}"'))
-    assert remote_payload["speaker"] == "Dylan"
+    assert remote_payload["speaker"] == "dylan"
     assert remote_payload["text"] == "别回头。"
     assert remote_payload["instruct"] == "低声"
     assert "别回头。" not in " ".join(captured["command"])

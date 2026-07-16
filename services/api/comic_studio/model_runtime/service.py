@@ -55,12 +55,14 @@ class ModelRuntimeService:
         adapters,
         *,
         mock_ssh_manager=None,
+        narrator_speaker: str = "dylan",
     ):
         self.channel_store = channel_store
         self.session_factory = session_factory
         self.data_root = data_root
         self.adapters = adapters
         self.mock_ssh_manager = mock_ssh_manager
+        self.narrator_speaker = narrator_speaker
 
     @staticmethod
     def _adapter_identity(adapter) -> tuple[str, str]:
@@ -308,6 +310,7 @@ class ModelRuntimeService:
                 session,
                 self.data_root,
                 self.adapters.create(Capability.SPEECH),
+                narrator_speaker=self.narrator_speaker,
             ).synthesize_dialogue(dialogue_id)
 
     async def execute_video(self, shot_id: str, activate: bool):

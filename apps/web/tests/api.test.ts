@@ -14,6 +14,7 @@ import {
   applyDirectorSuggestionToShot,
   createDirectorStage,
   createDirectorSuggestion,
+  deleteDirectorObject,
   getDirectorStage,
   listDirectorRevisions,
   restoreDirectorRevision,
@@ -235,6 +236,12 @@ describe('script library api', () => {
 
 describe('director api', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('accepts a successful no-content object deletion', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {status:204})));
+
+    await expect(deleteDirectorObject('object-1', 3)).resolves.toBeUndefined();
+  });
 
   it('uses scene, stage, camera, suggestion, and apply endpoints', async () => {
     const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));

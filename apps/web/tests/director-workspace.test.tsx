@@ -5,7 +5,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {DirectorWorkspace} from '../components/director/DirectorWorkspace';
 import type {DirectorStage,Scene} from '../lib/types';
 
-const mocks=vi.hoisted(()=>({ApiError:class ApiError extends Error{constructor(message:string,public status:number,public detail:string){super(message);}},getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),listDirectorRevisions:vi.fn(),restoreDirectorRevision:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
+const mocks=vi.hoisted(()=>({ApiError:class ApiError extends Error{constructor(message:string,public status=500,public detail=''){super(message);}},getDirectorStage:vi.fn(),createDirectorStage:vi.fn(),getDirectorAssets:vi.fn(),syncDirectorAssets:vi.fn(),createDirectorObject:vi.fn(),deleteDirectorObject:vi.fn(),updateDirectorStage:vi.fn(),updateDirectorCamera:vi.fn(),updateDirectorObject:vi.fn(),listDirectorRevisions:vi.fn(),restoreDirectorRevision:vi.fn(),createDirectorSuggestion:vi.fn(),applyDirectorSuggestionToShot:vi.fn()}));
 vi.mock('../lib/api',()=>mocks);
 const overrideTransform={position:[2,0,0],rotation:[0,.5,0],scale:[1,1,1]} as const;
 const movedCamera={position:[2,2.4,6] as [number,number,number],target:[0,.9,0] as [number,number,number],rotation:[-.1,.25,0] as [number,number,number]};
@@ -17,6 +17,20 @@ const stage:DirectorStage={id:'stage-1',scene_id:'scene-1',version:1,environment
 
 describe('DirectorWorkspace',()=>{
   afterEach(()=>{cleanup();vi.clearAllMocks();});
+  it('reconnects after a transient local API failure',async()=>{
+    mocks.getDirectorStage
+      .mockRejectedValueOnce(new Error('本地 API 暂时不可用，请稍后重试'))
+      .mockResolvedValueOnce(stage);
+    mocks.getDirectorAssets.mockResolvedValue([]);
+
+    render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+
+    expect(await screen.findByText('本地 API 暂时不可用，请稍后重试')).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'重新连接导演台'}));
+
+    expect(await screen.findByRole('heading',{name:'3D 导演台'})).toBeVisible();
+    expect(mocks.getDirectorStage).toHaveBeenCalledTimes(2);
+  });
   it('loads the scene stage and persists a new placeholder object',async()=>{
     mocks.getDirectorStage.mockResolvedValue(stage);mocks.getDirectorAssets.mockResolvedValue([]);mocks.createDirectorObject.mockResolvedValue({...stage.objects[0],id:'object-1',stage_id:'stage-1',kind:'primitive',source_type:'placeholder',source_id:null,label:'新道具',position:1,transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{},metadata:{},visible:true});
     render(<DirectorWorkspace scene={scene} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);

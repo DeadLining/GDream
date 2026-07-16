@@ -1069,6 +1069,45 @@ class ProductionRetry(BaseModel):
     item_ids: list[str] | None = None
 
 
+class EpisodeAIRunCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    automation_policy: dict = Field(default_factory=dict)
+
+
+class EpisodeAIRunStageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    run_id: str
+    stage: str
+    position: int
+    status: str
+    attempt_count: int
+    input_snapshot: dict
+    output_metadata: dict
+    error: str
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class EpisodeAIRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    episode_id: str
+    status: str
+    current_stage: str
+    progress: int
+    automation_policy: dict
+    idempotency_key: str
+    pause_requested: bool
+    error: str
+    stages: list[EpisodeAIRunStageRead]
+    created_at: datetime
+    updated_at: datetime
+
+
 class PlannedDialogue(BaseModel):
     character_id: str | None
     text: str = Field(min_length=1)

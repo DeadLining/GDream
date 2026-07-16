@@ -1,4 +1,4 @@
-# Real-model theme-to-video E2E
+# Real-model theme-to-full-episode E2E
 
 This suite validates the expensive production path against the locally configured
 real providers:
@@ -7,9 +7,13 @@ real providers:
 2. stream an AI-written script;
 3. parse and confirm AI characters, episodes, scenes, and shots;
 4. generate, approve, and activate AI character references;
-5. generate and validate the first-frame panel;
-6. generate and validate a Wan MP4;
-7. open the generated project in the Web UI and verify playable video metadata.
+5. generate and validate every shot panel;
+6. synthesize every non-empty dialogue line;
+7. generate and validate a Wan MP4 for every shot;
+8. render and validate the full episode MP4;
+9. require the persisted render review to pass;
+10. create, gate, approve, and register the final release candidate;
+11. open the generated project in the Web UI and verify both shot video and final episode playback.
 
 Run from the repository root or `apps/web`:
 
@@ -38,7 +42,9 @@ explicit `test:e2e:real` command. Playwright traces and screenshots are written
 under `apps/web/test-results`; generated media and the isolated database remain
 under `.runtime/e2e-real` for inspection until the next run.
 
-After the model pipeline succeeds, the test also saves
+This is intentionally an expensive release gate: the default prompt requests a
+multi-shot episode with dialogue so image, TTS, video, compositor, QC, and
+publication paths are all exercised. After the model pipeline succeeds, the test also saves
 `.runtime/e2e-real/result.json`. If only a final browser assertion fails, rerun
 the browser verification without paying for the models again:
 

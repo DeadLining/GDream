@@ -20,6 +20,7 @@ type Shot = JsonObject & {
   image_prompt: string;
   active_panel_asset_id: string | null;
   active_video_asset_id: string | null;
+  dialogue: Array<JsonObject & {id: string; text: string; audio_asset_id: string | null; duration_seconds: number}>;
 };
 type Asset = JsonObject & {
   id: string;
@@ -51,7 +52,28 @@ export type ThemeToVideoResult = {
   script: {characters: number; episodes: number; bytes: number};
   panel: Asset & {bytes: number};
   video: Asset & {bytes: number};
+  shots: Array<{shot_id: string; panel: Asset & {bytes: number}; video: Asset & {bytes: number}}>;
+  speech: Array<{dialogue_id: string; asset: Asset & {bytes: number}}>;
+  render: {
+    path: string;
+    media_url: string;
+    bytes: number;
+    review: JsonObject & {overall_pass: boolean};
+  };
+  release: {
+    candidate: JsonObject & {id: string; status: string};
+    gate: JsonObject & {ready: boolean};
+    publication: JsonObject & {id: string; status: string};
+  };
   timings_ms: Record<string, number>;
+};
+
+type FullEpisodeClosure = {
+  episode: {scenes: Array<{shots: Array<{id: string; active_video_asset_id: string | null; dialogue: Array<{id: string; text: string}>}>}>};
+  shots: Array<{shot_id: string; panel: {bytes: number}; video: {bytes: number}}>;
+  speech: Array<{dialogue_id: string; asset: {bytes: number}}>;
+  render: {bytes: number; review: {overall_pass: boolean}};
+  release: {candidate: {id: string}; gate: {ready: boolean}; publication: {id: string; status: string}};
 };
 
 const wait = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
@@ -90,6 +112,35 @@ export function hasImageSignature(content: Buffer): boolean {
 
 export function hasMp4Signature(content: Buffer): boolean {
   return content.length >= 12 && content.subarray(0, 32).includes(Buffer.from('ftyp'));
+}
+
+export function assertFullEpisodeClosure(result: FullEpisodeClosure): void {
+  const episodeShots = result.episode.scenes.flatMap(scene => scene.shots);
+  const producedShotIds = new Set(result.shots.map(item => item.shot_id));
+  if (!episodeShots.length || episodeShots.some(shot => !shot.active_video_asset_id || !producedShotIds.has(shot.id))) {
+    throw new Error('Not every episode shot has a generated video');
+  }
+  if (result.shots.some(item => item.panel.bytes < 10_000 || item.video.bytes < 100_000)) {
+    throw new Error('One or more shot media assets are invalid');
+  }
+  const dialogueIds=episodeShots.flatMap(shot=>shot.dialogue.filter(line=>line.text.trim()).map(line=>line.id));
+  const speechByDialogue=new Map(result.speech.map(item=>[item.dialogue_id,item.asset.bytes]));
+  if(dialogueIds.some(id=>(speechByDialogue.get(id)??0)<1_000))throw new Error('Not every dialogue line has generated speech');
+  if (result.render.bytes < 100_000) throw new Error('Final episode render is invalid');
+  if (!result.render.review.overall_pass) throw new Error('Render quality review did not pass');
+  if (!result.release.candidate.id) throw new Error('Release candidate was not persisted');
+  if (!result.release.gate.ready) throw new Error('Release gate did not pass');
+  if (!result.release.publication.id || result.release.publication.status !== 'published') {
+    throw new Error('Publication record was not persisted');
+  }
+}
+
+export function buildFullEpisodeExecutionPlan(episode: {scenes: Array<{shots: Array<{id: string; dialogue: Array<{id: string; text: string}>}>}>}): {shotIds: string[]; dialogueIds: string[]} {
+  const shots=episode.scenes.flatMap(scene=>scene.shots);
+  return {
+    shotIds:shots.map(shot=>shot.id),
+    dialogueIds:shots.flatMap(shot=>shot.dialogue.filter(line=>line.text.trim()).map(line=>line.id)),
+  };
 }
 
 async function pollJob(
@@ -176,7 +227,7 @@ export async function runThemeToVideoPipeline({request, theme, timeoutMs, onStag
       data: {
         title: `E2E AI 漫剧 ${unique}`,
         logline: theme,
-        story_bible: `测试主题：${theme}\n只生成一集、一场、一个关键镜头，保持叙事和角色连续。`,
+        story_bible: `测试主题：${theme}\n只生成一集，使用一到两个场景和三到五个连续镜头，包含两句推动剧情的简短对白，保持角色、空间和光线连续。`,
         visual_style: '现代国风悬疑动态漫画，电影级光影，角色外观稳定，竖屏构图',
         aspect_ratio: '9:16',
         language: 'Chinese',
@@ -231,8 +282,8 @@ export async function runThemeToVideoPipeline({request, theme, timeoutMs, onStag
     await request.get(`/api/episodes/${episodeId}`, {timeout: 30_000}),
     'Load generated episode',
   );
-  const shot = episode.scenes[0]?.shots[0];
-  if (!shot) throw new Error('Confirmed AI structure created no shot');
+  const executionPlan=buildFullEpisodeExecutionPlan(episode);
+  if (!executionPlan.shotIds.length) throw new Error('Confirmed AI structure created no shot');
 
   await stage('generate-ai-character-references', async () => {
     for (const character of projectDetail.characters) {
@@ -264,69 +315,114 @@ export async function runThemeToVideoPipeline({request, theme, timeoutMs, onStag
     }
   });
 
-  const panelJob = await stage('start-ai-panel', async () => responseJson<{job_id: string}>(
-    await request.post(`/api/shots/${shot.id}/panels?activate=true`, {timeout: 30_000}),
-    'Start panel generation',
-  ));
-  const finishedPanelJob = await stage('wait-ai-panel', () => pollJob(request, panelJob.job_id, deadline, 'Panel generation'));
-  const panelId = String(finishedPanelJob.result_metadata.asset_id ?? '');
-  if (!panelId) throw new Error('Panel generation returned no asset_id');
-  const panel = await responseJson<Asset>(
-    await request.get(`/api/assets/${panelId}`, {timeout: 30_000}),
-    'Load panel asset',
-  );
-  const panelBytes = await stage('verify-ai-panel', () => mediaBody(request, panel, 'Panel'));
-  if (panelBytes.length < 10_000 || !hasImageSignature(panelBytes)) {
-    throw new Error(`Panel asset is not a valid generated image (${panelBytes.length} bytes)`);
+  const generatedPanels=new Map<string,Asset&{bytes:number}>();
+  for(const shot of episode.scenes.flatMap(scene=>scene.shots)){
+    const panelJob=await stage(`start-ai-panel:${shot.id}`,async()=>responseJson<{job_id:string}>(
+      await request.post(`/api/shots/${shot.id}/panels?activate=true`,{timeout:30_000}),
+      `Start panel generation for shot ${shot.position}`,
+    ));
+    const finishedPanelJob=await stage(`wait-ai-panel:${shot.id}`,()=>pollJob(request,panelJob.job_id,deadline,`Panel generation for shot ${shot.position}`));
+    const panelId=String(finishedPanelJob.result_metadata.asset_id??'');
+    if(!panelId)throw new Error(`Panel generation for shot ${shot.position} returned no asset_id`);
+    const panel=await responseJson<Asset>(await request.get(`/api/assets/${panelId}`,{timeout:30_000}),`Load panel asset for shot ${shot.position}`);
+    const panelBytes=await stage(`verify-ai-panel:${shot.id}`,()=>mediaBody(request,panel,`Panel for shot ${shot.position}`));
+    if(panelBytes.length<10_000||!hasImageSignature(panelBytes))throw new Error(`Panel for shot ${shot.position} is invalid (${panelBytes.length} bytes)`);
+
+    const approvedShot=await stage(`approve-panel:${shot.id}`,async()=>responseJson<Shot>(
+      await request.patch(`/api/shots/${shot.id}`,{data:{review_status:'approved',video_prompt:`${shot.composition}。保持角色外观、场景空间、光线方向和首帧构图稳定，动作自然连续。`,negative_video_prompt:'闪烁、变形、额外肢体、镜头抖动、角色换脸、字幕、水印'},timeout:30_000}),
+      `Approve panel for shot ${shot.position}`,
+    ));
+    if(!approvedShot.active_panel_asset_id)throw new Error(`Approved shot ${shot.position} lost its active panel`);
+    generatedPanels.set(shot.id,{...panel,bytes:panelBytes.length});
   }
 
-  const approvedShot = await stage('approve-panel-for-video', async () => responseJson<Shot>(
-    await request.patch(`/api/shots/${shot.id}`, {
-      data: {
-        review_status: 'approved',
-        video_prompt: '镜头缓慢推近，钟表齿轮恢复转动，人物抬眼看到线索，保持角色外观和首帧构图稳定。',
-        negative_video_prompt: '闪烁、变形、额外肢体、镜头抖动、角色换脸、字幕、水印',
-      },
-      timeout: 30_000,
-    }),
-    'Approve generated panel',
-  ));
-  if (!approvedShot.active_panel_asset_id) throw new Error('Approved shot lost its active panel');
+  const speech:ThemeToVideoResult['speech']=[];
+  for(const dialogueId of executionPlan.dialogueIds){
+    const speechJob=await stage(`start-speech:${dialogueId}`,async()=>responseJson<{job_id:string}>(
+      await request.post(`/api/dialogue/${dialogueId}/speech`,{timeout:30_000}),
+      `Start speech generation for ${dialogueId}`,
+    ));
+    const finishedSpeechJob=await stage(`wait-speech:${dialogueId}`,()=>pollJob(request,speechJob.job_id,deadline,`Speech generation for ${dialogueId}`));
+    const assetId=String(finishedSpeechJob.result_metadata.asset_id??'');
+    if(!assetId)throw new Error(`Speech generation for ${dialogueId} returned no asset_id`);
+    const asset=await responseJson<Asset>(await request.get(`/api/assets/${assetId}`,{timeout:30_000}),`Load speech asset for ${dialogueId}`);
+    const bytes=await stage(`verify-speech:${dialogueId}`,()=>mediaBody(request,asset,`Speech for ${dialogueId}`));
+    if(bytes.length<1_000)throw new Error(`Speech for ${dialogueId} is invalid (${bytes.length} bytes)`);
+    speech.push({dialogue_id:dialogueId,asset:{...asset,bytes:bytes.length}});
+  }
 
-  const videoJob = await stage('start-wan-video', async () => responseJson<{job_id: string}>(
-    await request.post(`/api/shots/${shot.id}/videos?activate=true`, {timeout: 30_000}),
-    'Start Wan video generation',
-  ));
-  const finishedVideoJob = await stage('wait-wan-video', () => pollJob(request, videoJob.job_id, deadline, 'Wan video generation'));
-  const videoId = String(finishedVideoJob.result_metadata.asset_id ?? '');
-  if (!videoId) throw new Error('Wan video generation returned no asset_id');
-  const video = await responseJson<Asset>(
-    await request.get(`/api/assets/${videoId}`, {timeout: 30_000}),
-    'Load video asset',
-  );
-  const videoBytes = await stage('verify-wan-video', () => mediaBody(request, video, 'Video'));
-  if (videoBytes.length < 100_000 || !hasMp4Signature(videoBytes)) {
-    throw new Error(`Video asset is not a valid MP4 (${videoBytes.length} bytes)`);
+  const generatedShots:ThemeToVideoResult['shots']=[];
+  for(const shot of episode.scenes.flatMap(scene=>scene.shots)){
+    const panel=generatedPanels.get(shot.id);
+    if(!panel)throw new Error(`Approved panel for shot ${shot.position} is missing`);
+    const videoJob=await stage(`start-wan-video:${shot.id}`,async()=>responseJson<{job_id:string}>(
+      await request.post(`/api/shots/${shot.id}/videos?activate=true`,{timeout:30_000}),
+      `Start video generation for shot ${shot.position}`,
+    ));
+    const finishedVideoJob=await stage(`wait-wan-video:${shot.id}`,()=>pollJob(request,videoJob.job_id,deadline,`Video generation for shot ${shot.position}`));
+    const videoId=String(finishedVideoJob.result_metadata.asset_id??'');
+    if(!videoId)throw new Error(`Video generation for shot ${shot.position} returned no asset_id`);
+    const video=await responseJson<Asset>(await request.get(`/api/assets/${videoId}`,{timeout:30_000}),`Load video asset for shot ${shot.position}`);
+    const videoBytes=await stage(`verify-wan-video:${shot.id}`,()=>mediaBody(request,video,`Video for shot ${shot.position}`));
+    if(videoBytes.length<100_000||!hasMp4Signature(videoBytes))throw new Error(`Video for shot ${shot.position} is invalid (${videoBytes.length} bytes)`);
+    generatedShots.push({shot_id:shot.id,panel,video:{...video,bytes:videoBytes.length}});
   }
 
   episode = await responseJson<Episode>(
     await request.get(`/api/episodes/${episodeId}`, {timeout: 30_000}),
     'Reload generated episode',
   );
-  const finalShot = episode.scenes.flatMap(scene => scene.shots).find(item => item.id === shot.id);
-  if (!finalShot || finalShot.active_video_asset_id !== video.id) {
-    throw new Error('Generated video was not activated on the shot');
-  }
+  const finalShots=episode.scenes.flatMap(scene=>scene.shots);
+  if(finalShots.some(item=>!item.active_video_asset_id))throw new Error('One or more generated videos were not activated');
+
+  const renderJob=await stage('start-episode-render',async()=>responseJson<{job_id:string}>(
+    await request.post(`/api/episodes/${episodeId}/render`,{timeout:30_000}),
+    'Start episode render',
+  ));
+  const finishedRenderJob=await stage('wait-episode-render',()=>pollJob(request,renderJob.job_id,deadline,'Episode render'));
+  const renderPath=String(finishedRenderJob.result_metadata.output_path??'');
+  const renderMediaUrl=String(finishedRenderJob.result_metadata.media_url??'');
+  const review=finishedRenderJob.result_metadata.review as JsonObject & {overall_pass?:boolean};
+  if(!renderPath||!renderMediaUrl)throw new Error('Episode render returned no output path');
+  const renderResponse=await request.get(renderMediaUrl,{timeout:120_000});
+  if(!renderResponse.ok())throw new Error(`Episode render media failed with HTTP ${renderResponse.status()}`);
+  const renderBytes=await renderResponse.body();
+  if(renderBytes.length<100_000||!hasMp4Signature(renderBytes))throw new Error(`Episode render is not a valid MP4 (${renderBytes.length} bytes)`);
+  if(review?.overall_pass!==true)throw new Error('Episode render quality review did not pass');
+
+  const candidate=await stage('create-release-candidate',async()=>responseJson<JsonObject&{id:string;status:string}>(
+    await request.post(`/api/episodes/${episodeId}/release-candidates`,{data:{version:'V1',render_path:renderPath,qc_snapshot:review},timeout:30_000}),
+    'Create release candidate',
+  ));
+  const gate=await stage('check-release-gate',async()=>responseJson<JsonObject&{ready:boolean}>(
+    await request.get(`/api/release-candidates/${candidate.id}/gate`,{timeout:30_000}),
+    'Check release gate',
+  ));
+  if(!gate.ready)throw new Error('Release gate did not pass');
+  await stage('approve-release-candidate',async()=>responseJson<JsonObject>(
+    await request.post(`/api/release-candidates/${candidate.id}/approve`,{timeout:30_000}),
+    'Approve release candidate',
+  ));
+  const publication=await stage('publish-internal-master',async()=>responseJson<JsonObject&{id:string;status:string}>(
+    await request.post(`/api/release-candidates/${candidate.id}/publish`,{data:{platform:'internal_master',idempotency_key:`${episodeId}:${candidate.id}:internal_master`},timeout:30_000}),
+    'Publish internal master',
+  ));
 
   timings.total = Date.now() - startedAt;
-  return {
+  const result:ThemeToVideoResult={
     theme,
     project,
     episode,
-    shot: finalShot,
+    shot: finalShots[0],
     script: {characters: draft.characters.length, episodes: draft.episodes.length, bytes: Buffer.byteLength(scriptText)},
-    panel: {...panel, bytes: panelBytes.length},
-    video: {...video, bytes: videoBytes.length},
+    panel:generatedShots[0].panel,
+    video:generatedShots[0].video,
+    shots:generatedShots,
+    speech,
+    render:{path:renderPath,media_url:renderMediaUrl,bytes:renderBytes.length,review:{...review,overall_pass:true}},
+    release:{candidate,gate,publication},
     timings_ms: timings,
   };
+  assertFullEpisodeClosure(result);
+  return result;
 }

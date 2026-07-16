@@ -29,6 +29,9 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     }
     throw new ApiError(detail || `请求失败 (${response.status})`, response.status, detail);
   }
+  if (response.status === 204 || response.status === 205) {
+    return undefined as T;
+  }
   return response.json() as Promise<T>;
 }
 export const json = (method: string, body?: unknown): RequestInit => ({

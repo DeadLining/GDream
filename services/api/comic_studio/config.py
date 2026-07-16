@@ -127,6 +127,14 @@ class Settings(BaseSettings):
             "QWEN_TTS_SSH_HOST", "AI_COMIC_QWEN_TTS_SSH_HOST"
         ),
     )
+    qwen_tts_narrator_speaker: str = Field(
+        default="dylan",
+        min_length=1,
+        validation_alias=AliasChoices(
+            "QWEN_TTS_NARRATOR_SPEAKER",
+            "AI_COMIC_QWEN_TTS_NARRATOR_SPEAKER",
+        ),
+    )
     compositor_root: Path = Field(
         default=Path("packages/compositor"),
         validation_alias=AliasChoices("COMPOSITOR_ROOT", "AI_COMIC_COMPOSITOR_ROOT"),

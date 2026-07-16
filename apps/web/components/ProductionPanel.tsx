@@ -20,6 +20,7 @@ import type {ProductionMediaMode} from './production-canvas/ProductionMediaWorks
 import {ProductionRunControls} from './production-canvas/ProductionRunControls';
 import {ShotGroupRerun} from './production-canvas/ShotGroupRerun';
 import {ProductionTaskDrawer} from './production-canvas/ProductionTaskDrawer';
+import {EpisodeAIRunControls} from './production-canvas/EpisodeAIRunControls';
 
 export function ProductionPanel({
   episodeId,
@@ -237,6 +238,10 @@ export function ProductionPanel({
     setCanvasError('');
     void loadCanvas(episodeId,generation,controller.signal).catch(cause=>{if(isCurrent(generation,controller.signal))setCanvasError(cause instanceof Error?cause.message:'生产画布加载失败');});
   };
+  const refreshAfterAIRun=()=>{
+    const {generation,controller}=sessionRef.current;
+    void Promise.all([refreshReadiness(episodeId,generation,controller.signal),loadCanvas(episodeId,generation,controller.signal)]).catch(cause=>{if(isCurrent(generation,controller.signal))setActionError(cause instanceof Error?cause.message:'整集结果刷新失败');});
+  };
   return <main className="production-panel production-workbench">
     <header>
       <div><span className="eyebrow">批量生产</span><h1>剧集生产队列</h1></div>
@@ -249,6 +254,7 @@ export function ProductionPanel({
       </div>}
     </header>
     <div className="production-canvas-stage">
+      <EpisodeAIRunControls episodeId={episodeId} onCompleted={refreshAfterAIRun}/>
       {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onOpenVisualReview={onOpenVisualReview} onOpenDirector={onOpenDirector} onOpenDialogue={onOpenDialogue} onOpenMedia={onOpenMedia} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
       <ShotGroupRerun selectedShotIds={selectedCanvasShotIds} starting={rerunStarting} error={rerunError} onSubmit={stages=>void startShotGroupRerun(stages)}/>
       <ProductionRunControls open={configOpen} onOpenChange={setConfigOpen} stages={stages} setStages={setStages} concurrency={concurrency} setConcurrency={setConcurrency}
