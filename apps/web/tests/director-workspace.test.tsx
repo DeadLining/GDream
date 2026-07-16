@@ -233,9 +233,14 @@ describe('DirectorWorkspace',()=>{
     await userEvent.selectOptions(screen.getByLabelText('角色姿态'),'dialogue');
     await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',1,{object_overrides:{'object-1':{pose_preset:'dialogue'}}}));
     await userEvent.selectOptions(screen.getByLabelText('动画片段'),'walk');
-    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',2,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk'}}}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',2,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:false,animation_time_seconds:0}}}));
+    expect(screen.getByLabelText('代理动画时间')).toHaveAttribute('max','2');
+    fireEvent.change(screen.getByLabelText('代理动画时间'),{target:{value:'1'}});
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',3,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:false,animation_time_seconds:1}}}));
     await userEvent.click(screen.getByRole('button',{name:'播放动画'}));
-    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',3,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:true}}}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',4,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:true,animation_time_seconds:1}}}));
+    await userEvent.click(screen.getByRole('button',{name:'重置代理动画'}));
+    await waitFor(()=>expect(mocks.updateDirectorCamera).toHaveBeenLastCalledWith('stage-1','shot-1',5,{object_overrides:{'object-1':{pose_preset:'dialogue',animation_clip:'walk',animation_playing:false,animation_time_seconds:0}}}));
     expect(mocks.updateDirectorObject).not.toHaveBeenCalled();
   });
   it('controls an imported GLB animation clip and timeline on the selected shot',async()=>{

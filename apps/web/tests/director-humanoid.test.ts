@@ -28,6 +28,7 @@ describe('standard humanoid director rig',()=>{
     expect(DIRECTOR_ANIMATION_CLIPS.map(item=>item.id)).toEqual([
       'idle','walk','run','talk','turn','injured',
     ]);
+    expect(DIRECTOR_ANIMATION_CLIPS.every(item=>item.duration_seconds===2)).toBe(true);
     expect(directorAnimationMotion('walk',.25).leftArm).toBeCloseTo(
       -directorAnimationMotion('walk',.25).rightArm,
     );
