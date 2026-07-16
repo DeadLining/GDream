@@ -139,10 +139,10 @@ def test_document_stream_persists_chunks_and_finalizes_revision(client):
     assert captured["existing_draft"] == ""
 
 
-def test_document_stream_creates_a_clean_ai_version_after_a_finalized_version(client):
+def test_document_stream_uses_finalized_version_as_ai_revision_source(client):
     class Provider:
         async def stream_script(self, context):
-            assert context["existing_draft"] == ""
+            assert context["existing_draft"] == "旧版本正文"
             yield "全新版本"
 
     class Factory:
@@ -167,6 +167,9 @@ def test_document_stream_creates_a_clean_ai_version_after_a_finalized_version(cl
     assert detail["current_revision"]["revision_number"] == 2
     assert detail["current_revision"]["content"] == "全新版本"
     assert detail["current_revision"]["creation_method"] == "ai"
+    assert detail["current_revision"]["generation_metadata"] == {
+        "source_revision_id": old_revision_id,
+    }
     assert detail["revision_count"] == 2
 
 
