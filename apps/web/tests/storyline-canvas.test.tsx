@@ -25,6 +25,7 @@ describe('StorylineCanvas', () => {
     render(<StorylineCanvas scriptTitle="穿越时空" volumes={[]} unassignedEpisodes={[episode]} storylines={storylines}/>);
 
     expect(screen.getByText('未分卷')).toBeVisible();
+    expect(screen.getByText('第 01 集')).toBeVisible();
     expect(screen.getByRole('button',{name:'金属海螺异动'})).toBeVisible();
   });
 
