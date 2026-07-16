@@ -316,3 +316,25 @@ def test_storyline_event_can_be_updated_and_deleted(client):
     assert deleted.status_code == 204
     loaded = client.get(f"/api/projects/{project['id']}/storylines").json()
     assert loaded[0]["events"] == []
+
+
+def test_storyline_can_be_deleted_with_its_events(client):
+    project = _project(client, "删除故事线")
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "第一集", "premise": "事件", "target_duration_seconds": 60},
+    ).json()
+    storyline = client.post(
+        f"/api/projects/{project['id']}/storylines",
+        json={"title": "待删除", "kind": "conflict", "color": "#B9473E", "description": ""},
+    ).json()
+    client.post(
+        f"/api/storylines/{storyline['id']}/events",
+        json={"episode_id": episode["id"], "position": 1, "stage": "setup", "title": "冲突", "description": ""},
+    )
+
+    deleted = client.delete(f"/api/storylines/{storyline['id']}")
+
+    assert deleted.status_code == 204
+    assert client.get(f"/api/projects/{project['id']}/storylines").json() == []
+    assert client.delete(f"/api/storylines/{storyline['id']}").status_code == 404
