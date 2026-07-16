@@ -1,4 +1,4 @@
-import {BasicDepthPacking,Color,MeshBasicMaterial,MeshDepthMaterial,Vector3 as ThreeVector3,type Camera,type Material,type Object3D,type Scene} from 'three';
+import {BasicDepthPacking,Box3,Color,MeshBasicMaterial,MeshDepthMaterial,Vector3 as ThreeVector3,type Camera,type Material,type Object3D,type Scene} from 'three';
 import {captureDirectorPreview} from './director-preview';
 import {HUMANOID_BONES,mapHumanoidBoneName,type HumanoidBoneId} from './director-humanoid';
 import type {DirectorGuidanceKind} from './types';
@@ -24,6 +24,30 @@ const hideGuidanceExclusions=(scene:Scene)=>{
 
 const restoreVisibility=(visibility:Map<Object3D,boolean>)=>{
   for(const [object,visible] of visibility)object.visible=visible;
+};
+
+const fitDepthClipping=(scene:Scene,camera:Camera)=>{
+  if(!('near' in camera&&'far' in camera&&'updateProjectionMatrix' in camera))return null;
+  const clippingCamera=camera as Camera&{near:number;far:number;updateProjectionMatrix:()=>void};
+  scene.updateMatrixWorld(true);camera.updateMatrixWorld(true);
+  const bounds=new Box3();
+  scene.traverse(object=>{
+    if(object.name.startsWith('director-object-')&&!shouldHideFromGuidance(object)&&object.visible)bounds.expandByObject(object);
+  });
+  if(bounds.isEmpty())return null;
+  const depths:number[]=[];
+  for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){
+    const depth=-new ThreeVector3(x,y,z).applyMatrix4(camera.matrixWorldInverse).z;
+    if(Number.isFinite(depth)&&depth>0)depths.push(depth);
+  }
+  if(!depths.length)return null;
+  const previous={near:clippingCamera.near,far:clippingCamera.far};
+  const minimum=Math.min(...depths);const maximum=Math.max(...depths);
+  const padding=Math.max(.05,(maximum-minimum)*.15);
+  clippingCamera.near=Math.max(.01,minimum-padding);
+  clippingCamera.far=Math.max(clippingCamera.near+.1,maximum+padding);
+  clippingCamera.updateProjectionMatrix();
+  return()=>{clippingCamera.near=previous.near;clippingCamera.far=previous.far;clippingCamera.updateProjectionMatrix();};
 };
 
 export async function captureDirectorSilhouette({scene,camera,renderer,capture=captureDirectorPreview}:{scene:Scene;camera:Camera;renderer:RendererLike;capture?:(canvas:HTMLCanvasElement)=>Promise<Blob>}):Promise<Blob>{
@@ -55,11 +79,13 @@ export async function captureDirectorDepth({scene,camera,renderer,capture=captur
   const overrideMaterial=scene.overrideMaterial;
   const visibility=hideGuidanceExclusions(scene);
   const depthMaterial=new MeshDepthMaterial({depthPacking:BasicDepthPacking});
+  const restoreClipping=fitDepthClipping(scene,camera);
   scene.background=new Color('#000000');scene.overrideMaterial=depthMaterial;
   try{
     renderer.render(scene,camera);
     return await capture(renderer.domElement as HTMLCanvasElement);
   }finally{
+    restoreClipping?.();
     scene.overrideMaterial=overrideMaterial;
     restoreVisibility(visibility);
     scene.background=background;
