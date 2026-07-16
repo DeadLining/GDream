@@ -178,12 +178,14 @@ it('keeps the AI variant workspace inside one viewport without a canvas scrollba
   expect(css).toMatch(/\.ai-variant-canvas\s*>\s*img\s*\{[^}]*position:\s*absolute[^}]*inset:\s*var\(--space-2\)[^}]*width:\s*calc\(100%\s*-\s*var\(--space-4\)\)[^}]*height:\s*calc\(100%\s*-\s*var\(--space-4\)\)[^}]*object-fit:\s*contain[^}]*\}/s);
 });
 
-it('keeps the character master setting inside one viewport without panel scrollbars',()=>{
+it('keeps long character master settings reachable with panel scrolling',()=>{
   const css=readAllStyles();
   expect(css).toMatch(/\.master-setting-page\s*\{[^}]*height:\s*100%[^}]*overflow:\s*hidden[^}]*\}/s);
-  expect(css).toMatch(/\.master-setting-content\s*\{[^}]*height:\s*100%[^}]*display:\s*grid[^}]*grid-template-rows:[^;]*minmax\(0,\s*1fr\)[^}]*overflow:\s*hidden[^}]*\}/s);
-  expect(css).toMatch(/\.master-image-grid\s*\{[^}]*height:\s*100%[^}]*grid-template-rows:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[^}]*\}/s);
-  expect(css).toMatch(/\.master-setting-page\s*>\s*\.master-setting-inspector\s*\{[^}]*overflow:\s*hidden[^}]*\}/s);
+  expect(css).toMatch(/\.master-setting-content\s*\{[^}]*height:\s*100%[^}]*display:\s*grid[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*\}/s);
+  expect(css).toMatch(/\.master-image-grid\s*\{[^}]*min-height:\s*420px[^}]*grid-template-rows:\s*repeat\(2,\s*minmax\(180px,\s*1fr\)\)[^}]*\}/s);
+  expect(css).toMatch(/\.identity-bible\s*\{[^}]*overflow:\s*visible[^}]*\}/s);
+  expect(css).toMatch(/\.identity-bible article p\s*\{[^}]*display:\s*block[^}]*overflow:\s*visible[^}]*overflow-wrap:\s*anywhere[^}]*\}/s);
+  expect(css).toMatch(/\.master-setting-page\s*>\s*\.master-setting-inspector\s*\{[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*\}/s);
   expect(css).toMatch(/\.master-embedded-workspace\s+\.lineage-inspector\s*\{[^}]*overflow:\s*hidden[^}]*\}/s);
   expect(css).toMatch(/\.character-model-section\s*\{[^}]*grid-template-rows:\s*minmax\(112px,\s*auto\)\s+minmax\(0,\s*1fr\)\s+auto[^}]*\}/s);
 });
