@@ -19,18 +19,21 @@ class SpeechProvider(Protocol):
 
 
 class SpeechService:
-    NARRATOR_SPEAKER = "dylan"
-
     def __init__(
         self,
         session: Session,
         data_root: Path,
         provider: SpeechProvider,
+        *,
+        narrator_speaker: str = "dylan",
     ):
         self.session = session
         self.data_root = data_root.resolve()
         self.assets = AssetStore(session, self.data_root)
         self.provider = provider
+        self.narrator_speaker = narrator_speaker.strip()
+        if not self.narrator_speaker:
+            raise ValueError("Narrator speaker must not be empty")
 
     async def synthesize_dialogue(self, dialogue_id: str) -> models.Asset:
         statement = (
@@ -65,7 +68,7 @@ class SpeechService:
         speaker = (
             character.voice_speaker
             if character is not None
-            else self.NARRATOR_SPEAKER
+            else self.narrator_speaker
         )
         audio = await self.provider.synthesize(
             line.text, speaker, "Chinese", instruction

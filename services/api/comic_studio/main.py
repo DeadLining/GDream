@@ -223,6 +223,7 @@ def create_app(
         settings.data_root,
         CapabilityAdapterRegistry(lambda: app.state.provider_factory),
         mock_ssh_manager=app.state.mock_ssh_manager,
+        narrator_speaker=settings.qwen_tts_narrator_speaker,
     )
     app.state.episode_ai_stage_handlers = EpisodeAIStageHandlers(
         session_factory,

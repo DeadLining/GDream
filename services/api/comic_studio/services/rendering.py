@@ -14,6 +14,87 @@ class RenderingService:
         self.data_root = data_root.resolve()
         self.compositor_root = compositor_root.resolve()
 
+    @staticmethod
+    def _srt_timestamp(seconds: float) -> str:
+        milliseconds = max(0, round(seconds * 1000))
+        hours, remainder = divmod(milliseconds, 3_600_000)
+        minutes, remainder = divmod(remainder, 60_000)
+        whole_seconds, milliseconds = divmod(remainder, 1000)
+        return f"{hours:02}:{minutes:02}:{whole_seconds:02},{milliseconds:03}"
+
+    @classmethod
+    def build_srt(cls, manifest: dict) -> str:
+        cues = []
+        shot_offset = 0.0
+        for shot in manifest.get("shots", []):
+            shot_duration = max(0.0, float(shot.get("durationSeconds", 0)))
+            for line in shot.get("dialogue", []):
+                text = str(line.get("text", "")).replace("\r\n", "\n").replace("\r", "\n")
+                text = text.replace("\x00", "").strip()
+                if not text:
+                    continue
+                relative_start = max(0.0, float(line.get("startSeconds", 0)))
+                if relative_start >= shot_duration:
+                    continue
+                duration = max(0.1, float(line.get("durationSeconds", 0.1)))
+                start = shot_offset + relative_start
+                end = shot_offset + min(shot_duration, relative_start + duration)
+                if end <= start:
+                    continue
+                cues.append(
+                    "\n".join(
+                        [
+                            str(len(cues) + 1),
+                            f"{cls._srt_timestamp(start)} --> {cls._srt_timestamp(end)}",
+                            text,
+                        ]
+                    )
+                )
+            shot_offset += shot_duration
+        return "\n\n".join(cues) + ("\n" if cues else "")
+
+    @staticmethod
+    def _mux_subtitles(output_path: Path, subtitles: str) -> None:
+        subtitle_path = output_path.with_suffix(".srt")
+        subtitled_path = output_path.with_name(
+            f"{output_path.stem}.subtitled{output_path.suffix}"
+        )
+        subtitle_path.write_text(subtitles, encoding="utf-8")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(output_path),
+                    "-sub_charenc",
+                    "UTF-8",
+                    "-i",
+                    str(subtitle_path),
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "0:a?",
+                    "-map",
+                    "1:0",
+                    "-c:v",
+                    "copy",
+                    "-c:a",
+                    "copy",
+                    "-c:s",
+                    "mov_text",
+                    "-metadata:s:s:0",
+                    "language=zho",
+                    "-movflags",
+                    "+faststart",
+                    str(subtitled_path),
+                ],
+                check=True,
+            )
+            subtitled_path.replace(output_path)
+        finally:
+            subtitled_path.unlink(missing_ok=True)
+
     def build_manifest(self, episode_id: str) -> dict:
         statement = (
             select(models.Episode)
@@ -159,6 +240,7 @@ class RenderingService:
 
     def render(self, episode_id: str, output_path: Path) -> dict:
         manifest = self.build_manifest(episode_id)
+        subtitles = self.build_srt(manifest)
         output_path = output_path.resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path = output_path.with_suffix(".manifest.json")
@@ -175,6 +257,8 @@ class RenderingService:
             cwd=self.compositor_root,
             check=True,
         )
+        if subtitles:
+            self._mux_subtitles(output_path, subtitles)
         probe = subprocess.run(
             [
                 "ffprobe",
@@ -194,4 +278,6 @@ class RenderingService:
         stream_types = {stream["codec_type"] for stream in report.get("streams", [])}
         if "video" not in stream_types:
             raise RuntimeError("Rendered file has no video stream")
+        if subtitles and "subtitle" not in stream_types:
+            raise RuntimeError("Rendered file has no subtitle stream")
         return report
