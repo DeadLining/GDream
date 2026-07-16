@@ -126,7 +126,7 @@ Acceptance criteria:
 
 - [x] Add a `model3d` model-runtime capability and provider contract.
 - [x] Implement at least one hosted provider adapter before considering self-hosting.
-- [ ] Support image-to-3D generation from approved multi-view character references.
+- [x] Support image-to-3D generation from approved multi-view character references, using a deterministic contact sheet for providers that accept one image input while preserving every source asset and view type in generation provenance.
 - [x] Persist asynchronous generation jobs, progress, retryability, provider metadata, and sanitized failures.
 - [x] Validate and normalize generated outputs before they become selectable assets.
 - [ ] Add repair, decimation, texture optimization, and thumbnail processing.
