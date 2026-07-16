@@ -1,6 +1,8 @@
 /* Storyboard and inspector operational layout */
 .scene-section { margin-top: 22px; }
 .scene-heading { min-height: 34px; grid-template-columns: auto auto minmax(0, 1fr) auto; padding: 7px 0; margin-bottom: 9px; border-bottom: 1px solid var(--line); }
+.scene-heading.has-reference { grid-template-columns: 88px auto auto minmax(0,1fr) auto; align-items: center; }
+.scene-heading > img { width: 88px; aspect-ratio: 16/9; display: block; object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .scene-heading h2, .scene-heading p, .scene-heading time, .scene-heading span { min-width: 0; }
 .shots-grid { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); align-items: stretch; }
 .shot-card { display: grid; grid-template-rows: auto 34px 42px 30px; width: 100%; min-height: 0; padding: 0; color: var(--ink); }

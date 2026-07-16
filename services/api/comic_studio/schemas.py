@@ -779,6 +779,10 @@ class SceneRead(BaseModel):
     summary: str
     continuity_state: dict
     estimated_duration_seconds: float
+    reference_asset_id: str | None = None
+    reference_asset_name: str | None = None
+    reference_media_url: str | None = None
+    reference_media_type: str | None = None
     shots: list[ShotRead] = []
 
 

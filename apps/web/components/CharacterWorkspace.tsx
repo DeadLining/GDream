@@ -15,6 +15,7 @@ import {
   deleteAssetVariant,
   deleteAssetVariantState,
   generateCharacterReferenceSet,
+  generateLibraryAssetImage,
   generateModel3D,
   getAssetVariantImpact,
   getAssetVariantStateImpact,
@@ -175,6 +176,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
   const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();await onMetricsChanged?.();};
   const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();await onMetricsChanged?.();};
+  const generateLibraryImage=async(id:string)=>{const started=await generateLibraryAssetImage(id);const finished=await pollJob(started.job_id);if(finished.status==='failed')throw new Error(finished.error||'场景参考图生成失败');await reloadLibraryAssets();await onMetricsChanged?.();};
   const generateLibraryModel=async(id:string,referenceAssetId:string)=>{
     const started=await generateModel3D('library_asset',id,referenceAssetId);
     const finished=await pollJob(started.job_id);
@@ -185,7 +187,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const loadLibraryModelJob=(id:string)=>getLatestModel3DJob('library_asset',id);
   const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
   const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
-  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
+  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
 
   if(!character)return catalog;
 

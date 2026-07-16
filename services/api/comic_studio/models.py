@@ -378,6 +378,35 @@ class Scene(Base):
         order_by="LibraryAssetSceneBinding.created_at",
     )
 
+    @property
+    def reference_library_asset(self) -> LibraryAsset | None:
+        for binding in self.library_asset_bindings:
+            asset = binding.library_asset
+            media = asset.media_asset
+            if asset.kind == "scene" and media is not None and media.media_type.startswith("image/"):
+                return asset
+        return None
+
+    @property
+    def reference_asset_id(self) -> str | None:
+        asset = self.reference_library_asset
+        return asset.id if asset is not None else None
+
+    @property
+    def reference_asset_name(self) -> str | None:
+        asset = self.reference_library_asset
+        return asset.name if asset is not None else None
+
+    @property
+    def reference_media_url(self) -> str | None:
+        asset = self.reference_library_asset
+        return f"/media/{asset.media_asset.local_path}" if asset is not None else None
+
+    @property
+    def reference_media_type(self) -> str | None:
+        asset = self.reference_library_asset
+        return asset.media_asset.media_type if asset is not None else None
+
 
 class Shot(Base):
     __tablename__ = "shots"

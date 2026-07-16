@@ -143,7 +143,11 @@ class EpisodeRepository:
             .options(
                 selectinload(models.Episode.scenes)
                 .selectinload(models.Scene.shots)
-                .selectinload(models.Shot.dialogue)
+                .selectinload(models.Shot.dialogue),
+                selectinload(models.Episode.scenes)
+                .selectinload(models.Scene.library_asset_bindings)
+                .selectinload(models.LibraryAssetSceneBinding.library_asset)
+                .selectinload(models.LibraryAsset.media_asset),
             )
             .where(models.Episode.id == episode_id)
         )

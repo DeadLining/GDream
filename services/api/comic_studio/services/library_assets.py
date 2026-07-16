@@ -112,6 +112,9 @@ class LibraryAssetService:
         *,
         filename: str,
         data_root: Path,
+        provider: str = "upload",
+        model: str = "local",
+        request_metadata: dict | None = None,
     ):
         library_asset = self.session.get(models.LibraryAsset, asset_id)
         if library_asset is None:
@@ -129,7 +132,8 @@ class LibraryAssetService:
 
         width = None
         height = None
-        request_metadata = {
+        stored_request_metadata = {
+            **(request_metadata or {}),
             "library_asset_id": library_asset.id,
             "original_filename": Path(filename).name,
         }
@@ -145,8 +149,8 @@ class LibraryAssetService:
             except Character3DRepresentationError as exc:
                 raise LibraryAssetMediaError(str(exc)) from exc
             media_type, extension = "model/gltf-binary", ".glb"
-            request_metadata["format"] = "glb"
-            request_metadata["glb_metrics"] = metrics
+            stored_request_metadata["format"] = "glb"
+            stored_request_metadata["glb_metrics"] = metrics
         else:
             try:
                 with Image.open(BytesIO(content)) as image:
@@ -165,9 +169,9 @@ class LibraryAssetService:
             kind="library-asset-media",
             local_path="",
             media_type=media_type,
-            provider="upload",
-            model="local",
-            request_metadata=request_metadata,
+            provider=provider,
+            model=model,
+            request_metadata=stored_request_metadata,
             checksum=hashlib.sha256(content).hexdigest(),
             review_status="approved",
             width=width,

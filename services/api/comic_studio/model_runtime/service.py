@@ -25,6 +25,7 @@ from comic_studio.services.character_reference_sets import (
     CharacterReferenceSetService,
 )
 from comic_studio.services.panels import PanelService
+from comic_studio.services.library_assets import LibraryAssetService
 from comic_studio.services.speech import SpeechService
 from comic_studio.services.videos import VideoService
 from comic_studio.services.visual_review import VisualReviewService
@@ -323,6 +324,40 @@ class ModelRuntimeService:
                     shot_ids,
                     activate=bool(request_payload.get("activate", True)),
                 )
+            if target_type == "library_asset":
+                library_asset = session.get(models.LibraryAsset, target_id)
+                if library_asset is None:
+                    raise KeyError(target_id)
+                if library_asset.kind != "scene":
+                    raise ValueError("library_asset_image_requires_scene")
+                project = session.get(models.Project, library_asset.project_id)
+                prompt = (
+                    "Create a canonical wide establishing reference image for an AI comic production scene.\n"
+                    f"Project visual style: {project.visual_style}.\n"
+                    f"Scene name: {library_asset.name}.\n"
+                    f"Scene description: {library_asset.description or 'Use the scene name as the core setting.'}.\n"
+                    f"Tags: {', '.join(library_asset.tags) or 'none'}.\n"
+                    "Show the environment, architecture, lighting, weather, spatial layout, and reusable continuity landmarks. "
+                    "Do not add captions, typography, watermarks, UI, contact sheets, or character close-ups."
+                )
+                result = await provider.generate(prompt, "1536x1024")
+                stored = LibraryAssetService(session).upload_media(
+                    library_asset.id,
+                    result.content,
+                    filename="ai-scene-reference.png",
+                    data_root=self.data_root,
+                    provider="gpt-image",
+                    model=provider.model,
+                    request_metadata={"prompt": prompt, "size": "1536x1024"},
+                )
+                media = stored.media_asset
+                return {
+                    "capability": Capability.IMAGE.value,
+                    "library_asset_id": stored.id,
+                    "asset_id": media.id,
+                    "media_url": f"/media/{media.local_path}",
+                    "media_type": media.media_type,
+                }
             if request_payload.get("mode") == "reference_set":
                 if on_progress is None:
                     raise ValueError("reference_set progress callback is required")

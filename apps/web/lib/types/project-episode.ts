@@ -36,7 +36,9 @@ export type Shot = {
 };
 export type Scene = {
   id: string; position: number; location: string; time_of_day: string; summary: string;
-  continuity_state: Record<string, unknown>; estimated_duration_seconds: number; shots: Shot[];
+  continuity_state: Record<string, unknown>; estimated_duration_seconds: number;
+  reference_asset_id?: string | null; reference_asset_name?: string | null;
+  reference_media_url?: string | null; reference_media_type?: string | null; shots: Shot[];
 };
 export type EpisodeDetail = EpisodeSummary & {scenes: Scene[]};
 export type EpisodeDeletionPreview={episode_id:string;title:string;deleted:{scenes:number;shots:number;dialogue_lines:number;assets:number}};

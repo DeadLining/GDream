@@ -20,6 +20,7 @@ vi.mock('../lib/api',()=>({
   listSceneLibraryAssets:mocks.listSceneLibraryAssets,
   bindLibraryAssetToScene:mocks.bindAsset,
   unbindLibraryAssetFromScene:mocks.unbindAsset,
+  mediaUrl:(path:string)=>path,
 }));
 
 const episode: EpisodeDetail = {
@@ -39,7 +40,7 @@ describe('SceneWorkspace', () => {
   afterEach(()=>{cleanup();vi.clearAllMocks();});
   beforeEach(()=>{
     mocks.listLibraryAssets.mockResolvedValue([
-      {id:'asset-scene',project_id:'project-1',kind:'scene',name:'雨夜实验室',description:'冷蓝灯光',tags:['雨夜'],metadata:{},created_at:'',updated_at:''},
+      {id:'asset-scene',project_id:'project-1',kind:'scene',name:'雨夜实验室',description:'冷蓝灯光',tags:['雨夜'],metadata:{},media_asset_id:'media-scene',media_url:'/media/lab.png',media_type:'image/png',created_at:'',updated_at:''},
       {id:'asset-prop',project_id:'project-1',kind:'prop',name:'银色怀表',description:'关键线索',tags:['线索'],metadata:{},created_at:'',updated_at:''},
       {id:'asset-costume',project_id:'project-1',kind:'costume',name:'黑色风衣',description:'主角常服',tags:['主角'],metadata:{},created_at:'',updated_at:''},
       {id:'asset-sound',project_id:'project-1',kind:'sound',name:'电流声',description:'环境声',tags:[],metadata:{},created_at:'',updated_at:''},
@@ -61,6 +62,10 @@ describe('SceneWorkspace', () => {
     expect(mocks.bindAsset).toHaveBeenCalledWith('scene-1','asset-prop');
     await userEvent.click(screen.getByRole('checkbox',{name:'绑定场景资产 雨夜实验室'}));
     expect(mocks.unbindAsset).toHaveBeenCalledWith('scene-1','asset-scene');
+    expect(screen.queryByRole('img',{name:'废弃实验室场景参考图'})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox',{name:'绑定场景资产 雨夜实验室'}));
+    expect(mocks.bindAsset).toHaveBeenCalledWith('scene-1','asset-scene');
+    expect(screen.getByRole('img',{name:'废弃实验室场景参考图'})).toHaveAttribute('src','/media/lab.png');
     await userEvent.click(screen.getByRole('checkbox',{name:'绑定声音资产 电流声'}));
     expect(mocks.bindAsset).toHaveBeenCalledWith('scene-1','asset-sound');
   });

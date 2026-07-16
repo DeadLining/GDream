@@ -72,7 +72,7 @@ class AssetVariantSuggestion(BaseModel):
 class ImageRuntimeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    target_type: Literal["shot", "character"]
+    target_type: Literal["shot", "character", "library_asset"]
     target_id: str
     activate: bool = True
     reference_type: str = "primary"
