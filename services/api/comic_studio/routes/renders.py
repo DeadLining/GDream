@@ -44,7 +44,7 @@ def run_render_job(app, job_id: str, episode_id: str) -> None:
                 from comic_studio.services.render_review import review_to_payload
 
                 record = RenderReviewService(session).review_render(
-                    output, episode_id, job_id=job.id
+                    output, episode_id, job_id=job_id
                 )
                 session.commit()
                 review_payload = review_to_payload(record)
