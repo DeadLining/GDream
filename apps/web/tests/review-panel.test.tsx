@@ -214,8 +214,14 @@ describe('ReviewPanel', () => {
     expect(play).toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button',{name:'暂停'}));
     expect(pause).toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button',{name:'取消静音'}));
+    const unmute=screen.getByRole('button',{name:'取消静音'});
+    expect(unmute).toHaveAttribute('aria-pressed','true');
+    expect(unmute.querySelector('.lucide-volume-x')).toBeInTheDocument();
+    await userEvent.click(unmute);
     expect(video).not.toHaveProperty('muted',true);
+    const mute=screen.getByRole('button',{name:'静音'});
+    expect(mute).toHaveAttribute('aria-pressed','false');
+    expect(mute.querySelector('.lucide-volume-2')).toBeInTheDocument();
   });
 
   it('moves a valid episode playhead with real media time',async()=>{
