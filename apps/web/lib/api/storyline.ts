@@ -17,6 +17,11 @@ export async function deleteVolume(id:string):Promise<void>{
   if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'删除卷失败');throw new ApiError(detail,response.status,detail);}
 }
 export const updateStoryline=(id:string,data:Partial<Pick<Storyline,'title'|'kind'|'color'|'description'>>)=>apiRequest<Storyline>(`/api/storylines/${id}`,json('PATCH',data));
+export async function deleteStoryline(id:string):Promise<void>{
+  let response:Response;
+  try{response=await fetch(`${API_BASE}/api/storylines/${id}`,{method:'DELETE'});}catch{throw new ApiError('无法连接本地 API',0,'connectivity_failure');}
+  if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'删除故事线失败');throw new ApiError(detail,response.status,detail);}
+}
 export const updateStorylineEvent=(id:string,data:Partial<Pick<Storyline['events'][number],'episode_id'|'scene_id'|'shot_id'|'position'|'stage'|'title'|'description'|'setup_event_id'|'payoff_event_id'|'metadata'>>)=>apiRequest<Storyline['events'][number]>(`/api/storyline-events/${id}`,json('PATCH',data));
 export async function deleteStorylineEvent(id:string):Promise<void>{
   let response:Response;

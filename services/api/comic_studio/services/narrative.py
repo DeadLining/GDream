@@ -172,6 +172,14 @@ class NarrativeService:
         self.session.refresh(storyline)
         return storyline
 
+    def delete_storyline(self, storyline_id: str) -> bool:
+        storyline = self.session.get(models.Storyline, storyline_id)
+        if storyline is None:
+            return False
+        self.session.delete(storyline)
+        self.session.commit()
+        return True
+
     def _validate_storyline_event(
         self, storyline: models.Storyline, data: schemas.StorylineEventCreate
     ) -> None:

@@ -124,6 +124,13 @@ def update_storyline(storyline_id: str, data: schemas.StorylinePatch, session: S
     return storyline
 
 
+@router.delete("/api/storylines/{storyline_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_storyline(storyline_id: str, session: SessionDependency):
+    if not NarrativeService(session).delete_storyline(storyline_id):
+        raise HTTPException(404, "Storyline not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/api/storylines/{storyline_id}/events",
     response_model=schemas.StorylineEventRead,
