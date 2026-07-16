@@ -58,6 +58,7 @@ function TransformEditor({transform,onCommit}:{transform:Transform;onCommit:(tra
 
 export function DirectorInspector({
   object,
+  animationSaving,
   environment,
   environmentSaving,
   sceneVisible,
@@ -90,6 +91,7 @@ export function DirectorInspector({
   onDeleteObject,
 }:{
   object:DirectorObject|null;
+  animationSaving:boolean;
   environment:Record<string,unknown>;
   environmentSaving:boolean;
   sceneVisible:boolean;
@@ -169,19 +171,19 @@ export function DirectorInspector({
       </>}
       {cameraMode&&animatedProxy&&<div className="director-animation-controls">
         <label htmlFor="director-animation">动画片段</label>
-        <select id="director-animation" value={animation} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>
+        <select id="director-animation" value={animation} disabled={animationSaving} onChange={event=>onAnimationChange(event.target.value as DirectorAnimationClip)}>{DIRECTOR_ANIMATION_CLIPS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>
         <label htmlFor="director-proxy-animation-time">代理动画时间</label>
-        <input id="director-proxy-animation-time" type="range" min="0" max={proxyAnimationDuration} step="0.01" value={proxyAnimationTime} onChange={event=>onAnimationTimeChange(Number(event.target.value))}/>
+        <input id="director-proxy-animation-time" type="range" min="0" max={proxyAnimationDuration} step="0.01" value={proxyAnimationTime} disabled={animationSaving} onChange={event=>onAnimationTimeChange(Number(event.target.value))}/>
         <output>{formatNumber(proxyAnimationTime,2)} / {formatNumber(proxyAnimationDuration,2)} 秒</output>
-        <div><button type="button" className="command-button" aria-label={animationPlaying?'暂停动画':'播放动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button><button type="button" className="command-button" aria-label="重置代理动画" onClick={onAnimationReset}><RotateCcw size={14}/></button></div>
+        <div><button type="button" className="command-button" aria-label={animationPlaying?'暂停动画':'播放动画'} disabled={animationSaving} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button><button type="button" className="command-button" aria-label="重置代理动画" disabled={animationSaving} onClick={onAnimationReset}><RotateCcw size={14}/></button></div>
       </div>}
       {cameraMode&&modelUrl&&importedClips.length>0&&<div className="director-animation-controls">
         <label htmlFor="director-imported-animation">导入动画片段</label>
-        <select id="director-imported-animation" value={importedAnimation} onChange={event=>onImportedAnimationChange(event.target.value)}>{importedClips.map(item=><option key={item.name} value={item.name}>{item.name}</option>)}</select>
+        <select id="director-imported-animation" value={importedAnimation} disabled={animationSaving} onChange={event=>onImportedAnimationChange(event.target.value)}>{importedClips.map(item=><option key={item.name} value={item.name}>{item.name}</option>)}</select>
         <label htmlFor="director-animation-time">动画时间</label>
-        <input id="director-animation-time" type="range" min="0" max={importedDuration} step="0.01" value={importedAnimationTime} onChange={event=>onAnimationTimeChange(Number(event.target.value))}/>
+        <input id="director-animation-time" type="range" min="0" max={importedDuration} step="0.01" value={importedAnimationTime} disabled={animationSaving} onChange={event=>onAnimationTimeChange(Number(event.target.value))}/>
         <output>{formatNumber(importedAnimationTime,2)} / {formatNumber(importedDuration,2)} 秒</output>
-        <div><button type="button" className="command-button" aria-label={animationPlaying?'暂停导入动画':'播放导入动画'} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button><button type="button" className="command-button" aria-label="重置导入动画" onClick={onAnimationReset}><RotateCcw size={14}/></button></div>
+        <div><button type="button" className="command-button" aria-label={animationPlaying?'暂停导入动画':'播放导入动画'} disabled={animationSaving} onClick={()=>onAnimationPlayingChange(!animationPlaying)}>{animationPlaying?<Pause size={14}/>:<Play size={14}/>}</button><button type="button" className="command-button" aria-label="重置导入动画" disabled={animationSaving} onClick={onAnimationReset}><RotateCcw size={14}/></button></div>
       </div>}
       {cameraMode&&<>
         <label className="director-checkbox"><input type="checkbox" aria-label="本镜头显示" checked={object.visible} onChange={event=>onShotVisibilityChange(event.target.checked)}/><span>本镜头显示</span></label>
