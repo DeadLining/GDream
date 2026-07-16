@@ -332,10 +332,14 @@ def stream_script_generation(
             "brief": payload.brief.strip(),
             "existing_draft": source_content,
         }
+        started_revision = ScriptRevisionRead.model_validate(current).model_dump(
+            mode="json"
+        )
     provider = request.app.state.provider_factory.create_llm()
 
     async def events():
         try:
+            yield _sse("started", {"revision": started_revision})
             async for chunk in provider.stream_script(context):
                 with request.app.state.session_factory() as chunk_session:
                     revision = chunk_session.get(models.ScriptRevision, revision_id)
