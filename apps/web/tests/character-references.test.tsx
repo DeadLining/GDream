@@ -184,7 +184,7 @@ it('keeps long character master settings reachable with panel scrolling',()=>{
   expect(css).toMatch(/\.master-setting-content\s*\{[^}]*height:\s*100%[^}]*display:\s*grid[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*\}/s);
   expect(css).toMatch(/\.master-visual-assets\s*\{[^}]*min-height:\s*420px[^}]*\}/s);
   expect(css).toMatch(/\.master-image-grid\s*\{[^}]*min-height:\s*420px[^}]*grid-template-rows:\s*repeat\(2,\s*minmax\(180px,\s*1fr\)\)[^}]*\}/s);
-  expect(css).toMatch(/\.identity-bible\s*\{[^}]*overflow:\s*visible[^}]*\}/s);
+  expect(css).toMatch(/\.identity-bible\s*\{[^}]*display:\s*block[^}]*overflow:\s*visible[^}]*\}/s);
   expect(css).toMatch(/\.identity-bible article p\s*\{[^}]*display:\s*block[^}]*overflow:\s*visible[^}]*overflow-wrap:\s*anywhere[^}]*\}/s);
   expect(css).toMatch(/\.master-setting-page\s*>\s*\.master-setting-inspector\s*\{[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*\}/s);
   expect(css).toMatch(/\.master-embedded-workspace\s+\.lineage-inspector\s*\{[^}]*overflow:\s*hidden[^}]*\}/s);
