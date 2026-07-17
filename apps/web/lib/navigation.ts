@@ -25,7 +25,6 @@ export type PlatformPage =
 export type OperationsDestination =
   | 'recent'
   | 'projects'
-  | 'archive'
   | 'trash'
   | 'export';
 
@@ -40,7 +39,6 @@ export const globalSectionWorkAreas = {
 export const operationsPlatformPages = {
   recent: 'home',
   projects: 'home',
-  archive: 'home',
   trash: 'trash',
   export: 'export',
 } as const satisfies Record<OperationsDestination, PlatformPage>;
