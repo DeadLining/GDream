@@ -75,6 +75,17 @@ describe('ModelCenter', () => {
     expect(await screen.findAllByRole('form')).toHaveLength(5);
   });
 
+  it('keeps invocation history available when runtime health fails', async () => {
+    mocks.getModelRuntimeHealth.mockRejectedValue(new Error('运行状态暂时不可用'));
+
+    render(<ModelCenter/>);
+
+    expect(await screen.findByText('provider_timeout')).toBeVisible();
+    expect(screen.getByRole('heading', {name: '最近调用'})).toBeVisible();
+    expect(screen.getByText('运行状态暂时不可用')).toBeVisible();
+    expect(await screen.findAllByRole('form')).toHaveLength(5);
+  });
+
   it('retries a retryable invocation and refreshes runtime state', async () => {
     render(<ModelCenter/>);
     await userEvent.click(await screen.findByRole('button', {name: '重试画面调用'}));

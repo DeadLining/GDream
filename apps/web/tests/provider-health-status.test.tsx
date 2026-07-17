@@ -90,6 +90,19 @@ describe('ProviderHealthStatus', () => {
     expect(screen.getByText('65 ms')).toBeVisible();
   });
 
+  it('keeps older four-channel health responses usable when 3D status is absent', async () => {
+    const {model3d: _model3d, ...legacyHealth} = healthy;
+    mocks.getProviderHealth.mockResolvedValue(legacyHealth);
+    render(<ProviderHealthStatus/>);
+
+    await userEvent.click(screen.getByRole('button', {name: '检测模型服务'}));
+
+    expect(await screen.findByText('4/4 正常')).toBeVisible();
+    expect(screen.getByRole('region', {name: '模型服务检测详情'})).toBeVisible();
+    expect(screen.getByText('3D 生成')).toBeVisible();
+    expect(screen.getByText('已禁用')).toBeVisible();
+  });
+
   it('closes the result popover when clicking outside it', async () => {
     mocks.getProviderHealth.mockResolvedValue(healthy);
     render(<div><ProviderHealthStatus/><button type="button">页面其他区域</button></div>);
