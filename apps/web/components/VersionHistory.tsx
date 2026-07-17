@@ -6,10 +6,11 @@ import {createEpisodeVersion,listEpisodeVersions,restoreEpisodeVersion} from '..
 import {diffEpisodeSnapshots} from '../lib/episode-version-diff';
 import type {EpisodeDetail,EpisodeVersion} from '../lib/types';
 
-const csvCell=(value:unknown)=>`"${String(value??'').replaceAll('"','""')}"`;
+const spreadsheetSafe=(value:unknown)=>{const text=String(value??'');return /^[=+\-@]/.test(text)?`'${text}`:text;};
+const csvCell=(value:unknown)=>`"${spreadsheetSafe(value).replaceAll('"','""')}"`;
 export const serializeEpisodeVersionsCsv=(versions:EpisodeVersion[])=>[
-  ['版本','标签','来源','作者','恢复来源','创建时间'].map(csvCell).join(','),
-  ...versions.map(version=>[`V${version.version}`,version.label,version.source,version.author,version.restored_from_id??'',version.created_at].map(csvCell).join(',')),
+  ['版本','标签','来源','恢复来源','创建时间'].map(csvCell).join(','),
+  ...versions.map(version=>[`V${version.version}`,version.label,version.source,version.restored_from_id??'',version.created_at].map(csvCell).join(',')),
 ].join('\n');
 const downloadVersions=(episodeId:string,versions:EpisodeVersion[])=>{const anchor=document.createElement('a');anchor.href=`data:text/csv;charset=utf-8,${encodeURIComponent('\uFEFF'+serializeEpisodeVersionsCsv(versions))}`;anchor.download=`episode-${episodeId}-versions.csv`;anchor.click();};
 const scopeLabels={episode:'单集',scene:'场景',shot:'镜头',dialogue:'对白'} as const;
@@ -28,7 +29,7 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
   const [creating,setCreating]=useState(false);
   useEffect(()=>{
     if(!episode?.id){setVersions([]);setSelectedId('');setCompareId('');setLoading(false);return;}
-    let active=true;setLoading(true);setError('');
+    let active=true;setVersions([]);setSelectedId('');setCompareId('');setSuccess('');setError('');setLoading(true);
     listEpisodeVersions(episode.id).then(items=>{if(active){setVersions(items);setSelectedId(items[0]?.id??'');setCompareId(items[1]?.id??items[0]?.id??'');}}).catch(cause=>active&&setError(cause instanceof Error?cause.message:'版本加载失败')).finally(()=>active&&setLoading(false));
     return()=>{active=false;};
   },[episode?.id]);
@@ -38,7 +39,7 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
   const createSnapshot=async(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();if(!episode||creating)return;
     const form=new FormData(event.currentTarget);setCreating(true);setError('');setSuccess('');
-    try{const created=await createEpisodeVersion(episode.id,{label:String(form.get('label')).trim(),source:'manual',author:String(form.get('author')).trim()});setVersions(items=>[created,...items.filter(item=>item.id!==created.id)]);setCompareId(selected?.id??created.id);setSelectedId(created.id);setCreateOpen(false);setSuccess(`已保存 V${created.version}“${created.label}”。`);}
+    try{const created=await createEpisodeVersion(episode.id,{label:String(form.get('label')).trim(),source:'manual'});setVersions(items=>[created,...items.filter(item=>item.id!==created.id)]);setCompareId(selected?.id??created.id);setSelectedId(created.id);setCreateOpen(false);setSuccess(`已保存 V${created.version}“${created.label}”。`);}
     catch(cause){setError(cause instanceof Error?cause.message:'版本保存失败');}
     finally{setCreating(false);}
   };
@@ -49,7 +50,7 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
     {error&&<p className="warning-box" role="alert">{error}</p>}
     {success&&<p className="success-box" role="status">{success}</p>}
     <div className="version-layout">
-      <aside className="version-timeline"><h2>历史快照</h2>{loading?<p>正在加载版本…</p>:versions.length===0?<p>暂无版本记录。</p>:versions.map(version=><button key={version.id} className={version.id===selected?.id?'active':''} onClick={()=>setSelectedId(version.id)}><strong>V{version.version} {version.label}</strong><small>{version.author} · {version.created_at?new Date(version.created_at).toLocaleString('zh-CN'):'时间未记录'}</small></button>)}</aside>
+      <aside className="version-timeline"><h2>历史快照</h2>{loading?<p>正在加载版本…</p>:versions.length===0?<p>暂无版本记录。</p>:versions.map(version=><button key={version.id} className={version.id===selected?.id?'active':''} onClick={()=>setSelectedId(version.id)}><strong>V{version.version} {version.label}</strong><small>{version.created_at?new Date(version.created_at).toLocaleString('zh-CN'):'时间未记录'}</small></button>)}</aside>
       <section className="version-compare version-structured-diff">
         <div className="version-compare-controls">
           <label><span>对比基线</span><select aria-label="对比基线" value={baseline?.id??''} disabled={!versions.length} onChange={event=>setCompareId(event.target.value)}>{versions.map(version=><option key={version.id} value={version.id}>V{version.version} {version.label}</option>)}</select></label>
@@ -68,7 +69,7 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
       </section>
       <aside className="operations-inspector">
         <h2>目标快照</h2>
-        {selected?<><h3>V{selected.version} {selected.label}</h3><dl className="snapshot-details"><div><dt>来源</dt><dd>{selected.source}</dd></div><div><dt>创建者</dt><dd>{selected.author}</dd></div><div><dt>恢复来源</dt><dd>{selected.restored_from_id??'无'}</dd></div></dl><p className="warning-box">恢复会应用单集、场景、镜头和对白快照；当前状态会先自动保存为检查点。</p></>:<p>请选择一个目标快照。</p>}
+        {selected?<><h3>V{selected.version} {selected.label}</h3><dl className="snapshot-details"><div><dt>来源</dt><dd>{selected.source}</dd></div><div><dt>恢复来源</dt><dd>{selected.restored_from_id??'无'}</dd></div></dl><p className="warning-box">恢复会应用单集、场景、镜头和对白快照；当前状态会先自动保存为检查点。</p></>:<p>请选择一个目标快照。</p>}
       </aside>
     </div>
     <footer className="operations-sticky-footer">
@@ -76,6 +77,6 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
       <button aria-label="导出版本记录" disabled={!episode||!versions.length} onClick={()=>episode&&downloadVersions(episode.id,versions)}><Download size={16}/>导出版本记录</button>
       <button className="command-button" aria-label="恢复所选快照" disabled={!selected||restoring} onClick={restoreSnapshot}><RotateCcw size={16}/>{restoring?'恢复中…':'恢复所选快照'}</button>
     </footer>
-    {createOpen&&<div className="dialog-backdrop"><form className="form-dialog" role="dialog" aria-label="保存当前版本" onSubmit={createSnapshot}><header><h2>保存当前版本</h2><button type="button" aria-label="关闭" onClick={()=>setCreateOpen(false)}>×</button></header><label>版本标签<input aria-label="版本标签" name="label" placeholder="例如：导演确认版" required autoFocus/></label><label>创建者<input aria-label="创建者" name="author" placeholder="例如：本人" required/></label><p>将保存当前单集、场景、镜头和对白的不可变快照。</p><footer><button type="button" onClick={()=>setCreateOpen(false)}>取消</button><button className="primary-action" aria-label="保存版本" disabled={creating}>{creating?'保存中…':'保存版本'}</button></footer></form></div>}
+    {createOpen&&<div className="dialog-backdrop"><form className="form-dialog" role="dialog" aria-label="保存当前版本" onSubmit={createSnapshot}><header><h2>保存当前版本</h2><button type="button" aria-label="关闭" onClick={()=>setCreateOpen(false)}>×</button></header><label>版本标签<input aria-label="版本标签" name="label" placeholder="例如：导演确认版" required autoFocus/></label><p>将保存当前单集、场景、镜头和对白的不可变快照。</p><footer><button type="button" onClick={()=>setCreateOpen(false)}>取消</button><button className="primary-action" aria-label="保存版本" disabled={creating}>{creating?'保存中…':'保存版本'}</button></footer></form></div>}
   </main>;
 }

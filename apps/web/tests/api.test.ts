@@ -456,7 +456,7 @@ describe('operations api',()=>{
     await updateProductionTask('task-1',{status:'completed'});
     await deleteProductionTask('task-1');
     await listEpisodeVersions('episode-1');
-    await createEpisodeVersion('episode-1',{label:'审核前',source:'manual',author:'张伟'});
+    await createEpisodeVersion('episode-1',{label:'审核前',source:'manual'});
     await restoreEpisodeVersion('version-1');
     await listDeliveryPackages('episode-1');
     await createDeliveryPackage('episode-1',{release_candidate_id:'candidate-1',preset_name:'平台包',outputs:[{kind:'landscape_video',format:'mp4',enabled:true}]});

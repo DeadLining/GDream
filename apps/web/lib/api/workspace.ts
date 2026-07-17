@@ -5,7 +5,7 @@ import { API_BASE, ApiError, apiRequest, json } from './core';
 import type { DeliveryOutput, DeliveryPackage, EpisodeVersion, ProjectSearchResponse, TrashItem, TrashRestore, WorkspaceSummary } from '../types';
 
 export const listEpisodeVersions=(episodeId:string)=>apiRequest<EpisodeVersion[]>(`/api/episodes/${episodeId}/versions`);
-export const createEpisodeVersion=(episodeId:string,data:{label:string;source:'manual'|'autosave'|'checkpoint';author:string})=>apiRequest<EpisodeVersion>(`/api/episodes/${episodeId}/versions`,json('POST',data));
+export const createEpisodeVersion=(episodeId:string,data:{label:string;source:'manual'|'autosave'|'checkpoint'})=>apiRequest<EpisodeVersion>(`/api/episodes/${episodeId}/versions`,json('POST',data));
 export const restoreEpisodeVersion=(id:string)=>apiRequest<EpisodeVersion>(`/api/episode-versions/${id}/restore`,json('POST'));
 export const listDeliveryPackages=(episodeId:string)=>apiRequest<DeliveryPackage[]>(`/api/episodes/${episodeId}/delivery-packages`);
 export const createDeliveryPackage=(episodeId:string,data:{release_candidate_id:string;preset_name:string;outputs:DeliveryOutput[]})=>apiRequest<DeliveryPackage>(`/api/episodes/${episodeId}/delivery-packages`,json('POST',data));

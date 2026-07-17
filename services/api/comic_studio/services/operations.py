@@ -233,7 +233,13 @@ class OperationsService:
         snapshot = self._episode_snapshot(episode_id)
         if snapshot is None: return None
         number = self._next_version_number(episode_id)
-        version = models.EpisodeVersion(episode_id=episode_id, version=number, snapshot=snapshot, **data.model_dump())
+        version = models.EpisodeVersion(
+            episode_id=episode_id,
+            version=number,
+            snapshot=snapshot,
+            author="本人",
+            **data.model_dump(),
+        )
         self.session.add(version); self.session.flush()
         self.session.commit(); self.session.refresh(version)
         return version
