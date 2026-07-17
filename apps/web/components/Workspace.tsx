@@ -320,7 +320,7 @@ export function Workspace() {
         id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
         role={workArea === 'inspector' ? 'tabpanel' : undefined}
         aria-labelledby={workArea === 'inspector' ? 'workspace-tab-inspector' : undefined}
-      >{selectedShot ? <Inspector shot={selectedShot} characters={project?.characters ?? []} onShotUpdated={updateShotInEpisode}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
+      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode} onOpenMedia={mode=>{setSelectedShotId(selectedShot.id);setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia({shotId:selectedShot.id,mode});setGlobalSection('episode');changeWorkArea('production');}} onOpenDialogue={()=>{setSelectedShotId(selectedShot.id);setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionMedia(null);setProductionDialogueShotId(selectedShot.id);setGlobalSection('episode');changeWorkArea('production');}}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>
