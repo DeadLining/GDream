@@ -43,13 +43,16 @@ describe('DirectorCanvas',()=>{
     expect(ui.getByTestId('orbit')).toHaveAttribute('data-enabled','true');
   });
 
-  it('renders a standard humanoid rig proxy when a character has no GLB',()=>{
+  it('renders a plain gray humanoid proxy without visible joints when a character has no GLB',()=>{
     const view=render(<DirectorCanvas objects={[objects[0]]} camera={camera} selectedObjectId={null} mode="world" onTransform={vi.fn()}/>);
 
     expect(view.container.querySelector('[name="humanoid-rig-character-1"]')).toBeInTheDocument();
-    for(const bone of ['Hips','Spine','Head','LeftUpperArm','RightUpperArm','LeftUpperLeg','RightUpperLeg']){
-      expect(view.container.querySelector(`[name="humanoid-bone-${bone}"]`)).toBeInTheDocument();
+    for(const part of ['head','body','left-arm','right-arm','left-leg','right-leg']){
+      expect(view.container.querySelector(`[name="humanoid-proxy-${part}"]`)).toBeInTheDocument();
     }
+    expect(view.container.querySelector('[name^="humanoid-bone-"]')).not.toBeInTheDocument();
+    expect(view.container.querySelector('[name="humanoid-face"]')).not.toBeInTheDocument();
+    expect(view.container.querySelector('meshstandardmaterial[color="#8b8f94"]')).toBeInTheDocument();
   });
 
   it('registers silhouette, skeleton, depth, and object-mask capture from the live three scene',()=>{
