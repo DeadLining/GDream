@@ -8,12 +8,13 @@ import type {DirectorObject,ShotCamera} from '../lib/types';
 const threeCamera={position:{set:vi.fn()},rotation:{set:vi.fn()},fov:50,updateProjectionMatrix:vi.fn()};
 const threeState={camera:threeCamera,scene:new Scene(),gl:{domElement:{width:800,height:600},render:vi.fn()}};
 const useGLTFCall=vi.hoisted(()=>vi.fn());
+const transformHarness=vi.hoisted(()=>({useEventObject:false}));
 vi.mock('@react-three/fiber',()=>({Canvas:({children,onPointerMissed}:React.PropsWithChildren<{onPointerMissed?:()=>void}>)=> <div data-testid="r3f-canvas" onClick={()=>onPointerMissed?.()}>{children}</div>,useFrame:vi.fn(),useThree:(select:(state:typeof threeState)=>unknown)=>select(threeState)}));
 vi.mock('@react-three/drei',()=>({
   Clone:({object}:{object:{name:string}})=><div data-testid="director-model" data-name={object.name}/>,
   Image:({url}:{url:string})=><div data-testid="director-image" data-url={url}/>,
   OrbitControls:({enabled,onEnd}:{enabled:boolean;onEnd?:(event:unknown)=>void})=><button data-testid="orbit" data-enabled={String(enabled)} onClick={()=>onEnd?.({target:{object:{position:{x:2,y:3,z:4},rotation:{x:.1,y:.2,z:.3}},target:{x:0,y:1,z:0}}})}>移动镜头</button>,
-  TransformControls:({children,mode,translationSnap,rotationSnap,scaleSnap,onObjectChange,onMouseUp}:React.PropsWithChildren<{mode:string;translationSnap?:number|null;rotationSnap?:number|null;scaleSnap?:number|null;onObjectChange?:()=>void;onMouseUp?:()=>void}>)=><div data-testid="transform-controls" data-mode={mode} data-translation-snap={translationSnap??''} data-rotation-snap={rotationSnap??''} data-scale-snap={scaleSnap??''} onClick={()=>{const current=document.querySelector('[name="director-object-character-1"]') as unknown as {position:{x:number;y:number;z:number};rotation:{x:number;y:number;z:number};scale:{x:number;y:number;z:number}};current.position={x:1,y:0,z:0};current.rotation={x:0,y:.2,z:0};current.scale={x:1,y:1,z:1};onObjectChange?.();current.position={x:2,y:0,z:0};onObjectChange?.();onMouseUp?.();}}>{children}</div>,
+  TransformControls:({children,mode,translationSnap,rotationSnap,scaleSnap,onObjectChange,onMouseUp}:React.PropsWithChildren<{mode:string;translationSnap?:number|null;rotationSnap?:number|null;scaleSnap?:number|null;onObjectChange?:(event?:unknown)=>void;onMouseUp?:()=>void}>)=><div data-testid="transform-controls" data-mode={mode} data-translation-snap={translationSnap??''} data-rotation-snap={rotationSnap??''} data-scale-snap={scaleSnap??''} onClick={()=>{const current=document.querySelector('[name="director-object-character-1"]') as unknown as {position:{x:number;y:number;z:number};rotation:{x:number;y:number;z:number};scale:{x:number;y:number;z:number}};if(transformHarness.useEventObject){const controlled={position:{x:1,y:0,z:0},rotation:{x:0,y:.2,z:0},scale:{x:1,y:1,z:1}};onObjectChange?.({target:{object:controlled}});controlled.position.x=2;onObjectChange?.({target:{object:controlled}});}else{current.position={x:1,y:0,z:0};current.rotation={x:0,y:.2,z:0};current.scale={x:1,y:1,z:1};onObjectChange?.();current.position={x:2,y:0,z:0};onObjectChange?.();}onMouseUp?.();}}>{children}</div>,
   useAnimations:()=>({actions:{},mixer:{update:vi.fn()}}),
   useGLTF:(url:string)=>{useGLTFCall(url);const scene=new Group();scene.name=url;return {scene,animations:[]};},
 }));
@@ -28,7 +29,7 @@ const objects:DirectorObject[]=[
 
 describe('DirectorCanvas',()=>{
   beforeEach(()=>vi.spyOn(console,'error').mockImplementation(()=>{}));
-  afterEach(()=>{cleanup();vi.restoreAllMocks();});
+  afterEach(()=>{cleanup();transformHarness.useEventObject=false;vi.restoreAllMocks();});
   it('renders deterministic placeholders and selected transform controls',()=>{
     const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" onTransform={vi.fn()}/>);
     const ui=within(view.container);
@@ -113,6 +114,16 @@ describe('DirectorCanvas',()=>{
     const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" onTransform={onTransform}/>);
     fireEvent.click(within(view.container).getByTestId('transform-controls'));
     expect(onTransform).toHaveBeenCalledTimes(1);
+    expect(onTransform).toHaveBeenCalledWith('character-1',{position:[2,0,0],rotation:[0,.2,0],scale:[1,1,1]});
+  });
+
+  it('commits the transform controls event object instead of the stale child ref',()=>{
+    transformHarness.useEventObject=true;
+    const onTransform=vi.fn();
+    const view=render(<DirectorCanvas objects={objects} camera={camera} selectedObjectId="character-1" mode="world" onTransform={onTransform}/>);
+
+    fireEvent.click(within(view.container).getByTestId('transform-controls'));
+
     expect(onTransform).toHaveBeenCalledWith('character-1',{position:[2,0,0],rotation:[0,.2,0],scale:[1,1,1]});
   });
 
