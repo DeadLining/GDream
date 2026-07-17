@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {SceneWorkspace} from '../components/SceneWorkspace';
 import type {EpisodeDetail} from '../lib/types';
+import {readAllStyles} from './_styles';
 
 const mocks=vi.hoisted(()=>({updateScene:vi.fn(),createShot:vi.fn(),reorderScenes:vi.fn(),getEpisode:vi.fn(),createRun:vi.fn(),listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindAsset:vi.fn(),unbindAsset:vi.fn()}));
 vi.mock('../lib/api',()=>({
@@ -35,6 +36,7 @@ const episode: EpisodeDetail = {
     ]},
   ],
 };
+const sceneStyles=readAllStyles();
 
 describe('SceneWorkspace', () => {
   afterEach(()=>{cleanup();vi.clearAllMocks();});
@@ -48,6 +50,12 @@ describe('SceneWorkspace', () => {
     mocks.listSceneLibraryAssets.mockResolvedValue([
       {id:'asset-scene',project_id:'project-1',kind:'scene',name:'雨夜实验室',description:'冷蓝灯光',tags:['雨夜'],metadata:{},created_at:'',updated_at:''},
     ]);
+  });
+
+  it('keeps the mobile scene rail visible above an independently scrolling document',()=>{
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.scene-workspace\s*\{[^}]*grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)[^}]*overflow:\s*hidden/);
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.scene-rail-item\s*\{[^}]*flex:\s*0\s+0\s+210px/);
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.scene-document\s*\{[^}]*overflow:\s*auto/);
   });
 
   it('binds explicit scene and prop assets to the selected scene',async()=>{
