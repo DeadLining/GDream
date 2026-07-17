@@ -27,8 +27,7 @@ export type OperationsDestination =
   | 'projects'
   | 'archive'
   | 'trash'
-  | 'export'
-  | 'settings';
+  | 'export';
 
 export const globalSectionWorkAreas = {
   overview: 'overview',
@@ -44,7 +43,6 @@ export const operationsPlatformPages = {
   archive: 'home',
   trash: 'trash',
   export: 'export',
-  settings: 'settings',
 } as const satisfies Record<OperationsDestination, PlatformPage>;
 
 export function resolveOperationsPage(destination: string): PlatformPage | null {

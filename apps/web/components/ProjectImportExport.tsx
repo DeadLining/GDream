@@ -2,7 +2,7 @@
 
 import {useRef, useState} from 'react';
 import {Download, Loader2, Upload, AlertTriangle, CheckCircle2} from 'lucide-react';
-import {exportProject, importProject} from '../lib/api';
+import {exportProject, importProject, projectExportDownloadUrl} from '../lib/api';
 import type {ProjectImportResponse} from '../lib/types';
 
 type Props = {
@@ -25,7 +25,7 @@ export function ProjectImportExport({projectId, onImported}: Props) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
-  const [exportInfo, setExportInfo] = useState<{bytes: number; path: string} | null>(null);
+  const [exportInfo, setExportInfo] = useState<{bytes: number} | null>(null);
   const [importInfo, setImportInfo] = useState<ProjectImportResponse | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -36,7 +36,7 @@ export function ProjectImportExport({projectId, onImported}: Props) {
     setExportInfo(null);
     try {
       const result = await exportProject(projectId);
-      setExportInfo({bytes: result.bytes_written, path: result.zip_path});
+      setExportInfo({bytes: result.bytes_written});
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '导出失败');
     } finally {
@@ -93,12 +93,21 @@ export function ProjectImportExport({projectId, onImported}: Props) {
             {exporting ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
             {exporting ? '正在打包…' : '导出 ZIP'}
           </button>
-          {exportInfo && (
+          {exportInfo && <>
             <p className="portability-success" role="status">
               <CheckCircle2 size={12} />
-              已生成 {formatBytes(exportInfo.bytes)} · {exportInfo.path}
+              已生成 {formatBytes(exportInfo.bytes)}
             </p>
-          )}
+            <a
+              className="command-button"
+              aria-label="下载工程 ZIP"
+              href={projectExportDownloadUrl(projectId)}
+              download
+            >
+              <Download size={14}/>
+              下载工程 ZIP
+            </a>
+          </>}
         </div>
 
         <div className="portability-card">

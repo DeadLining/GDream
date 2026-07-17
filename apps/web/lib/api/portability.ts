@@ -9,6 +9,9 @@ export const exportProject = (projectId: string) =>
     {method: 'POST'},
   );
 
+export const projectExportDownloadUrl = (projectId: string) =>
+  `${API_BASE}/api/projects/${encodeURIComponent(projectId)}/export/download`;
+
 export const importProject = async (file: File) => {
   // Bypass apiRequest so fetch can set the multipart/form-data boundary itself;
   // apiRequest would force content-type: application/json and break the upload.
