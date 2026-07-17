@@ -69,7 +69,7 @@ test('3D director renders, captures preview, and applies selected AI fields',asy
   await expect.poll(pixelVariance,{timeout:10000}).toBeGreaterThan(6);
   if(testInfo.project.name==='desktop'){
     const canvas=page.locator('canvas');const initialBox=await canvas.boundingBox();expect(initialBox).not.toBeNull();
-    await canvas.click({position:{x:initialBox!.width*.5,y:initialBox!.height*.62}});
+    await page.getByRole('button',{name:'林夏',exact:true}).click();
     await expect(page.locator('.director-inspector header strong')).toHaveText('林夏');
     await page.getByRole('spinbutton',{name:'位置 X'}).fill('0.5');await page.getByRole('spinbutton',{name:'位置 X'}).press('Tab');
     await expect.poll(()=>cameraWrites.length).toBe(1);
