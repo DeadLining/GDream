@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from comic_studio import models
 
 
@@ -100,6 +102,7 @@ def test_soft_deleted_state_enters_trash_and_restores_with_usage(client):
     assert item["resource_type"] == "asset_variant_state"
     assert item["resource_id"] == state["id"]
     assert item["name"] == "左臂擦伤"
+    assert item["deleted_by"] == "本人"
     assert item["reference_count"] == 1
     assert item["lineage"] == ["作品主设定", "第03集雨夜造型", "左臂擦伤"]
 
@@ -134,6 +137,29 @@ def test_unreferenced_state_can_be_permanently_deleted_from_trash(client):
     assert client.post(f"/api/trash-items/{item['id']}/restore").status_code == 404
     with client.app.state.session_factory() as session:
         assert session.get(models.AssetVariantState, spare["id"]) is None
+
+
+def test_expired_trash_item_cannot_be_restored(client):
+    project, _character, variant, _state, _usage = _lineage(client)
+    spare = client.post(
+        f"/api/asset-variants/{variant['id']}/states",
+        json={"kind": "custom", "label": "过期状态", "overrides": {}},
+    ).json()
+    assert client.delete(f"/api/asset-variant-states/{spare['id']}").status_code == 204
+    item = next(
+        item
+        for item in client.get(f"/api/projects/{project['id']}/trash-items").json()
+        if item["resource_id"] == spare["id"]
+    )
+    with client.app.state.session_factory() as session:
+        trash = session.get(models.TrashItem, item["id"])
+        trash.expires_at = models.utc_now() - timedelta(seconds=1)
+        session.commit()
+
+    response = client.post(f"/api/trash-items/{item['id']}/restore")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "回收项已超过 30 天恢复期限"
 
 
 def test_soft_deleted_variant_preserves_parent_and_children_for_restore(client):

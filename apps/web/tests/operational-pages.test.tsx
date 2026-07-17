@@ -250,7 +250,7 @@ describe('operational frontend pages',()=>{
     expect(operationMocks.restoreTrashItem).toHaveBeenCalledWith('trash-1');
   });
 
-  it('filters recycle items by content type and deletion actor',async()=>{
+  it('filters recycle items by content type without team actor controls',async()=>{
     operationMocks.listTrashItems.mockResolvedValue([
       {id:'trash-1',project_id:'p1',resource_type:'asset_variant_state',resource_id:'state-1',name:'左臂擦伤',original_location:['作品主设定','雨夜造型','左臂擦伤'],lineage:['作品主设定','雨夜造型','左臂擦伤'],deleted_by:'林默',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:0,can_permanently_delete:true},
       {id:'trash-2',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-2',name:'白昼造型',original_location:['作品主设定','白昼造型'],lineage:['作品主设定','白昼造型'],deleted_by:'张伟',deleted_at:'2026-07-14T08:00:00Z',expires_at:'2026-08-13T08:00:00Z',reference_count:0,can_permanently_delete:true},
@@ -260,8 +260,45 @@ describe('operational frontend pages',()=>{
     await userEvent.selectOptions(screen.getByRole('combobox',{name:'内容类型'}),'asset_variant_state');
     expect(screen.getByRole('row',{name:/左臂擦伤/})).toBeVisible();
     expect(screen.queryByText('白昼造型')).not.toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByRole('combobox',{name:'删除者'}),'张伟');
-    expect(screen.getByText('没有匹配的回收项。')).toBeVisible();
+    expect(screen.queryByRole('combobox',{name:'删除者'})).not.toBeInTheDocument();
+    expect(screen.getByRole('table')).not.toHaveTextContent('林默');
+  });
+
+  it('clears stale recycle items when switching projects and loading fails',async()=>{
+    operationMocks.listTrashItems
+      .mockResolvedValueOnce([{id:'trash-old',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-old',name:'旧作品造型',original_location:['旧作品造型'],lineage:['旧作品造型'],deleted_by:'本人',deleted_at:'2026-07-14T08:00:00Z',expires_at:'2026-08-13T08:00:00Z',reference_count:0,can_permanently_delete:true}])
+      .mockRejectedValueOnce(new Error('回收站服务不可用'));
+    const view=render(<RecycleBin project={project}/>);
+    expect(await screen.findByRole('row',{name:/旧作品造型/})).toBeVisible();
+
+    view.rerender(<RecycleBin project={{...project,id:'p2',title:'新作品'}}/>);
+
+    expect(screen.queryByRole('row',{name:/旧作品造型/})).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('回收站服务不可用');
+    expect(screen.queryByRole('row',{name:/旧作品造型/})).not.toBeInTheDocument();
+  });
+
+  it('locks every recycle action while one request is pending',async()=>{
+    let finishRestore:(value:{restored:true;resource_type:'asset_variant';resource_id:string})=>void=()=>{};
+    operationMocks.restoreTrashItem.mockReturnValue(new Promise(resolve=>{finishRestore=resolve;}));
+    operationMocks.listTrashItems.mockResolvedValue([
+      {id:'trash-1',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-1',name:'雨夜造型',original_location:['雨夜造型'],lineage:['雨夜造型'],deleted_by:'本人',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:0,can_permanently_delete:true},
+      {id:'trash-2',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-2',name:'白昼造型',original_location:['白昼造型'],lineage:['白昼造型'],deleted_by:'本人',deleted_at:'2026-07-14T08:00:00Z',expires_at:'2026-08-13T08:00:00Z',reference_count:0,can_permanently_delete:true},
+    ]);
+    render(<RecycleBin project={project}/>);
+    await userEvent.click(await screen.findByRole('button',{name:'恢复雨夜造型'}));
+
+    expect(screen.getByRole('button',{name:'恢复白昼造型'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'永久删除白昼造型'})).toBeDisabled();
+    finishRestore({restored:true,resource_type:'asset_variant',resource_id:'variant-1'});
+  });
+
+  it('marks expired recycle items and disables restoration',async()=>{
+    operationMocks.listTrashItems.mockResolvedValue([{id:'trash-expired',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-expired',name:'过期造型',original_location:['过期造型'],lineage:['过期造型'],deleted_by:'本人',deleted_at:'2026-05-01T08:00:00Z',expires_at:'2026-05-31T08:00:00Z',reference_count:0,can_permanently_delete:true}]);
+    render(<RecycleBin project={project}/>);
+    const row=await screen.findByRole('row',{name:/过期造型/});
+    expect(within(row).getByText('已过期')).toBeVisible();
+    expect(within(row).getByRole('button',{name:'恢复过期造型'})).toBeDisabled();
   });
 
   it('requires confirmation before permanently deleting a recycle item',async()=>{
