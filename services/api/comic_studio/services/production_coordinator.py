@@ -7,6 +7,15 @@ from comic_studio.services.budgeting import BudgetingService
 
 
 Worker = Callable[[models.ProductionItem], Awaitable[dict]]
+BLOCKING_SKIP_REASONS = {"generation_not_ready", "missing_approved_panel"}
+
+
+def _has_blocking_skips(items: list[models.ProductionItem]) -> bool:
+    return any(
+        item.status == "skipped"
+        and item.result_metadata.get("reason") in BLOCKING_SKIP_REASONS
+        for item in items
+    )
 
 
 class ProductionCoordinator:
@@ -42,6 +51,10 @@ class ProductionCoordinator:
             await asyncio.gather(*(execute(item.id) for item in batch))
             store.refresh_counters(run_id)
         run = store.refresh_counters(run_id)
-        terminal = "completed_with_failures" if run.failed_items else "completed"
+        terminal = (
+            "completed_with_failures"
+            if run.failed_items or _has_blocking_skips(store.list_items(run_id))
+            else "completed"
+        )
         if run.status == "running": run = store.transition_run(run_id, terminal)
         return store.refresh_counters(run_id)
