@@ -289,3 +289,11 @@ def test_delivery_packages_require_approved_release_candidate(client):
         assert "立即离开这里" in archive.read("subtitles/subtitles.srt").decode()
         manifest = json.loads(archive.read("manifest.json"))
         assert manifest["episode"]["id"] == episode["id"]
+
+    (client.app.state.settings.data_root / package["artifact_path"]).unlink()
+    packages = client.get(f"/api/episodes/{episode['id']}/delivery-packages")
+    assert packages.status_code == 200
+    missing = packages.json()[0]
+    assert missing["status"] == "failed"
+    assert missing["artifact_path"] == ""
+    assert missing["checks"]["archive_created"] is False
