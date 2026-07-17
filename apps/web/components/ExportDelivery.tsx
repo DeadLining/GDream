@@ -16,6 +16,7 @@ const deliveryOutputs=(aspectRatio:string|undefined):DeliveryOutput[]=>[
 const outputLabels:Record<DeliveryOutput['kind'],string>={landscape_video:'横屏成片',vertical_video:'竖屏成片',clean_master:'无字幕母版',subtitles:'字幕',audio_mix:'混音音轨',asset_manifest:'资产清单'};
 const statusLabels:Record<DeliveryPackage['status'],string>={queued:'已排队',running:'处理中',completed:'已完成',failed:'失败'};
 const checkLabels:Record<string,string>={release_candidate_approved:'候选版本已审核',render_complete:'主渲染文件存在',archive_created:'交付归档已生成'};
+const compareCandidateVersions=(left:ReleaseCandidate,right:ReleaseCandidate)=>left.version.localeCompare(right.version,undefined,{numeric:true,sensitivity:'base'})||Date.parse(left.created_at)-Date.parse(right.created_at);
 
 export function ExportDelivery({project,episode,onNavigate}:{project:ProjectDetail|null;episode:EpisodeDetail|null;onNavigate?:(page:string)=>void}){
   const [candidates,setCandidates]=useState<ReleaseCandidate[]>([]);
@@ -27,9 +28,10 @@ export function ExportDelivery({project,episode,onNavigate}:{project:ProjectDeta
   const [error,setError]=useState('');
 
   useEffect(()=>{
+    setCandidates([]);setPackages([]);setSelectedPackageId('');setCreating(false);setError('');
     if(!episode?.id){setLoading(false);return;}
     let active=true;
-    setLoading(true);setError('');
+    setLoading(true);
     Promise.all([listReleaseCandidates(episode.id),listDeliveryPackages(episode.id)])
       .then(([nextCandidates,nextPackages])=>{if(active){setCandidates(nextCandidates);setPackages(nextPackages);setSelectedPackageId(nextPackages[0]?.id??'');}})
       .catch(cause=>active&&setError(cause instanceof Error?cause.message:'交付信息加载失败'))
@@ -38,7 +40,7 @@ export function ExportDelivery({project,episode,onNavigate}:{project:ProjectDeta
   },[episode?.id]);
   useEffect(()=>setOutputs(deliveryOutputs(project?.aspect_ratio)),[project?.id,project?.aspect_ratio]);
 
-  const approved=[...candidates].reverse().find(candidate=>candidate.status==='approved'||candidate.status==='published')??null;
+  const approved=candidates.filter(candidate=>candidate.status==='approved'||candidate.status==='published').sort(compareCandidateVersions).at(-1)??null;
   const selectedPackage=packages.find(item=>item.id===selectedPackageId)??packages[0]??null;
   const selectedChecks=useMemo(()=>selectedPackage?Object.entries(selectedPackage.checks):[],[selectedPackage]);
   const create=async()=>{
@@ -80,6 +82,7 @@ export function ExportDelivery({project,episode,onNavigate}:{project:ProjectDeta
             <h3>{selectedPackage.preset_name}</h3>
             <ul className="delivery-checks">{selectedChecks.map(([key,value])=><li key={key} className={value?'success-text':'warning-text'}>{value?<CheckCircle2 size={16}/>:<TriangleAlert size={16}/>}<span><strong>{checkLabels[key]??key}</strong><small>{value?'服务端记录为是':'服务端记录为否'}</small></span></li>)}</ul>
             {selectedPackage.status==='queued'&&<p className="warning-box">这是旧版未执行任务，请重新生成交付包。</p>}
+            {selectedPackage.status==='failed'&&<p className="warning-box">交付产物不存在或生成已中断，请重新生成交付包。</p>}
             {selectedPackage.status==='completed'&&!selectedPackage.artifact_path&&<p className="warning-box">任务标记完成，但尚未提供可下载产物。</p>}
             {selectedPackage.status==='completed'&&selectedPackage.artifact_path&&<a className="command-button" aria-label="下载交付包" href={deliveryPackageDownloadUrl(selectedPackage.id)} download><Download size={16}/>下载交付包</a>}
           </>}

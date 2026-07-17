@@ -73,4 +73,12 @@ describe('system and delivery frontend pages',()=>{
     expect(screen.queryByRole('link',{name:'下载交付包'})).not.toBeInTheDocument();
     expect(screen.getByRole('button',{name:'生成交付包'})).toBeDisabled();
   });
+
+  it('explains failed packages without exposing a broken download',async()=>{
+    systemMocks.listDeliveryPackages.mockResolvedValue([{id:'dp-failed',project_id:'p1',episode_id:'e1',release_candidate_id:'rc1',preset_name:'失败交付包',outputs:[],checks:{release_candidate_approved:true,render_complete:true,archive_created:false},status:'failed',artifact_path:'',created_at:'',updated_at:''}]);
+    render(<ExportDelivery project={project} episode={episode}/>);
+
+    expect(await screen.findByText('交付产物不存在或生成已中断，请重新生成交付包。')).toBeVisible();
+    expect(screen.queryByRole('link',{name:'下载交付包'})).not.toBeInTheDocument();
+  });
 });

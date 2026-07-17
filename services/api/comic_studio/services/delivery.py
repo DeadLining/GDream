@@ -119,20 +119,43 @@ class DeliveryPackageService:
     def list(self, episode_id: str):
         if self.session.get(models.Episode, episode_id) is None:
             return None
-        return list(
+        packages = list(
             self.session.scalars(
                 select(models.DeliveryPackage)
                 .where(models.DeliveryPackage.episode_id == episode_id)
                 .order_by(models.DeliveryPackage.created_at.desc())
             )
         )
+        repaired = False
+        for package in packages:
+            missing_archive = (
+                package.status == "completed" and self._artifact_file(package) is None
+            )
+            interrupted = package.status in {"queued", "running"}
+            if missing_archive or interrupted:
+                package.status = "failed"
+                package.artifact_path = ""
+                package.checks = {**package.checks, "archive_created": False}
+                repaired = True
+        if repaired:
+            self.session.commit()
+        return packages
 
     def artifact(self, package_id: str) -> tuple[models.DeliveryPackage, Path] | None:
         package = self.session.get(models.DeliveryPackage, package_id)
-        if package is None or package.status != "completed" or not package.artifact_path:
+        if package is None or package.status != "completed":
             return None
-        path = self._resolve(Path(package.artifact_path))
-        return (package, path) if path.is_file() else None
+        path = self._artifact_file(package)
+        return (package, path) if path is not None else None
+
+    def _artifact_file(self, package: models.DeliveryPackage) -> Path | None:
+        if not package.artifact_path:
+            return None
+        try:
+            path = self._resolve(Path(package.artifact_path))
+        except DeliveryValidationError:
+            return None
+        return path if path.is_file() else None
 
     def _render_path(
         self, episode: models.Episode, candidate: models.ReleaseCandidate
