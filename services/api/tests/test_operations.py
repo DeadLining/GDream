@@ -93,6 +93,13 @@ def test_member_scope_rejects_episode_from_another_project(client):
     assert response.json()["detail"] == "Member scope resources must belong to the project"
 
 
+def test_personal_app_does_not_publish_project_member_endpoints(client):
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert not any("members" in path for path in paths)
+    assert not any("project-members" in path for path in paths)
+
+
 def test_tasks_validate_linked_hierarchy_and_support_updates(client):
     project, episode, scene_id, shot_id = _project_episode_shot(client, "任务作品")
     created = client.post(

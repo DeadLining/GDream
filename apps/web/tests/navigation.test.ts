@@ -20,13 +20,16 @@ describe('workspace navigation model', () => {
     expect(operationsPlatformPages).toEqual({
       recent: 'home',
       projects: 'home',
-      shared: 'home',
       archive: 'home',
       trash: 'trash',
-      team: 'team',
       export: 'export',
       settings: 'settings',
     });
+  });
+
+  it('does not expose collaboration destinations in the personal app', () => {
+    expect(resolveOperationsPage('shared')).toBeNull();
+    expect(resolveOperationsPage('team')).toBeNull();
   });
 
   it('rejects unknown operations destinations', () => {
