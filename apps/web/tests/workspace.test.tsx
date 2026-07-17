@@ -684,6 +684,13 @@ describe('Workspace', () => {
     expect(mobileRule).toBeGreaterThan(compactDesktopRule);
   });
 
+  it('uses a two-column compact workspace before switching to mobile', () => {
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1023px\)[\s\S]*?\.project-nav\s*\{[^}]*display:\s*none/);
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1023px\)[\s\S]*?\.mobile-project-bar\s*\{[^}]*display:\s*grid/);
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1023px\)[\s\S]*?\.workspace-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+320px/);
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)\s*and\s*\(max-width:\s*1023px\)[\s\S]*?\.workspace-grid\.without-inspector\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  });
+
   it('keeps the empty workspace grid full-width after responsive grid overrides', () => {
     const compactDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 210px minmax(400px, 1fr) 296px;');
     const narrowDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 200px minmax(0, 1fr) 280px;');
