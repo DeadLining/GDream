@@ -208,7 +208,7 @@ describe('operational frontend pages',()=>{
     render(<RecycleBin project={project}/>);
     expect(await screen.findByText('白昼造型')).toBeVisible();
     await userEvent.selectOptions(screen.getByRole('combobox',{name:'内容类型'}),'asset_variant_state');
-    expect(screen.getByText('左臂擦伤')).toBeVisible();
+    expect(screen.getByRole('row',{name:/左臂擦伤/})).toBeVisible();
     expect(screen.queryByText('白昼造型')).not.toBeInTheDocument();
     await userEvent.selectOptions(screen.getByRole('combobox',{name:'删除者'}),'张伟');
     expect(screen.getByText('没有匹配的回收项。')).toBeVisible();
