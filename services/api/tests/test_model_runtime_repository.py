@@ -24,6 +24,14 @@ def test_recovers_running_runtime_jobs_as_interrupted(db_session):
         "runtime_image", "shot", "s1", {"capability": "image"}
     )
     store.transition(job.id, "running")
+    invocation = InvocationRepository(db_session).start(
+        Capability.IMAGE,
+        "gptimage",
+        "gpt-image-2",
+        "shot",
+        "s1",
+        job.id,
+    )
 
     recovered = InvocationRepository(db_session).recover_running_jobs()
 
@@ -33,3 +41,7 @@ def test_recovers_running_runtime_jobs_as_interrupted(db_session):
     assert interrupted.status == "failed"
     assert interrupted.result_metadata["error_code"] == "runtime_interrupted"
     assert interrupted.result_metadata["retryable"] is True
+    db_session.refresh(invocation)
+    assert invocation.status == "failed"
+    assert invocation.error_code == "runtime_interrupted"
+    assert invocation.retryable is True
