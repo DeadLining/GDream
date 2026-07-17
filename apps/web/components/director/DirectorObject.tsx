@@ -39,7 +39,7 @@ function Placeholder({object}:{object:DirectorObjectDto}){
 }
 
 export function DirectorObject({object,selected,editable,transformMode,snapEnabled,onSelect,onTransform}:{object:DirectorObjectDto;selected:boolean;editable:boolean;transformMode:DirectorTransformMode;snapEnabled:boolean;onSelect:()=>void;onTransform:(transform:Transform)=>void}){
-  const ref=useRef<Group>(null);
+  const ref=useRef<Group>(null!);
   const pendingTransform=useRef<Transform|null>(null);
   if(!object.visible)return null;
   const group=<group ref={ref} name={`director-object-${object.id}`} userData={{kind:object.kind,sourceType:object.source_type}} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale} onClick={event=>{event.stopPropagation();onSelect();}}><Placeholder object={object}/></group>;
