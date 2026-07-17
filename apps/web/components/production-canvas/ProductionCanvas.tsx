@@ -153,7 +153,7 @@ export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLay
     focusShotRef.current=shotId;
     setActiveShotId(shotId);
     onSelectShot(shotId);
-    if(node.type==='director')onOpenDirector?.(shotId);
+    if(node.type==='director'&&!node.data.blocked)onOpenDirector?.(shotId);
     if(node.type==='visual-review'&&!node.data.blocked)onOpenVisualReview?.(shotId);
     if(node.type==='dialogue'||node.type==='tts')onOpenDialogue?.(shotId);
     if(node.type==='panel-render')onOpenMedia?.(shotId,'panel');
