@@ -58,7 +58,7 @@ class OperationsService:
         task = self.session.get(models.ProductionTask, task_id)
         if task is None:
             return None
-        before = {"title": task.title, "description": task.description, "priority": task.priority, "status": task.status, "assignee": task.assignee, "due_at": _json_value(task.due_at), "checklist": task.checklist}
+        before = {"title": task.title, "description": task.description, "priority": task.priority, "status": task.status, "due_at": _json_value(task.due_at), "checklist": task.checklist}
         values = data.model_dump(exclude_unset=True)
         if "checklist" in values and values["checklist"] is not None:
             values["checklist"] = [item.model_dump() if hasattr(item, "model_dump") else item for item in data.checklist or []]
@@ -66,6 +66,14 @@ class OperationsService:
         after = {**before, **{key: _json_value(value) for key, value in values.items()}}
         self.session.commit(); self.session.refresh(task)
         return task
+
+    def delete_task(self, task_id: str) -> bool:
+        task = self.session.get(models.ProductionTask, task_id)
+        if task is None:
+            return False
+        self.session.delete(task)
+        self.session.commit()
+        return True
 
     def _episode_snapshot(self, episode_id: str) -> dict | None:
         episode = self.session.scalar(

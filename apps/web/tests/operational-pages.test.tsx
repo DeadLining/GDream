@@ -27,9 +27,9 @@ describe('operational frontend pages',()=>{
   afterEach(cleanup);
   beforeEach(()=>{
     vi.clearAllMocks();
-    operationMocks.listProductionTasks.mockResolvedValue([{id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',assignee:'王磊',due_at:'2026-07-14T12:00:00Z',checklist:[{label:'收集素材',done:true},{label:'提交审核',done:false}],created_at:'',updated_at:''}]);
+    operationMocks.listProductionTasks.mockResolvedValue([{id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',due_at:'2026-07-14T12:00:00Z',checklist:[{label:'收集素材',done:true},{label:'提交审核',done:false}],created_at:'',updated_at:''}]);
     operationMocks.updateProductionTask.mockImplementation(async(_id:string,data:Record<string,unknown>)=>({...await operationMocks.listProductionTasks.mock.results[0]?.value?.then((items:any[])=>items[0]),...data}));
-    operationMocks.createProductionTask.mockResolvedValue({id:'t2',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,review_thread_id:null,title:'审核镜头连续性',description:'检查角色状态',priority:'high',status:'todo',assignee:'张伟',due_at:null,checklist:[],created_at:'',updated_at:''});
+    operationMocks.createProductionTask.mockResolvedValue({id:'t2',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,review_thread_id:null,title:'审核镜头连续性',description:'检查角色状态',priority:'high',status:'todo',due_at:null,checklist:[],created_at:'',updated_at:''});
     operationMocks.listEpisodeVersions.mockResolvedValue([
       {id:'v2',episode_id:'e1',version:2,label:'当前版',source:'manual',author:'林默',snapshot:{episode:{id:'e1',project_id:'p1',title:'雨夜抉择·修订',premise:'寻找失踪同伴',target_duration_seconds:480,status:'production'},scenes:[{id:'s1',position:1,location:'天台',time_of_day:'night',summary:'雨夜追踪',continuity_state:{},estimated_duration_seconds:30,shots:[]}]},restored_from_id:null,created_at:''},
       {id:'v1',episode_id:'e1',version:1,label:'审核前',source:'manual',author:'张伟',snapshot:{episode:{id:'e1',project_id:'p1',title:'雨夜抉择',premise:'寻找失踪同伴',target_duration_seconds:480,status:'planned'},scenes:[{id:'s1',position:1,location:'珊瑚营地',time_of_day:'night',summary:'雨夜追踪',continuity_state:{},estimated_duration_seconds:30,shots:[]}]},restored_from_id:null,created_at:''},
@@ -70,8 +70,8 @@ describe('operational frontend pages',()=>{
 
   it('opens the task selected by a global search result',async()=>{
     operationMocks.listProductionTasks.mockResolvedValue([
-      {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐环境音',description:'环境音设计',priority:'medium',status:'in_progress',assignee:'',due_at:null,checklist:[],created_at:'',updated_at:''},
-      {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理交付清单',description:'核对文件',priority:'low',status:'todo',assignee:'',due_at:null,checklist:[],created_at:'',updated_at:''},
+      {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐环境音',description:'环境音设计',priority:'medium',status:'in_progress',due_at:null,checklist:[],created_at:'',updated_at:''},
+      {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理交付清单',description:'核对文件',priority:'low',status:'todo',due_at:null,checklist:[],created_at:'',updated_at:''},
     ]);
     render(<TaskCenter project={project} episode={episode} initialTaskId="t2"/>);
 
@@ -154,8 +154,8 @@ describe('operational frontend pages',()=>{
 
   it('switches task views and applies status filters',async()=>{
     operationMocks.listProductionTasks.mockResolvedValue([
-      {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',assignee:'王磊',due_at:'2026-07-20T10:30:00Z',checklist:[],created_at:'',updated_at:''},
-      {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理项目交付清单',description:'核对交付格式',priority:'low',status:'todo',assignee:'张伟',due_at:null,checklist:[],created_at:'',updated_at:''},
+      {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',due_at:'2026-07-20T10:30:00Z',checklist:[],created_at:'',updated_at:''},
+      {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理项目交付清单',description:'核对交付格式',priority:'low',status:'todo',due_at:null,checklist:[],created_at:'',updated_at:''},
     ]);
     render(<TaskCenter project={project} episode={episode}/>);
     expect(await screen.findByText('整理项目交付清单')).toBeVisible();

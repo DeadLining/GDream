@@ -31,7 +31,7 @@ def test_workspace_summary_uses_real_project_task_and_review_counts(client):
         session.add(shot); session.commit()
     client.post(
         f"/api/projects/{project['id']}/tasks",
-        json={"title":"补齐环境音","description":"雨声层次","priority":"medium","assignee":"王磊","episode_id":episode["id"],"scene_id":scene.id,"shot_id":shot.id,"review_thread_id":None,"due_at":None,"checklist":[]},
+        json={"title":"补齐环境音","description":"雨声层次","priority":"medium","episode_id":episode["id"],"scene_id":scene.id,"shot_id":shot.id,"review_thread_id":None,"due_at":None,"checklist":[]},
     )
 
     response = client.get("/api/workspace/summary")
@@ -84,7 +84,7 @@ def test_project_search_returns_navigable_results_across_real_resources(client):
             "metadata": {},
         },
     ).json()
-    client.post(f"/api/projects/{project['id']}/tasks",json={"title":"修正左臂伤势","description":"保持连续性","priority":"high","assignee":"王磊","episode_id":episode["id"],"scene_id":scene.id,"shot_id":shot_id,"review_thread_id":None,"due_at":None,"checklist":[]})
+    client.post(f"/api/projects/{project['id']}/tasks",json={"title":"修正左臂伤势","description":"保持连续性","priority":"high","episode_id":episode["id"],"scene_id":scene.id,"shot_id":shot_id,"review_thread_id":None,"due_at":None,"checklist":[]})
 
     response = client.get(f"/api/projects/{project['id']}/search", params={"q":"左臂"})
 

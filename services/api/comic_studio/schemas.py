@@ -1205,7 +1205,6 @@ class ProductionTaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=5000)
     priority: TaskPriority = "medium"
-    assignee: str = Field(default="", max_length=120)
     due_at: datetime | None = None
     episode_id: str | None = None
     scene_id: str | None = None
@@ -1220,7 +1219,6 @@ class ProductionTaskPatch(BaseModel):
     description: str | None = Field(default=None, max_length=5000)
     priority: TaskPriority | None = None
     status: TaskStatus | None = None
-    assignee: str | None = Field(default=None, max_length=120)
     due_at: datetime | None = None
     checklist: list[TaskChecklistItem] | None = Field(default=None, max_length=100)
 
@@ -1237,7 +1235,6 @@ class ProductionTaskRead(BaseModel):
     description: str
     priority: str
     status: str
-    assignee: str
     due_at: datetime | None
     checklist: list[dict]
     created_at: datetime

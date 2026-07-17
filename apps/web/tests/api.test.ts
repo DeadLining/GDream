@@ -53,6 +53,7 @@ import {
   listReleaseCandidates,
   rejectVisualReviewCandidate,
   createProductionTask,
+  deleteProductionTask,
   listProductionTasks,
   updateProductionTask,
   createEpisodeVersion,
@@ -451,8 +452,9 @@ describe('operations api',()=>{
     vi.stubGlobal('fetch',fetchMock);
 
     await listProductionTasks('project-1');
-    await createProductionTask('project-1',{title:'修正镜头',priority:'high',episode_id:'episode-1',scene_id:null,shot_id:'shot-1',review_thread_id:null,description:'',assignee:'陈舟',due_at:null,checklist:[]});
+    await createProductionTask('project-1',{title:'修正镜头',priority:'high',episode_id:'episode-1',scene_id:null,shot_id:'shot-1',review_thread_id:null,description:'',due_at:null,checklist:[]});
     await updateProductionTask('task-1',{status:'completed'});
+    await deleteProductionTask('task-1');
     await listEpisodeVersions('episode-1');
     await createEpisodeVersion('episode-1',{label:'审核前',source:'manual',author:'张伟'});
     await restoreEpisodeVersion('version-1');
@@ -463,6 +465,7 @@ describe('operations api',()=>{
       ['/api/projects/project-1/tasks','GET'],
       ['/api/projects/project-1/tasks','POST'],
       ['/api/production-tasks/task-1','PATCH'],
+      ['/api/production-tasks/task-1','DELETE'],
       ['/api/episodes/episode-1/versions','GET'],
       ['/api/episodes/episode-1/versions','POST'],
       ['/api/episode-versions/version-1/restore','POST'],

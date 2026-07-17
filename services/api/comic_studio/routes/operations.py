@@ -46,6 +46,12 @@ def update_task(task_id: str, data: schemas.ProductionTaskPatch, session: Sessio
     return task
 
 
+@router.delete("/api/production-tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: str, session: SessionDependency):
+    if not OperationsService(session).delete_task(task_id):
+        raise HTTPException(status_code=404, detail="Production task not found")
+
+
 @router.post("/api/episodes/{episode_id}/versions", response_model=schemas.EpisodeVersionRead, status_code=status.HTTP_201_CREATED)
 def create_version(episode_id: str, data: schemas.EpisodeVersionCreate, session: SessionDependency):
     version = OperationsService(session).create_version(episode_id, data)
