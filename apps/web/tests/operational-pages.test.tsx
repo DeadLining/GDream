@@ -53,6 +53,22 @@ describe('operational frontend pages',()=>{
     expect(onOpenProject).toHaveBeenCalledWith('p1');
   });
 
+  it('separates recent projects from all personal projects without fake controls',async()=>{
+    const manyProjects:Project[]=Array.from({length:6},(_,index)=>({...projects[0],id:`project-${index+1}`,title:`个人作品 ${index+1}`,updated_at:`2026-07-${String(17-index).padStart(2,'0')}T10:00:00Z`}));
+    render(<WorkspaceHome projects={manyProjects} selectedProject={null} onOpenProject={vi.fn()} onCreateProject={vi.fn()} onNavigate={vi.fn()}/>);
+
+    expect(screen.getByRole('button',{name:'最近访问'})).toHaveAttribute('aria-current','page');
+    expect(screen.queryByText('个人作品 6')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'已归档'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:/更多操作/})).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button',{name:'我的作品'}));
+
+    expect(screen.getByRole('heading',{name:'我的作品'})).toBeVisible();
+    expect(screen.getByText('个人作品 6')).toBeVisible();
+    expect(screen.getByRole('button',{name:'我的作品'})).toHaveAttribute('aria-current','page');
+  });
+
   it('searches across assets, shots, scripts, and review work',async()=>{
     const onClose=vi.fn();
     render(<GlobalSearchOverlay project={project} episode={episode} onClose={onClose} onOpenResult={vi.fn()}/>);

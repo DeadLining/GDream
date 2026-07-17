@@ -16,17 +16,17 @@ describe('workspace navigation model', () => {
     });
   });
 
-  it('maps every operations destination to a platform page', () => {
+  it('maps every real operations destination to a platform page', () => {
     expect(operationsPlatformPages).toEqual({
       recent: 'home',
       projects: 'home',
-      archive: 'home',
       trash: 'trash',
       export: 'export',
     });
   });
 
-  it('does not expose collaboration destinations in the personal app', () => {
+  it('does not expose fake archive or collaboration destinations', () => {
+    expect(resolveOperationsPage('archive')).toBeNull();
     expect(resolveOperationsPage('shared')).toBeNull();
     expect(resolveOperationsPage('team')).toBeNull();
     expect(resolveOperationsPage('settings')).toBeNull();
