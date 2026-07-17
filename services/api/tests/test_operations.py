@@ -64,7 +64,6 @@ def test_tasks_validate_linked_hierarchy_and_support_updates(client):
             "title": "修正角色左臂伤势",
             "description": "保持前后镜头连续",
             "priority": "high",
-            "assignee": "陈舟",
             "episode_id": episode["id"],
             "scene_id": scene_id,
             "shot_id": shot_id,
@@ -74,6 +73,13 @@ def test_tasks_validate_linked_hierarchy_and_support_updates(client):
     assert created.status_code == 201
     task = created.json()
     assert task["status"] == "todo"
+    assert "assignee" not in task
+
+    rejected_team_field = client.post(
+        f"/api/projects/{project['id']}/tasks",
+        json={"title": "不应分配给成员", "assignee": "陈舟"},
+    )
+    assert rejected_team_field.status_code == 422
 
     updated = client.patch(
         f"/api/production-tasks/{task['id']}",
@@ -89,6 +95,12 @@ def test_tasks_validate_linked_hierarchy_and_support_updates(client):
     )
     assert invalid.status_code == 422
     assert invalid.json()["detail"] == "Task links must belong to the project and hierarchy"
+
+    deleted = client.delete(f"/api/production-tasks/{task['id']}")
+    assert deleted.status_code == 204
+    assert client.patch(
+        f"/api/production-tasks/{task['id']}", json={"status": "todo"}
+    ).status_code == 404
 
 
 def test_episode_versions_restore_business_data_with_automatic_backup(client):

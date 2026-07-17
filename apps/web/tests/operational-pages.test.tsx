@@ -9,7 +9,7 @@ import {WorkspaceHome} from '../components/WorkspaceHome';
 import type {EpisodeDetail,Project,ProjectDetail,ProjectSearchResult} from '../lib/types';
 
 const operationMocks=vi.hoisted(()=>({
-  listProductionTasks:vi.fn(),updateProductionTask:vi.fn(),createProductionTask:vi.fn(),
+  listProductionTasks:vi.fn(),updateProductionTask:vi.fn(),createProductionTask:vi.fn(),deleteProductionTask:vi.fn(),
   listEpisodeVersions:vi.fn(),createEpisodeVersion:vi.fn(),restoreEpisodeVersion:vi.fn(),
   listTrashItems:vi.fn(),restoreTrashItem:vi.fn(),permanentlyDeleteTrashItem:vi.fn(),
   getWorkspaceSummary:vi.fn(),searchProject:vi.fn(),
@@ -124,7 +124,7 @@ describe('operational frontend pages',()=>{
     const dialog=screen.getByRole('dialog',{name:'新建任务'});
     await userEvent.type(within(dialog).getByRole('textbox',{name:'任务标题'}),'审核镜头连续性');
     await userEvent.type(within(dialog).getByRole('textbox',{name:'任务说明'}),'检查角色状态');
-    await userEvent.type(within(dialog).getByRole('textbox',{name:'执行人'}),'张伟');
+    expect(within(dialog).queryByRole('textbox',{name:'执行人'})).not.toBeInTheDocument();
     await userEvent.selectOptions(within(dialog).getByRole('combobox',{name:'优先级'}),'high');
     await userEvent.selectOptions(within(dialog).getByRole('combobox',{name:'任务范围'}),'shot');
     await userEvent.type(within(dialog).getByLabelText('到期时间'),'2026-07-20T10:30');
@@ -133,14 +133,32 @@ describe('operational frontend pages',()=>{
     expect((await screen.findAllByText('审核镜头连续性'))[0]).toBeVisible();
   });
 
-  it('switches task views and applies assignee and status filters',async()=>{
+  it('keeps task management personal and supports editing and deleting tasks',async()=>{
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+    render(<TaskCenter project={project} episode={episode}/>);
+    expect((await screen.findAllByText('补齐场景04环境音'))[0]).toBeVisible();
+    expect(screen.queryByRole('combobox',{name:'执行人'})).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button',{name:'编辑任务'}));
+    const dialog=screen.getByRole('dialog',{name:'编辑任务'});
+    await userEvent.clear(within(dialog).getByRole('textbox',{name:'任务标题'}));
+    await userEvent.type(within(dialog).getByRole('textbox',{name:'任务标题'}),'补齐钟表铺环境音');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox',{name:'优先级'}),'high');
+    await userEvent.click(within(dialog).getByRole('button',{name:'保存任务'}));
+    expect(operationMocks.updateProductionTask).toHaveBeenCalledWith('t1',expect.objectContaining({title:'补齐钟表铺环境音',priority:'high'}));
+
+    await userEvent.click(screen.getByRole('button',{name:'删除任务'}));
+    expect(operationMocks.deleteProductionTask).toHaveBeenCalledWith('t1');
+    expect(screen.queryByText('补齐钟表铺环境音')).not.toBeInTheDocument();
+  });
+
+  it('switches task views and applies status filters',async()=>{
     operationMocks.listProductionTasks.mockResolvedValue([
       {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',assignee:'王磊',due_at:'2026-07-20T10:30:00Z',checklist:[],created_at:'',updated_at:''},
       {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理项目交付清单',description:'核对交付格式',priority:'low',status:'todo',assignee:'张伟',due_at:null,checklist:[],created_at:'',updated_at:''},
     ]);
     render(<TaskCenter project={project} episode={episode}/>);
     expect(await screen.findByText('整理项目交付清单')).toBeVisible();
-    await userEvent.selectOptions(screen.getByRole('combobox',{name:'执行人'}),'王磊');
     await userEvent.selectOptions(screen.getByRole('combobox',{name:'任务状态筛选'}),'in_progress');
     expect(screen.getAllByText('补齐场景04环境音')[0]).toBeVisible();
     expect(screen.queryByText('整理项目交付清单')).not.toBeInTheDocument();
