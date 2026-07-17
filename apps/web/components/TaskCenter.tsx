@@ -10,7 +10,7 @@ const statuses=Object.keys(statusLabel) as ProductionTask['status'][];
 type TaskView='list'|'board'|'timeline';
 type TaskScope='project'|'episode'|'scene'|'shot';
 
-export function TaskCenter({project,episode,onOpenTarget}:{project:ProjectDetail|null;episode:EpisodeDetail|null;onOpenTarget?:(task:ProductionTask)=>void}){
+export function TaskCenter({project,episode,initialTaskId,onOpenTarget}:{project:ProjectDetail|null;episode:EpisodeDetail|null;initialTaskId?:string;onOpenTarget?:(task:ProductionTask)=>void}){
   const [tasks,setTasks]=useState<ProductionTask[]>([]);
   const [selectedId,setSelectedId]=useState('');
   const [loading,setLoading]=useState(true);
@@ -32,10 +32,10 @@ export function TaskCenter({project,episode,onOpenTarget}:{project:ProjectDetail
     setLoading(true);setError('');
     listProductionTasks(project.id).then(items=>{
       if(!active)return;
-      setTasks(items);setSelectedId(current=>items.some(item=>item.id===current)?current:(items[0]?.id??''));
+      setTasks(items);setSelectedId(current=>initialTaskId&&items.some(item=>item.id===initialTaskId)?initialTaskId:items.some(item=>item.id===current)?current:(items[0]?.id??''));
     }).catch(cause=>active&&setError(cause instanceof Error?cause.message:'任务加载失败')).finally(()=>active&&setLoading(false));
     return()=>{active=false;};
-  },[project?.id]);
+  },[project?.id,initialTaskId]);
 
   const selected=tasks.find(task=>task.id===selectedId)??tasks[0]??null;
   const assignees=useMemo(()=>Array.from(new Set(tasks.map(task=>task.assignee).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'zh-CN')),[tasks]);

@@ -32,11 +32,11 @@ const characterFields:Array<{key:keyof CharacterDraft;label:string;multiline?:bo
   {key:'voice_speaker',label:'声音角色',required:true},{key:'voice_instruction',label:'配音说明',multiline:true},
 ];
 
-export function AssetCatalogView({characters,character,references,variants,characterAssets={},libraryAssets=[],libraryError='',onSelect,onOpen,onCreateCharacter,onUpdateCharacter,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset,onUploadLibraryAssetMedia,onGenerateLibraryAssetImage,onGenerateLibraryAssetModel,onApproveLibraryAssetModel,onLoadLibraryAssetModelJob}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];characterAssets?:Record<string,CharacterAssetCatalogData>;libraryAssets?:LibraryAsset[];libraryError?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateCharacter?:(data:CharacterDraft)=>Promise<void>|void;onUpdateCharacter?:(id:string,data:CharacterDraft)=>Promise<void>|void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void;onUploadLibraryAssetMedia?:(id:string,file:File)=>Promise<void>|void;onGenerateLibraryAssetImage?:(id:string)=>Promise<void>|void;onGenerateLibraryAssetModel?:(id:string,referenceAssetId:string)=>Promise<Job>;onApproveLibraryAssetModel?:(jobId:string)=>Promise<void>;onLoadLibraryAssetModelJob?:(id:string)=>Promise<Job|null>}){
+export function AssetCatalogView({characters,character,references,variants,characterAssets={},libraryAssets=[],libraryError='',requestedCategory='character',initialLibraryAssetId='',onSelect,onOpen,onCreateCharacter,onUpdateCharacter,onCreateLibraryAsset,onUpdateLibraryAsset,onDeleteLibraryAsset,onUploadLibraryAssetMedia,onGenerateLibraryAssetImage,onGenerateLibraryAssetModel,onApproveLibraryAssetModel,onLoadLibraryAssetModelJob}:{characters:Character[];character:Character|null;references:CharacterReference[];variants:AssetVariant[];characterAssets?:Record<string,CharacterAssetCatalogData>;libraryAssets?:LibraryAsset[];libraryError?:string;requestedCategory?:'character'|LibraryAssetKind;initialLibraryAssetId?:string;onSelect:(id:string)=>void;onOpen:(view:AssetWorkspaceView)=>void;onCreateCharacter?:(data:CharacterDraft)=>Promise<void>|void;onUpdateCharacter?:(id:string,data:CharacterDraft)=>Promise<void>|void;onCreateLibraryAsset?:(data:LibraryAssetCreate)=>Promise<void>|void;onUpdateLibraryAsset?:(id:string,data:LibraryAssetPatch)=>Promise<void>|void;onDeleteLibraryAsset?:(id:string)=>Promise<void>|void;onUploadLibraryAssetMedia?:(id:string,file:File)=>Promise<void>|void;onGenerateLibraryAssetImage?:(id:string)=>Promise<void>|void;onGenerateLibraryAssetModel?:(id:string,referenceAssetId:string)=>Promise<Job>;onApproveLibraryAssetModel?:(jobId:string)=>Promise<void>;onLoadLibraryAssetModelJob?:(id:string)=>Promise<Job|null>}){
   const [filter,setFilter]=useState<'all'|'variants'|'pending'>('all');
-  const [category,setCategory]=useState<'character'|LibraryAssetKind>('character');
+  const [category,setCategory]=useState<'character'|LibraryAssetKind>(requestedCategory);
   const [query,setQuery]=useState('');
-  const [selectedLibraryId,setSelectedLibraryId]=useState('');
+  const [selectedLibraryId,setSelectedLibraryId]=useState(initialLibraryAssetId);
   const [formMode,setFormMode]=useState<'create'|'edit'|null>(null);
   const [assetName,setAssetName]=useState('');
   const [assetDescription,setAssetDescription]=useState('');
@@ -71,6 +71,7 @@ export function AssetCatalogView({characters,character,references,variants,chara
   },[selectedLibrary?.id]);
   const categories:(['character',string]|[LibraryAssetKind,string])[]=[['character','角色实体'],...Object.entries(libraryCategory).map(([kind,item])=>[kind as LibraryAssetKind,item.label] as [LibraryAssetKind,string])];
   const selectCategory=(next:'character'|LibraryAssetKind)=>{setCategory(next);setQuery('');setFormMode(null);setAssetError('');if(next!=='character')setSelectedLibraryId(libraryAssets.find(item=>item.kind===next)?.id??'');};
+  useEffect(()=>{setCategory(requestedCategory);setQuery('');setFormMode(null);setAssetError('');setSelectedLibraryId(initialLibraryAssetId);},[requestedCategory,initialLibraryAssetId]);
   const openCreate=()=>{setFormMode('create');setAssetName('');setAssetDescription('');setAssetTags('');setAssetError('');};
   const openEdit=()=>{if(!selectedLibrary)return;setFormMode('edit');setAssetName(selectedLibrary.name);setAssetDescription(selectedLibrary.description);setAssetTags(selectedLibrary.tags.join(', '));setAssetError('');};
   const saveLibraryAsset=async(event:FormEvent)=>{event.preventDefault();if(category==='character'||!assetName.trim()||assetBusy)return;const data={kind:category,name:assetName.trim(),description:assetDescription.trim(),tags:assetTags.split(/[,，]/).map(item=>item.trim()).filter(Boolean),metadata:formMode==='edit'?selectedLibrary?.metadata??{}:{}};setAssetBusy(true);setAssetError('');try{if(formMode==='edit'&&selectedLibrary&&onUpdateLibraryAsset)await onUpdateLibraryAsset(selectedLibrary.id,data);else if(formMode==='create'&&onCreateLibraryAsset)await onCreateLibraryAsset(data);setFormMode(null);}catch(cause){setAssetError(cause instanceof Error?cause.message:'保存资产失败');}finally{setAssetBusy(false);}};
@@ -173,11 +174,11 @@ export function CharacterMasterView({characters,character,references,variants,re
 type VariantDraft={kind:'master'|'episode';label:string;episode_id:string|null;parent_variant_id:string|null;inherited_fields:string[];overrides:Record<string,unknown>};
 type StateDraft={kind:AssetVariantState['kind'];label:string;overrides:Record<string,unknown>};
 
-export function AssetVariantEditorView({character,references,variants,episodes,onOpen,onCreateVariant,onCreateState,embedded=false}:{character:Character;references:CharacterReference[];variants:AssetVariant[];episodes:EpisodeSummary[];onOpen:(view:AssetWorkspaceView)=>void;onCreateVariant:(data:VariantDraft)=>Promise<void>|void;onCreateState:(variantId:string,data:StateDraft)=>Promise<void>|void;embedded?:boolean}){
+export function AssetVariantEditorView({character,references,variants,episodes,initialVariantId,initialStateId,onOpen,onCreateVariant,onCreateState,embedded=false}:{character:Character;references:CharacterReference[];variants:AssetVariant[];episodes:EpisodeSummary[];initialVariantId?:string;initialStateId?:string;onOpen:(view:AssetWorkspaceView)=>void;onCreateVariant:(data:VariantDraft)=>Promise<void>|void;onCreateState:(variantId:string,data:StateDraft)=>Promise<void>|void;embedded?:boolean}){
   const master=variants.find(item=>item.kind==='master')??variants[0];
   const episodeVariants=variants.filter(item=>item.kind==='episode');
-  const [selectedId,setSelectedId]=useState(episodeVariants[0]?.id??master?.id??'');
-  const [stateId,setStateId]=useState<string>('');
+  const [selectedId,setSelectedId]=useState(variants.some(item=>item.id===initialVariantId)?initialVariantId??'':episodeVariants[0]?.id??master?.id??'');
+  const [stateId,setStateId]=useState<string>(initialStateId??'');
   const [busy,setBusy]=useState(false);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
@@ -194,6 +195,7 @@ export function AssetVariantEditorView({character,references,variants,episodes,o
   const canvasImage=selectedState?stateImage(selectedState):image;
   const fields=useMemo(()=>Array.from(new Set(['年龄','发型','服装','伤势','表情',...Object.keys(selected?.overrides??{}),...Object.keys(selectedState?.overrides??{}),...Object.keys(draft?.overrides??{})])),[selected,selectedState,draft]);
   useEffect(()=>{if(selected&&!selected.states.some(item=>item.id===stateId))setStateId(selected.states[0]?.id??'');},[selected,stateId]);
+  useEffect(()=>{const target=initialVariantId?variants.find(item=>item.id===initialVariantId):undefined;if(target){setSelectedId(target.id);setStateId(initialStateId&&target.states.some(item=>item.id===initialStateId)?initialStateId:target.states[0]?.id??'');}},[initialVariantId,initialStateId,variants]);
   useEffect(()=>{if(!selectedId&&episodeVariants[0])setSelectedId(episodeVariants[0].id);},[episodeVariants,selectedId]);
   useEffect(()=>{if(selected?.kind==='episode'&&selected.episode_id)setTargetEpisodeId(selected.episode_id);},[selected]);
 

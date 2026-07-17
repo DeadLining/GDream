@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from comic_studio import models, schemas
@@ -157,6 +157,41 @@ class DiscoveryService:
             if variant is None:
                 continue
             results.append(self._result("asset_state", item.id, item.label, variant.label, project_id, episode_id=variant.episode_id, character_id=variant.character_id, variant_id=variant.id, state_id=item.id, hierarchy=[*self._variant_lineage(variant), item.label], reference_count=self._count(models.AssetVariantUsage.id, models.AssetVariantUsage.state_id == item.id)))
+
+        library_assets = self.session.scalars(
+            select(models.LibraryAsset).where(
+                models.LibraryAsset.project_id == project_id,
+                or_(
+                    models.LibraryAsset.name.ilike(like),
+                    models.LibraryAsset.description.ilike(like),
+                    cast(models.LibraryAsset.tags, String).ilike(like),
+                ),
+            ).limit(12)
+        )
+        library_kind_labels = {
+            "scene": "场景资产",
+            "prop": "道具资产",
+            "costume": "服装资产",
+            "sound": "声音资产",
+        }
+        for item in library_assets:
+            results.append(
+                self._result(
+                    "library_asset",
+                    item.id,
+                    item.name,
+                    item.description,
+                    project_id,
+                    library_asset_id=item.id,
+                    library_asset_kind=item.kind,
+                    hierarchy=[project.title, library_kind_labels[item.kind], item.name],
+                    status="ready" if item.media_asset_id else "pending",
+                    reference_count=self._count(
+                        models.LibraryAssetSceneBinding.id,
+                        models.LibraryAssetSceneBinding.library_asset_id == item.id,
+                    ),
+                )
+            )
 
         episodes = self.session.scalars(select(models.Episode).where(models.Episode.project_id == project_id, or_(models.Episode.title.ilike(like), models.Episode.premise.ilike(like))).limit(12))
         for item in episodes:

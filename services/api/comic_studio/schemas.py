@@ -402,7 +402,7 @@ class WorkspaceSummaryRead(BaseModel):
 
 
 class ProjectSearchResult(BaseModel):
-    kind: Literal["script", "character", "asset_variant", "asset_state", "episode", "scene", "shot", "review", "task"]
+    kind: Literal["script", "character", "asset_variant", "asset_state", "library_asset", "episode", "scene", "shot", "review", "task"]
     id: str
     title: str
     subtitle: str
@@ -415,6 +415,8 @@ class ProjectSearchResult(BaseModel):
     character_id: str | None = None
     variant_id: str | None = None
     state_id: str | None = None
+    library_asset_id: str | None = None
+    library_asset_kind: Literal["scene", "prop", "costume", "sound"] | None = None
     reference_count: int = 0
 
 

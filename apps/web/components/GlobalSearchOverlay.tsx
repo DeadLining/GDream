@@ -6,8 +6,8 @@ import type {EpisodeDetail,ProjectDetail,ProjectSearchResult} from '../lib/types
 
 type Scope='all'|'script'|'assets'|'structure'|'shot'|'review'|'task';
 const scopes:Array<[Scope,string]>=[['all','全部'],['script','剧本'],['assets','角色与资产'],['structure','集与场景'],['shot','镜头'],['review','评论'],['task','任务']];
-const kindScope:Record<ProjectSearchResult['kind'],Scope>={script:'script',character:'assets',asset_variant:'assets',asset_state:'assets',episode:'structure',scene:'structure',shot:'shot',review:'review',task:'task'};
-const openLabels:Record<ProjectSearchResult['kind'],string>={script:'打开剧本',character:'打开资产库',asset_variant:'打开资产库',asset_state:'打开资产库',episode:'打开剧集',scene:'打开场景',shot:'定位到镜头',review:'打开评论',task:'打开任务'};
+const kindScope:Record<ProjectSearchResult['kind'],Scope>={script:'script',character:'assets',asset_variant:'assets',asset_state:'assets',library_asset:'assets',episode:'structure',scene:'structure',shot:'shot',review:'review',task:'task'};
+const openLabels:Record<ProjectSearchResult['kind'],string>={script:'打开剧本',character:'打开资产库',asset_variant:'打开资产库',asset_state:'打开资产库',library_asset:'打开资产库',episode:'打开剧集',scene:'打开场景',shot:'定位到镜头',review:'打开评论',task:'打开任务'};
 const resultKey=(item:ProjectSearchResult)=>`${item.kind}:${item.id}`;
 
 export function GlobalSearchOverlay({project,onClose,onOpenResult}:{project:ProjectDetail|null;episode:EpisodeDetail|null;onClose:()=>void;onOpenResult:(item:ProjectSearchResult)=>void}){

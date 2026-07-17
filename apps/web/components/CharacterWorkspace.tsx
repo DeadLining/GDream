@@ -51,6 +51,7 @@ import type {
   LibraryAssetPatch,
   Job,
   EpisodeSummary,
+  ProjectSearchResult,
 } from '../lib/types';
 import {
   AssetCatalogView,
@@ -84,7 +85,7 @@ const modelMetadata=(metadata:Record<string,unknown>|undefined)=>{
   return{skinCount,jointCount,animationClips,morphTargets};
 };
 
-export function CharacterWorkspace({projectId,characters,episodes=[],onCharactersChanged,onMetricsChanged}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void}){
+export function CharacterWorkspace({projectId,characters,episodes=[],searchTarget,onCharactersChanged,onMetricsChanged}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];searchTarget?:ProjectSearchResult|null;onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void}){
   const [workspaceCharacters,setWorkspaceCharacters]=useState(characters);
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
@@ -115,6 +116,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const representations=character?assetData[character.id]?.representations??[]:[];
   const selectedScope=(()=>{if(modelScope.startsWith('state:')){const stateId=modelScope.slice(6);const variant=variants.find(item=>item.states.some(state=>state.id===stateId));return{variantId:variant?.id??null,stateId};}if(modelScope.startsWith('variant:'))return{variantId:modelScope.slice(8),stateId:null};return{variantId:null,stateId:null};})();
   const characterIds=workspaceCharacters.map(item=>item.id).join('|');
+  const searchCategory=searchTarget?.kind==='library_asset'&&searchTarget.library_asset_kind?searchTarget.library_asset_kind:'character';
 
   const load=async(id:string)=>{
     const request=(loadRequests.current[id]??0)+1;
@@ -144,6 +146,13 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     if(errors.length)throw new Error(`已启动 ${started} 集，${errors.length} 集失败：${errors.join('；')}`);
   };
   useEffect(()=>{for(const item of workspaceCharacters)void load(item.id);},[characterIds]);
+  useEffect(()=>{
+    if(!searchTarget)return;
+    if(searchTarget.kind==='library_asset'){setView('catalog');return;}
+    if(searchTarget.character_id&&workspaceCharacters.some(item=>item.id===searchTarget.character_id))setSelected(searchTarget.character_id);
+    if(searchTarget.kind==='character')setView('master');
+    else if(searchTarget.kind==='asset_variant'||searchTarget.kind==='asset_state')setView('variant');
+  },[searchTarget,characterIds]);
   useEffect(()=>setModelScope('master'),[character?.id]);
   useEffect(()=>{
     let current=true;
@@ -187,7 +196,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
   const loadLibraryModelJob=(id:string)=>getLatestModel3DJob('library_asset',id);
   const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
   const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
-  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
+  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
 
   if(!character)return catalog;
 
@@ -329,7 +338,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],onCharacter
     references={references}
     variants={variants}
     referenceManager={referenceManager}
-    variantWorkspace={<AssetVariantEditorView embedded character={character} references={references} variants={variants} episodes={episodes} onOpen={setView} onCreateVariant={addEpisodeVariant} onCreateState={addState}/>}
+    variantWorkspace={<AssetVariantEditorView embedded character={character} references={references} variants={variants} episodes={episodes} initialVariantId={searchTarget?.variant_id??undefined} initialStateId={searchTarget?.state_id??undefined} onOpen={setView} onCreateVariant={addEpisodeVariant} onCreateState={addState}/>}
     lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState} onLoadEpisodeShots={loadEpisodeShots} onCreateUsage={addUsage} onAnalyzeImpact={analyzeImpact} onRegenerateImpact={regenerateImpact}/>}
     modelManager={<>{modelManager}{modelMetadataSummary}</>}
     initialTab={view==='variant'?'variant':view==='lineage'?'lineage':'master'}

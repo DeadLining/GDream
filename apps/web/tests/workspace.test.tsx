@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
   listVisualReviewThreads:vi.fn(),updateVisualReviewThread:vi.fn(),createVisualReviewMessage:vi.fn(),createVisualReviewThread:vi.fn(),acceptVisualReviewCandidate:vi.fn(),
   listReviewThreads:vi.fn(),createReviewMessage:vi.fn(),updateReviewThread:vi.fn(),listReleaseCandidates:vi.fn(),
-  listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindLibraryAssetToScene:vi.fn(),unbindLibraryAssetFromScene:vi.fn(),
+  listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindLibraryAssetToScene:vi.fn(),unbindLibraryAssetFromScene:vi.fn(),searchProject:vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -46,7 +46,7 @@ vi.mock('../lib/api', () => ({
   listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
   listVisualReviewThreads:mocks.listVisualReviewThreads,updateVisualReviewThread:mocks.updateVisualReviewThread,createVisualReviewMessage:mocks.createVisualReviewMessage,createVisualReviewThread:mocks.createVisualReviewThread,acceptVisualReviewCandidate:mocks.acceptVisualReviewCandidate,
   listReviewThreads:mocks.listReviewThreads,createReviewMessage:mocks.createReviewMessage,updateReviewThread:mocks.updateReviewThread,listReleaseCandidates:mocks.listReleaseCandidates,
-  listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,
+  listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,searchProject:mocks.searchProject,
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
@@ -312,6 +312,23 @@ describe('Workspace', () => {
     expect(screen.queryByRole('button', {name: '重新生成分镜'})).not.toBeInTheDocument();
     expect(screen.queryByRole('button', {name: '根据本集设定生成分镜'})).not.toBeInTheDocument();
     expect(mocks.startPlanning).not.toHaveBeenCalled();
+  });
+
+  it('opens the exact scene selected from global search',async()=>{
+    const searchableEpisode={...plannedEpisode,scenes:[...plannedEpisode.scenes,{id:'scene-2',position:2,location:'时间裂缝',time_of_day:'night',summary:'怀表发光',continuity_state:{},estimated_duration_seconds:8,shots:[]}]};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(searchableEpisode);
+    mocks.searchProject.mockResolvedValue({query:'时间',results:[{kind:'scene',id:'scene-2',title:'时间裂缝',subtitle:'怀表发光',hierarchy:['霓虹夜行','失窃的雨夜','时间裂缝'],status:'',project_id:'project-1',episode_id:'episode-1',scene_id:'scene-2',shot_id:null,character_id:null,variant_id:null,state_id:null,library_asset_id:null,library_asset_kind:null,reference_count:0}]});
+    render(<Workspace/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'全局搜索'}));
+    await userEvent.type(screen.getByRole('textbox',{name:'搜索作品内容'}),'时间');
+    await userEvent.click(await screen.findByRole('button',{name:/时间裂缝/}));
+    await userEvent.click(screen.getByRole('button',{name:'打开场景'}));
+
+    expect(await screen.findByRole('heading',{name:'时间裂缝'})).toBeVisible();
+    expect(screen.getByText('怀表发光')).toBeVisible();
   });
 
   it('exposes the active project context and accessible studio commands', async () => {

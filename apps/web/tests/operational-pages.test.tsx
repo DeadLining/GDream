@@ -80,7 +80,7 @@ describe('operational frontend pages',()=>{
   });
 
   it('selects a search result before explicitly opening its destination',async()=>{
-    const episodeResult:ProjectSearchResult={kind:'episode',id:'e1',title:'雨夜抉择',subtitle:'寻找失踪同伴',hierarchy:['长安风云','雨夜抉择'],status:'production',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,character_id:null,variant_id:null,state_id:null,reference_count:0};
+    const episodeResult:ProjectSearchResult={kind:'episode',id:'e1',title:'雨夜抉择',subtitle:'寻找失踪同伴',hierarchy:['长安风云','雨夜抉择'],status:'production',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,character_id:null,variant_id:null,state_id:null,library_asset_id:null,library_asset_kind:null,reference_count:0};
     operationMocks.searchProject.mockResolvedValue({query:'雨夜',results:[episodeResult]});
     const onOpenResult=vi.fn();
     render(<GlobalSearchOverlay project={project} episode={episode} onClose={vi.fn()} onOpenResult={onOpenResult}/>);
@@ -98,7 +98,7 @@ describe('operational frontend pages',()=>{
     const input=screen.getByRole('textbox',{name:'搜索作品内容'});
     await userEvent.type(input,'左臂');
     await screen.findByText('镜头与画面');
-    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
     expect(onOpenResult).toHaveBeenCalledWith(expect.objectContaining({kind:'shot',id:'shot-1'}));
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledOnce();

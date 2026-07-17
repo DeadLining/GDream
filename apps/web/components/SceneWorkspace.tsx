@@ -10,9 +10,9 @@ const assetKindLabel={scene:'场景',prop:'道具',costume:'服装',sound:'声�
 const emptyScene:SceneCreate={location:'',time_of_day:'day',summary:'',continuity_state:{},estimated_duration_seconds:8};
 const emptyShot:StructureShotCreate={shot_type:'medium',duration_seconds:4,composition:'',camera_motion:'static',character_state:{},image_prompt:'',negative_prompt:'',video_prompt:'',negative_video_prompt:''};
 
-export function SceneWorkspace({episode,onOpenShot,onEpisodeChanged}:{episode:EpisodeDetail;onOpenShot:(shotId:string)=>void;onEpisodeChanged?:()=>Promise<void>|void}){
+export function SceneWorkspace({episode,initialSceneId,onOpenShot,onEpisodeChanged}:{episode:EpisodeDetail;initialSceneId?:string;onOpenShot:(shotId:string)=>void;onEpisodeChanged?:()=>Promise<void>|void}){
   const [current,setCurrent]=useState(episode);
-  const [sceneId,setSceneId]=useState(episode.scenes[0]?.id??'');
+  const [sceneId,setSceneId]=useState(episode.scenes.some(scene=>scene.id===initialSceneId)?initialSceneId??'':episode.scenes[0]?.id??'');
   const [editingScene,setEditingScene]=useState(false);
   const [addingScene,setAddingScene]=useState(false);
   const [addingShot,setAddingShot]=useState(false);
@@ -26,7 +26,7 @@ export function SceneWorkspace({episode,onOpenShot,onEpisodeChanged}:{episode:Ep
   const [assetBusy,setAssetBusy]=useState('');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
-  useEffect(()=>{setCurrent(episode);setSceneId(value=>episode.scenes.some(scene=>scene.id===value)?value:episode.scenes[0]?.id??'');},[episode]);
+  useEffect(()=>{setCurrent(episode);setSceneId(value=>initialSceneId&&episode.scenes.some(scene=>scene.id===initialSceneId)?initialSceneId:episode.scenes.some(scene=>scene.id===value)?value:episode.scenes[0]?.id??'');},[episode,initialSceneId]);
   const scene=current.scenes.find(item=>item.id===sceneId)??current.scenes[0];
   const dialogueCount=useMemo(()=>scene?.shots.reduce((total,shot)=>total+shot.dialogue.length,0)??0,[scene]);
   const productionAssets=libraryAssets;

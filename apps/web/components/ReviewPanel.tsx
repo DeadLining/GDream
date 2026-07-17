@@ -6,13 +6,13 @@ import {approveReleaseCandidate,createReleaseCandidate,createReviewMessage,creat
 import {pollJob} from '../lib/jobs';
 import type {EpisodeDetail, ProductionReadiness,ReleaseCandidate,RenderReview,ReviewThread} from '../lib/types';
 
-export function ReviewPanel({episode, readiness, onSelectShot, onEpisodeChanged}: {episode: EpisodeDetail; readiness: ProductionReadiness; onSelectShot: (id: string) => void; onEpisodeChanged?: () => Promise<void> | void}) {
+export function ReviewPanel({episode, readiness, initialShotId, initialThreadId, onSelectShot, onEpisodeChanged}: {episode: EpisodeDetail; readiness: ProductionReadiness; initialShotId?: string; initialThreadId?: string; onSelectShot: (id: string) => void; onEpisodeChanged?: () => Promise<void> | void}) {
   const missingPanels = new Set(readiness.blockers.missing_panels);
   const stalePanels = new Set(readiness.blockers.stale_panels??[]);
   const unapprovedShots = new Set(readiness.blockers.unapproved_shots);
   const allShots = useMemo(() => episode.scenes.flatMap(scene => scene.shots.map(shot => ({shot, scenePosition: scene.position, sceneLocation: scene.location}))), [episode]);
   const shots = allShots.filter(({shot}) => missingPanels.has(shot.id) || stalePanels.has(shot.id) || unapprovedShots.has(shot.id));
-  const [selectedId, setSelectedId] = useState(shots[0]?.shot.id ?? allShots[0]?.shot.id ?? '');
+  const [selectedId, setSelectedId] = useState(allShots.some(item=>item.shot.id===initialShotId)?initialShotId??'':shots[0]?.shot.id ?? allShots[0]?.shot.id ?? '');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'image' | 'video'>('image');
   const [previewMode,setPreviewMode]=useState<'shot'|'final'>('shot');
@@ -99,7 +99,8 @@ export function ReviewPanel({episode, readiness, onSelectShot, onEpisodeChanged}
     getAsset(assetId).then(asset => {if (current) setPreviewUrl(mediaUrl(asset.media_url));}).catch(() => {if (current) setPreviewUrl(null);});
     return () => {current = false;};
   }, [previewMode,selected?.shot.id, selected?.shot.active_panel_asset_id, selected?.shot.active_video_asset_id]);
-  useEffect(()=>{let current=true;listReviewThreads(episode.id).then(items=>{if(!current)return;setThreads(items);setSelectedThreadId(items.find(item=>item.status==='open')?.id??'');}).catch(()=>{if(current)setThreads([]);});return()=>{current=false;};},[episode.id]);
+  useEffect(()=>{setSelectedId(current=>initialShotId&&allShots.some(item=>item.shot.id===initialShotId)?initialShotId:allShots.some(item=>item.shot.id===current)?current:shots[0]?.shot.id??allShots[0]?.shot.id??'');},[episode.id,initialShotId,allShots]);
+  useEffect(()=>{let current=true;listReviewThreads(episode.id).then(items=>{if(!current)return;setThreads(items);const target=initialThreadId?items.find(item=>item.id===initialThreadId):undefined;setSelectedThreadId(target?.id??items.find(item=>item.status==='open')?.id??'');if(target){setCommentFilter(target.status==='open'?'open':'resolved');if(target.shot_id&&allShots.some(item=>item.shot.id===target.shot_id)){setSelectedId(target.shot_id);onSelectShot(target.shot_id);}}}).catch(()=>{if(current)setThreads([]);});return()=>{current=false;};},[episode.id,initialThreadId]);
   useEffect(()=>{let current=true;listReleaseCandidates(episode.id).then(items=>{if(!current)return;setReleaseCandidates(items);setSelectedCandidateId(value=>items.some(item=>item.id===value)?value:items[0]?.id??'');setNextCandidateVersion(Math.max(0,...items.map(item=>Number(item.version.match(/^V(\d+)$/)?.[1]??0)))+1);if(items.length)getRenderReview(episode.id).then(review=>{if(current)setRenderReview(review);}).catch(()=>{if(current)setRenderReview(null);});else setRenderReview(null);}).catch(()=>{if(current){setReleaseCandidates([]);setSelectedCandidateId('');setRenderReview(null);setNextCandidateVersion(1);}});return()=>{current=false;};},[episode.id]);
 
   const shotStartFor=(id:string)=>{const index=allShots.findIndex(item=>item.shot.id===id);return index<1?0:allShots.slice(0,index).reduce((sum,item)=>sum+item.shot.duration_seconds,0);};
