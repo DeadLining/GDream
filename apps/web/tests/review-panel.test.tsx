@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {ReviewPanel} from '../components/ReviewPanel';
 import type {EpisodeDetail, ProductionReadiness} from '../lib/types';
+import {readAllStyles} from './_styles';
 
 const mocks=vi.hoisted(()=>({threads:vi.fn(),createThread:vi.fn(),message:vi.fn(),patch:vi.fn(),updateShot:vi.fn(),getAsset:vi.fn(),startRender:vi.fn(),candidate:vi.fn(),candidates:vi.fn(),renderReview:vi.fn(),gate:vi.fn(),approve:vi.fn(),publish:vi.fn(),visualThreads:vi.fn(),createVisualThread:vi.fn(),visualMessage:vi.fn(),visualGenerate:vi.fn(),poll:vi.fn()}));
 vi.mock('../lib/api',()=>({listReviewThreads:mocks.threads,createReviewThread:mocks.createThread,createReviewMessage:mocks.message,updateReviewThread:mocks.patch,updateShot:mocks.updateShot,getAsset:mocks.getAsset,startRender:mocks.startRender,createReleaseCandidate:mocks.candidate,listReleaseCandidates:mocks.candidates,getRenderReview:mocks.renderReview,getReleaseGate:mocks.gate,approveReleaseCandidate:mocks.approve,publishReleaseCandidate:mocks.publish,listVisualReviewThreads:mocks.visualThreads,createVisualReviewThread:mocks.createVisualThread,createVisualReviewMessage:mocks.visualMessage,startVisualReviewGeneration:mocks.visualGenerate,mediaUrl:(path:string)=>path}));
@@ -84,6 +85,14 @@ describe('ReviewPanel', () => {
     expect(heading.parentElement?.parentElement).toHaveClass('review-header-copy');
     await userEvent.click(screen.getByRole('button',{name:'上一镜头'}));
     expect(await screen.findByRole('img',{name:'进入巷道'})).toHaveClass('review-player-media');
+  });
+
+  it('keeps compact review and publishing controls vertically reachable', () => {
+    const styles=readAllStyles();
+    expect(styles).toMatch(/\.review-discussion\s*\{[^}]*overflow-y:\s*auto[^}]*\}/s);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*\{[^}]*height:\s*100%[^}]*overflow-y:\s*auto[^}]*\}/);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{[^}]*flex:\s*0\s+0\s+auto[^}]*min-height:\s*0[^}]*\}/);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*700px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{[^}]*grid-template-columns:\s*1fr[^}]*\}/);
   });
 
   it('shows honest QC availability and derives the next candidate version', async () => {
