@@ -18,9 +18,14 @@ export function ModelCenter({onDirtyChange, onSaved}: {onDirtyChange?: (dirty: b
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [nextHealth, nextInvocations] = await Promise.all([getModelRuntimeHealth(), getModelRuntimeInvocations()]);
-      setHealth(nextHealth); setInvocations(nextInvocations); setError('');
-    } catch (cause) {setError(cause instanceof Error ? cause.message : '模型运行状态加载失败');}
+      const [healthResult, invocationsResult] = await Promise.allSettled([getModelRuntimeHealth(), getModelRuntimeInvocations()]);
+      const errors: string[] = [];
+      if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
+      else errors.push(healthResult.reason instanceof Error ? healthResult.reason.message : '模型运行状态加载失败');
+      if (invocationsResult.status === 'fulfilled') setInvocations(invocationsResult.value);
+      else errors.push(invocationsResult.reason instanceof Error ? invocationsResult.reason.message : '模型调用记录加载失败');
+      setError(errors.join('；'));
+    } catch (cause) {setError(cause instanceof Error ? cause.message : '模型中心加载失败');}
     finally {setRefreshing(false);}
   }, []);
   useEffect(() => {void load();}, [load]);

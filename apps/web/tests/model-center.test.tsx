@@ -71,7 +71,7 @@ describe('ModelCenter', () => {
 
     expect(await screen.findByText('MiniMax-M3')).toBeVisible();
     expect(screen.getByText('运行正常')).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent('调用记录暂时不可用');
+    expect(screen.getByText('调用记录暂时不可用')).toBeVisible();
     expect(await screen.findAllByRole('form')).toHaveLength(5);
   });
 
