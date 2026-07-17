@@ -86,3 +86,14 @@
   .scene-production-asset-list { grid-template-columns: 1fr; }
   .visual-review-workspace { grid-template-columns: 1fr; grid-template-rows: minmax(520px, 1fr) auto; overflow: auto; }.review-conversation { border-top: 1px solid var(--color-line); border-left: 0; }
 }
+@media (max-width: 600px) {
+  .scene-document { padding-inline: var(--space-2); }
+  .scene-document-header { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
+  .scene-document-intro { grid-column: 1 / -1; grid-template-columns: 88px minmax(0, 1fr); }
+  .scene-reference-image,.scene-reference-placeholder { width: 88px; }
+  .scene-header-actions { grid-column: 1; grid-row: 2; justify-self: start; }
+  .scene-metadata { grid-column: 2; grid-row: 2; justify-self: end; }
+  .scene-metadata span:first-child { display: none; }
+  .scene-beat { grid-template-columns: 30px minmax(0, 1fr); row-gap: var(--space-1); padding-block: var(--space-2); }
+  .scene-beat-actions { grid-column: 2; justify-content: flex-end; }
+}
