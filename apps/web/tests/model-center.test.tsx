@@ -64,6 +64,17 @@ describe('ModelCenter', () => {
     expect(await screen.findAllByRole('form')).toHaveLength(5);
   });
 
+  it('keeps runtime health available when invocation history fails', async () => {
+    mocks.getModelRuntimeInvocations.mockRejectedValue(new Error('调用记录暂时不可用'));
+
+    render(<ModelCenter/>);
+
+    expect(await screen.findByText('MiniMax-M3')).toBeVisible();
+    expect(screen.getByText('运行正常')).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent('调用记录暂时不可用');
+    expect(await screen.findAllByRole('form')).toHaveLength(5);
+  });
+
   it('retries a retryable invocation and refreshes runtime state', async () => {
     render(<ModelCenter/>);
     await userEvent.click(await screen.findByRole('button', {name: '重试画面调用'}));
