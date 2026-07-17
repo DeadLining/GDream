@@ -199,4 +199,30 @@ describe('operational frontend pages',()=>{
     expect(operationMocks.listTrashItems).toHaveBeenCalledWith('p1');
     expect(operationMocks.restoreTrashItem).toHaveBeenCalledWith('trash-1');
   });
+
+  it('filters recycle items by content type and deletion actor',async()=>{
+    operationMocks.listTrashItems.mockResolvedValue([
+      {id:'trash-1',project_id:'p1',resource_type:'asset_variant_state',resource_id:'state-1',name:'左臂擦伤',original_location:['作品主设定','雨夜造型','左臂擦伤'],lineage:['作品主设定','雨夜造型','左臂擦伤'],deleted_by:'林默',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:0,can_permanently_delete:true},
+      {id:'trash-2',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-2',name:'白昼造型',original_location:['作品主设定','白昼造型'],lineage:['作品主设定','白昼造型'],deleted_by:'张伟',deleted_at:'2026-07-14T08:00:00Z',expires_at:'2026-08-13T08:00:00Z',reference_count:0,can_permanently_delete:true},
+    ]);
+    render(<RecycleBin project={project}/>);
+    expect(await screen.findByText('白昼造型')).toBeVisible();
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'内容类型'}),'asset_variant_state');
+    expect(screen.getByText('左臂擦伤')).toBeVisible();
+    expect(screen.queryByText('白昼造型')).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'删除者'}),'张伟');
+    expect(screen.getByText('没有匹配的回收项。')).toBeVisible();
+  });
+
+  it('requires confirmation before permanently deleting a recycle item',async()=>{
+    operationMocks.listTrashItems.mockResolvedValue([{id:'trash-2',project_id:'p1',resource_type:'asset_variant',resource_id:'variant-2',name:'白昼造型',original_location:['作品主设定','白昼造型'],lineage:['作品主设定','白昼造型'],deleted_by:'张伟',deleted_at:'2026-07-14T08:00:00Z',expires_at:'2026-08-13T08:00:00Z',reference_count:0,can_permanently_delete:true}]);
+    vi.spyOn(window,'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<RecycleBin project={project}/>);
+    const purge=await screen.findByRole('button',{name:'永久删除白昼造型'});
+    await userEvent.click(purge);
+    expect(operationMocks.permanentlyDeleteTrashItem).not.toHaveBeenCalled();
+    await userEvent.click(purge);
+    expect(window.confirm).toHaveBeenCalledWith('永久删除“白昼造型”？此操作无法撤销。');
+    expect(operationMocks.permanentlyDeleteTrashItem).toHaveBeenCalledWith('trash-2');
+  });
 });
