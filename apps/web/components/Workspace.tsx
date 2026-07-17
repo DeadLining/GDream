@@ -77,9 +77,7 @@ export function Workspace() {
     if (!query) return;
     const update = () => {
       setMobile(query.matches);
-      setWorkArea(current => query.matches
-        ? current === 'review' ? 'overview' : current
-        : current === 'inspector' ? 'overview' : current);
+      setWorkArea(current => !query.matches && current === 'inspector' ? 'overview' : current);
     };
     update();
     query.addEventListener?.('change', update);
