@@ -602,6 +602,24 @@ describe('Workspace', () => {
     expect(screen.queryByRole('tab', {name: '模型渠道'})).not.toBeInTheDocument();
   });
 
+  it('preserves review publishing when crossing the mobile breakpoint', async () => {
+    const viewport = mediaController(false);
+    vi.stubGlobal('matchMedia', vi.fn(() => viewport.media));
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+    await userEvent.click(await screen.findByRole('button', {name: '审核发布'}));
+    expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
+
+    act(() => viewport.setMatches(true));
+    expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
+
+    act(() => viewport.setMatches(false));
+    expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
+  });
+
   it('keeps the four production stages and inspector in one scroll-safe mobile row', () => {
     render(<WorkspaceTabs value="overview" onChange={() => true} mobile areas={['overview', 'scene', 'storyboard', 'production', 'inspector']}/>);
     expect(screen.getAllByRole('tab')).toHaveLength(5);
