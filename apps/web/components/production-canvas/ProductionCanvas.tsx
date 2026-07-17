@@ -53,6 +53,7 @@ export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLay
   const [positionedNodes,setPositionedNodes]=useState<any[]>([]);
   const [viewport,setViewport]=useState(effectiveLayout?.viewport??{x:0,y:0,zoom:.75});
   const [readOnly,setReadOnly]=useState(false);
+  const [compact,setCompact]=useState(false);
   const [canvasView,setCanvasView]=useState<ProductionCanvasView>('overview');
   const [canvasTheme,setCanvasTheme]=useState<ProductionCanvasTheme>('dark');
   const [inspectorOpen,setInspectorOpen]=useState(true);
@@ -78,10 +79,20 @@ export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLay
   },[graph.episode_id]);
   useEffect(()=>{
     if(typeof window==='undefined'||!window.matchMedia)return;
-    const query=window.matchMedia('(max-width: 700px)');
-    const update=()=>setReadOnly(query.matches);
-    update();query.addEventListener('change',update);
-    return()=>query.removeEventListener('change',update);
+    const readOnlyQuery=window.matchMedia('(max-width: 700px)');
+    const compactQuery=window.matchMedia('(max-width: 1023px)');
+    const update=()=>{
+      setReadOnly(readOnlyQuery.matches);
+      setCompact(compactQuery.matches);
+      if(compactQuery.matches)setInspectorOpen(false);
+    };
+    update();
+    readOnlyQuery.addEventListener('change',update);
+    compactQuery.addEventListener('change',update);
+    return()=>{
+      readOnlyQuery.removeEventListener('change',update);
+      compactQuery.removeEventListener('change',update);
+    };
   },[]);
   useEffect(()=>{
     const saved=localStorage.getItem('ai-comic-production-canvas-theme');
@@ -135,7 +146,7 @@ export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLay
   };
   const selectNode=(node:ProductionCanvasNode)=>{
     setSelectedNodeId(node.id);
-    setInspectorOpen(!readOnly||node.type!=='shot');
+    setInspectorOpen(Boolean(node.data.blocked)||!compact);
     if(node.type==='scene-group'||node.type==='asset')return;
     const shotId=node.type==='shot'?node.id.slice(5):String(node.data.shotId??'');
     if(!shotId)return;
