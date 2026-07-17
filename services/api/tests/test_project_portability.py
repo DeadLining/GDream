@@ -7,6 +7,10 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import select
+
 from comic_studio import models
 from comic_studio.services.project_portability import (
     MANIFEST_SCHEMA,
@@ -72,6 +76,14 @@ def _seed_project(session, data_root: Path) -> str:
     return project.id
 
 
+def _current_alembic_heads() -> str:
+    config = Config()
+    config.set_main_option(
+        "script_location", str(Path(__file__).resolve().parents[1] / "alembic")
+    )
+    return ",".join(sorted(ScriptDirectory.from_config(config).get_heads()))
+
+
 def test_export_writes_valid_zip_with_manifest(db_session, tmp_path):
     project_id = _seed_project(db_session, tmp_path)
     result = ProjectPortabilityService(db_session, data_root=tmp_path).export_project(project_id)
@@ -88,6 +100,7 @@ def test_export_writes_valid_zip_with_manifest(db_session, tmp_path):
         assert manifest["schema"] == MANIFEST_SCHEMA
         assert manifest["project_id"] == project_id
         assert manifest["project_title"] == "夜行"
+        assert manifest["alembic_revision"] == _current_alembic_heads()
         assert manifest["entity_counts"]["episodes"] == 1
         assert manifest["entity_counts"]["shots"] == 1
         database = json.loads(zf.read("database.json"))
@@ -198,3 +211,23 @@ def test_import_assets_written_to_disk(db_session, tmp_path):
     abs_path = (tmp_path / asset.local_path).resolve()
     assert abs_path.is_file()
     assert abs_path.read_bytes() == b"\x89PNG\r\n\x1a\nfake-png-bytes"
+
+
+def test_import_missing_asset_payload_does_not_reuse_source_path(db_session, tmp_path):
+    project_id = _seed_project(db_session, tmp_path)
+    service = ProjectPortabilityService(db_session, data_root=tmp_path)
+    exported = service.export_project(project_id)
+    stripped = tmp_path / "missing-asset.zip"
+    with zipfile.ZipFile(exported.zip_path) as source, zipfile.ZipFile(stripped, "w") as target:
+        for item in source.infolist():
+            if not item.filename.startswith("assets/"):
+                target.writestr(item, source.read(item.filename))
+
+    imported = service.import_project(stripped)
+    asset = db_session.scalar(
+        select(models.Asset).where(models.Asset.project_id == imported.project_id)
+    )
+
+    assert asset is not None
+    assert asset.local_path == ""
+    assert any("missing asset binary" in warning.lower() for warning in imported.warnings)

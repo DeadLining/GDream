@@ -39,10 +39,14 @@ describe('ProjectSettings',()=>{
     await userEvent.type(screen.getByRole('textbox',{name:'作品名称'}),' 2');
     await waitFor(()=>expect(onDirtyChange).toHaveBeenLastCalledWith(true));
     expect(screen.getByRole('button',{name:'保存设置'})).toBeEnabled();
+    expect(screen.getByRole('button',{name:'导出 ZIP'})).toBeDisabled();
+    expect(screen.getByLabelText('选择 ZIP 工程包')).toBeDisabled();
 
     await userEvent.click(screen.getByRole('button',{name:'放弃更改'}));
     await waitFor(()=>expect(onDirtyChange).toHaveBeenLastCalledWith(false));
     expect(screen.getByRole('button',{name:'保存设置'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'导出 ZIP'})).toBeEnabled();
+    expect(screen.getByLabelText('选择 ZIP 工程包')).toBeEnabled();
   });
 
   it('edits project basics while preserving the approved hierarchy rules',async()=>{
@@ -71,5 +75,16 @@ describe('ProjectSettings',()=>{
     await userEvent.upload(screen.getByLabelText('选择 ZIP 工程包'),archive);
     expect(portabilityMocks.importProject).toHaveBeenCalledWith(archive);
     expect(onImported).toHaveBeenCalledWith({project_id:'p2',warnings:[]});
+  });
+
+  it('clears portability results when switching projects',async()=>{
+    const view=render(<ProjectSettings project={project} volumes={volumes} sceneCount={4} shotCount={28} onSave={()=>{}}/>);
+    await userEvent.click(screen.getByRole('button',{name:'导出 ZIP'}));
+    expect(await screen.findByRole('link',{name:'下载工程 ZIP'})).toBeVisible();
+
+    view.rerender(<ProjectSettings project={{...project,id:'p2',title:'新作品'}} volumes={[]} sceneCount={0} shotCount={0} onSave={()=>{}}/>);
+
+    expect(screen.queryByRole('link',{name:'下载工程 ZIP'})).not.toBeInTheDocument();
+    expect(screen.queryByText(/已生成/)).not.toBeInTheDocument();
   });
 });
