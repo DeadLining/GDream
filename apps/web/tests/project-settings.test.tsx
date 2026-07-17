@@ -1,4 +1,4 @@
-import {cleanup,render,screen} from '@testing-library/react';
+import {cleanup,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {ProjectSettings} from '../components/ProjectSettings';
@@ -9,6 +9,33 @@ const volumes:Volume[]=[{id:'v1',project_id:'p1',position:1,title:'启航篇',su
 
 describe('ProjectSettings',()=>{
   afterEach(cleanup);
+  it('links every visible settings section and omits unavailable dangerous actions',async()=>{
+    render(<ProjectSettings project={project} volumes={volumes} sceneCount={4} shotCount={28} onSave={()=>{}}/>);
+
+    expect(screen.getByRole('link',{name:'基本信息'})).toHaveAttribute('href','#project-basic');
+    expect(screen.getByRole('link',{name:'结构规则'})).toHaveAttribute('href','#project-structure');
+    expect(screen.getByRole('link',{name:'生成规范'})).toHaveAttribute('href','#project-generation');
+    expect(screen.getByRole('link',{name:'文件与存储'})).toHaveAttribute('href','#project-files');
+    expect(screen.queryByRole('button',{name:'危险操作'})).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('link',{name:'结构规则'}));
+    expect(screen.getByRole('link',{name:'结构规则'})).toHaveAttribute('aria-current','location');
+  });
+
+  it('reports unsaved changes and clears them when edits are abandoned',async()=>{
+    const onDirtyChange=vi.fn();
+    render(<ProjectSettings project={project} volumes={volumes} sceneCount={4} shotCount={28} onSave={()=>{}} onDirtyChange={onDirtyChange}/>);
+
+    expect(screen.getByRole('button',{name:'保存设置'})).toBeDisabled();
+    await userEvent.type(screen.getByRole('textbox',{name:'作品名称'}),' 2');
+    await waitFor(()=>expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+    expect(screen.getByRole('button',{name:'保存设置'})).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button',{name:'放弃更改'}));
+    await waitFor(()=>expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+    expect(screen.getByRole('button',{name:'保存设置'})).toBeDisabled();
+  });
+
   it('edits project basics while preserving the approved hierarchy rules',async()=>{
     const onSave=vi.fn().mockResolvedValue(undefined);
     render(<ProjectSettings project={project} volumes={volumes} sceneCount={4} shotCount={28} onSave={onSave}/>);

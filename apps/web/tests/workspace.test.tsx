@@ -463,6 +463,25 @@ describe('Workspace', () => {
     expect(screen.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
   });
 
+  it('confirms before leaving unsaved project settings', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    vi.stubGlobal('confirm', confirm);
+    render(<Workspace/>);
+
+    await userEvent.click(await screen.findByRole('button', {name: '作品设置'}));
+    await userEvent.type(screen.getByRole('textbox', {name: '作品名称'}), ' 2');
+
+    await userEvent.click(screen.getByRole('button', {name: '作品设置'}));
+    expect(confirm).toHaveBeenCalledWith('作品设置有未保存更改，确定离开吗？');
+    expect(screen.getByRole('heading', {name: '作品基本信息'})).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', {name: '作品设置'}));
+    expect(screen.getByRole('tab', {name: '概览'})).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('opens on overview and navigates between episode work areas', async () => {
     mocks.listProjects.mockResolvedValue([project]);
     mocks.getProject.mockResolvedValue(projectDetail);
