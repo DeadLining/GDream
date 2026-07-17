@@ -114,11 +114,18 @@ def test_episode_versions_restore_business_data_with_automatic_backup(client):
         session.commit()
     v1 = client.post(
         f"/api/episodes/{episode['id']}/versions",
-        json={"label": "审核前", "source": "manual", "author": "张伟"},
+        json={"label": "审核前", "source": "manual"},
     )
     assert v1.status_code == 201
     assert v1.json()["version"] == 1
+    assert v1.json()["author"] == "本人"
     assert v1.json()["snapshot"]["episode"]["title"] == "雨夜抉择"
+
+    rejected_author = client.post(
+        f"/api/episodes/{episode['id']}/versions",
+        json={"label": "不应指定创建者", "source": "manual", "author": "张伟"},
+    )
+    assert rejected_author.status_code == 422
 
     with client.app.state.session_factory() as session:
         current_episode = session.get(models.Episode, episode["id"])
@@ -144,7 +151,7 @@ def test_episode_versions_restore_business_data_with_automatic_backup(client):
         session.commit()
     v2 = client.post(
         f"/api/episodes/{episode['id']}/versions",
-        json={"label": "当前版", "source": "manual", "author": "李想"},
+        json={"label": "当前版", "source": "manual"},
     ).json()
     restored = client.post(f"/api/episode-versions/{v1.json()['id']}/restore")
     assert restored.status_code == 201
@@ -170,7 +177,7 @@ def test_episode_version_restore_rejects_active_production(client):
     _project, episode, _scene_id, _shot_id = _project_episode_shot(client, "恢复冲突作品")
     version = client.post(
         f"/api/episodes/{episode['id']}/versions",
-        json={"label": "生产前", "source": "manual", "author": "张伟"},
+        json={"label": "生产前", "source": "manual"},
     ).json()
     with client.app.state.session_factory() as session:
         session.add(models.ProductionRun(episode_id=episode["id"], status="running", stages=["panels"]))
@@ -186,7 +193,7 @@ def test_episode_version_restore_rolls_back_backup_and_business_changes_on_inval
     _project, episode, _scene_id, _shot_id = _project_episode_shot(client, "原子恢复作品")
     version = client.post(
         f"/api/episodes/{episode['id']}/versions",
-        json={"label": "损坏快照", "source": "manual", "author": "张伟"},
+        json={"label": "损坏快照", "source": "manual"},
     ).json()
     with client.app.state.session_factory() as session:
         current_episode = session.get(models.Episode, episode["id"])

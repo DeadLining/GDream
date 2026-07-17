@@ -6,7 +6,7 @@ import {RecycleBin} from '../components/RecycleBin';
 import {TaskCenter} from '../components/TaskCenter';
 import {VersionHistory,serializeEpisodeVersionsCsv} from '../components/VersionHistory';
 import {WorkspaceHome} from '../components/WorkspaceHome';
-import type {EpisodeDetail,Project,ProjectDetail,ProjectSearchResult} from '../lib/types';
+import type {EpisodeDetail,EpisodeVersion,Project,ProjectDetail,ProjectSearchResult} from '../lib/types';
 
 const operationMocks=vi.hoisted(()=>({
   listProductionTasks:vi.fn(),updateProductionTask:vi.fn(),createProductionTask:vi.fn(),deleteProductionTask:vi.fn(),
@@ -213,10 +213,30 @@ describe('operational frontend pages',()=>{
     await userEvent.click(screen.getByRole('button',{name:'保存当前版本'}));
     const dialog=screen.getByRole('dialog',{name:'保存当前版本'});
     await userEvent.type(within(dialog).getByRole('textbox',{name:'版本标签'}),'导演确认版');
-    await userEvent.type(within(dialog).getByRole('textbox',{name:'创建者'}),'林默');
+    expect(within(dialog).queryByRole('textbox',{name:'创建者'})).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button',{name:'保存版本'}));
-    expect(operationMocks.createEpisodeVersion).toHaveBeenCalledWith('e1',{label:'导演确认版',source:'manual',author:'林默'});
+    expect(operationMocks.createEpisodeVersion).toHaveBeenCalledWith('e1',{label:'导演确认版',source:'manual'});
     expect((await screen.findAllByText('V1 导演确认版'))[0]).toBeVisible();
+  });
+
+  it('clears stale versions when switching episodes fails to load',async()=>{
+    const secondEpisode={...episode,id:'e2',title:'第二集'};
+    const view=render(<VersionHistory episode={episode}/>);
+    expect((await screen.findAllByText('V2 当前版'))[0]).toBeVisible();
+    operationMocks.listEpisodeVersions.mockRejectedValueOnce(new Error('版本服务不可用'));
+
+    view.rerender(<VersionHistory episode={secondEpisode}/>);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('版本服务不可用');
+    expect(screen.queryByText('V2 当前版')).not.toBeInTheDocument();
+  });
+
+  it('exports personal version metadata without spreadsheet formulas',()=>{
+    const dangerous:EpisodeVersion={id:'v-safe',episode_id:'e1',version:1,label:'=HYPERLINK("bad")',source:'manual',author:'旧作者',snapshot:{},restored_from_id:null,created_at:''};
+    const csv=serializeEpisodeVersionsCsv([dangerous]);
+    expect(csv).not.toContain('作者');
+    expect(csv).not.toContain('"=HYPERLINK');
+    expect(csv).toContain("'=HYPERLINK");
   });
 
   it('loads deleted lineage nodes, protects references, and restores them',async()=>{
