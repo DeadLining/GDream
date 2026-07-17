@@ -43,3 +43,44 @@ def test_coordinator_honors_pause_before_claiming_new_items(db_session):
     assert called==[]
     assert finished.status=="paused"
     assert finished.queued_items==3
+
+
+def test_coordinator_reports_generation_gate_skips_as_incomplete(db_session):
+    run, items = seed_run(db_session, count=1)
+    store = ProductionStore(db_session)
+    store.transition_item(
+        items[0].id,
+        "skipped",
+        result_metadata={
+            "reason": "generation_not_ready",
+            "blockers": ["missing_background", "director_preview_missing"],
+        },
+    )
+
+    finished = asyncio.run(
+        ProductionCoordinator(lambda: db_session, {"panel": lambda _item: None}).run(
+            run.id
+        )
+    )
+
+    assert finished.status == "completed_with_failures"
+    assert finished.skipped_items == 1
+
+
+def test_coordinator_keeps_already_ready_skips_successful(db_session):
+    run, items = seed_run(db_session, count=1)
+    store = ProductionStore(db_session)
+    store.transition_item(
+        items[0].id,
+        "skipped",
+        result_metadata={"reason": "already_ready"},
+    )
+
+    finished = asyncio.run(
+        ProductionCoordinator(lambda: db_session, {"panel": lambda _item: None}).run(
+            run.id
+        )
+    )
+
+    assert finished.status == "completed"
+    assert finished.skipped_items == 1
