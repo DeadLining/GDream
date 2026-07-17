@@ -1,10 +1,16 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from comic_studio import schemas
 from comic_studio.db import get_session
+from comic_studio.services.delivery import (
+    DeliveryCandidateNotApproved,
+    DeliveryPackageService,
+    DeliveryValidationError,
+)
 from comic_studio.services.operations import OperationsService, OperationsValidationError
 
 
@@ -12,7 +18,7 @@ router = APIRouter(tags=["operations"])
 SessionDependency = Annotated[Session, Depends(get_session)]
 
 
-def _unprocessable(exc: OperationsValidationError):
+def _unprocessable(exc: ValueError):
     raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -69,22 +75,38 @@ def restore_version(version_id: str, session: SessionDependency):
 
 
 @router.post("/api/episodes/{episode_id}/delivery-packages", response_model=schemas.DeliveryPackageRead, status_code=status.HTTP_201_CREATED)
-def create_delivery_package(episode_id: str, data: schemas.DeliveryPackageCreate, session: SessionDependency):
+def create_delivery_package(episode_id: str, data: schemas.DeliveryPackageCreate, request: Request, session: SessionDependency):
     try:
-        package = OperationsService(session).create_delivery_package(episode_id, data)
-    except OperationsValidationError as exc:
+        package = DeliveryPackageService(
+            session, request.app.state.settings.data_root
+        ).create(episode_id, data)
+    except DeliveryValidationError as exc:
         _unprocessable(exc)
-    except RuntimeError as exc:
-        if str(exc) == "candidate_not_approved":
-            raise HTTPException(status_code=409, detail="Delivery package requires an approved release candidate") from exc
-        raise
+    except DeliveryCandidateNotApproved as exc:
+        raise HTTPException(status_code=409, detail="Delivery package requires an approved release candidate") from exc
     if package is None: raise HTTPException(status_code=404, detail="Episode not found")
     return package
 
 
 @router.get("/api/episodes/{episode_id}/delivery-packages", response_model=list[schemas.DeliveryPackageRead])
-def list_delivery_packages(episode_id: str, session: SessionDependency):
-    packages = OperationsService(session).list_delivery_packages(episode_id)
+def list_delivery_packages(episode_id: str, request: Request, session: SessionDependency):
+    packages = DeliveryPackageService(
+        session, request.app.state.settings.data_root
+    ).list(episode_id)
     if packages is None: raise HTTPException(status_code=404, detail="Episode not found")
     return packages
 
+
+@router.get("/api/delivery-packages/{package_id}/download")
+def download_delivery_package(package_id: str, request: Request, session: SessionDependency):
+    artifact = DeliveryPackageService(
+        session, request.app.state.settings.data_root
+    ).artifact(package_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Delivery artifact not found")
+    package, path = artifact
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=f"delivery-{package.id[:8]}.zip",
+    )

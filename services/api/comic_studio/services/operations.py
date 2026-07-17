@@ -286,22 +286,3 @@ class OperationsService:
         except Exception:
             self.session.rollback()
             raise
-
-    def create_delivery_package(self, episode_id: str, data: schemas.DeliveryPackageCreate):
-        episode = self.session.get(models.Episode, episode_id)
-        if episode is None: return None
-        candidate = self.session.get(models.ReleaseCandidate, data.release_candidate_id)
-        if candidate is None or candidate.episode_id != episode_id:
-            raise OperationsValidationError("Release candidate must belong to the delivery episode")
-        if candidate.status != "approved":
-            raise RuntimeError("candidate_not_approved")
-        outputs = [item.model_dump() for item in data.outputs]
-        package = models.DeliveryPackage(project_id=episode.project_id, episode_id=episode_id, release_candidate_id=candidate.id, preset_name=data.preset_name, outputs=outputs, checks={"release_candidate_approved": True, "render_complete": bool(candidate.render_path), "asset_license": True}, status="queued")
-        self.session.add(package); self.session.flush()
-        self.session.commit(); self.session.refresh(package)
-        return package
-
-    def list_delivery_packages(self, episode_id: str):
-        episode = self.session.get(models.Episode, episode_id)
-        if episode is None: return None
-        return list(self.session.scalars(select(models.DeliveryPackage).where(models.DeliveryPackage.episode_id == episode_id).order_by(models.DeliveryPackage.created_at.desc())))
