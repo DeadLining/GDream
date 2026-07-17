@@ -45,3 +45,28 @@ def test_recovers_running_runtime_jobs_as_interrupted(db_session):
     assert invocation.status == "failed"
     assert invocation.error_code == "runtime_interrupted"
     assert invocation.retryable is True
+
+
+def test_reconciles_legacy_running_invocation_for_terminal_job(db_session):
+    store = JobStore(db_session)
+    job = store.create(
+        "runtime_image", "shot", "s1", {"capability": "image"}
+    )
+    store.transition(job.id, "running")
+    invocation = InvocationRepository(db_session).start(
+        Capability.IMAGE,
+        "gptimage",
+        "gpt-image-2",
+        "shot",
+        "s1",
+        job.id,
+    )
+    store.interrupt_running(job.id)
+
+    recovered = InvocationRepository(db_session).recover_running_jobs()
+
+    assert recovered == []
+    db_session.refresh(invocation)
+    assert invocation.status == "failed"
+    assert invocation.error_code == "runtime_interrupted"
+    assert invocation.retryable is True
