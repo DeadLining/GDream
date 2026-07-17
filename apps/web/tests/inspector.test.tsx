@@ -53,7 +53,7 @@ describe('Inspector', () => {
     expect(await screen.findByText('当前画面使用的角色、场景或导演输入已变化')).toBeVisible();
     expect(screen.getByRole('button',{name:'重新生成画面'})).toBeEnabled();
     expect(screen.getByRole('button',{name:/画面版本 2.*输入已变化/})).toBeVisible();
-    expect(screen.getByText('当前画面已过期，请重新生成后再生成视频。')).toBeVisible();
+    expect(screen.queryByText('当前画面已过期，请重新生成后再生成视频。')).not.toBeInTheDocument();
     expect(screen.getByRole('button',{name:'使用首帧和提示词生成视频'})).toBeDisabled();
   });
 
