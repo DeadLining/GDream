@@ -127,7 +127,7 @@ describe('ProviderHealthStatus', () => {
     const button = screen.getByRole('button', {name: '检测模型服务'});
     await userEvent.click(button);
     expect(await screen.findByText('2/3 正常')).toBeVisible();
-    expect(screen.getByText('已禁用')).toBeVisible();
+    expect(screen.getAllByText('已禁用')).toHaveLength(2);
   });
 
   it('shows details when all providers are disabled', async () => {

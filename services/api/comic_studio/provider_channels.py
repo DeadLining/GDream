@@ -340,7 +340,7 @@ class ProviderChannelStore:
     @staticmethod
     def _persistence_payload(channels: ProviderChannels) -> dict:
         payload = channels.model_dump(mode="json")
-        for channel_name in ("llm", "image", "tts", "video"):
+        for channel_name in ("llm", "image", "tts", "video", "model3d"):
             channel = getattr(channels, channel_name)
             payload[channel_name]["api_key"] = channel.api_key_value
         return payload
