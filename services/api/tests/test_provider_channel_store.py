@@ -311,6 +311,27 @@ def test_save_is_atomic_private_and_updates_snapshot(tmp_path):
     assert list(path.parent.glob("provider-channels.json.*.tmp")) == []
 
 
+def test_save_persists_the_model3d_api_key_without_secret_masking(tmp_path):
+    path = tmp_path / "provider-channels.json"
+    channels = make_channels(
+        model3d=channel_payload(
+            name="fal.ai TripoSR",
+            enabled=True,
+            base_url="https://fal.run",
+            model="fal-ai/triposr",
+            api_key="model3d-secret",
+        )
+    )
+
+    ProviderChannelStore(path, make_channels()).save(channels)
+
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    assert persisted["model3d"]["api_key"] == "model3d-secret"
+    assert ProviderChannelStore(path, make_channels()).load().model3d.api_key_value == (
+        "model3d-secret"
+    )
+
+
 def test_concurrent_updates_serialize_read_modify_save_without_lost_changes(tmp_path):
     path = tmp_path / "provider-channels.json"
     first_store = ProviderChannelStore(path, make_channels())

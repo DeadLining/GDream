@@ -51,7 +51,7 @@ describe('ProviderHealthStatus', () => {
     expect(button).toHaveTextContent('4/4 正常');
   });
 
-  it('opens all four results and reruns the check when the status button is clicked again', async () => {
+  it('opens all five results and reruns the check when the status button is clicked again', async () => {
     mocks.getProviderHealth.mockResolvedValue(healthy);
     render(<ProviderHealthStatus/>);
     const button = screen.getByRole('button', {name: '检测模型服务'});
@@ -62,10 +62,11 @@ describe('ProviderHealthStatus', () => {
     const details = screen.getByRole('region', {name: '模型服务检测详情'});
     expect(button).toHaveAttribute('aria-expanded', 'true');
     expect(details).toBeVisible();
-    for (const label of ['剧本规划', '画面生成', '语音合成', '视频生成']) {
+    for (const label of ['剧本规划', '画面生成', '语音合成', '视频生成', '3D 生成']) {
       expect(screen.getByText(label)).toBeVisible();
     }
     expect(screen.getAllByText('正常')).toHaveLength(4);
+    expect(screen.getByText('已禁用')).toBeVisible();
     expect(screen.getByText('21 ms')).toBeVisible();
     expect(screen.getByText('MiniMax-M3')).toBeVisible();
     expect(screen.getByText('api.minimax.chat')).toBeVisible();
@@ -73,6 +74,20 @@ describe('ProviderHealthStatus', () => {
     await userEvent.click(button);
     await waitFor(() => expect(mocks.getProviderHealth).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('region', {name: '模型服务检测详情'})).toBeVisible();
+  });
+
+  it('counts an enabled 3D provider in the aggregate result', async () => {
+    mocks.getProviderHealth.mockResolvedValue({
+      ...healthy,
+      model3d: {...healthy.model3d, status: 'ok', elapsed_ms: 65},
+    });
+    render(<ProviderHealthStatus/>);
+
+    await userEvent.click(screen.getByRole('button', {name: '检测模型服务'}));
+
+    expect(await screen.findByText('5/5 正常')).toBeVisible();
+    expect(screen.getByText('3D 生成')).toBeVisible();
+    expect(screen.getByText('65 ms')).toBeVisible();
   });
 
   it('closes the result popover when clicking outside it', async () => {
@@ -122,7 +137,7 @@ describe('ProviderHealthStatus', () => {
     const button = screen.getByRole('button', {name: '检测模型服务'});
     await userEvent.click(button);
     expect(await screen.findByText('0/0 正常')).toBeVisible();
-    expect(screen.getAllByText('已禁用')).toHaveLength(4);
+    expect(screen.getAllByText('已禁用')).toHaveLength(5);
   });
 
   it('shows a concise retryable aggregate error without a count', async () => {
