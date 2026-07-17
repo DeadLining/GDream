@@ -1,8 +1,8 @@
 'use client';
 
-import {useEffect,useMemo,useState} from 'react';
-import {ArrowRight,Download,RotateCcw} from 'lucide-react';
-import {listEpisodeVersions,restoreEpisodeVersion} from '../lib/api';
+import {useEffect,useMemo,useState,type FormEvent} from 'react';
+import {ArrowRight,Download,Plus,RotateCcw} from 'lucide-react';
+import {createEpisodeVersion,listEpisodeVersions,restoreEpisodeVersion} from '../lib/api';
 import {diffEpisodeSnapshots} from '../lib/episode-version-diff';
 import type {EpisodeDetail,EpisodeVersion} from '../lib/types';
 
@@ -24,6 +24,8 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
   const [restoring,setRestoring]=useState(false);
+  const [createOpen,setCreateOpen]=useState(false);
+  const [creating,setCreating]=useState(false);
   useEffect(()=>{
     if(!episode?.id){setVersions([]);setSelectedId('');setCompareId('');setLoading(false);return;}
     let active=true;setLoading(true);setError('');
@@ -33,10 +35,17 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
   const selected=versions.find(version=>version.id===selectedId)??versions[0]??null;
   const baseline=versions.find(version=>version.id===compareId)??versions[1]??selected;
   const diff=useMemo(()=>baseline&&selected?diffEpisodeSnapshots(baseline.snapshot,selected.snapshot):null,[baseline,selected]);
+  const createSnapshot=async(event:FormEvent<HTMLFormElement>)=>{
+    event.preventDefault();if(!episode||creating)return;
+    const form=new FormData(event.currentTarget);setCreating(true);setError('');setSuccess('');
+    try{const created=await createEpisodeVersion(episode.id,{label:String(form.get('label')).trim(),source:'manual',author:String(form.get('author')).trim()});setVersions(items=>[created,...items.filter(item=>item.id!==created.id)]);setCompareId(selected?.id??created.id);setSelectedId(created.id);setCreateOpen(false);setSuccess(`已保存 V${created.version}“${created.label}”。`);}
+    catch(cause){setError(cause instanceof Error?cause.message:'版本保存失败');}
+    finally{setCreating(false);}
+  };
   const restoreSnapshot=async()=>{if(!selected||!window.confirm(`恢复 V${selected.version}“${selected.label}”？当前状态会先自动备份。`))return;setRestoring(true);setError('');setSuccess('');try{const created=await restoreEpisodeVersion(selected.id);const refreshed=episode?await listEpisodeVersions(episode.id):[];const nextVersions=refreshed.some(item=>item.id===created.id)?refreshed:[created,...refreshed];setVersions(nextVersions);setCompareId(selected.id);setSelectedId(created.id);try{await onRestored?.();}catch{setError('快照已恢复，但工作区刷新失败，请手动刷新项目。');}setSuccess(`已恢复 V${selected.version}，恢复前状态已自动备份。`);}catch(cause){setError(cause instanceof Error?cause.message:'快照恢复失败');}finally{setRestoring(false);}};
 
   return <main className="operations-page version-history-page">
-    <header className="operations-page-header"><div><h1>版本历史</h1><p>{episode?.title??'当前单集'} · 比较不可变快照并恢复业务状态</p></div></header>
+    <header className="operations-page-header"><div><h1>版本历史</h1><p>{episode?.title??'当前单集'} · 比较不可变快照并恢复业务状态</p></div><button className="command-button" aria-label="保存当前版本" disabled={!episode} onClick={()=>setCreateOpen(true)}><Plus size={16}/>保存当前版本</button></header>
     {error&&<p className="warning-box" role="alert">{error}</p>}
     {success&&<p className="success-box" role="status">{success}</p>}
     <div className="version-layout">
@@ -67,5 +76,6 @@ export function VersionHistory({episode,onRestored}:{episode:EpisodeDetail|null;
       <button aria-label="导出版本记录" disabled={!episode||!versions.length} onClick={()=>episode&&downloadVersions(episode.id,versions)}><Download size={16}/>导出版本记录</button>
       <button className="command-button" aria-label="恢复所选快照" disabled={!selected||restoring} onClick={restoreSnapshot}><RotateCcw size={16}/>{restoring?'恢复中…':'恢复所选快照'}</button>
     </footer>
+    {createOpen&&<div className="dialog-backdrop"><form className="form-dialog" role="dialog" aria-label="保存当前版本" onSubmit={createSnapshot}><header><h2>保存当前版本</h2><button type="button" aria-label="关闭" onClick={()=>setCreateOpen(false)}>×</button></header><label>版本标签<input aria-label="版本标签" name="label" placeholder="例如：导演确认版" required autoFocus/></label><label>创建者<input aria-label="创建者" name="author" placeholder="姓名或团队" required/></label><p>将保存当前单集、场景、镜头和对白的不可变快照。</p><footer><button type="button" onClick={()=>setCreateOpen(false)}>取消</button><button className="primary-action" aria-label="保存版本" disabled={creating}>{creating?'保存中…':'保存版本'}</button></footer></form></div>}
   </main>;
 }

@@ -186,7 +186,7 @@ describe('operational frontend pages',()=>{
     await userEvent.type(within(dialog).getByRole('textbox',{name:'创建者'}),'林默');
     await userEvent.click(within(dialog).getByRole('button',{name:'保存版本'}));
     expect(operationMocks.createEpisodeVersion).toHaveBeenCalledWith('e1',{label:'导演确认版',source:'manual',author:'林默'});
-    expect(await screen.findByText('V1 导演确认版')).toBeVisible();
+    expect((await screen.findAllByText('V1 导演确认版'))[0]).toBeVisible();
   });
 
   it('loads deleted lineage nodes, protects references, and restores them',async()=>{
