@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -62,12 +64,12 @@ def _utc_now_iso() -> str:
 
 
 def _alembic_head() -> str:
-    """Return the latest alembic revision id known to the codebase.
-
-    Hard-coded rather than read at runtime so the export does not require a
-    live alembic context. Update this constant when bumping the migration head.
-    """
-    return "20260721_29"
+    config = Config()
+    config.set_main_option(
+        "script_location",
+        str(Path(__file__).resolve().parents[2] / "alembic"),
+    )
+    return ",".join(sorted(ScriptDirectory.from_config(config).get_heads()))
 
 
 def _row_to_dict(instance: object) -> dict[str, Any]:
@@ -398,7 +400,7 @@ class ProjectPortabilityService:
         for as_row in database.get("assets", []):
             checksum = as_row.get("checksum") or as_row["id"]
             payload = asset_payloads.get(checksum)
-            local_path = None
+            local_path = ""
             if payload is not None and as_row.get("local_path"):
                 # Preserve the suffix of the original path.
                 old_path = Path(as_row["local_path"])
@@ -408,11 +410,13 @@ class ProjectPortabilityService:
                 abs_path.parent.mkdir(parents=True, exist_ok=True)
                 abs_path.write_bytes(payload)
                 local_path = str(new_relative)
+            elif as_row.get("local_path"):
+                warnings.append(f"Skipped missing asset binary: {checksum}")
             asset = models.Asset(
                 id=remap("asset", as_row["id"]),
                 project_id=new_project_id,
                 kind=as_row.get("kind", "asset"),
-                local_path=local_path or as_row.get("local_path", ""),
+                local_path=local_path,
                 media_type=as_row.get("media_type", "application/octet-stream"),
                 provider=as_row.get("provider", "imported"),
                 model=as_row.get("model", "imported"),

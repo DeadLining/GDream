@@ -1,12 +1,13 @@
 'use client';
 
-import {useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Download, Loader2, Upload, AlertTriangle, CheckCircle2} from 'lucide-react';
 import {exportProject, importProject, projectExportDownloadUrl} from '../lib/api';
 import type {ProjectImportResponse} from '../lib/types';
 
 type Props = {
   projectId: string;
+  disabled?: boolean;
   /** Called after a successful import so the parent can refresh its project list. */
   onImported?: (result: ProjectImportResponse) => void;
 };
@@ -21,43 +22,60 @@ type Props = {
  *
  * Designed to drop into ProjectSettings as a standalone section.
  */
-export function ProjectImportExport({projectId, onImported}: Props) {
+export function ProjectImportExport({projectId, disabled = false, onImported}: Props) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [exportInfo, setExportInfo] = useState<{bytes: number} | null>(null);
   const [importInfo, setImportInfo] = useState<ProjectImportResponse | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const generation = useRef(0);
+  const busy = exporting || importing;
+
+  useEffect(() => {
+    generation.current += 1;
+    setExporting(false);
+    setImporting(false);
+    setError('');
+    setExportInfo(null);
+    setImportInfo(null);
+    if (fileInput.current) fileInput.current.value = '';
+  }, [projectId]);
 
   const handleExport = async () => {
-    if (exporting) return;
+    if (disabled || busy) return;
+    const request = generation.current;
     setExporting(true);
     setError('');
     setExportInfo(null);
     try {
       const result = await exportProject(projectId);
-      setExportInfo({bytes: result.bytes_written});
+      if (request === generation.current) setExportInfo({bytes: result.bytes_written});
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '导出失败');
+      if (request === generation.current) setError(cause instanceof Error ? cause.message : '导出失败');
     } finally {
-      setExporting(false);
+      if (request === generation.current) setExporting(false);
     }
   };
 
   const handleImportFile = async (file: File | null) => {
-    if (!file || importing) return;
+    if (!file || disabled || busy) return;
+    const request = generation.current;
     setImporting(true);
     setError('');
     setImportInfo(null);
     try {
       const result = await importProject(file);
+      if (request !== generation.current) return;
       setImportInfo(result);
       onImported?.(result);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '导入失败');
+      if (request === generation.current) setError(cause instanceof Error ? cause.message : '导入失败');
     } finally {
-      setImporting(false);
-      if (fileInput.current) fileInput.current.value = '';
+      if (request === generation.current) {
+        setImporting(false);
+        if (fileInput.current) fileInput.current.value = '';
+      }
     }
   };
 
@@ -71,7 +89,7 @@ export function ProjectImportExport({projectId, onImported}: Props) {
     <section className="project-portability" aria-label="工程导入导出">
       <header>
         <h2>工程 ZIP 导入 / 导出</h2>
-        <p>导出当前作品（含角色、剧集、场景、镜头、对白与资产）为可移植 ZIP；也可从 ZIP 导入为新作品。</p>
+        <p>导出当前作品支持的核心结构与资产为可移植 ZIP；也可从 ZIP 导入为新作品。</p>
       </header>
 
       <div className="portability-actions">
@@ -87,8 +105,9 @@ export function ProjectImportExport({projectId, onImported}: Props) {
             type="button"
             className="primary-action"
             onClick={() => void handleExport()}
-            disabled={exporting}
+            disabled={disabled || busy}
             aria-busy={exporting}
+            title={disabled ? '请先保存作品设置' : undefined}
           >
             {exporting ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
             {exporting ? '正在打包…' : '导出 ZIP'}
@@ -116,7 +135,7 @@ export function ProjectImportExport({projectId, onImported}: Props) {
             <strong>从 ZIP 导入</strong>
           </div>
           <p className="portability-card-hint">
-            选择 .zip 文件，系统会以新作品 ID 导入（保留全部结构）。
+            选择 .zip 文件，系统会以新作品 ID 导入支持的核心结构。
           </p>
           <input
             ref={fileInput}
@@ -124,7 +143,8 @@ export function ProjectImportExport({projectId, onImported}: Props) {
             accept=".zip,application/zip"
             aria-label="选择 ZIP 工程包"
             onChange={event => void handleImportFile(event.target.files?.[0] ?? null)}
-            disabled={importing}
+            disabled={disabled || busy}
+            title={disabled ? '请先保存作品设置' : undefined}
           />
           {importInfo && (
             <p className="portability-success" role="status">
