@@ -30,4 +30,16 @@ describe('AssetVariantEditorView',()=>{
     await waitFor(()=>expect(onCreateVariant).toHaveBeenCalledWith(expect.objectContaining({kind:'episode',episode_id:'episode-2',label:'受伤造型'})));
     expect(mocks.suggestAssetVariant).toHaveBeenCalledWith(expect.objectContaining({episode_id:'episode-2'}));
   });
+
+  it('opens the exact variant state selected by global search',()=>{
+    const searchableVariants:AssetVariant[]=[
+      ...variants,
+      {id:'variant-1',character_id:'character-1',episode_id:'episode-1',parent_variant_id:'master-1',kind:'episode',label:'雨夜造型',inherited_fields:[],overrides:{},version:1,review_status:'approved',created_at:'',updated_at:'',states:[{id:'state-1',variant_id:'variant-1',kind:'outfit',label:'黑色风衣',overrides:{},created_at:'',updated_at:'',usages:[]}],usages:[]},
+      {id:'variant-2',character_id:'character-1',episode_id:'episode-2',parent_variant_id:'master-1',kind:'episode',label:'受伤造型',inherited_fields:[],overrides:{},version:1,review_status:'draft',created_at:'',updated_at:'',states:[{id:'state-2',variant_id:'variant-2',kind:'injury',label:'左眉伤痕',overrides:{},created_at:'',updated_at:'',usages:[]}],usages:[]},
+    ];
+    render(<AssetVariantEditorView embedded character={character} references={[]} variants={searchableVariants} episodes={episodes} initialVariantId="variant-2" initialStateId="state-2" onOpen={vi.fn()} onCreateVariant={vi.fn()} onCreateState={vi.fn()}/>);
+
+    expect(screen.getByRole('button',{name:/左眉伤痕/})).toHaveClass('active');
+    expect(screen.getByText('当前基线').parentElement).toHaveTextContent('受伤造型');
+  });
 });

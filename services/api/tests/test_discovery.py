@@ -74,6 +74,16 @@ def test_project_search_returns_navigable_results_across_real_resources(client):
     variant = client.post(f"/api/characters/{character['id']}/variants",json={"kind":"episode","label":"雨夜造型","episode_id":episode["id"],"parent_variant_id":master["id"],"inherited_fields":["identity"],"overrides":{}}).json()
     state = client.post(f"/api/asset-variants/{variant['id']}/states",json={"kind":"injury","label":"左臂擦伤","overrides":{}}).json()
     client.post(f"/api/asset-variants/{variant['id']}/usages",json={"state_id":state["id"],"shot_id":shot_id,"usage_kind":"panel"})
+    library_asset = client.post(
+        f"/api/projects/{project['id']}/library-assets",
+        json={
+            "kind": "prop",
+            "name": "左臂护具",
+            "description": "雨夜行动使用",
+            "tags": ["伤势", "道具"],
+            "metadata": {},
+        },
+    ).json()
     client.post(f"/api/projects/{project['id']}/tasks",json={"title":"修正左臂伤势","description":"保持连续性","priority":"high","assignee":"王磊","episode_id":episode["id"],"scene_id":scene.id,"shot_id":shot_id,"review_thread_id":None,"due_at":None,"checklist":[]})
 
     response = client.get(f"/api/projects/{project['id']}/search", params={"q":"左臂"})
@@ -82,7 +92,7 @@ def test_project_search_returns_navigable_results_across_real_resources(client):
     payload = response.json()
     assert payload["query"] == "左臂"
     kinds = {item["kind"] for item in payload["results"]}
-    assert {"asset_state", "shot", "task"}.issubset(kinds)
+    assert {"asset_state", "library_asset", "shot", "task"}.issubset(kinds)
     asset = next(item for item in payload["results"] if item["kind"] == "asset_state")
     assert asset["state_id"] == state["id"]
     assert asset["character_id"] == character["id"]
@@ -91,6 +101,12 @@ def test_project_search_returns_navigable_results_across_real_resources(client):
     shot_result = next(item for item in payload["results"] if item["kind"] == "shot")
     assert shot_result["shot_id"] == shot_id
     assert shot_result["episode_id"] == episode["id"]
+    library_result = next(
+        item for item in payload["results"] if item["kind"] == "library_asset"
+    )
+    assert library_result["library_asset_id"] == library_asset["id"]
+    assert library_result["library_asset_kind"] == "prop"
+    assert library_result["hierarchy"] == ["雨夜长安", "道具资产", "左臂护具"]
 
 
 def test_project_search_rejects_blank_and_caps_result_count(client):

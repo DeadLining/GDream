@@ -146,6 +146,19 @@ describe('ReviewPanel', () => {
     await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('review-1',{status:'resolved'}));
   });
 
+  it('opens the exact review thread selected by global search',async()=>{
+    const threads=[
+      {id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:1,severity:'major' as const,title:'光线偏暗',status:'open' as const,created_at:'',updated_at:'',messages:[]},
+      {id:'review-2',episode_id:'episode-1',shot_id:'shot-3',timecode_seconds:2,severity:'critical' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[]},
+    ];
+    mocks.threads.mockResolvedValue(threads);
+    render(<ReviewPanel episode={episode} readiness={readiness} initialShotId="shot-3" initialThreadId="review-2" onSelectShot={vi.fn()}/>);
+
+    const target=await screen.findByRole('button',{name:'角色脸型漂移 镜头评论'});
+    expect(target.closest('article')).toHaveClass('active');
+    expect(screen.getByRole('button',{name:'镜头 3'})).toHaveClass('active');
+  });
+
   it('creates a time-linked review thread and reopens a resolved thread', async()=>{
     const resolved={id:'review-resolved',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:1.5,severity:'minor' as const,title:'字幕位置',status:'resolved' as const,created_at:'',updated_at:'',messages:[]};
     const created={id:'review-new',episode_id:'episode-1',shot_id:'shot-2',timecode_seconds:3,severity:'major' as const,title:'芯片反光过强',status:'open' as const,created_at:'',updated_at:'',messages:[]};

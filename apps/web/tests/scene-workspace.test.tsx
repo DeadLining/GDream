@@ -101,6 +101,13 @@ describe('SceneWorkspace', () => {
     expect(onOpenShot).toHaveBeenCalledWith('shot-2');
   });
 
+  it('opens the scene selected by a global search result',()=>{
+    render(<SceneWorkspace episode={episode} initialSceneId="scene-2" onOpenShot={vi.fn()}/>);
+
+    expect(screen.getByRole('heading',{name:'时间裂缝'})).toBeVisible();
+    expect(screen.getByText('怀表发光')).toBeVisible();
+  });
+
   it('edits a scene and offers a scoped rerun for invalidated shots',async()=>{
     const updated={...episode,scenes:[{...episode.scenes[0],location:'霓虹旧巷'},episode.scenes[1]]};
     mocks.updateScene.mockResolvedValue({episode_id:'episode-1',resource_id:'scene-1',affected_shot_ids:['shot-1'],invalidated_stages:['panels','videos']});

@@ -39,7 +39,7 @@ describe('operational frontend pages',()=>{
     operationMocks.listTrashItems.mockResolvedValue([{id:'trash-1',project_id:'p1',resource_type:'asset_variant_state',resource_id:'state-1',name:'左臂擦伤',original_location:['作品主设定','第03集雨夜造型','左臂擦伤'],lineage:['作品主设定','第03集雨夜造型','左臂擦伤'],deleted_by:'林默',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:14,can_permanently_delete:false}]);
     operationMocks.restoreTrashItem.mockResolvedValue({restored:true,resource_type:'asset_variant_state',resource_id:'state-1'});
     operationMocks.getWorkspaceSummary.mockResolvedValue({active_project_count:2,active_task_count:4,pending_review_count:3,updated_today_count:1,projects:[{project_id:'p1',title:'长安风云',logline:'雨夜中的失踪案',volume_count:3,episode_count:1,scene_count:1,shot_count:1,open_task_count:3,pending_review_count:1,completion_percent:62,current_stage:'分镜制作中',latest_task_titles:['审核分镜草稿','生成角色状态参考','补齐环境音'],updated_at:'2026-07-12T10:24:00Z'}]});
-    operationMocks.searchProject.mockResolvedValue({query:'左臂',results:[{kind:'asset_state',id:'state-1',title:'左臂擦伤',subtitle:'雨夜造型',hierarchy:['作品主设定','集级变体','左臂擦伤'],status:'',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,character_id:'c1',variant_id:'v1',state_id:'state-1',reference_count:14},{kind:'shot',id:'shot-1',title:'镜头 01',subtitle:'林默进入营地',hierarchy:['长安风云','雨夜抉择','珊瑚营地','镜头 01'],status:'draft',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',character_id:null,variant_id:null,state_id:null,reference_count:0}]});
+    operationMocks.searchProject.mockResolvedValue({query:'左臂',results:[{kind:'asset_state',id:'state-1',title:'左臂擦伤',subtitle:'雨夜造型',hierarchy:['作品主设定','集级变体','左臂擦伤'],status:'',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,character_id:'c1',variant_id:'v1',state_id:'state-1',library_asset_id:null,library_asset_kind:null,reference_count:14},{kind:'library_asset',id:'library-1',title:'左臂护具',subtitle:'雨夜行动使用',hierarchy:['长安风云','道具资产','左臂护具'],status:'ready',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,character_id:null,variant_id:null,state_id:null,library_asset_id:'library-1',library_asset_kind:'prop',reference_count:1},{kind:'shot',id:'shot-1',title:'镜头 01',subtitle:'林默进入营地',hierarchy:['长安风云','雨夜抉择','珊瑚营地','镜头 01'],status:'draft',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',character_id:null,variant_id:null,state_id:null,library_asset_id:null,library_asset_kind:null,reference_count:0}]});
   });
 
   it('renders the cross-project workspace and opens a selected project',async()=>{
@@ -61,10 +61,22 @@ describe('operational frontend pages',()=>{
     await userEvent.clear(input);
     await userEvent.type(input,'左臂');
     expect(await screen.findByText('作品主设定 → 集级变体 → 左臂擦伤')).toBeVisible();
+    expect(screen.getByText('左臂护具')).toBeVisible();
     expect(screen.getByText('镜头与画面')).toBeVisible();
     expect(operationMocks.searchProject).toHaveBeenCalledWith('p1','左臂');
     await userEvent.click(screen.getByRole('button',{name:'关闭全局搜索'}));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('opens the task selected by a global search result',async()=>{
+    operationMocks.listProductionTasks.mockResolvedValue([
+      {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐环境音',description:'环境音设计',priority:'medium',status:'in_progress',assignee:'',due_at:null,checklist:[],created_at:'',updated_at:''},
+      {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理交付清单',description:'核对文件',priority:'low',status:'todo',assignee:'',due_at:null,checklist:[],created_at:'',updated_at:''},
+    ]);
+    render(<TaskCenter project={project} episode={episode} initialTaskId="t2"/>);
+
+    const inspector=await screen.findByRole('complementary');
+    expect(within(inspector).getByRole('heading',{name:'整理交付清单'})).toBeVisible();
   });
 
   it('selects a search result before explicitly opening its destination',async()=>{
