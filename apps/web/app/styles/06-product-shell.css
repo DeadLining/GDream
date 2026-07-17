@@ -39,6 +39,10 @@
   .workspace-grid.without-inspector { grid-template-columns: 210px minmax(400px, 1fr); }
 }
 
+@media (min-width: 900px) and (max-width: 1023px) {
+  .workspace-grid.without-inspector { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 899px) {
   .app-toolbar { position: sticky; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 48px 40px; flex-basis: 88px; height: 88px; }
   .toolbar-context { height: 48px; padding-left: 10px; }
@@ -49,4 +53,3 @@
   .toolbar-actions::-webkit-scrollbar { display:none; }
   .workspace-grid.without-inspector { grid-template-columns: 1fr; }
 }
-
