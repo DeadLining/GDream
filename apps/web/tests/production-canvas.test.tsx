@@ -4,7 +4,7 @@ import {useState} from 'react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 
 beforeEach(()=>localStorage.clear());
-afterEach(cleanup);
+afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 
 vi.mock('@xyflow/react',()=>({
   ReactFlow:({nodes,nodeTypes,defaultViewport,fitView,onSelectionChange,nodesConnectable}:any)=><div data-testid="react-flow" data-default-zoom={defaultViewport?.zoom} data-fit-view={String(Boolean(fitView))} data-nodes-connectable={String(Boolean(nodesConnectable))}><button type="button" aria-label="模拟重复镜头选择" onClick={()=>{const shot=nodes.find((node:any)=>node.type==='shot');onSelectionChange?.({nodes:[shot]});onSelectionChange?.({nodes:[shot]});}}/>{nodes.filter((node:any)=>!node.hidden).map((node:any)=>{const Node=nodeTypes[node.type];return <Node key={node.id} id={node.id} type={node.type} data={node.data}/>;})}</div>,
@@ -63,6 +63,29 @@ it('removes the node inspector when the user closes it',async()=>{
 
   expect(screen.queryByRole('complementary',{name:'生产节点检查器'})).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:'打开节点检查器'})).toBeVisible();
+});
+
+it('starts compact production canvases with the node inspector closed',async()=>{
+  vi.stubGlobal('matchMedia',vi.fn((query:string)=>({
+    matches:query==='(max-width: 1023px)',
+    media:query,
+    onchange:null,
+    addEventListener:vi.fn(),
+    removeEventListener:vi.fn(),
+    addListener:vi.fn(),
+    removeListener:vi.fn(),
+    dispatchEvent:vi.fn(),
+  })));
+
+  render(<ProductionCanvas graph={graph} selectedShotId="shot-2" onSelectShot={vi.fn()}/>);
+
+  expect(await screen.findByRole('button',{name:'打开节点检查器'})).toBeVisible();
+  expect(screen.queryByRole('complementary',{name:'生产节点检查器'})).not.toBeInTheDocument();
+});
+
+it('keeps the compact inspector above the episode AI action rail',()=>{
+  expect(readAllStyles()).toMatch(/@media\(max-width:1023px\)[^{]*\{[\s\S]*?\.production-canvas-shell-v2>\.production-canvas-inspector\s*\{[^}]*bottom:\s*76px[^}]*max-height:[^}]*overflow-y:\s*auto[^}]*\}/);
+  expect(readAllStyles()).toMatch(/@media\(max-width:700px\)[^{]*\{[\s\S]*?\.production-canvas-shell-v2>\.production-canvas-inspector\s*\{[^}]*bottom:\s*76px[^}]*height:\s*210px[^}]*\}/);
 });
 
 it('restores saved viewport, expanded shots, pinned shots, and collapsed scenes',async()=>{
