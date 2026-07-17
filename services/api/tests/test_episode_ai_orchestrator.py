@@ -98,7 +98,18 @@ def test_critical_stage_failure_requires_review_and_preserves_attempt(tmp_path):
     session_factory, run_id, _episode_id = _seed_run(tmp_path)
 
     async def references(_context: EpisodeAIStageContext):
-        raise EpisodeAIStageNeedsReview("角色参考图连续性不足")
+        raise EpisodeAIStageNeedsReview(
+            "角色参考图连续性不足",
+            metadata={
+                "code": "shot_generation_not_ready",
+                "blocked_shots": {
+                    "shot-1": {
+                        "blockers": ["missing_character_reference"],
+                        "requirement_ids": ["requirement-1"],
+                    }
+                },
+            },
+        )
 
     blocked = asyncio.run(
         EpisodeAIOrchestrator(session_factory, {"references": references}).run_once(run_id)
@@ -109,6 +120,15 @@ def test_critical_stage_failure_requires_review_and_preserves_attempt(tmp_path):
     assert blocked.error == "角色参考图连续性不足"
     assert stage.status == "needs_review"
     assert stage.attempt_count == 1
+    assert stage.output_metadata == {
+        "code": "shot_generation_not_ready",
+        "blocked_shots": {
+            "shot-1": {
+                "blockers": ["missing_character_reference"],
+                "requirement_ids": ["requirement-1"],
+            }
+        },
+    }
 
 
 def test_unexpected_stage_failure_is_retryable_failed_run(tmp_path):
