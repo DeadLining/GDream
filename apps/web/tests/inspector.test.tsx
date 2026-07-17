@@ -2,12 +2,11 @@ import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Inspector} from '../components/Inspector';
-import type {Asset, Character, Job, Shot} from '../lib/types';
+import type {Asset, Job, Shot} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
   listPanelVersions: vi.fn(), updateShot: vi.fn(), startPanelGeneration: vi.fn(),
-  activatePanel: vi.fn(), updateDialogue: vi.fn(), startSpeech: vi.fn(), retryJob: vi.fn(),
-  listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
+  activatePanel: vi.fn(), listVideoVersions: vi.fn(),
   pollJob: vi.fn(),
 }));
 vi.mock('../lib/api', () => ({...mocks, mediaUrl: (path:string) => path}));
@@ -23,8 +22,6 @@ const shot: Shot = {
 };
 const succeeded: Job = {id:'job-1',operation:'generate_panel',target_type:'shot',target_id:'shot-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/panel.png'},error:'',retry_count:0,created_at:'',updated_at:''};
 const asset: Asset = {id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'openai',model:'gpt-image-2',generation_attempt:2,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''};
-const character: Character = {id:'character-1',project_id:'project-1',name:'林默',role:'protagonist',appearance_bible:'black coat',personality:'quiet',continuity_rules:'',negative_constraints:'',voice_speaker:'Dylan',voice_instruction:'',created_at:'',updated_at:''};
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(next => {resolve = next;});
@@ -33,17 +30,27 @@ function deferred<T>() {
 
 describe('Inspector', () => {
   afterEach(cleanup);
-  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);mocks.updateDialogue.mockImplementation(async (_id,data)=>({...shot.dialogue[0],...data}));});
+  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);});
 
-  it('groups controls under the operational section hierarchy', async () => {
+  it('keeps only shot controls in the inspector and routes heavy workflows to production', async () => {
     mocks.listPanelVersions.mockResolvedValue([asset]);
-    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1'}}/>);
+    const onOpenMedia=vi.fn();
+    const onOpenDialogue=vi.fn();
+    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1'}} onOpenMedia={onOpenMedia} onOpenDialogue={onOpenDialogue}/>);
     expect(screen.getByRole('heading',{name:'镜头状态'})).toBeVisible();
     expect(screen.getByRole('heading',{name:'构图与运动'})).toBeVisible();
     expect(screen.getByRole('heading',{name:'生成提示'})).toBeVisible();
     expect(await screen.findByRole('heading',{name:'画面版本'})).toBeVisible();
-    expect(screen.getByRole('heading',{name:'对白与配音'})).toBeVisible();
+    expect(screen.queryByRole('heading',{name:'图 + 文生成视频'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading',{name:'对白与配音'})).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('视频动态提示词')).not.toBeInTheDocument();
     expect(screen.getByRole('button',{name:/画面版本 2.*当前版本/})).toHaveAttribute('aria-pressed','true');
+    await userEvent.click(screen.getByRole('button',{name:'管理分镜版本'}));
+    await userEvent.click(screen.getByRole('button',{name:'打开视频生成'}));
+    await userEvent.click(screen.getByRole('button',{name:'打开对白配音'}));
+    expect(onOpenMedia).toHaveBeenNthCalledWith(1,'panel');
+    expect(onOpenMedia).toHaveBeenNthCalledWith(2,'video');
+    expect(onOpenDialogue).toHaveBeenCalledTimes(1);
   });
 
   it('explains stale active panel inputs and exposes regeneration', async () => {
@@ -54,7 +61,6 @@ describe('Inspector', () => {
     expect(screen.getByRole('button',{name:'重新生成画面'})).toBeEnabled();
     expect(screen.getByRole('button',{name:/画面版本 2.*输入已变化/})).toBeVisible();
     expect(screen.queryByText('当前画面已过期，请重新生成后再生成视频。')).not.toBeInTheDocument();
-    expect(screen.getByRole('button',{name:'使用首帧和提示词生成视频'})).toBeDisabled();
   });
 
   it('ignores panel versions returned for a previously selected shot', async () => {
@@ -86,15 +92,12 @@ describe('Inspector', () => {
     expect(onShotUpdated).toHaveBeenCalled();
   });
 
-  it('generates a panel and speech through persisted jobs', async () => {
+  it('generates a panel through a persisted job', async () => {
     mocks.startPanelGeneration.mockResolvedValue({job_id:'job-1',status:'queued'});
-    mocks.startSpeech.mockResolvedValue({job_id:'job-2',status:'queued'});
     mocks.pollJob.mockResolvedValue(succeeded);
-    render(<Inspector shot={{...shot,dialogue:[{...shot.dialogue[0],character_id:character.id}]}} characters={[character]}/>);
+    render(<Inspector shot={shot}/>);
     await userEvent.click(screen.getByRole('button',{name:'生成画面'}));
     await waitFor(()=>expect(mocks.listPanelVersions).toHaveBeenCalledTimes(2));
-    await userEvent.click(screen.getByRole('button',{name:'生成配音'}));
-    expect(await screen.findByLabelText('对白音频')).toBeVisible();
   });
 
   it('shows panel generation request failures and releases the action', async () => {
@@ -107,55 +110,12 @@ describe('Inspector', () => {
     expect(screen.getByRole('button',{name:'生成画面'})).toBeEnabled();
   });
 
-  it('presents image plus text video generation and runs it from the active panel', async () => {
-    mocks.listPanelVersions.mockResolvedValue([asset]);
-    mocks.startVideoGeneration.mockResolvedValue({job_id:'video-job-1',status:'queued'});
-    mocks.pollJob.mockResolvedValue({...succeeded,id:'video-job-1',operation:'generate_video',result_metadata:{asset_id:'video-asset-1'}});
-    mocks.listVideoVersions
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{...asset,id:'video-asset-1',kind:'video',media_url:'/media/video.mp4',media_type:'video/mp4',duration_seconds:5}]);
-
-    render(<Inspector shot={{...shot,active_panel_asset_id:'asset-1',review_status:'approved',video_prompt:'缓慢推近'}}/>);
-
-    expect(await screen.findByRole('heading',{name:'图 + 文生成视频'})).toBeVisible();
-    expect(screen.getByText('首帧画面')).toBeVisible();
-    expect(screen.getByRole('img',{name:'视频首帧：画面版本 2'})).toHaveAttribute('src','/media/panel.png');
-    expect(screen.getByLabelText('视频动态提示词')).toHaveValue('缓慢推近');
-
-    await userEvent.click(screen.getByRole('button',{name:'使用首帧和提示词生成视频'}));
-
-    await waitFor(() => expect(mocks.startVideoGeneration).toHaveBeenCalledWith('shot-1',true));
-    expect(mocks.listVideoVersions).toHaveBeenCalledTimes(2);
-  });
-
-  it('explains why image plus text video generation is unavailable without an approved panel', async () => {
-    render(<Inspector shot={shot}/>);
-
-    expect(await screen.findByText('先生成并选中一张画面，再将镜头审核为已通过。')).toBeVisible();
-    expect(screen.getByRole('button',{name:'使用首帧和提示词生成视频'})).toBeDisabled();
-  });
-
-  it('activates panel versions and saves edited dialogue', async () => {
+  it('activates panel versions without embedding dialogue editing', async () => {
     mocks.listPanelVersions.mockResolvedValue([asset]);
     mocks.activatePanel.mockResolvedValue({...shot,active_panel_asset_id:'asset-1'});
-    mocks.updateDialogue.mockResolvedValue(shot.dialogue[0]);
     render(<Inspector shot={shot}/>);
     await userEvent.click(await screen.findByRole('button',{name:/画面版本 2/}));
     await waitFor(()=>expect(mocks.activatePanel).toHaveBeenCalledWith('shot-1','asset-1'));
-    await userEvent.clear(screen.getByLabelText('对白文本'));
-    await userEvent.type(screen.getByLabelText('对白文本'),'快走。');
-    await userEvent.click(screen.getByRole('button',{name:'保存对白'}));
-    expect(mocks.updateDialogue).toHaveBeenCalledWith('line-1',expect.objectContaining({text:'快走。'}));
-  });
-
-  it('assigns a dialogue speaker and presents speech as the primary action', async () => {
-    mocks.updateDialogue.mockResolvedValue({...shot.dialogue[0],character_id:character.id});
-    render(<Inspector shot={shot} characters={[character]}/>);
-
-    await userEvent.selectOptions(screen.getByLabelText('对白角色'), character.id);
-    await userEvent.click(screen.getByRole('button',{name:'保存对白'}));
-
-    expect(mocks.updateDialogue).toHaveBeenCalledWith('line-1',expect.objectContaining({character_id:character.id}));
-    expect(screen.getByRole('button',{name:'生成配音'})).toHaveClass('dialogue-primary-action');
+    expect(screen.queryByLabelText('对白文本')).not.toBeInTheDocument();
   });
 });

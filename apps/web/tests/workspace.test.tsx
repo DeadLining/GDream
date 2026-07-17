@@ -555,6 +555,21 @@ describe('Workspace', () => {
     expect(document.querySelector('.workspace-inspector')).toBeVisible();
   });
 
+  it('opens full video production from the compact shot inspector action', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+
+    render(<Workspace />);
+
+    await userEvent.click(await screen.findByRole('tab', {name: '分镜'}));
+    await userEvent.click(screen.getByRole('button', {name: '打开视频生成'}));
+
+    expect(screen.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', {name: '视频生成'})).toBeVisible();
+    expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
+  });
+
   it('keeps only the selected mobile work area visible', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query === '(max-width: 899px)',
