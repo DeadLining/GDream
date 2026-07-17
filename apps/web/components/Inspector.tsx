@@ -83,7 +83,7 @@ export function Inspector({shot, characters = [], onShotUpdated}: {shot: Shot; c
       <textarea id="shot-video-prompt" aria-label="视频动态提示词" className="prompt-field" value={form.video_prompt??''} onChange={event=>setForm({...form,video_prompt:event.target.value})} rows={4} placeholder="例如：镜头缓慢推近，人物抬眼，衣角被风吹动，保持角色外观稳定"/>
       <label className="field-spacer" htmlFor="shot-negative-video-prompt">视频负面提示词</label>
       <textarea id="shot-negative-video-prompt" aria-label="视频负面提示词" className="prompt-field" value={form.negative_video_prompt??''} onChange={event=>setForm({...form,negative_video_prompt:event.target.value})} rows={2} placeholder="例如：闪烁、变形、额外肢体、镜头抖动"/>
-      {activePanel?.is_stale?<p className="video-generation-gate">当前画面已过期，请重新生成后再生成视频。</p>:!form.active_panel_asset_id || form.review_status !== 'approved' ? <p className="video-generation-gate">先生成并选中一张画面，再将镜头审核为已通过。</p> : null}
+      {!activePanel?.is_stale&&(!form.active_panel_asset_id||form.review_status!=='approved')?<p className="video-generation-gate">先生成并选中一张画面，再将镜头审核为已通过。</p>:null}
       <button className="primary-action video-generate" onClick={generateVideo} disabled={!canGenerateVideo} aria-label="使用首帧和提示词生成视频"><Film size={16}/>{generatingVideo?'正在生成视频':'使用首帧 + 提示词生成视频'}</button>
       <div className="video-versions">{videos.map(asset=><button key={asset.id} className={form.active_video_asset_id===asset.id?'active':''} onClick={()=>selectVideo(asset.id)}><video src={mediaUrl(asset.media_url)} muted playsInline controls/><span>V{asset.generation_attempt}</span></button>)}</div>
     </section>
