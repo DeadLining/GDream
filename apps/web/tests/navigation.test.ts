@@ -23,13 +23,13 @@ describe('workspace navigation model', () => {
       archive: 'home',
       trash: 'trash',
       export: 'export',
-      settings: 'settings',
     });
   });
 
   it('does not expose collaboration destinations in the personal app', () => {
     expect(resolveOperationsPage('shared')).toBeNull();
     expect(resolveOperationsPage('team')).toBeNull();
+    expect(resolveOperationsPage('settings')).toBeNull();
   });
 
   it('rejects unknown operations destinations', () => {

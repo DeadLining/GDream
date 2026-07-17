@@ -1,14 +1,23 @@
 import {cleanup,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {afterEach,describe,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {ProjectSettings} from '../components/ProjectSettings';
 import type {ProjectDetail,Volume} from '../lib/types';
+
+const portabilityMocks=vi.hoisted(()=>({exportProject:vi.fn(),importProject:vi.fn(),projectExportDownloadUrl:vi.fn()}));
+vi.mock('../lib/api',()=>portabilityMocks);
 
 const project:ProjectDetail={id:'p1',title:'星轨计划',logline:'寻找失落坐标',story_bible:'三卷结构',visual_style:'cinematic anime',aspect_ratio:'16:9',language:'Chinese',created_at:'',updated_at:'',characters:[],episodes:[{id:'e1',project_id:'p1',title:'启航',premise:'发现坐标',target_duration_seconds:480,status:'planned',created_at:'',updated_at:''}]};
 const volumes:Volume[]=[{id:'v1',project_id:'p1',position:1,title:'启航篇',summary:'',created_at:'',updated_at:'',episodes:[{...project.episodes[0],volume_id:'v1',position:1}]}];
 
 describe('ProjectSettings',()=>{
   afterEach(cleanup);
+  beforeEach(()=>{
+    vi.clearAllMocks();
+    portabilityMocks.exportProject.mockResolvedValue({project_id:'p1',zip_path:'/private/server/export.zip',bytes_written:2048});
+    portabilityMocks.importProject.mockResolvedValue({project_id:'p2',warnings:[]});
+    portabilityMocks.projectExportDownloadUrl.mockReturnValue('/api/projects/p1/export/download');
+  });
   it('links every visible settings section and omits unavailable dangerous actions',async()=>{
     render(<ProjectSettings project={project} volumes={volumes} sceneCount={4} shotCount={28} onSave={()=>{}}/>);
 
@@ -49,5 +58,18 @@ describe('ProjectSettings',()=>{
     await userEvent.click(screen.getByRole('button',{name:'保存设置'}));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({title:'星轨纪元',aspect_ratio:'9:16'}));
+  });
+
+  it('downloads exports and reports imported projects to the workspace',async()=>{
+    const onImported=vi.fn();
+    render(<ProjectSettings project={project} volumes={volumes} sceneCount={4} shotCount={28} onSave={()=>{}} onImported={onImported}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'导出 ZIP'}));
+    expect(await screen.findByRole('link',{name:'下载工程 ZIP'})).toHaveAttribute('href','/api/projects/p1/export/download');
+
+    const archive=new File(['zip-content'],'project.zip',{type:'application/zip'});
+    await userEvent.upload(screen.getByLabelText('选择 ZIP 工程包'),archive);
+    expect(portabilityMocks.importProject).toHaveBeenCalledWith(archive);
+    expect(onImported).toHaveBeenCalledWith({project_id:'p2',warnings:[]});
   });
 });

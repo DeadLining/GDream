@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from io import BytesIO
 from pathlib import Path
 
 from comic_studio import models
@@ -105,6 +106,18 @@ def test_export_unknown_project_raises(db_session, tmp_path):
 
     with pytest.raises(ProjectPortabilityError, match="Project not found"):
         ProjectPortabilityService(db_session, data_root=tmp_path).export_project("nope")
+
+
+def test_export_download_returns_the_generated_archive(client):
+    with client.app.state.session_factory() as session:
+        project_id = _seed_project(session, client.app.state.settings.data_root)
+
+    response = client.get(f"/api/projects/{project_id}/export/download")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(BytesIO(response.content)) as archive:
+        assert {"manifest.json", "database.json"}.issubset(archive.namelist())
 
 
 def test_import_round_trip_preserves_structure(db_session, tmp_path):
