@@ -8,6 +8,16 @@ import {resolveDirectorHeadRotation} from '../../lib/director-head-gaze';
 import {GlbModel} from '../shared/GlbModel';
 import {DirectorProxy} from './DirectorProxy';
 
+type TransformSource={position:{x:number;y:number;z:number};rotation:{x:number;y:number;z:number};scale:{x:number;y:number;z:number}};
+
+const readTransform=(source:TransformSource):Transform=>({
+  position:[source.position.x,source.position.y,source.position.z],
+  rotation:[source.rotation.x,source.rotation.y,source.rotation.z],
+  scale:[source.scale.x,source.scale.y,source.scale.z],
+});
+
+const controlObject=(event:unknown):TransformSource|null=>(event as {target?:{object?:TransformSource|null}}|undefined)?.target?.object??null;
+
 function Placeholder({object}:{object:DirectorObjectDto}){
   const modelUrl=typeof object.appearance.model_url==='string'?object.appearance.model_url:'';
   const modelScale=typeof object.appearance.model_scale==='number'?object.appearance.model_scale:1;
@@ -34,5 +44,5 @@ export function DirectorObject({object,selected,editable,transformMode,snapEnabl
   if(!object.visible)return null;
   const group=<group ref={ref} name={`director-object-${object.id}`} userData={{kind:object.kind,sourceType:object.source_type}} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale} onClick={event=>{event.stopPropagation();onSelect();}}><Placeholder object={object}/></group>;
   if(!selected||!editable)return group;
-  return <TransformControls mode={transformMode} translationSnap={snapEnabled ? .25 : null} rotationSnap={snapEnabled ? Math.PI/12 : null} scaleSnap={snapEnabled ? .1 : null} onMouseDown={()=>{pendingTransform.current=null;}} onObjectChange={()=>{const current=ref.current;if(!current)return;pendingTransform.current={position:[current.position.x,current.position.y,current.position.z],rotation:[current.rotation.x,current.rotation.y,current.rotation.z],scale:[current.scale.x,current.scale.y,current.scale.z]};}} onMouseUp={()=>{const transform=pendingTransform.current;pendingTransform.current=null;if(transform)onTransform(transform);}}>{group}</TransformControls>;
+  return <TransformControls mode={transformMode} translationSnap={snapEnabled ? .25 : null} rotationSnap={snapEnabled ? Math.PI/12 : null} scaleSnap={snapEnabled ? .1 : null} onMouseDown={()=>{pendingTransform.current=null;}} onObjectChange={event=>{const current=controlObject(event)??ref.current;if(current)pendingTransform.current=readTransform(current);}} onMouseUp={event=>{const current=controlObject(event);const transform=current?readTransform(current):pendingTransform.current;pendingTransform.current=null;if(transform)onTransform(transform);}}>{group}</TransformControls>;
 }
