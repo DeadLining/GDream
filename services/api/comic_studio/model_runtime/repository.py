@@ -74,17 +74,29 @@ class InvocationRepository:
         store = JobStore(self.session)
         for job in jobs:
             store.interrupt_running(job.id)
-            invocations = list(
-                self.session.scalars(
-                    select(models.ModelInvocation).where(
-                        models.ModelInvocation.job_id == job.id,
-                        models.ModelInvocation.status == "running",
-                    )
+        invocations = list(
+            self.session.scalars(
+                select(models.ModelInvocation).where(
+                    models.ModelInvocation.job_id.is_not(None),
+                    models.ModelInvocation.status == "running",
                 )
             )
-            for invocation in invocations:
-                invocation.status = "failed"
-                invocation.error_code = "runtime_interrupted"
-                invocation.retryable = True
-            self.session.commit()
+        )
+        for invocation in invocations:
+            job = self.session.get(models.Job, invocation.job_id)
+            if job is None or not job.operation.startswith("runtime_"):
+                continue
+            if job.status == "succeeded":
+                invocation.status = "succeeded"
+                continue
+            if job.status not in {"failed", "queued"}:
+                continue
+            invocation.status = "failed"
+            invocation.error_code = str(
+                job.result_metadata.get("error_code", "runtime_interrupted")
+            )
+            invocation.retryable = bool(
+                job.result_metadata.get("retryable", job.status == "queued")
+            )
+        self.session.commit()
         return [job.id for job in jobs]
