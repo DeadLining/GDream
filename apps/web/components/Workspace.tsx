@@ -4,7 +4,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {createEpisode,createProject,createVolume,deleteEpisode,deleteVolume,getEpisode,getProductionReadiness,getProject,getProjectOverviewMetrics,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
-import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,Shot,Storyline,Volume} from '../lib/types';
+import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,ProjectSearchResult,Shot,Storyline,Volume} from '../lib/types';
 import {AppToolbar, type GlobalSection} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
 import {CreateProjectDialog} from './CreateProjectDialog';
@@ -254,8 +254,21 @@ export function Workspace() {
     changeWorkArea(globalSectionWorkAreas[section]);
   };
   const openPlatformPage=(page:PlatformPage)=>{if(canLeaveSettings())setPlatformPage(page);};
+  const openSearchResult=async(item:ProjectSearchResult)=>{
+    if(!canLeaveSettings())return;
+    setSearchOpen(false);
+    if(['character','asset_variant','asset_state'].includes(item.kind)){setPlatformPage('project');setGlobalSection('assets');changeWorkArea('characters');return;}
+    if(item.kind==='task'){setPlatformPage('tasks');return;}
+    setPlatformPage('project');
+    if(item.kind==='script'){setFocusedStorylineId(null);setGlobalSection('script');changeWorkArea('import');return;}
+    if(item.episode_id&&item.episode_id!==episode?.id)await loadEpisode(item.episode_id);
+    if(item.kind==='episode'){setGlobalSection('episode');changeWorkArea('overview');return;}
+    if(item.kind==='scene'){setGlobalSection('episode');changeWorkArea('scene');return;}
+    if(item.kind==='shot'){if(item.shot_id)setSelectedShotId(item.shot_id);setGlobalSection('episode');changeWorkArea('storyboard');return;}
+    if(item.kind==='review'){if(item.shot_id)setSelectedShotId(item.shot_id);setGlobalSection('review');changeWorkArea('review');}
+  };
   const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => {if (canLeaveSettings()) {setPlatformPage('project'); setGlobalSection('episode'); changeWorkArea('production');}}} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey} onModelCenter={toggleModelCenter} modelCenterOpen={platformPage === 'models'} onProjectSettings={toggleProjectSettings} projectSettingsOpen={platformPage==='settings'} activeSection={globalSection} onNavigate={navigateGlobal} onWorkspaceHome={()=>openPlatformPage('home')} onSearch={()=>setSearchOpen(true)} onTasks={()=>openPlatformPage('tasks')} onVersions={()=>openPlatformPage('versions')}/>;
-  const searchOverlay=searchOpen?<GlobalSearchOverlay project={project} episode={episode} onClose={()=>setSearchOpen(false)} onOpenAsset={()=>{setSearchOpen(false);setPlatformPage('project');setGlobalSection('assets');setWorkArea('characters');}} onOpenShot={id=>{setSearchOpen(false);setPlatformPage('project');setGlobalSection('episode');selectShotById(id);setWorkArea('storyboard');}}/>:null;
+  const searchOverlay=searchOpen?<GlobalSearchOverlay project={project} episode={episode} onClose={()=>setSearchOpen(false)} onOpenResult={openSearchResult}/>:null;
   const navigateOperations=(page:string)=>{const next=resolveOperationsPage(page);if(next)openPlatformPage(next);};
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
   if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>{searchOverlay}</div>;

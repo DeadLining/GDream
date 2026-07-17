@@ -120,7 +120,7 @@
 }
 @media (max-width: 640px) {
   .operations-page { padding:12px; }.operations-page-header { align-items:stretch; flex-direction:column; }.operations-metrics { grid-template-columns:1fr; }
-  .search-backdrop { padding:0; }.global-search-dialog { width:100%; height:100%; max-height:none; }.search-preview { display:none; }
+  .search-backdrop { padding:0; }.global-search-dialog { width:100%; height:100%; max-height:none; }.global-search-body { overflow:auto; }.search-results { overflow:visible; }.search-preview { display:block; }
   .version-layout { min-height:0; grid-template-columns:1fr; }.version-timeline { border-right:0; border-bottom:1px solid var(--line); display:flex; overflow-x:auto; }.version-timeline h2 { display:none; }.version-timeline button { min-width:170px; }.version-compare { overflow:visible; }.version-compare-controls { position:static; }.version-diff-item dl>div { grid-template-columns:1fr; }
   .account-preferences { grid-template-columns:1fr; }.preference-nav { flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--line); }.preference-nav button { min-width:42px; }.preference-main { padding:12px; }.preference-form select { width:160px; }
   .delivery-preview { grid-template-columns:1fr; }.delivery-flow { justify-content:flex-start; }.activity-tabs { overflow-x:auto; }.activity-tabs button { white-space:nowrap; }
