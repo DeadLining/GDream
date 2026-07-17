@@ -33,7 +33,7 @@ class RecycleBinService:
             parent_id = parent.parent_variant_id
         return lineage
 
-    def soft_delete_variant(self, variant_id: str, actor: str = "林默") -> bool:
+    def soft_delete_variant(self, variant_id: str, actor: str = "本人") -> bool:
         variant = self.session.get(models.AssetVariant, variant_id)
         if variant is None or variant.deleted_at is not None:
             return False
@@ -60,7 +60,7 @@ class RecycleBinService:
         self.session.commit()
         return True
 
-    def soft_delete_state(self, state_id: str, actor: str = "林默") -> bool:
+    def soft_delete_state(self, state_id: str, actor: str = "本人") -> bool:
         state = self.session.get(models.AssetVariantState, state_id)
         if state is None or state.deleted_at is not None:
             return False
@@ -162,6 +162,8 @@ class RecycleBinService:
         item = self.session.get(models.TrashItem, item_id)
         if item is None:
             return None
+        if item.expires_at <= models.utc_now().replace(tzinfo=item.expires_at.tzinfo):
+            raise RecycleBinConflictError("回收项已超过 30 天恢复期限")
         if item.resource_type == "asset_variant":
             resource = self.session.get(models.AssetVariant, item.resource_id)
         else:
