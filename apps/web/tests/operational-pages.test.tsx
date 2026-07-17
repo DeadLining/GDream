@@ -6,7 +6,7 @@ import {RecycleBin} from '../components/RecycleBin';
 import {TaskCenter} from '../components/TaskCenter';
 import {VersionHistory,serializeEpisodeVersionsCsv} from '../components/VersionHistory';
 import {WorkspaceHome} from '../components/WorkspaceHome';
-import type {EpisodeDetail,Project,ProjectDetail} from '../lib/types';
+import type {EpisodeDetail,Project,ProjectDetail,ProjectSearchResult} from '../lib/types';
 
 const operationMocks=vi.hoisted(()=>({
   listProductionTasks:vi.fn(),updateProductionTask:vi.fn(),createProductionTask:vi.fn(),
@@ -55,7 +55,7 @@ describe('operational frontend pages',()=>{
 
   it('searches across assets, shots, scripts, and review work',async()=>{
     const onClose=vi.fn();
-    render(<GlobalSearchOverlay project={project} episode={episode} onClose={onClose} onOpenAsset={vi.fn()} onOpenShot={vi.fn()}/>);
+    render(<GlobalSearchOverlay project={project} episode={episode} onClose={onClose} onOpenResult={vi.fn()}/>);
     expect(screen.getByRole('dialog',{name:'全局搜索'})).toBeVisible();
     const input=screen.getByRole('textbox',{name:'搜索作品内容'});
     await userEvent.clear(input);
@@ -64,6 +64,31 @@ describe('operational frontend pages',()=>{
     expect(screen.getByText('镜头与画面')).toBeVisible();
     expect(operationMocks.searchProject).toHaveBeenCalledWith('p1','左臂');
     await userEvent.click(screen.getByRole('button',{name:'关闭全局搜索'}));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('selects a search result before explicitly opening its destination',async()=>{
+    const episodeResult:ProjectSearchResult={kind:'episode',id:'e1',title:'雨夜抉择',subtitle:'寻找失踪同伴',hierarchy:['长安风云','雨夜抉择'],status:'production',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,character_id:null,variant_id:null,state_id:null,reference_count:0};
+    operationMocks.searchProject.mockResolvedValue({query:'雨夜',results:[episodeResult]});
+    const onOpenResult=vi.fn();
+    render(<GlobalSearchOverlay project={project} episode={episode} onClose={vi.fn()} onOpenResult={onOpenResult}/>);
+    await userEvent.type(screen.getByRole('textbox',{name:'搜索作品内容'}),'雨夜');
+    await userEvent.click(await screen.findByRole('button',{name:/雨夜抉择/}));
+    expect(onOpenResult).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button',{name:'打开剧集'}));
+    expect(onOpenResult).toHaveBeenCalledWith(episodeResult);
+  });
+
+  it('supports arrow selection, Enter opening, and Escape closing',async()=>{
+    const onClose=vi.fn();
+    const onOpenResult=vi.fn();
+    render(<GlobalSearchOverlay project={project} episode={episode} onClose={onClose} onOpenResult={onOpenResult}/>);
+    const input=screen.getByRole('textbox',{name:'搜索作品内容'});
+    await userEvent.type(input,'左臂');
+    await screen.findByText('镜头与画面');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(onOpenResult).toHaveBeenCalledWith(expect.objectContaining({kind:'shot',id:'shot-1'}));
+    await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledOnce();
   });
 
