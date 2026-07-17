@@ -4,7 +4,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {createEpisode,createProject,createVolume,deleteEpisode,deleteVolume,getEpisode,getProductionReadiness,getProject,getProjectOverviewMetrics,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
-import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,ProjectSearchResult,Shot,Storyline,Volume} from '../lib/types';
+import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,ProductionTask,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,ProjectSearchResult,Shot,Storyline,Volume} from '../lib/types';
 import {AppToolbar, type GlobalSection} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
 import {CreateProjectDialog} from './CreateProjectDialog';
@@ -267,6 +267,16 @@ export function Workspace() {
     if(item.kind==='shot'){if(item.shot_id)setSelectedShotId(item.shot_id);setGlobalSection('episode');changeWorkArea('storyboard');return;}
     if(item.kind==='review'){if(item.shot_id)setSelectedShotId(item.shot_id);setGlobalSection('review');changeWorkArea('review');}
   };
+  const openTaskTarget=async(task:ProductionTask)=>{
+    if(!canLeaveSettings())return;
+    setPlatformPage('project');
+    if(task.episode_id&&task.episode_id!==episode?.id)await loadEpisode(task.episode_id);
+    if(task.review_thread_id){if(task.shot_id)setSelectedShotId(task.shot_id);setGlobalSection('review');changeWorkArea('review');return;}
+    if(task.shot_id){setSelectedShotId(task.shot_id);setGlobalSection('episode');changeWorkArea('storyboard');return;}
+    if(task.scene_id){setGlobalSection('episode');changeWorkArea('scene');return;}
+    if(task.episode_id){setGlobalSection('episode');changeWorkArea('overview');return;}
+    setGlobalSection('overview');changeWorkArea('overview');
+  };
   const toolbar = <AppToolbar projectLabel={project?.title ?? null} episodeLabel={episode?.title ?? null} episodeId={episode?.id} onRefresh={() => reloadProjects(project?.id)} onProduction={() => {if (canLeaveSettings()) {setPlatformPage('project'); setGlobalSection('episode'); changeWorkArea('production');}}} renderReady={Boolean(readiness?.ready && !readinessError)} healthRefreshKey={healthRefreshKey} onModelCenter={toggleModelCenter} modelCenterOpen={platformPage === 'models'} onProjectSettings={toggleProjectSettings} projectSettingsOpen={platformPage==='settings'} activeSection={globalSection} onNavigate={navigateGlobal} onWorkspaceHome={()=>openPlatformPage('home')} onSearch={()=>setSearchOpen(true)} onTasks={()=>openPlatformPage('tasks')} onVersions={()=>openPlatformPage('versions')}/>;
   const searchOverlay=searchOpen?<GlobalSearchOverlay project={project} episode={episode} onClose={()=>setSearchOpen(false)} onOpenResult={openSearchResult}/>:null;
   const navigateOperations=(page:string)=>{const next=resolveOperationsPage(page);if(next)openPlatformPage(next);};
@@ -274,7 +284,7 @@ export function Workspace() {
   if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>{searchOverlay}</div>;
   if(platformPage==='settings'&&project){const sceneCount=episode?.scenes.length??0;const shotCount=episode?.scenes.reduce((sum,scene)=>sum+scene.shots.length,0)??0;return <div className="app-shell">{toolbar}<ProjectSettings project={project} volumes={volumes} sceneCount={sceneCount} shotCount={shotCount} onDirtyChange={setSettingsDirty} onSave={async data=>{const updated=await updateProject(project.id,data);setProject(current=>current?{...current,...updated}:current);setProjects(current=>current.map(item=>item.id===updated.id?updated:item));}}/>{searchOverlay}</div>;}
   if(platformPage==='home')return <div className="app-shell">{toolbar}<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={id=>{void loadProject(id);setPlatformPage('project');setGlobalSection('episode');setWorkArea('overview');}} onCreateProject={()=>setProjectDialog(true)} onNavigate={navigateOperations}/><CreateProjectDialog open={projectDialog} onClose={()=>setProjectDialog(false)} onCreate={async(data:ProjectCreate)=>{const created=await createProject(data);setProjectDialog(false);await reloadProjects(created.id);setPlatformPage('project');}}/>{searchOverlay}</div>;
-  if(platformPage==='tasks')return <div className="app-shell">{toolbar}<TaskCenter project={project} episode={episode}/>{searchOverlay}</div>;
+  if(platformPage==='tasks')return <div className="app-shell">{toolbar}<TaskCenter project={project} episode={episode} onOpenTarget={openTaskTarget}/>{searchOverlay}</div>;
   if(platformPage==='versions')return <div className="app-shell">{toolbar}<VersionHistory episode={episode} onRestored={()=>episode?loadProject(episode.project_id):Promise.resolve()}/>{searchOverlay}</div>;
   if(platformPage==='trash')return <div className="app-shell">{toolbar}<RecycleBin project={project}/>{searchOverlay}</div>;
   if(platformPage==='team')return <div className="app-shell">{toolbar}<TeamPermissions project={project} onSave={members=>localStorage.setItem('ai-comic-team-draft',JSON.stringify(members))} onNavigate={navigateOperations}/>{searchOverlay}</div>;

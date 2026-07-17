@@ -129,8 +129,8 @@ describe('operational frontend pages',()=>{
     render(<TaskCenter project={project} episode={episode}/>);
     expect(await screen.findByText('整理项目交付清单')).toBeVisible();
     await userEvent.selectOptions(screen.getByRole('combobox',{name:'执行人'}),'王磊');
-    await userEvent.selectOptions(screen.getByRole('combobox',{name:'任务状态'}),'in_progress');
-    expect(screen.getByText('补齐场景04环境音')).toBeVisible();
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'任务状态筛选'}),'in_progress');
+    expect(screen.getAllByText('补齐场景04环境音')[0]).toBeVisible();
     expect(screen.queryByText('整理项目交付清单')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button',{name:'看板'}));
     expect(screen.getByRole('button',{name:'看板'})).toHaveAttribute('aria-pressed','true');
