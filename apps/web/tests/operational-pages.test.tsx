@@ -174,6 +174,21 @@ describe('operational frontend pages',()=>{
     expect(serializeEpisodeVersionsCsv(await operationMocks.listEpisodeVersions.mock.results[0].value)).toContain('审核前');
   });
 
+  it('creates the first manual episode snapshot from the empty version state',async()=>{
+    operationMocks.listEpisodeVersions.mockResolvedValue([]);
+    const created={id:'v1',episode_id:'e1',version:1,label:'导演确认版',source:'manual',author:'林默',snapshot:{episode:{id:'e1',project_id:'p1',title:'雨夜抉择',premise:'寻找失踪同伴',target_duration_seconds:480,status:'production'},scenes:[]},restored_from_id:null,created_at:'2026-07-17T08:00:00Z'};
+    operationMocks.createEpisodeVersion.mockResolvedValue(created);
+    render(<VersionHistory episode={episode}/>);
+    expect(await screen.findByText('暂无版本记录。')).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'保存当前版本'}));
+    const dialog=screen.getByRole('dialog',{name:'保存当前版本'});
+    await userEvent.type(within(dialog).getByRole('textbox',{name:'版本标签'}),'导演确认版');
+    await userEvent.type(within(dialog).getByRole('textbox',{name:'创建者'}),'林默');
+    await userEvent.click(within(dialog).getByRole('button',{name:'保存版本'}));
+    expect(operationMocks.createEpisodeVersion).toHaveBeenCalledWith('e1',{label:'导演确认版',source:'manual',author:'林默'});
+    expect(await screen.findByText('V1 导演确认版')).toBeVisible();
+  });
+
   it('loads deleted lineage nodes, protects references, and restores them',async()=>{
     render(<RecycleBin project={project}/>);
     const row=await screen.findByRole('row',{name:/左臂擦伤/});
