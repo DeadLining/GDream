@@ -165,7 +165,12 @@ class EpisodeAIRunService:
         return self._save(run)
 
     def fail_current(
-        self, run_id: str, error: str, *, needs_review: bool = False
+        self,
+        run_id: str,
+        error: str,
+        *,
+        needs_review: bool = False,
+        output_metadata: dict | None = None,
     ) -> models.EpisodeAIRun:
         run = self.get(run_id)
         if run is None:
@@ -177,6 +182,7 @@ class EpisodeAIRunService:
         safe_error = str(redact(error))[:4000]
         stage.status = status
         stage.error = safe_error
+        stage.output_metadata = redact(output_metadata or {})
         stage.completed_at = models.utc_now()
         run.status = status
         run.error = safe_error
@@ -193,6 +199,7 @@ class EpisodeAIRunService:
             raise InvalidEpisodeAIRunTransition("stage_cannot_retry")
         stage.status = "pending"
         stage.error = ""
+        stage.output_metadata = {}
         stage.completed_at = None
         run.status = "queued"
         run.error = ""

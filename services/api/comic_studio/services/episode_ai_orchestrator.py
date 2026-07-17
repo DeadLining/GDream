@@ -17,7 +17,21 @@ class EpisodeAIStageContext:
 
 
 class EpisodeAIStageNeedsReview(RuntimeError):
-    pass
+    def __init__(self, message: str, *, metadata: dict | None = None):
+        super().__init__(message)
+        self.metadata = metadata or {}
+
+
+def shot_generation_needs_review(
+    blocked_shots: dict[str, dict],
+) -> EpisodeAIStageNeedsReview:
+    return EpisodeAIStageNeedsReview(
+        "Shot generation is not ready",
+        metadata={
+            "code": "shot_generation_not_ready",
+            "blocked_shots": blocked_shots,
+        },
+    )
 
 
 EpisodeAIStageHandler = Callable[[EpisodeAIStageContext], Awaitable[dict]]
@@ -50,7 +64,10 @@ class EpisodeAIOrchestrator:
         except EpisodeAIStageNeedsReview as exc:
             with self.session_factory() as session:
                 return EpisodeAIRunService(session).fail_current(
-                    run_id, str(exc), needs_review=True
+                    run_id,
+                    str(exc),
+                    needs_review=True,
+                    output_metadata=exc.metadata,
                 )
         except Exception as exc:
             with self.session_factory() as session:
