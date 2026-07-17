@@ -13,6 +13,19 @@ const providers: Array<{kind: ProviderHealthKind; label: string}> = [
   {kind: 'model3d', label: '3D 生成'},
 ];
 
+const unavailableProvider: ProviderHealthItem = {
+  status: 'disabled',
+  model: '',
+  host: '',
+  elapsed_ms: 0,
+  check_scope: 'model',
+  error: null,
+};
+
+function providerItem(health: ProviderHealth, kind: ProviderHealthKind) {
+  return health[kind] ?? unavailableProvider;
+}
+
 type RequestState = 'idle' | 'checking' | 'success' | 'error';
 
 function displayError(error: string | null) {
@@ -86,8 +99,8 @@ export function ProviderHealthStatus({healthRefreshKey = 0}: {healthRefreshKey?:
     if (changed && healthRefreshKey > 0) void check(true);
   }, [check, healthRefreshKey]);
 
-  const enabled = health ? providers.filter(({kind}) => health[kind].status !== 'disabled') : [];
-  const okCount = enabled.filter(({kind}) => health?.[kind].status === 'ok').length;
+  const enabled = health ? providers.filter(({kind}) => providerItem(health, kind).status !== 'disabled') : [];
+  const okCount = health ? enabled.filter(({kind}) => providerItem(health, kind).status === 'ok').length : 0;
   const buttonText = requestState === 'checking'
     ? '检测中'
     : requestState === 'error'
@@ -119,7 +132,7 @@ export function ProviderHealthStatus({healthRefreshKey = 0}: {healthRefreshKey?:
       {requestState === 'success' && detailsOpen && health && (
         <section id="provider-health-details" className="provider-health-popover" role="region" aria-label="模型服务检测详情">
           {providers.map(({kind, label}) => {
-            const item = health[kind];
+            const item = providerItem(health, kind);
             return (
               <div className={`provider-health-row ${item.status}`} key={kind}>
                 <StatusIcon status={item.status}/>
