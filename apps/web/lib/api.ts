@@ -19,7 +19,7 @@ export * from './api/character';
 export * from './api/asset-variant-ai';
 export * from './api/visual-review';
 export * from './api/review-publish';
-export * from './api/team';
+export * from './api/task';
 export * from './api/workspace';
 export * from './api/director';
 export * from './api/skill';

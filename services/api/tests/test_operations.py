@@ -8,7 +8,7 @@ def _project_episode_shot(client, title="运营作品"):
         "/api/projects",
         json={
             "title": title,
-            "logline": "跨部门协作",
+            "logline": "个人创作流程",
             "story_bible": "三卷结构",
             "visual_style": "cinematic comic",
             "aspect_ratio": "16:9",
@@ -44,53 +44,6 @@ def _project_episode_shot(client, title="运营作品"):
         session.add(shot)
         session.commit()
         return project, episode, scene.id, shot.id
-
-
-def test_project_members_preserve_scoped_permissions(client):
-    project, episode, _scene_id, _shot_id = _project_episode_shot(client)
-    created = client.post(
-        f"/api/projects/{project['id']}/members",
-        json={
-            "name": "陈舟",
-            "email": "chenzhou@example.com",
-            "role": "storyboard_artist",
-            "scope": {"episode_ids": [episode["id"]]},
-            "capabilities": {"shots": ["view", "edit"], "publish": []},
-        },
-    )
-    assert created.status_code == 201
-    member = created.json()
-    assert member["scope"]["episode_ids"] == [episode["id"]]
-
-    listed = client.get(f"/api/projects/{project['id']}/members")
-    assert listed.status_code == 200
-    assert [item["id"] for item in listed.json()] == [member["id"]]
-
-    patched = client.patch(
-        f"/api/project-members/{member['id']}",
-        json={"capabilities": {"shots": ["view", "edit"], "publish": ["approve"]}},
-    )
-    assert patched.status_code == 200
-    assert patched.json()["capabilities"]["publish"] == ["approve"]
-
-
-def test_member_scope_rejects_episode_from_another_project(client):
-    project, _episode, _scene_id, _shot_id = _project_episode_shot(client, "作品A")
-    _other_project, other_episode, _other_scene, _other_shot = _project_episode_shot(client, "作品B")
-
-    response = client.post(
-        f"/api/projects/{project['id']}/members",
-        json={
-            "name": "越权成员",
-            "email": "cross@example.com",
-            "role": "editor",
-            "scope": {"episode_ids": [other_episode["id"]]},
-            "capabilities": {"shots": ["view"]},
-        },
-    )
-
-    assert response.status_code == 422
-    assert response.json()["detail"] == "Member scope resources must belong to the project"
 
 
 def test_personal_app_does_not_publish_project_member_endpoints(client):

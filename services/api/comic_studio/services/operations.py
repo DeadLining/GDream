@@ -23,47 +23,6 @@ class OperationsService:
     def __init__(self, session: Session):
         self.session = session
 
-    def _validate_member_scope(self, project_id: str, scope: dict) -> None:
-        for volume_id in scope.get("volume_ids", []):
-            volume = self.session.get(models.Volume, volume_id)
-            if volume is None or volume.project_id != project_id:
-                raise OperationsValidationError("Member scope resources must belong to the project")
-        for episode_id in scope.get("episode_ids", []):
-            episode = self.session.get(models.Episode, episode_id)
-            if episode is None or episode.project_id != project_id:
-                raise OperationsValidationError("Member scope resources must belong to the project")
-
-    def create_member(self, project_id: str, data: schemas.ProjectMemberCreate):
-        if self.session.get(models.Project, project_id) is None:
-            return None
-        self._validate_member_scope(project_id, data.scope)
-        member = models.ProjectMember(project_id=project_id, **data.model_dump())
-        self.session.add(member)
-        self.session.flush()
-        self.session.commit()
-        self.session.refresh(member)
-        return member
-
-    def list_members(self, project_id: str):
-        if self.session.get(models.Project, project_id) is None:
-            return None
-        return list(self.session.scalars(select(models.ProjectMember).where(models.ProjectMember.project_id == project_id).order_by(models.ProjectMember.created_at)))
-
-    def update_member(self, member_id: str, data: schemas.ProjectMemberPatch):
-        member = self.session.get(models.ProjectMember, member_id)
-        if member is None:
-            return None
-        before = {"name": member.name, "role": member.role, "scope": member.scope, "capabilities": member.capabilities, "status": member.status}
-        values = data.model_dump(exclude_unset=True)
-        if "scope" in values:
-            self._validate_member_scope(member.project_id, values["scope"])
-        for key, value in values.items():
-            setattr(member, key, value)
-        after = {**before, **values}
-        self.session.commit()
-        self.session.refresh(member)
-        return member
-
     def _validate_task_links(self, project_id: str, data: schemas.ProductionTaskCreate) -> None:
         episode = self.session.get(models.Episode, data.episode_id) if data.episode_id else None
         scene = self.session.get(models.Scene, data.scene_id) if data.scene_id else None

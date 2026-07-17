@@ -31,7 +31,6 @@ import {GlobalSearchOverlay} from './GlobalSearchOverlay';
 import {TaskCenter} from './TaskCenter';
 import {VersionHistory} from './VersionHistory';
 import {RecycleBin} from './RecycleBin';
-import {TeamPermissions} from './TeamPermissions';
 import {ExportDelivery} from './ExportDelivery';
 
 export function Workspace() {
@@ -287,7 +286,6 @@ export function Workspace() {
   if(platformPage==='tasks')return <div className="app-shell">{toolbar}<TaskCenter project={project} episode={episode} onOpenTarget={openTaskTarget}/>{searchOverlay}</div>;
   if(platformPage==='versions')return <div className="app-shell">{toolbar}<VersionHistory episode={episode} onRestored={()=>episode?loadProject(episode.project_id):Promise.resolve()}/>{searchOverlay}</div>;
   if(platformPage==='trash')return <div className="app-shell">{toolbar}<RecycleBin project={project}/>{searchOverlay}</div>;
-  if(platformPage==='team')return <div className="app-shell">{toolbar}<TeamPermissions project={project} onSave={members=>localStorage.setItem('ai-comic-team-draft',JSON.stringify(members))} onNavigate={navigateOperations}/>{searchOverlay}</div>;
   if(platformPage==='export')return <div className="app-shell">{toolbar}<ExportDelivery project={project} episode={episode} onNavigate={navigateOperations}/>{searchOverlay}</div>;
 
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;

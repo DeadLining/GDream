@@ -52,9 +52,6 @@ import {
   publishReleaseCandidate,
   listReleaseCandidates,
   rejectVisualReviewCandidate,
-  createProjectMember,
-  listProjectMembers,
-  updateProjectMember,
   createProductionTask,
   listProductionTasks,
   updateProductionTask,
@@ -449,13 +446,10 @@ describe('asset lineage and visual annotation api', () => {
 describe('operations api',()=>{
   afterEach(()=>vi.unstubAllGlobals());
 
-  it('uses scoped collaboration, task, version, delivery, audit, and preference endpoints',async()=>{
+  it('uses task, version, and delivery endpoints',async()=>{
     const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
     vi.stubGlobal('fetch',fetchMock);
 
-    await listProjectMembers('project-1');
-    await createProjectMember('project-1',{name:'陈舟',email:'chen@example.com',role:'storyboard_artist',scope:{episode_ids:['episode-1']},capabilities:{shots:['view','edit']}});
-    await updateProjectMember('member-1',{status:'disabled'});
     await listProductionTasks('project-1');
     await createProductionTask('project-1',{title:'修正镜头',priority:'high',episode_id:'episode-1',scene_id:null,shot_id:'shot-1',review_thread_id:null,description:'',assignee:'陈舟',due_at:null,checklist:[]});
     await updateProductionTask('task-1',{status:'completed'});
@@ -466,9 +460,6 @@ describe('operations api',()=>{
     await createDeliveryPackage('episode-1',{release_candidate_id:'candidate-1',preset_name:'平台包',outputs:[{kind:'landscape_video',format:'mp4',enabled:true}]});
 
     expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit).method??'GET'])).toEqual([
-      ['/api/projects/project-1/members','GET'],
-      ['/api/projects/project-1/members','POST'],
-      ['/api/project-members/member-1','PATCH'],
       ['/api/projects/project-1/tasks','GET'],
       ['/api/projects/project-1/tasks','POST'],
       ['/api/production-tasks/task-1','PATCH'],
