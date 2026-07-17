@@ -1,4 +1,7 @@
 from copy import deepcopy
+from io import BytesIO
+import json
+import zipfile
 
 from comic_studio import models
 
@@ -194,22 +197,43 @@ def test_episode_version_restore_rolls_back_backup_and_business_changes_on_inval
 
 
 def test_delivery_packages_require_approved_release_candidate(client):
-    project, episode, _scene_id, _shot_id = _project_episode_shot(client, "交付作品")
+    project, episode, _scene_id, shot_id = _project_episode_shot(client, "交付作品")
+    render_relative = f"projects/{project['id']}/episodes/{episode['id']}/renders/final.mp4"
+    render_path = client.app.state.settings.data_root / render_relative
+    render_path.parent.mkdir(parents=True, exist_ok=True)
+    render_path.write_bytes(b"real-render")
     with client.app.state.session_factory() as session:
         row = models.ReleaseCandidate(
             episode_id=episode["id"],
             version="V1",
-            render_path=f"projects/{project['id']}/episodes/{episode['id']}/renders/final.mp4",
+            render_path=render_relative,
             qc_snapshot={"overall_pass": True},
             status="draft",
         )
         session.add(row)
+        session.add(
+            models.DialogueLine(
+                shot_id=shot_id,
+                position=1,
+                character_id=None,
+                text="立即离开这里",
+                subtitle_text="立即离开这里",
+                emotion="urgent",
+                performance_instruction="压低声音",
+                start_seconds=0.5,
+                duration_seconds=1.5,
+            )
+        )
         session.commit()
         candidate_id = row.id
     body = {
         "release_candidate_id": candidate_id,
         "preset_name": "平台标准包",
-        "outputs": [{"kind": "landscape_video", "format": "mp4", "enabled": True}],
+        "outputs": [
+            {"kind": "landscape_video", "format": "MP4 / H.264", "enabled": True},
+            {"kind": "subtitles", "format": "SRT / UTF-8", "enabled": True},
+            {"kind": "asset_manifest", "format": "JSON / UTF-8", "enabled": True},
+        ],
     }
     blocked = client.post(f"/api/episodes/{episode['id']}/delivery-packages", json=body)
     assert blocked.status_code == 409
@@ -223,6 +247,26 @@ def test_delivery_packages_require_approved_release_candidate(client):
     created = client.post(f"/api/episodes/{episode['id']}/delivery-packages", json=body)
     assert created.status_code == 201
     package = created.json()
-    assert package["status"] == "queued"
-    assert package["checks"]["release_candidate_approved"] is True
+    assert package["status"] == "completed"
+    assert package["checks"] == {
+        "release_candidate_approved": True,
+        "render_complete": True,
+        "archive_created": True,
+    }
+    assert "asset_license" not in package["checks"]
+    assert package["artifact_path"].endswith(".zip")
     assert package["project_id"] == project["id"]
+
+    downloaded = client.get(f"/api/delivery-packages/{package['id']}/download")
+    assert downloaded.status_code == 200
+    assert downloaded.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(BytesIO(downloaded.content)) as archive:
+        assert set(archive.namelist()) == {
+            "video/final.mp4",
+            "subtitles/subtitles.srt",
+            "manifest.json",
+        }
+        assert archive.read("video/final.mp4") == b"real-render"
+        assert "立即离开这里" in archive.read("subtitles/subtitles.srt").decode()
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["episode"]["id"] == episode["id"]
