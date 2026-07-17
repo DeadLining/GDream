@@ -114,9 +114,41 @@ describe('operational frontend pages',()=>{
     await userEvent.type(within(dialog).getByRole('textbox',{name:'任务说明'}),'检查角色状态');
     await userEvent.type(within(dialog).getByRole('textbox',{name:'执行人'}),'张伟');
     await userEvent.selectOptions(within(dialog).getByRole('combobox',{name:'优先级'}),'high');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox',{name:'任务范围'}),'shot');
+    await userEvent.type(within(dialog).getByLabelText('到期时间'),'2026-07-20T10:30');
     await userEvent.click(within(dialog).getByRole('button',{name:'创建任务'}));
-    expect(operationMocks.createProductionTask).toHaveBeenCalledWith('p1',expect.objectContaining({title:'审核镜头连续性',priority:'high',episode_id:'e1'}));
+    expect(operationMocks.createProductionTask).toHaveBeenCalledWith('p1',expect.objectContaining({title:'审核镜头连续性',priority:'high',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',due_at:expect.stringContaining('2026-07-20')}));
     expect((await screen.findAllByText('审核镜头连续性'))[0]).toBeVisible();
+  });
+
+  it('switches task views and applies assignee and status filters',async()=>{
+    operationMocks.listProductionTasks.mockResolvedValue([
+      {id:'t1',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',review_thread_id:null,title:'补齐场景04环境音',description:'完成环境音设计',priority:'medium',status:'in_progress',assignee:'王磊',due_at:'2026-07-20T10:30:00Z',checklist:[],created_at:'',updated_at:''},
+      {id:'t2',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,review_thread_id:null,title:'整理项目交付清单',description:'核对交付格式',priority:'low',status:'todo',assignee:'张伟',due_at:null,checklist:[],created_at:'',updated_at:''},
+    ]);
+    render(<TaskCenter project={project} episode={episode}/>);
+    expect(await screen.findByText('整理项目交付清单')).toBeVisible();
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'执行人'}),'王磊');
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'任务状态'}),'in_progress');
+    expect(screen.getByText('补齐场景04环境音')).toBeVisible();
+    expect(screen.queryByText('整理项目交付清单')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button',{name:'看板'}));
+    expect(screen.getByRole('button',{name:'看板'})).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByRole('heading',{name:'进行中'})).toBeVisible();
+    await userEvent.click(screen.getByRole('button',{name:'时间线'}));
+    expect(screen.getByText('07/20')).toBeVisible();
+  });
+
+  it('updates task status and checklist and opens the linked production target',async()=>{
+    const onOpenTarget=vi.fn();
+    render(<TaskCenter project={project} episode={episode} onOpenTarget={onOpenTarget}/>);
+    expect((await screen.findAllByText('补齐场景04环境音'))[0]).toBeVisible();
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'任务状态'}),'review');
+    expect(operationMocks.updateProductionTask).toHaveBeenCalledWith('t1',{status:'review'});
+    await userEvent.click(screen.getByRole('checkbox',{name:'提交审核'}));
+    expect(operationMocks.updateProductionTask).toHaveBeenCalledWith('t1',{checklist:[{label:'收集素材',done:true},{label:'提交审核',done:true}]});
+    await userEvent.click(screen.getByRole('button',{name:'打开关联镜头'}));
+    expect(onOpenTarget).toHaveBeenCalledWith(expect.objectContaining({id:'t1',shot_id:'shot-1'}));
   });
 
   it('compares two saved snapshots and restores the selected target version',async()=>{
