@@ -58,6 +58,13 @@ describe('SceneWorkspace', () => {
     expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.scene-document\s*\{[^}]*overflow:\s*auto/);
   });
 
+  it('stacks scene header and beat actions on phone widths',()=>{
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*?\.scene-document-header\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*?\.scene-document-intro\s*\{[^}]*grid-column:\s*1\s*\/\s*-1[^}]*grid-template-columns:\s*88px\s+minmax\(0,\s*1fr\)/);
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*?\.scene-beat\s*\{[^}]*grid-template-columns:\s*30px\s+minmax\(0,\s*1fr\)/);
+    expect(sceneStyles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*?\.scene-beat-actions\s*\{[^}]*grid-column:\s*2/);
+  });
+
   it('binds explicit scene and prop assets to the selected scene',async()=>{
     render(<SceneWorkspace episode={episode} onOpenShot={vi.fn()}/>);
 
