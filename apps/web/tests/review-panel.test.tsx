@@ -91,7 +91,7 @@ describe('ReviewPanel', () => {
     const styles=readAllStyles();
     expect(styles).toMatch(/\.review-discussion\s*\{[^}]*overflow-y:\s*auto[^}]*\}/s);
     expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*\{[^}]*height:\s*100%[^}]*overflow-y:\s*auto[^}]*\}/);
-    expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{[^}]*flex:\s*0\s+0\s+auto[^}]*min-height:\s*0[^}]*\}/);
+    expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{(?=[^}]*flex:\s*0\s+0\s+auto)(?=[^}]*min-height:\s*0)[^}]*\}/);
     expect(styles).toMatch(/@media\s*\(max-width:\s*700px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{[^}]*grid-template-columns:\s*1fr[^}]*\}/);
   });
 
