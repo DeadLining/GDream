@@ -197,7 +197,12 @@ export function Workspace() {
     setWorkArea(next);
     return true;
   };
-  const canLeaveSettings = () => platformPage !== 'models' || !settingsDirty || window.confirm('模型渠道有未保存更改，确定离开吗？');
+  const canLeaveSettings = () => {
+    if ((platformPage !== 'models' && platformPage !== 'settings') || !settingsDirty) return true;
+    const confirmed = window.confirm(platformPage === 'models' ? '模型渠道有未保存更改，确定离开吗？' : '作品设置有未保存更改，确定离开吗？');
+    if (confirmed) setSettingsDirty(false);
+    return confirmed;
+  };
   const toggleModelCenter = () => {
     if (platformPage === 'models') {
       if (!canLeaveSettings()) return;
@@ -206,7 +211,7 @@ export function Workspace() {
     }
     setPlatformPage('models');
   };
-  const toggleProjectSettings=()=>{if(platformPage==='settings'){setPlatformPage('project');return;}if(canLeaveSettings())setPlatformPage('settings');};
+  const toggleProjectSettings=()=>{if(platformPage==='settings'){if(canLeaveSettings())setPlatformPage('project');return;}if(canLeaveSettings())setPlatformPage('settings');};
   const navigateProject=(id:string)=>{if(canLeaveSettings()){deletionGeneration.current+=1;setDeletingEpisode(null);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);void loadProject(id);}};
   const navigateEpisode = (id: string) => {if (canLeaveSettings()) void loadEpisode(id);};
   const openEpisodeDeletion=async(id:string)=>{const target=project?.episodes.find(item=>item.id===id);if(!target)return;const generation=++deletionGeneration.current;setDeletingEpisode(target);setDeletionPreview(null);setDeletionError('');setDeletionWarnings([]);try{const preview=await previewEpisodeDeletion(id);if(deletionGeneration.current===generation)setDeletionPreview(preview);}catch(cause){if(deletionGeneration.current===generation)setDeletionError(cause instanceof Error?cause.message:'无法读取删除影响');}};
@@ -254,7 +259,7 @@ export function Workspace() {
   const navigateOperations=(page:string)=>{const next=resolveOperationsPage(page);if(next)openPlatformPage(next);};
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
   if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>{searchOverlay}</div>;
-  if(platformPage==='settings'&&project){const sceneCount=episode?.scenes.length??0;const shotCount=episode?.scenes.reduce((sum,scene)=>sum+scene.shots.length,0)??0;return <div className="app-shell">{toolbar}<ProjectSettings project={project} volumes={volumes} sceneCount={sceneCount} shotCount={shotCount} onSave={async data=>{const updated=await updateProject(project.id,data);setProject(current=>current?{...current,...updated}:current);setProjects(current=>current.map(item=>item.id===updated.id?updated:item));}}/>{searchOverlay}</div>;}
+  if(platformPage==='settings'&&project){const sceneCount=episode?.scenes.length??0;const shotCount=episode?.scenes.reduce((sum,scene)=>sum+scene.shots.length,0)??0;return <div className="app-shell">{toolbar}<ProjectSettings project={project} volumes={volumes} sceneCount={sceneCount} shotCount={shotCount} onDirtyChange={setSettingsDirty} onSave={async data=>{const updated=await updateProject(project.id,data);setProject(current=>current?{...current,...updated}:current);setProjects(current=>current.map(item=>item.id===updated.id?updated:item));}}/>{searchOverlay}</div>;}
   if(platformPage==='home')return <div className="app-shell">{toolbar}<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={id=>{void loadProject(id);setPlatformPage('project');setGlobalSection('episode');setWorkArea('overview');}} onCreateProject={()=>setProjectDialog(true)} onNavigate={navigateOperations}/><CreateProjectDialog open={projectDialog} onClose={()=>setProjectDialog(false)} onCreate={async(data:ProjectCreate)=>{const created=await createProject(data);setProjectDialog(false);await reloadProjects(created.id);setPlatformPage('project');}}/>{searchOverlay}</div>;
   if(platformPage==='tasks')return <div className="app-shell">{toolbar}<TaskCenter project={project} episode={episode}/>{searchOverlay}</div>;
   if(platformPage==='versions')return <div className="app-shell">{toolbar}<VersionHistory episode={episode} onRestored={()=>episode?loadProject(episode.project_id):Promise.resolve()}/>{searchOverlay}</div>;

@@ -157,8 +157,8 @@
 .project-settings-nav, .project-settings-summary { min-width: 0; overflow: auto; background: var(--surface); padding: 16px; }
 .project-settings-nav { border-right: 1px solid var(--line); }
 .project-settings-nav h1 { margin: 0 0 14px; font-size: 16px; }
-.project-settings-nav button { width: 100%; min-height: 36px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: transparent; padding: 0 10px; color: var(--muted-strong); cursor: pointer; font-size: 11px; text-align: left; }
-.project-settings-nav button.active { background: var(--color-danger-bg); color: var(--accent-strong); font-weight: 700; }
+.project-settings-nav a { width: 100%; min-height: 36px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: transparent; padding: 0 10px; color: var(--muted-strong); cursor: pointer; font-size: 11px; text-align: left; text-decoration: none; }
+.project-settings-nav a.active { background: var(--color-danger-bg); color: var(--accent-strong); font-weight: 700; }
 .project-settings-content { min-width: 0; overflow: auto; padding: 18px 22px 80px; }
 .project-settings-content > header { margin-bottom: 14px; }
 .project-settings-content > header span { color: var(--accent-strong); font-size: 10px; font-weight: 700; }
@@ -166,6 +166,7 @@
 .project-settings-content > header p { margin: 0; color: var(--muted); font-size: 11px; }
 .project-settings-content form { display: grid; gap: 14px; }
 .project-settings-form-section, .project-structure-rules { border: 1px solid var(--line); background: var(--surface); padding: 16px; }
+.project-settings-form-section, .project-structure-rules, #project-files { scroll-margin-top: 12px; }
 .project-settings-form-section h2, .project-structure-rules h2 { margin: 0 0 14px; font-size: 14px; }
 .project-settings-form-section { display: grid; gap: 12px; }
 .project-settings-form-section > div { display: grid; grid-template-columns: minmax(0,1fr) minmax(180px,.55fr); gap: 12px; }
@@ -198,7 +199,7 @@
 .project-settings-summary dl div { min-height: 34px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line-soft); font-size: 10px; }
 .project-settings-summary dt { color: var(--muted); }.project-settings-summary dd { margin: 0; color: var(--ink); }
 @media (max-width: 899px) { .project-settings-page { grid-template-columns: 150px minmax(0,1fr); }.project-settings-summary { display: none; } }
-@media (max-width: 620px) { .project-settings-page { display: block; overflow: auto; }.project-settings-nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; }.project-settings-nav h1 { display: none; }.project-settings-nav button { min-width: max-content; width: auto; }.project-settings-content { min-width: 0; width: 100%; max-width: 100%; overflow: visible; padding: 14px 12px 72px; }.project-settings-content form, .project-settings-form-section, .project-structure-rules { min-width: 0; width: 100%; max-width: 100%; }.project-settings-form-section > div { grid-template-columns: minmax(0,1fr); }.project-settings-content form > footer { bottom: -72px; width: 100%; margin: 0; padding-inline: 12px; }.project-hierarchy { width: 100%; max-width: 100%; grid-template-columns: repeat(9,auto); }.project-settings-form-section fieldset input { width: 1px; height: 1px; } }
+@media (max-width: 620px) { .project-settings-page { display: block; overflow: auto; }.project-settings-nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; }.project-settings-nav h1 { display: none; }.project-settings-nav a { min-width: max-content; width: auto; }.project-settings-content { min-width: 0; width: 100%; max-width: 100%; overflow: visible; padding: 14px 12px 72px; }.project-settings-content form, .project-settings-form-section, .project-structure-rules { min-width: 0; width: 100%; max-width: 100%; }.project-settings-form-section > div { grid-template-columns: minmax(0,1fr); }.project-settings-content form > footer { bottom: -72px; width: 100%; margin: 0; padding-inline: 12px; }.project-hierarchy { width: 100%; max-width: 100%; grid-template-columns: repeat(9,auto); }.project-settings-form-section fieldset input { width: 1px; height: 1px; } }
 .lineage-canvas { min-width: 0; min-height: 0; }
 @media (max-width: 899px) { .lineage-canvas { min-height: 560px; } }
 .review-generation-error { margin: -4px 0 8px; padding: 7px 8px; border-left: 3px solid var(--danger); background: var(--color-danger-bg); color: var(--danger); font-size: 10px; line-height: 1.45; }
