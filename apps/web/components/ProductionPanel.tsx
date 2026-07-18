@@ -21,6 +21,7 @@ import {ProductionRunControls} from './production-canvas/ProductionRunControls';
 import {ShotGroupRerun} from './production-canvas/ShotGroupRerun';
 import {ProductionTaskDrawer} from './production-canvas/ProductionTaskDrawer';
 import {EpisodeAIRunControls} from './production-canvas/EpisodeAIRunControls';
+import type {GenerationAssetRequest} from '../lib/shot-generation-readiness';
 
 export function ProductionPanel({
   episodeId,
@@ -30,6 +31,7 @@ export function ProductionPanel({
   onOpenDirector,
   onOpenDialogue,
   onOpenMedia,
+  onOpenAssets,
   onReadiness,
   refreshKey,
 }: {
@@ -40,6 +42,7 @@ export function ProductionPanel({
   onOpenDirector?: (id: string) => void;
   onOpenDialogue?: (id: string) => void;
   onOpenMedia?: (id: string, mode: ProductionMediaMode) => void;
+  onOpenAssets?: (request: GenerationAssetRequest) => void;
   onReadiness?: (ready: boolean) => void;
   refreshKey?: number;
 }) {
@@ -255,7 +258,7 @@ export function ProductionPanel({
       </div>}
     </header>
     <div className="production-canvas-stage">
-      <EpisodeAIRunControls episodeId={episodeId} onCompleted={refreshAfterAIRun}/>
+      <EpisodeAIRunControls episodeId={episodeId} onCompleted={refreshAfterAIRun} onOpenAssets={onOpenAssets} onOpenDirector={onOpenDirector}/>
       {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onOpenVisualReview={onOpenVisualReview} onOpenDirector={onOpenDirector} onOpenDialogue={onOpenDialogue} onOpenMedia={onOpenMedia} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
       <ShotGroupRerun selectedShotIds={selectedCanvasShotIds} starting={rerunStarting} error={rerunError} onSubmit={stages=>void startShotGroupRerun(stages)}/>
       <ProductionRunControls open={configOpen} onOpenChange={setConfigOpen} stages={stages} setStages={setStages} concurrency={concurrency} setConcurrency={setConcurrency}

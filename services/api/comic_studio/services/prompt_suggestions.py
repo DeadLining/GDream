@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
-from comic_studio.prompt_suggestions import MediaPromptSuggestion
+from comic_studio.prompt_suggestions import MediaPromptSuggestion, ShotGenerationContext
 from comic_studio.redaction import is_sensitive_key
+from comic_studio.services.panel_references import resolve_panel_generation_references
+from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
 PromptMode = Literal["panel", "video"]
@@ -53,6 +56,55 @@ class PromptSuggestionService:
         suggestion = await self.provider.suggest_media_prompt(context)
         return MediaPromptSuggestion.model_validate(suggestion)
 
+    def generation_context(
+        self, shot_id: str, mode: PromptMode
+    ) -> ShotGenerationContext:
+        if mode not in {"panel", "video"}:
+            raise ValueError("invalid_prompt_mode")
+        shot = self.session.get(models.Shot, shot_id)
+        if shot is None:
+            raise KeyError(shot_id)
+        compiled = self._compile(shot.id, mode)
+        if mode == "panel":
+            references = [
+                {
+                    "asset_id": item.asset.id,
+                    "label": item.label,
+                    "media_url": f"/media/{item.asset.local_path}",
+                    "media_type": item.asset.media_type,
+                    "role": item.role,
+                    "guidance_kind": item.guidance_kind,
+                }
+                for item in resolve_panel_generation_references(
+                    self.session,
+                    shot,
+                    compiled,
+                    require_character_references=False,
+                )
+            ]
+        else:
+            references = []
+        return ShotGenerationContext.model_validate(
+            {
+                "shot_id": shot.id,
+                "mode": mode,
+                "snapshot_hash": compiled.snapshot_hash,
+                "prompt_constraints": compiled.prompt_constraints,
+                "library_assets": [
+                    {
+                        "id": item["id"],
+                        "kind": item["kind"],
+                        "name": item["name"],
+                        "description": item["description"],
+                        "tags": item["tags"],
+                    }
+                    for item in compiled.snapshot["library_assets"]
+                ],
+                "director": self._director_context(compiled.snapshot["director"]),
+                "references": references,
+            }
+        )
+
     def _context(self, shot: models.Shot, mode: PromptMode) -> dict[str, Any]:
         scene = shot.scene
         episode = scene.episode
@@ -70,6 +122,7 @@ class PromptSuggestionService:
             0,
         )
         previous_shot = ordered_shots[shot_index - 1] if shot_index > 0 else None
+        compiled = self._compile(shot.id, mode)
 
         characters = list(
             self.session.scalars(
@@ -95,12 +148,6 @@ class PromptSuggestionService:
             .where(models.AssetVariantUsage.shot_id == shot.id)
             .order_by(models.AssetVariantUsage.created_at)
         ).all()
-        camera = self.session.scalar(
-            select(models.ShotCamera).where(models.ShotCamera.shot_id == shot.id)
-        )
-        stage = self.session.scalar(
-            select(models.DirectorStage).where(models.DirectorStage.scene_id == scene.id)
-        )
         visual_reviews = list(
             self.session.scalars(
                 select(models.VisualReviewThread)
@@ -166,6 +213,8 @@ class PromptSuggestionService:
                 }
                 for usage, variant, state in usages[:30]
             ],
+            "library_assets": _bounded_json(compiled.snapshot["library_assets"]),
+            "generation_constraints": _text(compiled.prompt_constraints, 6000),
             "visual_reviews": [
                 {
                     "title": _text(review.title, 200),
@@ -189,14 +238,7 @@ class PromptSuggestionService:
                 }
                 for review in visual_reviews
             ],
-            "director": (
-                {
-                    "environment": _bounded_json(stage.environment) if stage else {},
-                    "camera": self._camera_context(camera) if camera else None,
-                }
-                if stage or camera
-                else None
-            ),
+            "director": self._director_context(compiled.snapshot["director"]),
         }
 
     @staticmethod
@@ -215,14 +257,59 @@ class PromptSuggestionService:
         }
 
     @staticmethod
-    def _camera_context(camera: models.ShotCamera) -> dict[str, Any]:
+    def _director_context(director: dict[str, Any]) -> dict[str, Any] | None:
+        camera = director.get("camera")
+        objects = director.get("objects") or []
+        environment = director.get("environment") or {}
+        if not camera and not objects and not environment:
+            return None
+
+        director_objects = []
+        for item in objects[:60]:
+            transform = item.get("transform") or {}
+            rotation = transform.get("rotation") or [0, 0, 0]
+            horizontal_facing = 0
+            if (
+                isinstance(rotation, (list, tuple))
+                and len(rotation) > 1
+                and isinstance(rotation[1], (int, float))
+                and not isinstance(rotation[1], bool)
+            ):
+                horizontal_facing = round(math.degrees(rotation[1]))
+            director_objects.append(
+                {
+                    "id": _text(item.get("id"), 80),
+                    "kind": _text(item.get("kind"), 40),
+                    "source_type": _text(item.get("source_type"), 40),
+                    "source_id": item.get("source_id"),
+                    "label": _text(item.get("label"), 160),
+                    "position": _bounded_json(transform.get("position", [0, 0, 0])),
+                    "horizontal_facing_degrees": horizontal_facing,
+                }
+            )
+
         return {
-            "position": _bounded_json(camera.position),
-            "target": _bounded_json(camera.target),
-            "rotation": _bounded_json(camera.rotation),
-            "focal_length_mm": camera.focal_length_mm,
-            "shot_size": _text(camera.shot_size, 40),
-            "camera_motion": _text(camera.camera_motion, 80),
-            "framing_guides": _bounded_json(camera.framing_guides),
-            "object_overrides": _bounded_json(camera.object_overrides),
+            "environment": _bounded_json(environment),
+            "camera": (
+                {
+                    "position": _bounded_json(camera.get("position")),
+                    "target": _bounded_json(camera.get("target")),
+                    "rotation": _bounded_json(camera.get("rotation")),
+                    "focal_length_mm": camera.get("focal_length_mm"),
+                    "shot_size": _text(camera.get("shot_size"), 40),
+                    "camera_motion": _text(camera.get("camera_motion"), 80),
+                    "framing_guides": _bounded_json(camera.get("framing_guides", {})),
+                }
+                if camera
+                else None
+            ),
+            "objects": director_objects,
         }
+
+    def _compile(self, shot_id: str, mode: PromptMode):
+        return ShotInputCompiler(self.session).compile(
+            shot_id,
+            usage_kinds={"video", "reference"}
+            if mode == "video"
+            else {"panel", "reference"},
+        )

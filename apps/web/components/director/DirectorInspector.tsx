@@ -28,6 +28,19 @@ function PositionEditor({transform,onCommit}:{transform:Transform;onCommit:(tran
   </div>;
 }
 
+function HorizontalFacingEditor({transform,onCommit}:{transform:Transform;onCommit:(transform:Transform)=>void}){
+  const degrees=transform.rotation[1]*180/Math.PI;
+  const [draft,setDraft]=useState(()=>formatNumber(degrees,1));
+  useEffect(()=>setDraft(formatNumber(degrees,1)),[degrees]);
+  const commit=()=>{
+    const value=Number(draft);
+    if(!Number.isFinite(value)){setDraft(formatNumber(degrees,1));return;}
+    const rotation:[number,number,number]=[transform.rotation[0],value*Math.PI/180,transform.rotation[2]];
+    if(JSON.stringify(rotation)!==JSON.stringify(transform.rotation))onCommit({...transform,rotation});
+  };
+  return <label className="director-facing-control"><span>水平朝向</span><input type="number" aria-label="水平朝向" min="-180" max="180" step="1" value={draft} onChange={event=>setDraft(event.target.value)} onBlur={commit} onKeyDown={event=>{if(event.key==='Enter')event.currentTarget.blur();}}/><small>度</small></label>;
+}
+
 export function DirectorInspector({
   object,
   camera,
@@ -72,6 +85,7 @@ export function DirectorInspector({
         <button type="button" aria-label="网格吸附" title="网格吸附" aria-pressed={snapEnabled} onClick={()=>onSnapEnabledChange(!snapEnabled)}><Magnet size={15}/></button>
       </div>
       <PositionEditor transform={object.transform} onCommit={onObjectTransformChange}/>
+      {object.kind==='character'&&<HorizontalFacingEditor transform={object.transform} onCommit={onObjectTransformChange}/>}
       <label className="director-checkbox"><input type="checkbox" aria-label="本镜头显示" checked={object.visible} onChange={event=>onShotVisibilityChange(event.target.checked)}/><span>本镜头显示</span></label>
       <button className="command-button" disabled={!hasShotOverride} onClick={onResetShotOverride}><RotateCcw size={14}/>重置本镜头位置</button>
       <button className="command-button director-danger" onClick={onDeleteObject}><Trash2 size={14}/>删除场景对象</button>

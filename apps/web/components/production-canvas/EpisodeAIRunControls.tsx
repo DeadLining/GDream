@@ -11,6 +11,7 @@ import {
   retryEpisodeAIRun,
 } from '../../lib/api';
 import type {EpisodeAIRun,EpisodeAIStageName} from '../../lib/types';
+import {generationAssetTargetForBlockers,shotGenerationBlockerLabel,type GenerationAssetRequest} from '../../lib/shot-generation-readiness';
 
 const STAGES:Array<{id:EpisodeAIStageName;label:string}>=[
   {id:'scripting',label:'剧本'},
@@ -29,6 +30,35 @@ const STAGES:Array<{id:EpisodeAIStageName;label:string}>=[
 
 const ACTIVE=new Set(['queued','running']);
 const storageKey=(episodeId:string)=>`ai-comic-episode-ai-${episodeId}`;
+type BlockedShot={shotId:string;blockers:string[];requirementIds:string[]};
+type GenerationReadiness={blockedShots:BlockedShot[];blockers:string[]};
+const stringList=(value:unknown)=>Array.isArray(value)?value.filter((item):item is string=>typeof item==='string'):[];
+const generationReadinessFromRun=(run:EpisodeAIRun):GenerationReadiness|null=>{
+  const stage=run.stages.find(item=>item.stage===run.current_stage);
+  const metadata=stage?.output_metadata;
+  if(metadata?.code!=='shot_generation_not_ready'||!metadata.blocked_shots||typeof metadata.blocked_shots!=='object'||Array.isArray(metadata.blocked_shots))return null;
+  const blockedShots=Object.entries(metadata.blocked_shots).flatMap(([shotId,value])=>{
+    if(!value||typeof value!=='object'||Array.isArray(value))return[];
+    const item=value as Record<string,unknown>;
+    const blockers=stringList(item.blockers);
+    return shotId&&blockers.length?[{shotId,blockers,requirementIds:stringList(item.requirement_ids)}]:[];
+  });
+  if(!blockedShots.length)return null;
+  return{blockedShots,blockers:[...new Set(blockedShots.flatMap(item=>item.blockers))]};
+};
+const generationReadinessPrefix='Shot generation is not ready:';
+const parseGenerationReadinessError=(value:string):GenerationReadiness|null=>{
+  if(!value.startsWith(generationReadinessPrefix))return null;
+  const blockedShots=value.slice(generationReadinessPrefix.length).split(';').flatMap(entry=>{
+    const separator=entry.indexOf(':');
+    if(separator<0)return [];
+    const shotId=entry.slice(0,separator).trim();
+    const blockers=entry.slice(separator+1).split(',').map(item=>item.trim()).filter(Boolean);
+    return shotId?[{shotId,blockers,requirementIds:[]}]:[];
+  });
+  if(!blockedShots.length)return null;
+  return {blockedShots,blockers:[...new Set(blockedShots.flatMap(item=>item.blockers))]};
+};
 const friendlyError=(value:string)=>{
   if(!value)return '';
   if(value.includes('Episode has no shots'))return '本集还没有分镜，请先解析剧本或创建镜头';
@@ -45,7 +75,7 @@ const sleep=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});
 });
 
-export function EpisodeAIRunControls({episodeId,onCompleted}:{episodeId:string;onCompleted?:()=>void}){
+export function EpisodeAIRunControls({episodeId,onCompleted,onOpenAssets,onOpenDirector}:{episodeId:string;onCompleted?:()=>void;onOpenAssets?:(request:GenerationAssetRequest)=>void;onOpenDirector?:(shotId:string)=>void}){
   const [run,setRun]=useState<EpisodeAIRun|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -118,6 +148,10 @@ export function EpisodeAIRunControls({episodeId,onCompleted}:{episodeId:string;o
 
   const currentLabel=STAGES.find(item=>item.id===run.current_stage)?.label??run.current_stage;
   const completed=run.status==='completed';
+  const displayedError=error||run.error;
+  const generationReadiness=generationReadinessFromRun(run)??parseGenerationReadinessError(displayedError);
+  const needsAssets=generationReadiness?.blockers.some(item=>['missing_character_reference','missing_background','missing_required_prop'].includes(item));
+  const needsDirector=generationReadiness?.blockers.some(item=>['blocking_not_initialized','director_preview_missing'].includes(item));
   return <section className={`episode-ai-run status-${run.status}`} aria-label="整集 AI 任务">
     <header>
       <div className="episode-ai-run-title">{completed?<Check size={18}/>:run.status==='failed'||run.status==='needs_review'?<AlertTriangle size={18}/>:<Sparkles size={18}/>}<span><strong>{completed?'整集成片已完成':'整集 AI 成片'}</strong><small>{completed?'已通过质检并登记内部母版':`当前：${currentLabel}`}</small></span></div>
@@ -134,6 +168,13 @@ export function EpisodeAIRunControls({episodeId,onCompleted}:{episodeId:string;o
     <ol className="episode-ai-stages">
       {STAGES.map(item=>{const stage=run.stages.find(value=>value.stage===item.id);return <li key={item.id} className={`stage-${stage?.status??'pending'}`} title={friendlyError(stage?.error??'')||item.label}><i>{stage?.status==='succeeded'||stage?.status==='skipped'?<Check size={11}/>:stage?.status==='running'?<Loader2 className="spin" size={11}/>:null}</i><span>{item.label}</span></li>;})}
     </ol>
-    {(run.error||error)&&<p className="episode-ai-error" role="alert">{friendlyError(error||run.error)}</p>}
+    {displayedError&&(generationReadiness?<div className="episode-ai-error episode-ai-readiness-error" role="alert">
+      <strong>{generationReadiness.blockedShots.length} 个镜头尚未满足画面生成条件</strong>
+      <span>{generationReadiness.blockers.map(shotGenerationBlockerLabel).join('、')}</span>
+      <div className="episode-ai-error-actions">
+        {needsAssets&&onOpenAssets?<button type="button" onClick={()=>onOpenAssets({target:generationAssetTargetForBlockers(generationReadiness.blockers),shotId:generationReadiness.blockedShots[0].shotId,requirementIds:generationReadiness.blockedShots[0].requirementIds})}>完善项目资产</button>:null}
+        {needsDirector&&onOpenDirector?<button type="button" aria-label="打开首个阻塞镜头的 3D 导演台" onClick={()=>onOpenDirector(generationReadiness.blockedShots[0].shotId)}>打开 3D 导演台</button>:null}
+      </div>
+    </div>:<p className="episode-ai-error" role="alert">{friendlyError(displayedError)}</p>)}
   </section>;
 }

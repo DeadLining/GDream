@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from comic_studio import models
 from comic_studio.director import DirectorAssetRead
 from comic_studio.services.character_3d import Character3DRepresentationService
+from comic_studio.services.director_blocking import character_blocking_transform
 
 BODY_PLAN_PROXY_RIG = {
     "humanoid": "standard_humanoid",
@@ -79,8 +80,10 @@ class DirectorAssetCatalogService:
         if shot_id and all(shot.id != shot_id for shot in scene.shots):
             raise ValueError("director_shot_not_in_stage")
         continuity = scene.continuity_state or {}
-        result = [self._scene_definition(scene)]
-        result.extend(self._library_asset_definitions(scene))
+        library_assets = self._library_asset_definitions(scene)
+        library_backgrounds = [item for item in library_assets if item.kind == "background"]
+        result = library_backgrounds or [self._scene_definition(scene)]
+        result.extend(item for item in library_assets if item.kind != "background")
         result.extend(self._character_definitions(scene, shot_id))
         result.extend(self._prop_definitions(scene, continuity.get("props")))
         return result
@@ -317,11 +320,9 @@ class DirectorAssetCatalogService:
                             "appearance_bible": character.appearance_bible,
                             "continuity_rules": character.continuity_rules,
                         },
-                        transform={
-                            "position": [(index - (len(characters) - 1) / 2) * 1.2, 0, 0],
-                            "rotation": [0, 0, 0],
-                            "scale": [1, 1, 1],
-                        },
+                        transform=character_blocking_transform(
+                            index, len(characters)
+                        ),
                         appearance={
                             "model_url": model_url,
                             "model_scale": model_scale,
@@ -358,11 +359,7 @@ class DirectorAssetCatalogService:
                         "appearance_bible": character.appearance_bible,
                         "continuity_rules": character.continuity_rules,
                     },
-                    transform={
-                        "position": [(index - (len(characters) - 1) / 2) * 1.2, 0, 0],
-                        "rotation": [0, 0, 0],
-                        "scale": [1, 1, 1],
-                    },
+                    transform=character_blocking_transform(index, len(characters)),
                     appearance={
                         "color": "#d76b4b",
                         "proxy_rig": proxy_rig,

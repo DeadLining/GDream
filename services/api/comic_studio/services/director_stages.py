@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from sqlalchemy import delete,select
 from sqlalchemy.orm import Session,selectinload
 
@@ -36,7 +38,7 @@ class DirectorStageService:
 
     def _record_revision(self,stage:models.DirectorStage,*,camera:models.ShotCamera|None=None)->None:
         snapshot={}
-        if camera is not None:snapshot={"version":camera.version,"position":camera.position,"target":camera.target,"rotation":camera.rotation,"focal_length_mm":camera.focal_length_mm,"near":camera.near,"far":camera.far,"shot_size":camera.shot_size,"camera_motion":camera.camera_motion,"framing_guides":camera.framing_guides,"object_overrides":camera.object_overrides}
+        if camera is not None:snapshot={"version":camera.version,"position":camera.position,"target":camera.target,"rotation":camera.rotation,"focal_length_mm":camera.focal_length_mm,"near":camera.near,"far":camera.far,"shot_size":camera.shot_size,"camera_motion":camera.camera_motion,"framing_guides":camera.framing_guides,"object_overrides":camera.object_overrides,"initialized_from_shot_id":camera.initialized_from_shot_id}
         stage.revisions.append(models.DirectorRevision(shot_camera_id=camera.id if camera else None,stage_snapshot=self._stage_snapshot(stage),camera_snapshot=snapshot,reason="manual_save"))
 
     def _prune_revisions(self,stage_id:str)->None:
@@ -78,8 +80,11 @@ class DirectorStageService:
             desired={"kind":definition.kind,"source_type":definition.source_type,"source_id":definition.source_id,"label":definition.label,"appearance":definition.appearance,"object_metadata":metadata}
             if any(getattr(current,key)!=value for key,value in desired.items()):changed=True
         if not changed:
-            if AssetUsageBindingService(self.session).refresh_for_stage(stage.id):self.session.commit()
-            return stage
+            inheritance_changed=self._initialize_camera_inheritance(stage)
+            usage_changed=AssetUsageBindingService(self.session).refresh_for_stage(stage.id)
+            if inheritance_changed or usage_changed:
+                self.session.commit()
+            return self.get_stage(stage.id)
         self._record_revision(stage)
         stage.environment=environment
         stale_ids={item.id for item in stale}
@@ -97,7 +102,52 @@ class DirectorStageService:
                 next_position+=1
                 continue
             current.kind=definition.kind;current.source_type=definition.source_type;current.source_id=definition.source_id;current.label=definition.label;current.appearance=definition.appearance;current.object_metadata=metadata
-        stage.version+=1;self.session.flush();AssetUsageBindingService(self.session).refresh_for_stage(stage.id);self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
+        stage.version+=1;self.session.flush();self._initialize_camera_inheritance(stage);AssetUsageBindingService(self.session).refresh_for_stage(stage.id);self._prune_revisions(stage.id);self.session.commit();return self.get_stage(stage.id)
+
+    def _ordered_shots(self,stage:models.DirectorStage)->list[models.Shot]:
+        return list(self.session.scalars(select(models.Shot).where(models.Shot.scene_id==stage.scene_id).order_by(models.Shot.position,models.Shot.id)))
+
+    @staticmethod
+    def _blocking_snapshot(stage:models.DirectorStage,camera:models.ShotCamera)->dict:
+        snapshot={}
+        for item in stage.objects:
+            if item.kind in {"background","light"}:continue
+            override=camera.object_overrides.get(item.id,{})
+            snapshot[item.id]={
+                "transform":deepcopy(override.get("transform",item.transform)),
+                "visible":bool(override.get("visible",item.visible)),
+            }
+        return snapshot
+
+    def _initialize_camera_inheritance(self,stage:models.DirectorStage)->bool:
+        cameras={item.shot_id:item for item in stage.shot_cameras}
+        shots=self._ordered_shots(stage)
+        changed=False
+        for index in range(1,len(shots)):
+            previous=cameras.get(shots[index-1].id);current=cameras.get(shots[index].id)
+            if previous is None or current is None:continue
+            if current.initialized_from_shot_id is not None or current.object_overrides:continue
+            current.object_overrides=self._blocking_snapshot(stage,previous)
+            current.initialized_from_shot_id=previous.shot_id
+            current.version+=1
+            changed=True
+        return changed
+
+    def inherit_blocking(self,stage_id:str,shot_id:str,expected_version:int)->models.ShotCamera:
+        stage=self.get_stage(stage_id)
+        shots=self._ordered_shots(stage)
+        index=next((position for position,item in enumerate(shots) if item.id==shot_id),None)
+        if index is None:raise KeyError(shot_id)
+        if index==0:raise ValueError("previous_shot_missing")
+        cameras={item.shot_id:item for item in stage.shot_cameras}
+        camera=cameras.get(shot_id);previous=cameras.get(shots[index-1].id)
+        if camera is None or previous is None:raise KeyError(shot_id)
+        if camera.version!=expected_version:raise DirectorVersionConflict(camera.version)
+        self._record_revision(stage,camera=camera)
+        camera.object_overrides=self._blocking_snapshot(stage,previous)
+        camera.initialized_from_shot_id=previous.shot_id
+        camera.version+=1
+        self.session.flush();self._prune_revisions(stage.id);self.session.commit();self.session.refresh(camera);return camera
 
     def update_stage(self,stage_id:str,expected_version:int,patch:DirectorStagePatch)->models.DirectorStage:
         stage=self.get_stage(stage_id)

@@ -3,6 +3,10 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from comic_studio import models, schemas
 from comic_studio.assets import AssetStore
 from comic_studio.jobs import JobStore
+from comic_studio.services.asset_requirements import (
+    ShotGenerationNotReady,
+    require_image_target_ready,
+)
 from comic_studio.services.panel_freshness import PanelFreshnessService
 
 
@@ -73,6 +77,10 @@ def generate_panel(
     with request.app.state.session_factory() as session:
         if session.get(models.Shot, shot_id) is None:
             raise HTTPException(status_code=404, detail="Shot not found")
+        try:
+            require_image_target_ready(session, "shot", shot_id)
+        except ShotGenerationNotReady as exc:
+            raise HTTPException(status_code=409, detail=exc.detail) from exc
         job = JobStore(session).create(
             "generate_panel", "shot", shot_id, {"activate": activate}
         )

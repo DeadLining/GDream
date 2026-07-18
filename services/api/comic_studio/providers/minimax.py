@@ -65,8 +65,10 @@ operations. For panel mode, prioritize composition, character identity, scene co
 style. For video mode, prioritize first-frame continuity, action timing, camera movement, and temporal
 stability. When visual_reviews are present, treat their annotations and conversation as requested
 revisions while respecting the stated scope and preserving all unrelated identity and continuity
-constraints. Report visual_review in used_context when that feedback affects the draft. Do not use
-Markdown fences."""
+constraints. Use director.camera for framing and director.objects only for relative position and
+horizontal facing; ignore pose, expression, gaze, and scale. Use library_assets for bound scene and
+prop continuity. Report director_camera, director_blocking, library_assets, and visual_review in
+used_context whenever those sources affect the draft. Do not use Markdown fences."""
 
 
 def _extract_text(payload: dict[str, Any]) -> str:

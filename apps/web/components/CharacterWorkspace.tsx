@@ -5,6 +5,7 @@ import {Fragment,useEffect,useRef,useState} from 'react';
 import {
   activateCharacterReference,
   approveModel3DJob,
+  bindLibraryAssetToScene,
   createCharacter,
   createLibraryAsset,
   createAssetVariant,
@@ -21,14 +22,17 @@ import {
   getAssetVariantStateImpact,
   getCharacterImpact,
   getLatestModel3DJob,
+  getShotGenerationReadiness,
   getEpisodeProductionGraph,
   createProductionRun,
   listCharacterReferences,
   listCharacter3DRepresentations,
+  listAssetRequirements,
   listLibraryAssets,
   listAssetVariants,
   mediaUrl,
   retryModelRuntimeJob,
+  syncAssetRequirements,
   updateAssetVariant,
   updateAssetVariantState,
   updateCharacterReference,
@@ -52,6 +56,7 @@ import type {
   Job,
   EpisodeSummary,
   ProjectSearchResult,
+  ShotGenerationReadiness,
 } from '../lib/types';
 import {
   AssetCatalogView,
@@ -64,6 +69,7 @@ import {
 import {AssetLineageCanvas} from './canvas/AssetLineageCanvas';
 import {normalizeAssetImpact} from '../lib/asset-impact';
 import {CharacterModelPreview} from './assets/CharacterModelPreview';
+import type {AssetRequirement,GenerationAssetRequest} from '../lib/shot-generation-readiness';
 
 const types:Array<[CharacterReferenceType,string]>=[
   ['primary','主参考'],['front','正面'],['three_quarter','四分之三'],
@@ -84,8 +90,15 @@ const modelMetadata=(metadata:Record<string,unknown>|undefined)=>{
   const morphTargets=Array.from(new Set((Array.isArray(metadata?.morph_targets)?metadata.morph_targets:[]).filter((name):name is string=>typeof name==='string'&&Boolean(name.trim())).map(name=>name.trim())));
   return{skinCount,jointCount,animationClips,morphTargets};
 };
+const defaultAssetRequest:GenerationAssetRequest={target:'character',shotId:'',requirementIds:[]};
+const requirementsForRequest=(items:AssetRequirement[],request:GenerationAssetRequest)=>items.filter(item=>{
+  if(item.kind!==request.target)return false;
+  if(request.requirementIds.length&&request.requirementIds.includes(item.id))return true;
+  const shotIds=Array.isArray(item.source_context.shot_ids)?item.source_context.shot_ids:[];
+  return Boolean(request.shotId&&shotIds.includes(request.shotId));
+});
 
-export function CharacterWorkspace({projectId,characters,episodes=[],searchTarget,onCharactersChanged,onMetricsChanged}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];searchTarget?:ProjectSearchResult|null;onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void}){
+export function CharacterWorkspace({projectId,characters,episodes=[],requestedAssetRequest=defaultAssetRequest,searchTarget,onCharactersChanged,onMetricsChanged,onReturnToShot,onOpenDirector}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];requestedAssetRequest?:GenerationAssetRequest;searchTarget?:ProjectSearchResult|null;onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void;onReturnToShot?:(shotId:string)=>void;onOpenDirector?:(shotId:string)=>void}){
   const [workspaceCharacters,setWorkspaceCharacters]=useState(characters);
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
@@ -93,6 +106,9 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
   const [assetData,setAssetData]=useState<Record<string,CharacterAssetCatalogData>>({});
   const [libraryAssets,setLibraryAssets]=useState<LibraryAsset[]>([]);
   const [libraryError,setLibraryError]=useState('');
+  const [assetRequirements,setAssetRequirements]=useState<AssetRequirement[]>([]);
+  const [assetRequirementError,setAssetRequirementError]=useState('');
+  const [generationReadiness,setGenerationReadiness]=useState<ShotGenerationReadiness|null>(null);
   const [error,setError]=useState('');
   const [generating,setGenerating]=useState(false);
   const [currentJob,setCurrentJob]=useState<Job|null>(null);
@@ -109,6 +125,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
   const loadRequests=useRef<Record<string,number>>({});
   const libraryLoadRequest=useRef(0);
   useEffect(()=>setWorkspaceCharacters(characters),[characters]);
+  useEffect(()=>setView('catalog'),[requestedAssetRequest]);
   const resolvedProjectId=projectId??workspaceCharacters[0]?.project_id??'';
   const character=workspaceCharacters.find(item=>item.id===selected)??workspaceCharacters[0];
   const references=character?assetData[character.id]?.references??[]:[];
@@ -116,7 +133,8 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
   const representations=character?assetData[character.id]?.representations??[]:[];
   const selectedScope=(()=>{if(modelScope.startsWith('state:')){const stateId=modelScope.slice(6);const variant=variants.find(item=>item.states.some(state=>state.id===stateId));return{variantId:variant?.id??null,stateId};}if(modelScope.startsWith('variant:'))return{variantId:modelScope.slice(8),stateId:null};return{variantId:null,stateId:null};})();
   const characterIds=workspaceCharacters.map(item=>item.id).join('|');
-  const searchCategory=searchTarget?.kind==='library_asset'&&searchTarget.library_asset_kind?searchTarget.library_asset_kind:'character';
+  const requestedRequirementIds=requestedAssetRequest.requirementIds.join('|');
+  const searchCategory=searchTarget?.kind==='library_asset'&&searchTarget.library_asset_kind?searchTarget.library_asset_kind:requestedAssetRequest.target;
 
   const load=async(id:string)=>{
     const request=(loadRequests.current[id]??0)+1;
@@ -176,16 +194,34 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
   };
   useEffect(()=>{void reloadLibraryAssets();},[resolvedProjectId]);
 
+  useEffect(()=>{
+    let active=true;
+    if(!resolvedProjectId||!requestedAssetRequest.shotId){setAssetRequirements([]);setAssetRequirementError('');return;}
+    void listAssetRequirements(resolvedProjectId,requestedAssetRequest.target).then(items=>{if(active){const next=requirementsForRequest(items,requestedAssetRequest);setAssetRequirements(next);setAssetRequirementError('');}}).catch(cause=>{if(active){setAssetRequirements([]);setAssetRequirementError(cause instanceof Error?cause.message:'无法读取镜头资产需求');}});
+    return()=>{active=false;};
+  },[resolvedProjectId,requestedAssetRequest.target,requestedAssetRequest.shotId,requestedRequirementIds]);
+  useEffect(()=>{if(requestedAssetRequest.target==='character'){const characterId=assetRequirements.find(item=>item.binding_id)?.binding_id;if(characterId&&workspaceCharacters.some(item=>item.id===characterId))setSelected(characterId);}},[requestedAssetRequest.target,assetRequirements,characterIds]);
+  useEffect(()=>{let active=true;if(!requestedAssetRequest.shotId){setGenerationReadiness(null);return;}void getShotGenerationReadiness(requestedAssetRequest.shotId).then(value=>{if(active)setGenerationReadiness(value);}).catch(()=>{if(active)setGenerationReadiness(null);});return()=>{active=false;};},[requestedAssetRequest.shotId]);
+
+  const refreshAssetRequirements=async()=>{
+    if(!resolvedProjectId||!requestedAssetRequest.shotId)return;
+    const [items,readiness]=await Promise.all([syncAssetRequirements(resolvedProjectId),getShotGenerationReadiness(requestedAssetRequest.shotId)]);
+    setAssetRequirements(requirementsForRequest(items,requestedAssetRequest));
+    setGenerationReadiness(readiness);
+    setAssetRequirementError('');
+  };
+
   const addLibraryAsset=async(data:LibraryAssetCreate)=>{
     if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建资产');
-    await createLibraryAsset(resolvedProjectId,data);
+    const created=await createLibraryAsset(resolvedProjectId,data);
     await reloadLibraryAssets();
     await onMetricsChanged?.();
+    return created;
   };
   const editLibraryAsset=async(id:string,data:LibraryAssetPatch)=>{await updateLibraryAsset(id,data);await reloadLibraryAssets();};
   const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();await onMetricsChanged?.();};
-  const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();await onMetricsChanged?.();};
-  const generateLibraryImage=async(id:string)=>{const started=await generateLibraryAssetImage(id);const finished=await pollJob(started.job_id);if(finished.status==='failed')throw new Error(finished.error||'场景参考图生成失败');await reloadLibraryAssets();await onMetricsChanged?.();};
+  const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();await refreshAssetRequirements();await onMetricsChanged?.();};
+  const generateLibraryImage=async(id:string)=>{const started=await generateLibraryAssetImage(id);const finished=await pollJob(started.job_id);if(finished.status==='failed')throw new Error(finished.error||'场景参考图生成失败');await reloadLibraryAssets();await refreshAssetRequirements();await onMetricsChanged?.();};
   const generateLibraryModel=async(id:string,referenceAssetId:string)=>{
     const started=await generateModel3D('library_asset',id,referenceAssetId);
     const finished=await pollJob(started.job_id);
@@ -193,10 +229,18 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
     return finished;
   };
   const approveLibraryModel=async(jobId:string)=>{await approveModel3DJob(jobId);await reloadLibraryAssets();await onMetricsChanged?.();};
+  const bindLibraryAsset=async(assetId:string,requirementId:string)=>{
+    const requirement=assetRequirements.find(item=>item.id===requirementId);
+    if(!requirement)throw new Error('镜头资产需求已变化，请重新进入');
+    const sceneIds=(Array.isArray(requirement.source_context.scene_ids)?requirement.source_context.scene_ids:[]).filter((item):item is string=>typeof item==='string');
+    if(!sceneIds.length)throw new Error('缺少需求对应的场景');
+    for(const sceneId of sceneIds)await bindLibraryAssetToScene(sceneId,assetId);
+    await reloadLibraryAssets();await refreshAssetRequirements();await onMetricsChanged?.();
+  };
   const loadLibraryModelJob=(id:string)=>getLatestModel3DJob('library_asset',id);
   const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
   const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
-  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
+  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} requirements={assetRequirements} requirementError={assetRequirementError} generationReadiness={generationReadiness} onBindLibraryAsset={bindLibraryAsset} onReturnToShot={requestedAssetRequest.shotId&&onReturnToShot?()=>onReturnToShot(requestedAssetRequest.shotId):undefined} onOpenDirector={requestedAssetRequest.shotId&&onOpenDirector?()=>onOpenDirector(requestedAssetRequest.shotId):undefined} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
 
   if(!character)return catalog;
 
@@ -269,7 +313,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
       const failedLabel=metadata?.failed_type?labels[metadata.failed_type]:'图片';
       throw new Error(`${failedLabel}生成失败：${finished.error||String(metadata?.error_code??'未知错误')}`);
     }
-    await load(character.id);
+    await load(character.id);await refreshAssetRequirements();
   };
   const generate=async()=>{
     if(generating)return;
@@ -286,7 +330,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],searchTarge
     finally{setGenerating(false);}
   };
   const approve=async(reference:CharacterReference)=>{await updateCharacterReference(reference.id,{review_status:'approved'});await load(character.id);};
-  const activate=async(reference:CharacterReference)=>{await activateCharacterReference(character.id,reference.id);await load(character.id);await onMetricsChanged?.();};
+  const activate=async(reference:CharacterReference)=>{await activateCharacterReference(character.id,reference.id);await load(character.id);await refreshAssetRequirements();await onMetricsChanged?.();};
   const renameReference=async(reference:CharacterReference)=>{const label=editingReferenceLabel.trim();if(!label)return;try{await updateCharacterReference(reference.id,{label});setEditingReferenceId('');setEditingReferenceLabel('');await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'重命名参考图失败');}};
   const removeReference=async(reference:CharacterReference)=>{const label=reference.label||labels[reference.reference_type];if(reference.is_active||!window.confirm(`删除参考图「${label}」？`))return;try{await deleteCharacterReference(reference.id);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'删除参考图失败');}};
   const addVariant=async(data:Parameters<typeof createAssetVariant>[1])=>{await createAssetVariant(character.id,data);await load(character.id);};

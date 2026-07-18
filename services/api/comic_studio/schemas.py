@@ -991,6 +991,41 @@ class LibraryAssetRead(LibraryAssetCreate):
     updated_at: datetime
 
 
+AssetRequirementKind = Literal["character", "scene", "prop"]
+AssetRequirementStatus = Literal["missing", "pending", "ready"]
+
+
+class AssetRequirementRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    project_id: str
+    script_revision_id: str
+    kind: AssetRequirementKind
+    canonical_key: str
+    name: str
+    description: str
+    required: bool
+    status: AssetRequirementStatus
+    binding_type: str
+    binding_id: str | None
+    source_context: dict
+    metadata: dict
+    created_at: datetime
+    updated_at: datetime
+
+
+class ShotGenerationReadiness(BaseModel):
+    shot_id: str
+    project_id: str
+    script_revision_id: str
+    ready: bool
+    asset_ready: bool
+    blocking_ready: bool
+    camera_ready: bool
+    blockers: list[str]
+    requirement_ids: list[str]
+
+
 ReferenceType = Literal["primary", "front", "three_quarter", "side", "back", "expression", "outfit"]
 
 
@@ -1357,6 +1392,11 @@ class ProductionGraphShotRead(BaseModel):
     dialogue_ids: list[str] = Field(default_factory=list)
     dialogue_count: int = 0
     speech_ready_count: int = 0
+    director_ready: bool = False
+    director_asset_ready: bool = False
+    director_blocking_ready: bool = False
+    director_camera_ready: bool = False
+    director_blockers: list[str] = Field(default_factory=list)
 
 
 class ProductionGraphAssetRead(BaseModel):

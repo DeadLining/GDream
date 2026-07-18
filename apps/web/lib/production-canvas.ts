@@ -1,5 +1,6 @@
 import type {EpisodeProductionGraph,ProductionCanvasLayout} from './types';
 import ELK from 'elkjs/lib/elk.bundled.js';
+import {directorNodePresentation} from './director-readiness-presentation';
 
 export type ProductionCanvasNode={
   id:string;
@@ -71,10 +72,11 @@ export function buildProductionCanvasGraph(
     const hasPanel=Boolean(shot.active_panel_asset_id);
     const reviewApproved=shot.review_status==='approved';
     const reviewBlocked=!hasPanel;
-    const videoBlocked=!hasPanel||!reviewApproved;
-    const videoBlockedReason=!hasPanel?'请先生成分镜画面':!reviewApproved?'请先完成视觉审阅':null;
-    nodes.push(
-      {id:directorId,type:'director',position:{x:820,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,optional:true,statusLabel:'可选',detail:'需要精确机位或角色站位时使用'}},
+	    const videoBlocked=!hasPanel||!reviewApproved;
+	    const videoBlockedReason=!hasPanel?'请先生成分镜画面':!reviewApproved?'请先完成视觉审阅':null;
+	    const directorPresentation=directorNodePresentation(shot);
+	    nodes.push(
+	      {id:directorId,type:'director',position:{x:820,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,optional:false,...directorPresentation}},
       {id:panelId,type:'panel-render',position:{x:1050,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,assetId:shot.active_panel_asset_id,mediaUrl:shot.active_panel_media_url,statusLabel:shot.active_panel_asset_id?'候选已生成':'待生成',executorLabel:panelBinding?'自定义工作流':'默认图片执行器',workflowLabel:panelBinding?`${panelBinding.workflow_id} · v${panelBinding.workflow_version}`:null}},
       {id:reviewId,type:'visual-review',position:{x:1280,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,status:shot.review_status,blocked:reviewBlocked,blockedReason:reviewBlocked?'请先生成分镜画面':null,statusLabel:reviewBlocked?'等待画面':reviewApproved?'已通过':'待审阅'}},
       {id:videoId,type:'video-render',position:{x:1510,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,assetId:shot.active_video_asset_id,mediaUrl:shot.active_video_media_url,blocked:videoBlocked,blockedReason:videoBlockedReason,statusLabel:shot.active_video_asset_id?'已生成':shot.video_render_status==='running'?'生成中':videoBlocked?'已锁定':'待生成',executorLabel:videoBinding?'自定义工作流':'默认视频执行器',workflowLabel:videoBinding?`${videoBinding.workflow_id} · v${videoBinding.workflow_version}`:null}},

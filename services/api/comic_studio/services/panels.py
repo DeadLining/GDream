@@ -8,6 +8,7 @@ from comic_studio import models
 from comic_studio.assets import AssetStore
 from comic_studio.providers.gpt_image import GPTImageProvider
 from comic_studio.services.grid_split import split_grid_image
+from comic_studio.services.panel_references import resolve_panel_generation_references
 from comic_studio.services.shot_inputs import ShotInputCompiler
 from comic_studio.services.skill_loader import get_skill_loader
 from comic_studio.services.visual_review_markup import render_visual_review_markup
@@ -262,67 +263,40 @@ class PanelService:
         compiled = ShotInputCompiler(self.session).compile(
             shot.id, usage_kinds={"panel", "reference"}
         )
-        present_character_ids = {
-            key for key in shot.character_state if isinstance(key, str)
-        } | {
-            line.character_id for line in shot.dialogue if line.character_id is not None
-        } | set(compiled.character_ids)
-        reference_assets: list[models.Asset] = []
+        generation_references = resolve_panel_generation_references(
+            self.session,
+            shot,
+            compiled,
+            max_non_tail_references=MAX_PANEL_REFERENCE_IMAGES,
+        )
+        tail_reference = next(
+            (
+                item
+                for item in generation_references
+                if item.role == "previous_shot_tail"
+            ),
+            None,
+        )
+        tail_asset = tail_reference.asset if tail_reference is not None else None
+        non_tail_references = [
+            item
+            for item in generation_references
+            if item.role != "previous_shot_tail"
+        ]
+        reference_assets = [item.asset for item in non_tail_references]
+        director_preview_reference = next(
+            (
+                item
+                for item in non_tail_references
+                if item.role == "director_preview"
+            ),
+            None,
+        )
         director_preview = (
-            self.session.get(models.Asset, compiled.director_preview_asset_id)
-            if compiled.director_preview_asset_id
+            director_preview_reference.asset
+            if director_preview_reference is not None
             else None
         )
-        if director_preview is not None:
-            reference_assets.append(director_preview)
-        for _guidance_kind, guidance_asset_id in compiled.director_guidance_asset_ids:
-            guidance_asset = self.session.get(models.Asset, guidance_asset_id)
-            if guidance_asset is not None:
-                reference_assets.append(guidance_asset)
-        if present_character_ids:
-            references = list(
-                self.session.scalars(
-                    select(models.CharacterReference).where(
-                        models.CharacterReference.character_id.in_(
-                            present_character_ids
-                        ),
-                        models.CharacterReference.is_active.is_(True),
-                        models.CharacterReference.review_status == "approved",
-                    )
-                )
-            )
-            by_character: dict[str, list[models.CharacterReference]] = {}
-            for reference in references:
-                by_character.setdefault(reference.character_id, []).append(reference)
-            for character_id in present_character_ids:
-                candidates = by_character.get(character_id, [])
-                identity = next(
-                    (
-                        item
-                        for kind in ("primary", "front")
-                        for item in candidates
-                        if item.reference_type == kind
-                    ),
-                    None,
-                )
-                if identity is None:
-                    raise ValueError(f"missing_character_reference:{character_id}")
-                selected = [identity]
-                outfit = next(
-                    (item for item in candidates if item.reference_type == "outfit"),
-                    None,
-                )
-                if outfit is not None:
-                    selected.append(outfit)
-                for reference in selected:
-                    asset = self.session.get(models.Asset, reference.asset_id)
-                    if asset is not None:
-                        reference_assets.append(asset)
-        for asset_id in compiled.reference_asset_ids:
-            asset = self.session.get(models.Asset, asset_id)
-            if asset is not None and asset.id not in {item.id for item in reference_assets}:
-                reference_assets.append(asset)
-        reference_assets = reference_assets[:MAX_PANEL_REFERENCE_IMAGES]
         from comic_studio.services.art_style_loader import get_art_style_loader
 
         character_rules = "\n".join(
@@ -369,7 +343,6 @@ class PanelService:
                 f"- Annotations (normalized canvas geometry): {annotations}\n"
                 f"- Review conversation:\n{messages or '- no additional message'}"
             )
-        tail_asset = self._tail_frame_asset(shot)
         if tail_asset is not None and not (
             review_context and review_context.get("source_asset_id")
         ):
@@ -395,10 +368,13 @@ class PanelService:
                 "placement, and spatial proportions. Preserve character identity and "
                 "the requested visual style from the other references and prompt."
             )
-        if review_source is None and compiled.director_guidance_asset_ids:
+        if review_source is None and non_tail_references:
             guidance_lines = []
-            for guidance_kind, guidance_asset_id in compiled.director_guidance_asset_ids:
-                guidance_index = reference_indices.get(guidance_asset_id)
+            for reference in non_tail_references:
+                if reference.role != "director_guidance":
+                    continue
+                guidance_kind = reference.guidance_kind or ""
+                guidance_index = reference_indices.get(reference.asset.id)
                 if guidance_index is None:
                     continue
                 label = DIRECTOR_GUIDANCE_LABELS.get(guidance_kind, "guidance")

@@ -110,7 +110,7 @@ class DirectorObjectRead(BaseModel):
 
 class ShotCameraRead(BaseModel):
     model_config=ConfigDict(from_attributes=True)
-    id:str;stage_id:str;shot_id:str;version:int;position:list[float];target:list[float];rotation:list[float];focal_length_mm:float;near:float;far:float;shot_size:str;camera_motion:str;framing_guides:dict;object_overrides:dict;preview_asset_id:str|None;guidance_asset_ids:dict
+    id:str;stage_id:str;shot_id:str;version:int;position:list[float];target:list[float];rotation:list[float];focal_length_mm:float;near:float;far:float;shot_size:str;camera_motion:str;framing_guides:dict;object_overrides:dict;preview_asset_id:str|None;guidance_asset_ids:dict;initialized_from_shot_id:str|None
 
 
 class DirectorStageRead(BaseModel):

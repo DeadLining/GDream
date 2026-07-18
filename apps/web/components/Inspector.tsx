@@ -1,15 +1,19 @@
 'use client';
 import {useEffect, useState} from 'react';
 import {AudioLines, ChevronRight, Film, ImagePlus, Images, Save, Sparkles} from 'lucide-react';
-import {activatePanel, listPanelVersions, startPanelGeneration, updateShot} from '../lib/api';
+import {activatePanel, getShotGenerationReadiness, listPanelVersions, startPanelGeneration, updateShot} from '../lib/api';
 import {pollJob} from '../lib/jobs';
-import type {Asset, Job, ReviewStatus, Shot} from '../lib/types';
+import {applyShotGenerationBlockers,generationAssetRequest,shotGenerationBlockerLabels,shotGenerationConflictBlockers,type GenerationAssetRequest} from '../lib/shot-generation-readiness';
+import type {Asset, Job, ReviewStatus, Shot, ShotGenerationReadiness} from '../lib/types';
 import {JobStatus} from './JobStatus';
 import {PanelVersions} from './PanelVersions';
 
-export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue}: {shot:Shot;onShotUpdated?:(shot:Shot)=>void;onOpenMedia?:(mode:'panel'|'video')=>void;onOpenDialogue?:()=>void}) {
+export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue,onOpenAssets,onOpenDirector}: {shot:Shot;onShotUpdated?:(shot:Shot)=>void;onOpenMedia?:(mode:'panel'|'video')=>void;onOpenDialogue?:()=>void;onOpenAssets?:(request:GenerationAssetRequest)=>void;onOpenDirector?:()=>void}) {
   const [form, setForm] = useState(shot); const [assets, setAssets] = useState<Asset[]>([]); const [job, setJob] = useState<Job | null>(null); const [error, setError] = useState('');
   const [generatingPanel,setGeneratingPanel]=useState(false);
+  const [generationReadiness,setGenerationReadiness]=useState<ShotGenerationReadiness|null>(null);
+  const [readinessLoading,setReadinessLoading]=useState(true);
+  const [readinessError,setReadinessError]=useState('');
   useEffect(() => {
     let current = true;
     setForm(shot);
@@ -20,8 +24,9 @@ export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue}: {shot
       .catch(() => {if (current) setAssets([]);});
     return () => {current = false;};
   }, [shot]);
+  useEffect(()=>{let current=true;setReadinessLoading(true);setReadinessError('');setGenerationReadiness(null);getShotGenerationReadiness(shot.id).then(value=>{if(current)setGenerationReadiness(value);}).catch(()=>{if(current)setReadinessError('无法获取镜头生成条件');}).finally(()=>{if(current)setReadinessLoading(false);});return()=>{current=false;};},[shot.id]);
   const save = async () => {try {const updated = await updateShot(shot.id, {duration_seconds: Number(form.duration_seconds), composition: form.composition, camera_motion: form.camera_motion, image_prompt: form.image_prompt, negative_prompt: form.negative_prompt, review_status: form.review_status}); onShotUpdated?.(updated); setError('');} catch (cause) {setError(cause instanceof Error ? cause.message : '保存失败');}};
-  const generate = async () => {if(generatingPanel)return;setGeneratingPanel(true);setError('');setJob(null);try{const started = await startPanelGeneration(shot.id, true); const finished = await pollJob(started.job_id); setJob(finished); if (finished.status === 'succeeded') {setAssets(await listPanelVersions(shot.id)); onShotUpdated?.({...shot, active_panel_asset_id: String(finished.result_metadata.asset_id ?? shot.active_panel_asset_id)});}}catch(cause){setError(cause instanceof Error?cause.message:'画面生成失败');}finally{setGeneratingPanel(false);}};
+  const generate = async () => {if(generatingPanel)return;setGeneratingPanel(true);setError('');setJob(null);try{const latest=await getShotGenerationReadiness(shot.id);setGenerationReadiness(latest);if(!latest.ready){setError('生成条件已变化，请先补齐缺失项');return;}const started = await startPanelGeneration(shot.id, true); const finished = await pollJob(started.job_id); setJob(finished); if (finished.status === 'succeeded') {setAssets(await listPanelVersions(shot.id)); onShotUpdated?.({...shot, active_panel_asset_id: String(finished.result_metadata.asset_id ?? shot.active_panel_asset_id)});}}catch(cause){const blockers=shotGenerationConflictBlockers(cause,shot.id);if(blockers){setGenerationReadiness(current=>current?applyShotGenerationBlockers(current,blockers):current);setError('生成条件已变化，请先补齐缺失项');try{const latest=await getShotGenerationReadiness(shot.id);setGenerationReadiness(latest);setReadinessError('');}catch{setReadinessError('无法获取镜头生成条件');}}else setError(cause instanceof Error?cause.message:'画面生成失败');}finally{setGeneratingPanel(false);}};
   const activate = async (assetId: string) => {const updated = await activatePanel(shot.id, assetId); onShotUpdated?.(updated); setForm(updated);};
   const activePanel = assets.find(asset => asset.id === form.active_panel_asset_id);
   const stalePanelMessage=activePanel?.is_stale
@@ -31,6 +36,8 @@ export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue}: {shot
         ?'当前画面依赖的角色或导演输入已不可用'
         :'当前画面使用的角色、场景或导演输入已变化'
     :'';
+  const generationBlockers=shotGenerationBlockerLabels(generationReadiness);
+  const panelGenerationBlocked=readinessLoading||Boolean(readinessError)||generationReadiness?.ready!==true;
 
   return <aside className="inspector">
     <div className="inspector-heading"><span>镜头检查器</span><h2>镜头 {shot.position}</h2><p>{shot.shot_type.replaceAll('_', ' ')} · {shot.duration_seconds} 秒</p></div>
@@ -49,7 +56,8 @@ export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue}: {shot
       <details className="inspector-advanced"><summary>高级生成设置</summary><label htmlFor="shot-negative-prompt">负面提示词</label><textarea id="shot-negative-prompt" value={form.negative_prompt} onChange={event => setForm({...form, negative_prompt: event.target.value})} rows={2} className="prompt-field"/><div className="model-note"><Sparkles size={14}/><span>图像模型 <strong>gpt-image-2</strong></span></div></details>
       {error && <p className="form-error">{error}</p>}
       {stalePanelMessage&&<p className="panel-stale-notice" role="status">{stalePanelMessage}</p>}
-      <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate} disabled={generatingPanel}><ImagePlus size={18}/>{generatingPanel?'生成中':activePanel?.is_stale?'重新生成画面':'生成画面'}</button></div>
+      {(readinessLoading||readinessError||generationBlockers.length>0)&&<div className="shot-generation-gate" role="status"><strong>{readinessLoading?'正在检查生成条件':'生成条件未完成'}</strong>{readinessError&&<p>{readinessError}</p>}{generationBlockers.length>0&&<ul>{generationBlockers.map(item=><li key={item}>{item}</li>)}</ul>}<div>{generationReadiness&&!generationReadiness.asset_ready&&onOpenAssets&&<button type="button" onClick={()=>onOpenAssets(generationAssetRequest(generationReadiness))}>去完善资产</button>}{generationReadiness&&(!generationReadiness.blocking_ready||!generationReadiness.camera_ready)&&onOpenDirector&&<button type="button" onClick={onOpenDirector}>打开 3D 导演台</button>}</div></div>}
+      <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate} disabled={generatingPanel||panelGenerationBlocked}><ImagePlus size={18}/>{generatingPanel?'生成中':activePanel?.is_stale?'重新生成画面':'生成画面'}</button></div>
       <JobStatus job={job}/>
     </section>
     <PanelVersions assets={assets} activeId={form.active_panel_asset_id} onActivate={activate}/>

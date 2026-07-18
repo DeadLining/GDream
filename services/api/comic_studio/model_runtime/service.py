@@ -24,6 +24,7 @@ from comic_studio.services.character_reference_sets import (
     CharacterReferenceSetError,
     CharacterReferenceSetService,
 )
+from comic_studio.services.asset_requirements import require_image_target_ready
 from comic_studio.services.panels import PanelService
 from comic_studio.services.library_assets import LibraryAssetService
 from comic_studio.services.speech import SpeechService
@@ -295,6 +296,7 @@ class ModelRuntimeService:
     ):
         provider = self.adapters.create(Capability.IMAGE)
         with self.session_factory() as session:
+            require_image_target_ready(session, target_type, target_id)
             if target_type == "visual_review":
                 candidate = await VisualReviewService(session).generate_candidate(
                     target_id, self.data_root, provider

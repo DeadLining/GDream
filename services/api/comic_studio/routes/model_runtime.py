@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, BackgroundTasks, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from comic_studio.model_runtime.contracts import (
@@ -16,6 +16,10 @@ from comic_studio.model_runtime.contracts import (
 )
 from comic_studio.model_runtime.errors import ModelRuntimeError, RuntimeErrorCode
 from comic_studio.schemas import ProviderChannelUpdate
+from comic_studio.services.asset_requirements import (
+    ShotGenerationNotReady,
+    require_image_target_ready,
+)
 
 
 router = APIRouter(prefix="/api/model-runtime", tags=["model-runtime"])
@@ -140,6 +144,11 @@ def image(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
+    with request.app.state.session_factory() as session:
+        try:
+            require_image_target_ready(session, payload.target_type, payload.target_id)
+        except ShotGenerationNotReady as exc:
+            raise HTTPException(status_code=409, detail=exc.detail) from exc
     return _create_media_job(
         request,
         background_tasks,

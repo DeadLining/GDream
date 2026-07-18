@@ -17,7 +17,7 @@ export function DomainNode({id,data,type}:{id?:string;data:any;type?:string}){
   const view=presentation[nodeType]??{label:'生产节点',icon:Clapperboard,className:'generic'};
   const Icon=view.icon;
   const blocked=Boolean(data.blocked);
-  const complete=!blocked&&(nodeType==='visual-review'?data.status==='approved':nodeType==='tts'?Boolean(data.complete):Boolean(data.assetId));
+  const complete=!blocked&&(nodeType==='visual-review'?data.status==='approved':nodeType==='tts'||nodeType==='director'?Boolean(data.complete):Boolean(data.assetId));
   const detail=data.blockedReason??data.detail??data.statusLabel??'等待输入';
   return <button className={`production-domain-node type-${view.className} ${blocked?'blocked':''} ${data.optional?'optional':''} ${data.zoom<.55?'semantic-compact':''}`} aria-label={`镜头 ${shotLabel(data.shotPosition??data.shotId)} ${view.label}`} onClick={data.onSelect}>
     <Handle id="production-main" type="target" position={Position.Left} style={{top:nodeType==='panel-render'?'38%':'50%'}}/>

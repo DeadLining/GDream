@@ -7,10 +7,15 @@ from sqlalchemy import select
 from comic_studio import models, schemas
 from comic_studio.jobs import JobStore
 from comic_studio.repositories import EpisodeRepository
+from comic_studio.services.asset_requirements import (
+    AssetRequirementService,
+    CurrentScriptRevisionMissing,
+)
 from comic_studio.services.character_references import CharacterReferenceService
 from comic_studio.services.episode_ai_orchestrator import (
     EpisodeAIStageContext,
     EpisodeAIStageNeedsReview,
+    shot_generation_needs_review,
 )
 from comic_studio.services.render_review import RenderReviewService, review_to_payload
 from comic_studio.services.rendering import RenderingService
@@ -155,6 +160,22 @@ class EpisodeAIStageHandlers:
         _character_ids, shot_ids = self._episode_targets(context.episode_id)
         if not shot_ids:
             raise EpisodeAIStageNeedsReview("Episode has no shots")
+        blocked_shots = {}
+        with self.session_factory() as session:
+            readiness_service = AssetRequirementService(session)
+            for shot_id in shot_ids:
+                try:
+                    readiness = readiness_service.shot_readiness(shot_id)
+                except CurrentScriptRevisionMissing:
+                    blocked_shots = {}
+                    break
+                if readiness is not None and not readiness["ready"]:
+                    blocked_shots[shot_id] = {
+                        "blockers": readiness["blockers"],
+                        "requirement_ids": readiness["requirement_ids"],
+                    }
+        if blocked_shots:
+            raise shot_generation_needs_review(blocked_shots)
         asset_ids = []
         for shot_id in shot_ids:
             with self.session_factory() as session:

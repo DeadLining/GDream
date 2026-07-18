@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -32,3 +32,62 @@ class MediaPromptSuggestion(StrictPromptModel):
         if isinstance(value, list):
             return [item.strip() if isinstance(item, str) else item for item in value]
         return value
+
+
+class GenerationContextLibraryAsset(StrictPromptModel):
+    id: str
+    kind: Literal["scene", "prop", "costume", "sound"]
+    name: str
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class GenerationContextCamera(StrictPromptModel):
+    position: list[float]
+    target: list[float]
+    rotation: list[float]
+    focal_length_mm: float
+    shot_size: str
+    camera_motion: str
+    framing_guides: dict[str, Any] = Field(default_factory=dict)
+
+
+class GenerationContextDirectorObject(StrictPromptModel):
+    id: str
+    kind: str
+    source_type: str
+    source_id: str | None = None
+    label: str
+    position: list[float]
+    horizontal_facing_degrees: int
+
+
+class GenerationContextDirector(StrictPromptModel):
+    environment: dict[str, Any] = Field(default_factory=dict)
+    camera: GenerationContextCamera | None = None
+    objects: list[GenerationContextDirectorObject] = Field(default_factory=list)
+
+
+class GenerationContextReference(StrictPromptModel):
+    asset_id: str
+    label: str
+    media_url: str
+    media_type: str
+    role: Literal[
+        "previous_shot_tail",
+        "director_preview",
+        "director_guidance",
+        "character_reference",
+        "bound_asset",
+    ]
+    guidance_kind: str | None = None
+
+
+class ShotGenerationContext(StrictPromptModel):
+    shot_id: str
+    mode: Literal["panel", "video"]
+    snapshot_hash: str
+    prompt_constraints: str = ""
+    library_assets: list[GenerationContextLibraryAsset] = Field(default_factory=list)
+    director: GenerationContextDirector | None = None
+    references: list[GenerationContextReference] = Field(default_factory=list)

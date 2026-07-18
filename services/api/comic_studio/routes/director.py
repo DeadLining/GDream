@@ -101,6 +101,14 @@ def update_shot_camera(stage_id:str,shot_id:str,data:ShotCameraUpdateRequest,ses
     except DirectorVersionConflict as exc:raise _conflict(exc) from exc
 
 
+@router.post("/api/director-stages/{stage_id}/shots/{shot_id}/inherit-blocking",response_model=ShotCameraRead)
+def inherit_shot_blocking(stage_id:str,shot_id:str,data:DirectorVersionRequest,session:SessionDependency):
+    try:return DirectorStageService(session).inherit_blocking(stage_id,shot_id,data.expected_version)
+    except KeyError as exc:raise HTTPException(status_code=404,detail="Director camera not found") from exc
+    except ValueError as exc:raise HTTPException(status_code=422,detail=str(exc)) from exc
+    except DirectorVersionConflict as exc:raise _conflict(exc) from exc
+
+
 @router.post("/api/director-cameras/{camera_id}/preview",status_code=status.HTTP_201_CREATED)
 async def upload_camera_preview(camera_id:str,request:Request):
     form=await request.form();upload=form.get("file")

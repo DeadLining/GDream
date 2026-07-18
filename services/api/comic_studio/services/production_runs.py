@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from comic_studio import models, schemas
 from comic_studio.production import ProductionStore
 from comic_studio.repositories import EpisodeRepository
+from comic_studio.services.asset_requirements import (
+    AssetRequirementService,
+    CurrentScriptRevisionMissing,
+)
 from comic_studio.services.production_decision import (
     ACTIVE_RUN_STATUSES,
     ProductionDecisionService,
@@ -64,6 +68,32 @@ class ProductionRunService:
         # For shot_group scope, only snapshot the selected shots (and their dialogue).
         selected = set(shot_ids) if shot_ids is not None else None
         shots = [s for s in all_shots if selected is None or s.id in selected]
+        generation_readiness: dict[str, dict | None] = {}
+
+        def shot_generation_readiness(shot: models.Shot) -> dict | None:
+            if shot.id not in generation_readiness:
+                try:
+                    generation_readiness[shot.id] = AssetRequirementService(
+                        self.session
+                    ).shot_readiness(shot.id)
+                except CurrentScriptRevisionMissing:
+                    generation_readiness[shot.id] = None
+            return generation_readiness[shot.id]
+
+        def panel_state(shot: models.Shot, *, regenerate: bool):
+            already_ready = bool(
+                shot.active_panel_asset_id and shot.review_status == "approved"
+            )
+            if already_ready and not regenerate:
+                return "skipped", {"reason": "already_ready"}
+            readiness = shot_generation_readiness(shot)
+            if readiness is not None and not readiness["ready"]:
+                return "skipped", {
+                    "reason": "generation_not_ready",
+                    "blockers": readiness["blockers"],
+                }
+            return "queued", {}
+
         if "panels" in data.stages:
             if data.panel_generation_mode == "grid":
                 for scene in episode.scenes:
@@ -74,12 +104,27 @@ class ProductionRunService:
                     for index in range(0, len(scene_shots), 4):
                         chunk = scene_shots[index : index + 4]
                         position += 1
-                        ready = all(
+                        already_ready = all(
                             bool(s.active_panel_asset_id and s.review_status == "approved")
                             for s in chunk
                         )
-                        status = "queued" if data.regenerate_panels or not ready else "skipped"
-                        metadata = {} if status == "queued" else {"reason": "already_ready"}
+                        if already_ready and not data.regenerate_panels:
+                            status, metadata = "skipped", {"reason": "already_ready"}
+                        else:
+                            blocked_shots = {
+                                shot.id: readiness["blockers"]
+                                for shot in chunk
+                                if (readiness := shot_generation_readiness(shot))
+                                is not None
+                                and not readiness["ready"]
+                            }
+                            if blocked_shots:
+                                status, metadata = "skipped", {
+                                    "reason": "generation_not_ready",
+                                    "blocked_shots": blocked_shots,
+                                }
+                            else:
+                                status, metadata = "queued", {}
                         store.add_item(
                             run.id,
                             "panel",
@@ -92,9 +137,9 @@ class ProductionRunService:
             else:
                 for shot in shots:
                     position += 1
-                    ready = bool(shot.active_panel_asset_id and shot.review_status == "approved")
-                    status = "queued" if data.regenerate_panels or not ready else "skipped"
-                    metadata = {} if status == "queued" else {"reason": "already_ready"}
+                    status, metadata = panel_state(
+                        shot, regenerate=data.regenerate_panels
+                    )
                     store.add_item(run.id, "panel", "shot", shot.id, position=position, status=status, result_metadata=metadata)
         if "speech" in data.stages:
             for shot in shots:
@@ -118,5 +163,4 @@ class ProductionRunService:
                     status, metadata = "skipped", {"reason": "already_ready"}
                 store.add_item(run.id, "video", "shot", shot.id, position=position, status=status, result_metadata=metadata)
         return store.refresh_counters(run.id)
-
 

@@ -53,6 +53,11 @@ class Project(Base):
     storylines: Mapped[list[Storyline]] = relationship(
         back_populates="project", cascade="all, delete-orphan", order_by="Storyline.created_at"
     )
+    asset_requirements: Mapped[list[AssetRequirement]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="AssetRequirement.created_at",
+    )
 
 
 class Volume(Base):
@@ -437,7 +442,10 @@ class Shot(Base):
         back_populates="shot", cascade="all, delete-orphan", order_by="DialogueLine.position"
     )
     director_camera: Mapped[ShotCamera | None] = relationship(
-        back_populates="shot", cascade="all, delete-orphan", uselist=False
+        back_populates="shot",
+        cascade="all, delete-orphan",
+        uselist=False,
+        foreign_keys="ShotCamera.shot_id",
     )
     visual_review_threads: Mapped[list[VisualReviewThread]] = relationship(
         back_populates="shot", cascade="all, delete-orphan", order_by="VisualReviewThread.created_at"
@@ -623,11 +631,16 @@ class ShotCamera(Base):
     object_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
     preview_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     guidance_asset_ids: Mapped[dict] = mapped_column(JSON, default=dict)
+    initialized_from_shot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("shots.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     stage: Mapped[DirectorStage] = relationship(back_populates="shot_cameras")
-    shot: Mapped[Shot] = relationship(back_populates="director_camera")
+    shot: Mapped[Shot] = relationship(
+        back_populates="director_camera", foreign_keys=[shot_id]
+    )
     revisions: Mapped[list[DirectorRevision]] = relationship(back_populates="shot_camera")
 
 
@@ -815,6 +828,49 @@ class ScriptRevision(Base):
 
     document: Mapped[ScriptDocument] = relationship(back_populates="revisions")
     imports: Mapped[list[ScriptImport]] = relationship(back_populates="script_revision")
+    asset_requirements: Mapped[list[AssetRequirement]] = relationship(
+        back_populates="script_revision",
+        cascade="all, delete-orphan",
+        order_by="AssetRequirement.created_at",
+    )
+
+
+class AssetRequirement(Base):
+    __tablename__ = "asset_requirements"
+    __table_args__ = (
+        UniqueConstraint(
+            "script_revision_id",
+            "canonical_key",
+            name="uq_asset_requirement_revision_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    script_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("script_revisions.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(24), index=True)
+    canonical_key: Mapped[str] = mapped_column(String(240))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(24), default="missing", index=True)
+    binding_type: Mapped[str] = mapped_column(String(32), default="")
+    binding_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_context: Mapped[dict] = mapped_column(JSON, default=dict)
+    requirement_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    project: Mapped[Project] = relationship(back_populates="asset_requirements")
+    script_revision: Mapped[ScriptRevision] = relationship(
+        back_populates="asset_requirements"
+    )
 
 
 class ScriptChapter(Base):

@@ -1,8 +1,11 @@
 import {API_BASE,ApiError,apiRequest,json} from './core';
 import type {LibraryAsset,LibraryAssetCreate,LibraryAssetPatch} from '../types';
+import type {AssetRequirement,GenerationAssetTarget} from '../shot-generation-readiness';
 
 export const listLibraryAssets=(projectId:string)=>apiRequest<LibraryAsset[]>(`/api/projects/${projectId}/library-assets`);
 export const listSceneLibraryAssets=(sceneId:string)=>apiRequest<LibraryAsset[]>(`/api/scenes/${sceneId}/library-assets`);
+export const listAssetRequirements=(projectId:string,kind?:GenerationAssetTarget)=>apiRequest<AssetRequirement[]>(`/api/projects/${projectId}/asset-requirements${kind?`?kind=${encodeURIComponent(kind)}`:''}`);
+export const syncAssetRequirements=(projectId:string)=>apiRequest<AssetRequirement[]>(`/api/projects/${projectId}/asset-requirements/sync`,json('POST'));
 export const createLibraryAsset=(projectId:string,data:LibraryAssetCreate)=>apiRequest<LibraryAsset>(`/api/projects/${projectId}/library-assets`,json('POST',data));
 export const updateLibraryAsset=(id:string,data:LibraryAssetPatch)=>apiRequest<LibraryAsset>(`/api/library-assets/${id}`,json('PATCH',data));
 export async function uploadLibraryAssetMedia(id:string,file:Blob,filename='media'):Promise<LibraryAsset>{

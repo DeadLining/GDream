@@ -1,14 +1,33 @@
-from fastapi import APIRouter, HTTPException, Request
+from typing import Literal
+
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from comic_studio.prompt_suggestions import (
     MediaPromptSuggestion,
     MediaPromptSuggestionRequest,
+    ShotGenerationContext,
 )
 from comic_studio.providers.base import ProviderError
 from comic_studio.services.prompt_suggestions import PromptSuggestionService
 
 
 router = APIRouter(tags=["prompt-suggestions"])
+
+
+@router.get(
+    "/api/shots/{shot_id}/generation-context",
+    response_model=ShotGenerationContext,
+)
+def get_generation_context(
+    shot_id: str,
+    request: Request,
+    mode: Literal["panel", "video"] = Query(default="panel"),
+) -> ShotGenerationContext:
+    with request.app.state.session_factory() as session:
+        try:
+            return PromptSuggestionService(session, None).generation_context(shot_id, mode)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Shot not found") from exc
 
 
 @router.post(

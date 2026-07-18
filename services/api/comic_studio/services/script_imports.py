@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session, selectinload
 from comic_studio import models
 from comic_studio.redaction import redact
 from comic_studio.script_imports import ScriptImportConfirm, ScriptImportDraft
+from comic_studio.services.asset_requirements import (
+    AssetRequirementService,
+    CurrentScriptRevisionMissing,
+)
 
 
 class ScriptImportPlanner(Protocol):
@@ -277,6 +281,11 @@ class ScriptImportConfirmationService:
                             )
             script_import.status = "applied"
             script_import.applied_at = models.utc_now()
+            try:
+                AssetRequirementService(self.session).sync(project.id, commit=False)
+            except CurrentScriptRevisionMissing:
+                # Legacy imports may not be attached to a persistent script document.
+                pass
             self.session.commit()
             self.session.refresh(script_import)
             return script_import

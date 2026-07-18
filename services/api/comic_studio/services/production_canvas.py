@@ -2,6 +2,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
+from comic_studio.services.asset_requirements import (
+    AssetRequirementService,
+    CurrentScriptRevisionMissing,
+)
 
 
 class ProductionCanvasService:
@@ -84,6 +88,21 @@ class ProductionCanvasService:
                     )
                 )
 
+        readiness_service = AssetRequirementService(self.session)
+        director_readiness = {}
+        for shot in shots:
+            try:
+                readiness = readiness_service.shot_readiness(shot.id)
+            except CurrentScriptRevisionMissing:
+                readiness = None
+            director_readiness[shot.id] = readiness or {
+                "ready": False,
+                "asset_ready": False,
+                "blocking_ready": False,
+                "camera_ready": False,
+                "blockers": ["current_script_revision_missing"],
+            }
+
         return schemas.EpisodeProductionGraphRead(
             episode_id=episode.id,
             project_id=episode.project_id,
@@ -124,6 +143,13 @@ class ProductionCanvasService:
                     speech_ready_count=sum(
                         1 for line in shot.dialogue if line.audio_asset_id
                     ),
+                    director_ready=director_readiness[shot.id]["ready"],
+                    director_asset_ready=director_readiness[shot.id]["asset_ready"],
+                    director_blocking_ready=director_readiness[shot.id][
+                        "blocking_ready"
+                    ],
+                    director_camera_ready=director_readiness[shot.id]["camera_ready"],
+                    director_blockers=director_readiness[shot.id]["blockers"],
                 )
                 for shot in shots
             ],
