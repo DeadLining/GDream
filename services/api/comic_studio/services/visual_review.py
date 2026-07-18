@@ -343,6 +343,13 @@ class VisualReviewService:
             for shots in affected_by_character.values()
             for item in shots
         ] or [shot]
+        for affected_shot in affected_shots:
+            if affected_shot.id == shot.id:
+                continue
+            affected_shot.review_status = "needs_changes"
+            affected_shot.render_status = "pending"
+            affected_shot.active_video_asset_id = None
+            affected_shot.video_render_status = "pending"
         return {
             "scope": thread.modification_scope,
             "target_character_id": target_character_id,
