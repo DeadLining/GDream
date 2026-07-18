@@ -2,9 +2,11 @@ import asyncio
 from io import BytesIO
 
 from PIL import Image
+from sqlalchemy import select
 from comic_studio import models
 from comic_studio.model_runtime.contracts import Capability
 from comic_studio.providers.gpt_image import ImageResult
+from comic_studio.services.shot_inputs import ShotInputCompiler
 from comic_studio.services.visual_review import VisualReviewService
 
 
@@ -277,6 +279,58 @@ def test_visual_review_rejects_candidate_generated_for_another_shot(client):
 
     assert response.status_code==422
     assert response.json()["detail"]=="Candidate asset must be a panel for the review shot"
+
+
+def test_visual_review_cannot_accept_candidate_after_director_input_changes(client):
+    _project,shot_id,source_id,candidate_id=_graph(client)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        stage=models.DirectorStage(scene_id=shot.scene_id,environment={})
+        session.add(stage);session.flush()
+        camera=models.ShotCamera(
+            stage_id=stage.id,
+            shot_id=shot.id,
+            position=[0,1.6,5],
+            target=[0,1.2,0],
+        )
+        session.add(camera);session.flush()
+        compiled=ShotInputCompiler(session).compile(
+            shot.id,usage_kinds={"panel","reference"}
+        )
+        candidate_asset=session.get(models.Asset,candidate_id)
+        candidate_asset.request_metadata={
+            "input_snapshot":compiled.snapshot,
+            "input_snapshot_hash":compiled.snapshot_hash,
+        }
+        session.commit()
+
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"导演调整前候选","modification_scope":"shot"},
+    ).json()
+    candidate=client.post(
+        f"/api/visual-review-threads/{thread['id']}/candidates",
+        json={"asset_id":candidate_id,"generation_metadata":{}},
+    ).json()
+
+    with client.app.state.session_factory() as session:
+        camera=session.scalar(
+            select(models.ShotCamera).where(models.ShotCamera.shot_id==shot_id)
+        )
+        camera.position=[2,1.6,4]
+        camera.version+=1
+        session.commit()
+
+    accepted=client.post(f"/api/visual-review-candidates/{candidate['id']}/accept")
+
+    assert accepted.status_code==409
+    assert accepted.json()["detail"]=="Candidate panel is stale"
+    with client.app.state.session_factory() as session:
+        stored_candidate=session.get(models.VisualReviewCandidate,candidate['id'])
+        shot=session.get(models.Shot,shot_id)
+        assert stored_candidate.status=="ready"
+        assert shot.active_panel_asset_id is None
+        assert shot.review_status=="draft"
 
 
 def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(client):
