@@ -50,7 +50,17 @@ def _graph(client):
             request_metadata={}, parent_asset_id=source.id, checksum="candidate",
             review_status="draft",
         )
-        session.add_all([source,candidate]);session.commit()
+        session.add_all([source,candidate]);session.flush()
+        compiled=ShotInputCompiler(session).compile(
+            shot.id,usage_kinds={"panel","reference"}
+        )
+        provenance={
+            "input_snapshot":compiled.snapshot,
+            "input_snapshot_hash":compiled.snapshot_hash,
+        }
+        source.request_metadata=provenance
+        candidate.request_metadata=provenance
+        session.commit()
         return project,shot.id,source.id,candidate.id
 
 
