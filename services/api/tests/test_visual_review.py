@@ -358,8 +358,26 @@ def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(cli
             scene_id=shot.scene_id,position=2,shot_type="medium",duration_seconds=4,
             composition="林夏继续调查",camera_motion="static",
             character_state={character.id:{}},image_prompt="investigate",negative_prompt="",
+            review_status="approved",render_status="completed",
+            video_render_status="completed",
         )
-        session.add(other_shot);session.commit();other_shot_id=other_shot.id
+        session.add(other_shot);session.flush()
+        other_panel=models.Asset(
+            project_id=project["id"],kind=f"panel:{other_shot.id}",
+            local_path="other-panel.png",media_type="image/png",provider="test",
+            model="test",request_metadata={},checksum="other-panel",
+            review_status="approved",
+        )
+        other_video=models.Asset(
+            project_id=project["id"],kind=f"video:{other_shot.id}",
+            local_path="other-video.mp4",media_type="video/mp4",provider="test",
+            model="test",request_metadata={},checksum="other-video",
+            review_status="approved",parent_asset_id=other_panel.id,
+        )
+        session.add_all([other_panel,other_video]);session.flush()
+        other_shot.active_panel_asset_id=other_panel.id
+        other_shot.active_video_asset_id=other_video.id
+        session.commit();other_shot_id=other_shot.id
     thread=client.post(
         f"/api/shots/{shot_id}/visual-review-threads",
         json={"source_asset_id":source_id,"title":"降低惊恐感","modification_scope":"episode"},
@@ -393,6 +411,21 @@ def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(cli
         assert "降低惊恐感" in compiled.snapshot["asset_bindings"][0][
             "resolved_overrides"
         ]["visual_review_instruction"]
+        affected=session.get(models.Shot,other_shot_id)
+        assert affected.active_panel_asset_id==other_panel.id
+        assert affected.review_status=="needs_changes"
+        assert affected.render_status=="pending"
+        assert affected.active_video_asset_id is None
+        assert affected.video_render_status=="pending"
+
+    run=client.post(
+        f"/api/episodes/{thread['episode_id']}/production-runs",
+        json={"stages":["panels"]},
+    )
+    assert run.status_code==202
+    items=client.get(f"/api/production-runs/{run.json()['id']}/items").json()
+    affected_item=next(item for item in items if item["target_id"]==other_shot_id)
+    assert affected_item["status"]=="queued"
 
 
 def test_episode_scope_acceptance_targets_one_character_in_multi_character_shot(client):
