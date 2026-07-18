@@ -73,6 +73,55 @@ def test_generates_immutable_video_version_from_active_panel(db_session, tmp_pat
     assert provider.duration == 6
 
 
+def test_registering_active_panel_invalidates_existing_video(db_session, tmp_path):
+    project, shot, _panel = _eligible(db_session, tmp_path)
+    video = asyncio.run(
+        VideoService(db_session, tmp_path, Provider()).generate(shot.id, activate=True)
+    )
+
+    replacement = AssetStore(db_session, tmp_path).register_panel(
+        project_id=project.id,
+        shot_id=shot.id,
+        content=b"replacement-panel",
+        media_type="image/png",
+        provider="test",
+        model="image",
+        request_metadata={},
+        activate=True,
+    )
+
+    db_session.refresh(shot)
+    assert shot.active_panel_asset_id == replacement.id
+    assert shot.active_video_asset_id is None
+    assert shot.video_render_status == "pending"
+    assert db_session.get(models.Asset, video.id) is not None
+
+
+def test_activating_panel_version_invalidates_existing_video(db_session, tmp_path):
+    project, shot, _panel = _eligible(db_session, tmp_path)
+    replacement = AssetStore(db_session, tmp_path).register_panel(
+        project_id=project.id,
+        shot_id=shot.id,
+        content=b"inactive-replacement",
+        media_type="image/png",
+        provider="test",
+        model="image",
+        request_metadata={},
+        activate=False,
+    )
+    video = asyncio.run(
+        VideoService(db_session, tmp_path, Provider()).generate(shot.id, activate=True)
+    )
+
+    updated = AssetStore(db_session, tmp_path).activate_panel(shot.id, replacement.id)
+
+    assert updated is not None
+    assert updated.active_panel_asset_id == replacement.id
+    assert updated.active_video_asset_id is None
+    assert updated.video_render_status == "pending"
+    assert db_session.get(models.Asset, video.id) is not None
+
+
 def test_requires_approved_shot_and_active_panel(db_session, tmp_path):
     _, shot, _ = _eligible(db_session, tmp_path)
     shot.review_status = "draft"
