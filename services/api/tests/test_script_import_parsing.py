@@ -94,6 +94,15 @@ def test_draft_rejects_character_state_with_unknown_character_key():
         ScriptImportDraft.model_validate(payload)
 
 
+def test_draft_preserves_explicit_character_entity_kind():
+    payload = valid_draft().model_dump()
+    payload["characters"][0]["entity_kind"] = "character"
+
+    draft = ScriptImportDraft.model_validate(payload)
+
+    assert draft.characters[0].entity_kind == "character"
+
+
 def test_parser_persists_preview_without_mutating_project_graph(db_session):
     project = models.Project(
         title="已有项目",

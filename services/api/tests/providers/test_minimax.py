@@ -268,7 +268,33 @@ async def test_minimax_parses_script_import_with_import_specific_prompt():
 
     assert draft.episodes[0].scenes[0].shots[0].dialogue[0].speaker_draft_id == "char-1"
     assert "script import" in captured["body"]["system"].lower()
+    assert "never register props" in captured["body"]["system"].lower()
     assert captured["body"]["messages"][0]["content"].startswith("Structure this script")
+
+
+@pytest.mark.anyio
+async def test_minimax_retries_when_a_prop_is_registered_as_a_character():
+    requests = []
+    invalid = deepcopy(VALID_IMPORT_DRAFT)
+    invalid["characters"][0]["entity_kind"] = "prop"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        payload = invalid if len(requests) == 1 else VALID_IMPORT_DRAFT
+        return httpx.Response(
+            200, json={"content": [{"type": "text", "text": json.dumps(payload)}]}
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://api.minimaxi.com/anthropic"
+    ) as client:
+        draft = await MiniMaxProvider(api_key="secret", client=client).parse_script_import(
+            {"mode": "prose", "text": "林夏发现一枚记忆芯片"}
+        )
+
+    assert len(requests) == 2
+    assert "input should be 'character'" in requests[1]["messages"][-1]["content"].lower()
+    assert draft.characters[0].name == "林夏"
 
 
 @pytest.mark.anyio
