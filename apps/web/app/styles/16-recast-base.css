@@ -696,7 +696,7 @@ html { scrollbar-gutter: stable; }
   background: var(--color-app);
   padding: var(--space-4) var(--space-5) !important;
 }
-.review-discussion {
+.review-publish-sidebar {
   background: var(--color-surface) !important;
   padding: var(--space-5) !important;
 }
@@ -727,15 +727,6 @@ html { scrollbar-gutter: stable; }
 .review-safe-frame {
   border: 1px dashed rgb(148 163 184 / 0.4);
 }
-.review-comment-pin {
-  background: var(--color-accent-strong) !important;
-  color: #fff !important;
-  border-radius: var(--radius-circle) !important;
-  font-size: var(--fs-xs) !important;
-  font-weight: 700 !important;
-  box-shadow: 0 2px 8px rgb(99 102 241 / 0.4) !important;
-}
-
 /* —— 播放器底部传输栏 —— */
 .review-transport {
   background: var(--color-surface) !important;

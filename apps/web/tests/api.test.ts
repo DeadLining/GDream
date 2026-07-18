@@ -48,7 +48,6 @@ import {
   createVisualReviewCandidate,
   startVisualReviewGeneration,
   createReleaseCandidate,
-  createReviewThread,
   getReleaseGate,
   approveReleaseCandidate,
   publishReleaseCandidate,
@@ -499,11 +498,5 @@ describe('release publication api',()=>{
     await approveReleaseCandidate('release-1');
     await publishReleaseCandidate('release-1',{platform:'internal_master',idempotency_key:'episode-1:release-1:internal_master'});
     expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual(['/api/episodes/episode-1/release-candidates','/api/episodes/episode-1/release-candidates','/api/release-candidates/release-1/gate','/api/release-candidates/release-1/approve','/api/release-candidates/release-1/publish']);
-  });
-  it('creates a time-linked final review thread',async()=>{
-    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
-    vi.stubGlobal('fetch',fetchMock);
-    await createReviewThread('episode-1',{shot_id:'shot-2',timecode_seconds:3,severity:'major',title:'芯片反光过强'});
-    expect(fetchMock).toHaveBeenCalledWith('/api/episodes/episode-1/review-threads',expect.objectContaining({method:'POST',body:JSON.stringify({shot_id:'shot-2',timecode_seconds:3,severity:'major',title:'芯片反光过强'})}));
   });
 });

@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   getMockSshHosts: vi.fn(), getMockSshStatus: vi.fn(), startMockSsh: vi.fn(), stopMockSsh: vi.fn(),
   listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
   listVisualReviewThreads:vi.fn(),updateVisualReviewThread:vi.fn(),createVisualReviewMessage:vi.fn(),createVisualReviewThread:vi.fn(),acceptVisualReviewCandidate:vi.fn(),
-  listReviewThreads:vi.fn(),createReviewMessage:vi.fn(),updateReviewThread:vi.fn(),listReleaseCandidates:vi.fn(),
+  listReleaseCandidates:vi.fn(),
   listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindLibraryAssetToScene:vi.fn(),unbindLibraryAssetFromScene:vi.fn(),listAssetRequirements:vi.fn(),syncAssetRequirements:vi.fn(),
   searchProject:vi.fn(),
 }));
@@ -48,7 +48,7 @@ vi.mock('../lib/api', () => ({
   startMockSsh: mocks.startMockSsh, stopMockSsh: mocks.stopMockSsh,
   listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
   listVisualReviewThreads:mocks.listVisualReviewThreads,updateVisualReviewThread:mocks.updateVisualReviewThread,createVisualReviewMessage:mocks.createVisualReviewMessage,createVisualReviewThread:mocks.createVisualReviewThread,acceptVisualReviewCandidate:mocks.acceptVisualReviewCandidate,
-  listReviewThreads:mocks.listReviewThreads,createReviewMessage:mocks.createReviewMessage,updateReviewThread:mocks.updateReviewThread,listReleaseCandidates:mocks.listReleaseCandidates,
+  listReleaseCandidates:mocks.listReleaseCandidates,
   listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,listAssetRequirements:mocks.listAssetRequirements,syncAssetRequirements:mocks.syncAssetRequirements,
   searchProject:mocks.searchProject,
   mediaUrl: (path: string) => path,
@@ -159,7 +159,6 @@ describe('Workspace', () => {
     mocks.listStorylines.mockResolvedValue([]);
     mocks.getProjectOverviewMetrics.mockResolvedValue({project_id:'project-1',scene_count:1,script_locked:true,asset_total:0,asset_ready:0});
     mocks.listVisualReviewThreads.mockResolvedValue([]);
-    mocks.listReviewThreads.mockResolvedValue([]);
     mocks.listReleaseCandidates.mockResolvedValue([]);
     mocks.listLibraryAssets.mockResolvedValue([]);
     mocks.listAssetRequirements.mockResolvedValue([]);
@@ -545,7 +544,7 @@ describe('Workspace', () => {
     await userEvent.click(screen.getByRole('button', {name: '审核发布'}));
     expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
     expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
-    await userEvent.click(within(screen.getByLabelText('待处理评论')).getByRole('button', {name: /镜头 1/}));
+    expect(screen.queryByLabelText('待处理评论')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
   });
 

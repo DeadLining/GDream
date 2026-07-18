@@ -45,34 +45,6 @@ describe('ReviewPanel', () => {
     await waitFor(() => expect(mocks.threads).not.toHaveBeenCalled());
   });
 
-  it('derives one row per blocker shot and deduplicates blocker labels', () => {
-    mocks.threads.mockResolvedValue([]);
-    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={() => {}} />);
-
-    expect(screen.getByRole('heading', {name: '审核队列'})).toBeVisible();
-    const comments = within(screen.getByLabelText('待处理评论'));
-    expect(comments.getAllByRole('button')).toHaveLength(2);
-    expect(comments.getByRole('button', {name: /镜头 2/})).toHaveTextContent('缺少画面');
-    expect(comments.getByRole('button', {name: /镜头 2/})).toHaveTextContent('待审核');
-    expect(comments.getByRole('button', {name: /镜头 3/})).toHaveTextContent('待审核');
-    expect(comments.queryByRole('button', {name: /镜头 1/})).not.toBeInTheDocument();
-  });
-
-  it('paginates the review queue so the workspace stays on one screen', async () => {
-    const threads=Array.from({length:7},(_,index)=>({id:`review-${index+1}`,episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:index,severity:'major' as const,title:`审阅问题 ${index+1}`,status:'open' as const,created_at:'',updated_at:'',messages:[]}));
-    mocks.threads.mockResolvedValue(threads);
-    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={vi.fn()}/>);
-
-    const queue=within(screen.getByLabelText('待处理评论'));
-    expect(await queue.findByRole('button',{name:'审阅问题 1 镜头评论'})).toBeVisible();
-    expect(queue.queryByRole('button',{name:'审阅问题 5 镜头评论'})).not.toBeInTheDocument();
-    expect(screen.getByText('1 / 3')).toBeVisible();
-
-    await userEvent.click(screen.getByRole('button',{name:'下一页评论'}));
-    expect(await queue.findByRole('button',{name:'审阅问题 5 镜头评论'})).toBeVisible();
-    expect(queue.queryByRole('button',{name:'审阅问题 1 镜头评论'})).not.toBeInTheDocument();
-  });
-
   it('shows time-linked review and blocks publishing on critical issues', () => {
     mocks.threads.mockResolvedValue([]);
     render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={() => {}} />);
@@ -99,7 +71,7 @@ describe('ReviewPanel', () => {
 
   it('keeps compact review and publishing controls vertically reachable', () => {
     const styles=readAllStyles();
-    expect(styles).toMatch(/\.review-discussion\s*\{[^}]*overflow-y:\s*auto[^}]*\}/s);
+    expect(styles).toMatch(/\.review-publish-sidebar\s*\{[^}]*overflow-y:\s*auto[^}]*\}/s);
     expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*\{[^}]*height:\s*100%[^}]*overflow-y:\s*auto[^}]*\}/);
     expect(styles).toMatch(/@media\s*\(max-width:\s*899px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{(?=[^}]*flex:\s*0\s+0\s+auto)(?=[^}]*min-height:\s*0)[^}]*\}/);
     expect(styles).toMatch(/@media\s*\(max-width:\s*700px\)\s*\{[\s\S]*?\.review-publish-workspace\s*>\s*\.review-panel-header\s*\{[^}]*grid-template-columns:\s*1fr[^}]*\}/);
@@ -130,73 +102,9 @@ describe('ReviewPanel', () => {
     expect(screen.getByText('动态风险').parentElement).toHaveTextContent('中');
   });
 
-  it('routes a blocker row to the existing shot selection callback', async () => {
-    mocks.threads.mockResolvedValue([]);
+  it('uses transport and timeline filters without comment controls', async () => {
     const onSelectShot = vi.fn();
-    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={onSelectShot} />);
-
-    await userEvent.click(within(screen.getByLabelText('待处理评论')).getByRole('button', {name: /镜头 2/}));
-
-    expect(onSelectShot).toHaveBeenCalledWith('shot-2');
-  });
-
-  it('loads persisted review threads, sends a message, and resolves the selected issue', async()=>{
-    const thread={id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:2.5,severity:'critical' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[{id:'old-message',thread_id:'review-1',author_kind:'user' as const,content:'下巴轮廓偏离主设定',created_at:''}]};
-    mocks.threads.mockResolvedValue([thread]);
-    mocks.message.mockResolvedValue({id:'message-1',thread_id:'review-1',author_kind:'user',content:'恢复主设定脸型',created_at:''});
-    mocks.patch.mockResolvedValue({...thread,status:'resolved'});
-    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={vi.fn()}/>);
-
-    expect(await screen.findByRole('button',{name:'角色脸型漂移 镜头评论'})).toBeVisible();
-    expect(screen.getByText('下巴轮廓偏离主设定')).toBeVisible();
-    await userEvent.type(screen.getByLabelText('添加审阅评论'),'恢复主设定脸型');
-    await userEvent.click(screen.getByRole('button',{name:'发送评论'}));
-    await waitFor(()=>expect(mocks.message).toHaveBeenCalledWith('review-1',{author_kind:'user',content:'恢复主设定脸型'}));
-    await userEvent.click(screen.getByRole('button',{name:'解决角色脸型漂移'}));
-    await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('review-1',{status:'resolved'}));
-  });
-
-  it('opens the exact review thread selected by global search',async()=>{
-    const threads=[
-      {id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:1,severity:'major' as const,title:'光线偏暗',status:'open' as const,created_at:'',updated_at:'',messages:[]},
-      {id:'review-2',episode_id:'episode-1',shot_id:'shot-3',timecode_seconds:2,severity:'critical' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[]},
-    ];
-    mocks.threads.mockResolvedValue(threads);
-    render(<ReviewPanel episode={episode} readiness={readiness} initialShotId="shot-3" initialThreadId="review-2" onSelectShot={vi.fn()}/>);
-
-    const target=await screen.findByRole('button',{name:'角色脸型漂移 镜头评论'});
-    expect(target.closest('article')).toHaveClass('active');
-    expect(screen.getByRole('button',{name:'镜头 3'})).toHaveClass('active');
-  });
-
-  it('creates a time-linked review thread and reopens a resolved thread', async()=>{
-    const resolved={id:'review-resolved',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:1.5,severity:'minor' as const,title:'字幕位置',status:'resolved' as const,created_at:'',updated_at:'',messages:[]};
-    const created={id:'review-new',episode_id:'episode-1',shot_id:'shot-2',timecode_seconds:3,severity:'major' as const,title:'芯片反光过强',status:'open' as const,created_at:'',updated_at:'',messages:[]};
-    mocks.threads.mockResolvedValue([resolved]);
-    mocks.createThread.mockResolvedValue(created);
-    mocks.patch.mockResolvedValue({...resolved,status:'open'});
-    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={vi.fn()}/>);
-
-    await userEvent.click(screen.getByRole('button',{name:'新建终审评论'}));
-    await userEvent.type(screen.getByRole('textbox',{name:'评论标题'}),'芯片反光过强');
-    await userEvent.selectOptions(screen.getByRole('combobox',{name:'严重级别'}),'major');
-    await userEvent.clear(screen.getByRole('spinbutton',{name:'时间码秒数'}));
-    await userEvent.type(screen.getByRole('spinbutton',{name:'时间码秒数'}),'3');
-    await userEvent.click(screen.getByRole('button',{name:'保存评论'}));
-    await waitFor(()=>expect(mocks.createThread).toHaveBeenCalledWith('episode-1',{shot_id:'shot-2',timecode_seconds:3,severity:'major',title:'芯片反光过强'}));
-
-    await userEvent.click(screen.getByRole('button',{name:'已解决'}));
-    expect(await screen.findByRole('button',{name:'字幕位置 镜头评论'})).toBeVisible();
-    await userEvent.click(screen.getByRole('button',{name:'重开字幕位置'}));
-    await waitFor(()=>expect(mocks.patch).toHaveBeenCalledWith('review-resolved',{status:'open'}));
-  });
-
-  it('uses transport, timeline filters, comment pins, and approves the selected shot', async () => {
-    mocks.threads.mockResolvedValue([{id:'review-1',episode_id:'episode-1',shot_id:'shot-3',timecode_seconds:1.5,severity:'major',title:'动作节奏',status:'open',created_at:'',updated_at:'',messages:[]}]);
-    mocks.updateShot.mockResolvedValue({...episode.scenes[0].shots[2],review_status:'approved'});
-    const onSelectShot = vi.fn();
-    const onEpisodeChanged = vi.fn();
-    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={onSelectShot} onEpisodeChanged={onEpisodeChanged}/>);
+    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={onSelectShot}/>);
 
     await userEvent.click(screen.getByRole('button',{name:'下一镜头'}));
     expect(onSelectShot).toHaveBeenCalledWith('shot-3');
@@ -208,13 +116,7 @@ describe('ReviewPanel', () => {
     await userEvent.click(screen.getByRole('button',{name:'显示全部轨道'}));
     expect(screen.getByText('字幕',{selector:'label'})).toBeVisible();
     await userEvent.click(within(screen.getByLabelText('多轨时间线')).getByRole('button',{name:'镜头 3'}));
-
-    await userEvent.click(await screen.findByRole('button',{name:'画面评论 动作节奏'}));
-    expect(screen.getByRole('button',{name:'动作节奏 镜头评论'}).closest('article')).toHaveClass('active');
-
-    await userEvent.click(screen.getByRole('button',{name:'通过当前镜头审核'}));
-    await waitFor(() => expect(mocks.updateShot).toHaveBeenCalledWith('shot-3',{review_status:'approved'}));
-    expect(onEpisodeChanged).toHaveBeenCalled();
+    expect(screen.queryByRole('button',{name:/画面评论/})).not.toBeInTheDocument();
   });
 
   it('numbers timeline shots continuously across scenes',async()=>{
@@ -284,19 +186,6 @@ describe('ReviewPanel', () => {
     expect(screen.getByLabelText('时间线播放头')).toHaveStyle({left:'10%'});
   });
 
-  it('uses the current playback position for a new review comment',async()=>{
-    mocks.threads.mockResolvedValue([]);
-    mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
-    render(<ReviewPanel episode={timedEpisode} readiness={readyReadiness} onSelectShot={vi.fn()}/>);
-
-    const video=await screen.findByLabelText<HTMLVideoElement>('当前镜头视频');
-    Object.defineProperty(video,'currentTime',{configurable:true,writable:true,value:1.75});
-    fireEvent.timeUpdate(video);
-    await userEvent.click(screen.getByRole('button',{name:'新建终审评论'}));
-
-    expect(screen.getByRole('spinbutton',{name:'时间码秒数'})).toHaveValue(1.75);
-  });
-
   it('keeps final-preview playback on the absolute episode timeline',async()=>{
     mocks.threads.mockResolvedValue([]);
     mocks.getAsset.mockResolvedValue({id:'video-1',media_url:'/media/shot.mp4'});
@@ -312,25 +201,6 @@ describe('ReviewPanel', () => {
     fireEvent.timeUpdate(video);
 
     expect(screen.getByLabelText('时间线播放头')).toHaveStyle({left:'20%'});
-  });
-
-  it('starts review-aware AI generation when requesting shot changes',async()=>{
-    const thread={id:'review-1',episode_id:'episode-1',shot_id:'shot-1',timecode_seconds:2.5,severity:'major' as const,title:'角色脸型漂移',status:'open' as const,created_at:'',updated_at:'',messages:[{id:'message-1',thread_id:'review-1',author_kind:'user' as const,content:'恢复主设定脸型',created_at:''}]};
-    const visualThread={id:'visual-1',episode_id:'episode-1',shot_id:'shot-1',source_asset_id:'asset-1',title:'终审修改',status:'open' as const,modification_scope:'shot' as const,created_at:'',updated_at:'',annotations:[],messages:[],candidates:[]};
-    mocks.threads.mockResolvedValue([thread]);
-    mocks.updateShot.mockResolvedValue({...episode.scenes[0].shots[0],review_status:'needs_changes'});
-    mocks.visualThreads.mockResolvedValue([visualThread]);
-    mocks.visualMessage.mockResolvedValue({id:'visual-message',thread_id:'visual-1',author_kind:'user',content:'角色脸型漂移\n恢复主设定脸型',created_at:''});
-    mocks.visualGenerate.mockResolvedValue({job_id:'visual-job',status:'queued'});
-    mocks.poll.mockResolvedValue({id:'visual-job',status:'succeeded',result_metadata:{candidate_id:'candidate-1'}});
-    const focusedReadiness={...readiness,blockers:{missing_panels:[],unapproved_shots:['shot-1'],missing_speech:[]}};
-    render(<ReviewPanel episode={episode} readiness={focusedReadiness} onSelectShot={vi.fn()}/>);
-
-    await userEvent.click(await screen.findByRole('button',{name:'要求修改'}));
-
-    await waitFor(()=>expect(mocks.visualGenerate).toHaveBeenCalledWith('visual-1'));
-    expect(mocks.visualMessage).toHaveBeenCalledWith('visual-1',expect.objectContaining({author_kind:'user',content:expect.stringContaining('角色脸型漂移')}));
-    expect(await screen.findByText('修改候选已生成，请到视觉审阅确认')).toBeVisible();
   });
 
   it('renders a preview before separately gating, approving, and publishing it', async()=>{

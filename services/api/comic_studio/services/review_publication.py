@@ -212,12 +212,6 @@ class ReviewPublicationService:
         if candidate is None:
             return None
         readiness = ReadinessService(self.session).inspect(candidate.episode_id)
-        statement = select(models.ReviewThread.id).where(
-            models.ReviewThread.episode_id == candidate.episode_id,
-            models.ReviewThread.severity == "critical",
-            models.ReviewThread.status == "open",
-        )
-        open_critical = list(self.session.scalars(statement))
         production_ready = bool(readiness and readiness["video_ready"])
         qc_pass = candidate.qc_snapshot.get("overall_pass") is True
         render_current = self.candidate_render_is_current(candidate)
@@ -225,10 +219,10 @@ class ReviewPublicationService:
         if not render_current:
             blockers["stale_render"] = [candidate.id]
         return schemas.ReleaseGateRead(
-            ready=production_ready and qc_pass and render_current and not open_critical,
+            ready=production_ready and qc_pass and render_current,
             production_ready=production_ready,
             production_blockers=blockers,
-            open_critical_threads=open_critical,
+            open_critical_threads=[],
         )
 
     def approve(self, candidate_id: str):

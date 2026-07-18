@@ -149,15 +149,6 @@
 .review-global-note { display: grid; gap: 5px; margin-top: 10px; color: var(--muted-strong); font-size: 10px; font-weight: 700; }
 .narrative-inspector-actions { display: grid; gap: 8px; margin-top: 16px; }
 .danger-action { border-color: var(--color-danger-border) !important; color: var(--danger-strong) !important; background: var(--color-danger-bg) !important; }
-.review-discussion-header-actions { display: flex; align-items: center; gap: 7px; }
-.review-discussion-header-actions > button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); cursor: pointer; }
-.review-thread-form { display: grid; gap: 9px; margin: 8px 10px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface-subtle); }
-.review-thread-form > header { display: flex; align-items: center; justify-content: space-between; }
-.review-thread-form > header button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted-strong); cursor: pointer; }
-.review-thread-form label { display: grid; gap: 4px; color: var(--muted-strong); font-size: 10px; font-weight: 700; }
-.review-thread-form > div { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
-.review-thread-form input, .review-thread-form select { width: 100%; min-width: 0; height: 32px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 0 8px; color: var(--ink); }
-.review-thread-form > small { color: var(--muted); font-size: 10px; }
 .project-settings-page { min-height: 0; display: grid; grid-template-columns: 190px minmax(0,1fr) 250px; overflow: hidden; background: var(--app); }
 .project-settings-nav, .project-settings-summary { min-width: 0; overflow: auto; background: var(--surface); padding: 16px; }
 .project-settings-nav { border-right: 1px solid var(--line); }

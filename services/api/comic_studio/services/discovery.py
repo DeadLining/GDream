@@ -272,10 +272,6 @@ class DiscoveryService:
         for item in tasks:
             results.append(self._result("task", item.id, item.title, item.description, project_id, episode_id=item.episode_id, scene_id=item.scene_id, shot_id=item.shot_id, status=item.status))
 
-        reviews = self.session.execute(select(models.ReviewThread, models.Episode).join(models.Episode, models.Episode.id == models.ReviewThread.episode_id).where(models.Episode.project_id == project_id, models.ReviewThread.title.ilike(like)).limit(12))
-        for item, episode in reviews:
-            results.append(self._result("review", item.id, item.title, f"{item.severity} · {item.status}", project_id, episode_id=episode.id, shot_id=item.shot_id, hierarchy=[project.title, episode.title], status=item.status))
-
         scripts = self.session.scalars(select(models.ScriptDocument).where(models.ScriptDocument.project_id == project_id, models.ScriptDocument.title.ilike(like)).limit(12))
         for item in scripts:
             results.append(self._result("script", item.id, item.title, item.status, project_id, status=item.status))
