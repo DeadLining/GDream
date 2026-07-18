@@ -394,6 +394,8 @@ class VisualReviewService:
         asset.review_status = "approved"
         shot.active_panel_asset_id = asset.id
         shot.review_status = "approved"
+        shot.active_video_asset_id = None
+        shot.video_render_status = "pending"
         candidate.generation_metadata = {
             **candidate.generation_metadata,
             "acceptance": acceptance,
