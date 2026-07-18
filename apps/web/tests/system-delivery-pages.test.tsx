@@ -5,7 +5,7 @@ import {ExportDelivery} from '../components/ExportDelivery';
 import type {EpisodeDetail,ProjectDetail} from '../lib/types';
 
 const systemMocks=vi.hoisted(()=>({
-  listReleaseCandidates:vi.fn(),listDeliveryPackages:vi.fn(),createDeliveryPackage:vi.fn(),deliveryPackageDownloadUrl:vi.fn(),
+  listReleaseCandidates:vi.fn(),getReleaseGate:vi.fn(),listDeliveryPackages:vi.fn(),createDeliveryPackage:vi.fn(),deliveryPackageDownloadUrl:vi.fn(),
 }));
 vi.mock('../lib/api',()=>systemMocks);
 
@@ -17,6 +17,7 @@ describe('system and delivery frontend pages',()=>{
   beforeEach(()=>{
     vi.clearAllMocks();
     systemMocks.listReleaseCandidates.mockResolvedValue([{id:'rc1',episode_id:'e1',version:'V5',render_path:'final.mp4',qc_snapshot:{},status:'approved',created_at:'',updated_at:''}]);
+    systemMocks.getReleaseGate.mockResolvedValue({ready:true,production_ready:true,production_blockers:{},open_critical_threads:[]});
     systemMocks.listDeliveryPackages.mockResolvedValue([]);
     systemMocks.createDeliveryPackage.mockResolvedValue({id:'dp1',project_id:'p1',episode_id:'e1',release_candidate_id:'rc1',preset_name:'个人交付包',outputs:[],checks:{release_candidate_approved:true,render_complete:true,archive_created:true},status:'completed',artifact_path:'delivery/dp1.zip',created_at:'',updated_at:''});
     systemMocks.deliveryPackageDownloadUrl.mockReturnValue('/api/delivery-packages/dp1/download');
@@ -56,6 +57,29 @@ describe('system and delivery frontend pages',()=>{
     expect(await screen.findByText('V10 已审核通过')).toBeVisible();
     await userEvent.click(screen.getByRole('button',{name:'生成交付包'}));
     expect(systemMocks.createDeliveryPackage).toHaveBeenCalledWith('e1',expect.objectContaining({release_candidate_id:'rc10'}));
+  });
+
+  it('blocks delivery before submission when the approved render is stale',async()=>{
+    systemMocks.getReleaseGate.mockResolvedValue({ready:false,production_ready:true,production_blockers:{stale_render:['rc1']},open_critical_threads:[]});
+
+    render(<ExportDelivery project={project} episode={episode}/>);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('V5 的成片已过期，请重新渲染并审核');
+    expect(screen.getByRole('button',{name:'生成交付包'})).toBeDisabled();
+    expect(systemMocks.getReleaseGate).toHaveBeenCalledWith('rc1');
+    expect(systemMocks.createDeliveryPackage).not.toHaveBeenCalled();
+  });
+
+  it('shows the release candidate version for each historical package',async()=>{
+    systemMocks.listReleaseCandidates.mockResolvedValue([
+      {id:'rc1',episode_id:'e1',version:'V1',render_path:'v1.mp4',qc_snapshot:{},status:'published',created_at:'2026-07-16T10:00:00Z',updated_at:''},
+      {id:'rc2',episode_id:'e1',version:'V2',render_path:'v2.mp4',qc_snapshot:{},status:'approved',created_at:'2026-07-17T10:00:00Z',updated_at:''},
+    ]);
+    systemMocks.listDeliveryPackages.mockResolvedValue([{id:'dp1',project_id:'p1',episode_id:'e1',release_candidate_id:'rc1',preset_name:'个人交付包',outputs:[],checks:{release_candidate_approved:true,render_complete:true,archive_created:true},status:'completed',artifact_path:'delivery/dp1.zip',created_at:'',updated_at:''}]);
+
+    render(<ExportDelivery project={project} episode={episode}/>);
+
+    expect(await screen.findByRole('button',{name:/个人交付包.*V1.*已完成/})).toBeVisible();
   });
 
   it('clears stale delivery state when switching episodes and loading fails',async()=>{
