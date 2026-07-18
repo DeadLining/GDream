@@ -5,7 +5,7 @@ import {ScriptLibrary} from '../components/ScriptLibrary';
 import type {ScriptDocument, ScriptDocumentSummary} from '../lib/types';
 
 const mocks=vi.hoisted(()=>({
-  list:vi.fn(),get:vi.fn(),project:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),removeRevision:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),
+  list:vi.fn(),get:vi.fn(),project:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),removeRevision:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),parse:vi.fn(),updateImport:vi.fn(),confirmImport:vi.fn(),
 }));
 
 vi.mock('../lib/api',async importOriginal=>({
@@ -15,6 +15,7 @@ vi.mock('../lib/api',async importOriginal=>({
   finalizeScript:mocks.finalize,streamDocumentScript:mocks.stream,
   listScriptRevisions:mocks.revisions,restoreScriptRevision:mocks.restore,deleteScriptRevision:mocks.removeRevision,
   listVolumes:mocks.volumes,listStorylines:mocks.storylines,getProject:mocks.project,
+  parseScript:mocks.parse,updateScriptImportDraft:mocks.updateImport,confirmScriptImport:mocks.confirmImport,
 }));
 
 const revision=(content='第一集',checksum='old')=>({id:'r1',document_id:'s1',revision_number:1,status:'working' as const,content,checksum,creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'',generation_brief:'',generation_metadata:{},created_at:'2026-07-12T00:00:00Z'});
@@ -31,6 +32,9 @@ beforeEach(()=>{
   mocks.upload.mockResolvedValue({...document,title:'story',source_type:'upload',revision_count:2,current_revision_id:'r2',current_revision:{...revision('第二版','new'),id:'r2',revision_number:2,status:'finalized',creation_method:'upload'}});mocks.revisions.mockResolvedValue([document.current_revision]);mocks.restore.mockResolvedValue({...document,current_revision_id:'r2',current_revision:{...revision(),id:'r2',revision_number:2,status:'finalized'}});
   mocks.volumes.mockResolvedValue([{id:'v1',project_id:'p1',position:1,title:'海底异变',summary:'',created_at:'',updated_at:'',episodes:[{id:'e1',project_id:'p1',volume_id:'v1',position:1,title:'第一集',premise:'',target_duration_seconds:60,status:'planned',created_at:'',updated_at:''}]}]);
   mocks.storylines.mockResolvedValue([{id:'l1',project_id:'p1',title:'真实时间裂缝',kind:'foreshadowing',color:'#B9473E',description:'',created_at:'',updated_at:'',events:[{id:'ev1',storyline_id:'l1',episode_id:'e1',scene_id:null,shot_id:null,position:1,stage:'setup',title:'海螺发光',description:'',setup_event_id:null,payoff_event_id:null,metadata:{},created_at:'',updated_at:''}]}]);
+  const structured={project:{title:'雨夜',logline:'追查芯片'},characters:[{entity_kind:'character',draft_id:'c1',name:'林夏',aliases:[],role:'主角',appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'银色耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:''}],episodes:[{draft_id:'e1',enabled:true,title:'第一集',premise:'发现芯片',target_duration_seconds:60,scenes:[{location:'天台',time_of_day:'night',summary:'追逐',continuity_state:{},props:[{name:'记忆芯片',description:'银色芯片',required:true}],estimated_duration_seconds:5,shots:[{shot_type:'wide',duration_seconds:5,composition:'天台',camera_motion:'push_in',character_state:{c1:{}},image_prompt:'roof',negative_prompt:'',dialogue:[]}]}]}],warnings:[]};
+  const parsed={id:'i1',project_id:'p1',script_revision_id:'r1',status:'ready',mode:'auto',source_format:'paste',original_filename:'',checksum:'x',extracted_text:'第一集',structured_draft:structured,error:'',error_category:'',created_at:'',updated_at:'',applied_at:null,generated_episode_ids:[]};
+  mocks.parse.mockResolvedValue(parsed);mocks.updateImport.mockResolvedValue(parsed);mocks.confirmImport.mockResolvedValue({...parsed,status:'applied'});
 });
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 
@@ -164,6 +168,21 @@ it('opens the new AI version before streaming chunks into its editor',async()=>{
   mocks.revisions.mockResolvedValue([finalized,document.current_revision]);
   finish();
   await waitFor(()=>expect(screen.queryByRole('button',{name:'停止生成'})).not.toBeInTheDocument());
+});
+
+it('parses the current script into a reviewable episode draft before confirmation',async()=>{
+  const onConfirmed=vi.fn();
+  const user=userEvent.setup();
+  render(<ScriptLibrary projectId="p1" onConfirmed={onConfirmed}/>);
+
+  await user.click(await screen.findByRole('button',{name:'解析为剧集'}));
+  expect(mocks.parse).toHaveBeenCalledWith('s1');
+  expect(await screen.findByRole('heading',{name:'场景道具'})).toBeVisible();
+  expect(screen.getByLabelText('第 1 集第 1 场道具 1 名称')).toHaveValue('记忆芯片');
+  await user.click(screen.getByRole('button',{name:'确认导入'}));
+  await waitFor(()=>expect(mocks.updateImport).toHaveBeenCalledWith('i1',expect.objectContaining({episodes:expect.any(Array)})));
+  expect(mocks.confirmImport).toHaveBeenCalledWith('i1');
+  expect(onConfirmed).toHaveBeenCalled();
 });
 
 it('opens the storyline canvas without replacing the script document',async()=>{
