@@ -17,6 +17,7 @@ from comic_studio.services.episode_ai_orchestrator import (
     EpisodeAIStageNeedsReview,
     shot_generation_needs_review,
 )
+from comic_studio.services.panel_freshness import PanelFreshnessService
 from comic_studio.services.render_review import RenderReviewService, review_to_payload
 from comic_studio.services.rendering import RenderingService
 from comic_studio.services.review_publication import ReviewPublicationService
@@ -181,6 +182,16 @@ class EpisodeAIStageHandlers:
             with self.session_factory() as session:
                 shot = session.get(models.Shot, shot_id)
                 asset_id = shot.active_panel_asset_id
+                if asset_id is not None:
+                    panel = session.get(models.Asset, asset_id)
+                    if (
+                        panel is None
+                        or panel.kind != f"panel:{shot_id}"
+                        or PanelFreshnessService(session)
+                        .inspect(shot_id, panel)
+                        .is_stale
+                    ):
+                        asset_id = None
             if asset_id is None:
                 asset = await self.model_runtime.execute_image(
                     "shot", shot_id, {"activate": True}
