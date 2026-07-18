@@ -12,7 +12,7 @@ const operationMocks=vi.hoisted(()=>({
   listProductionTasks:vi.fn(),updateProductionTask:vi.fn(),createProductionTask:vi.fn(),deleteProductionTask:vi.fn(),
   listEpisodeVersions:vi.fn(),createEpisodeVersion:vi.fn(),restoreEpisodeVersion:vi.fn(),
   listTrashItems:vi.fn(),restoreTrashItem:vi.fn(),permanentlyDeleteTrashItem:vi.fn(),
-  getWorkspaceSummary:vi.fn(),searchProject:vi.fn(),
+  getWorkspaceSummary:vi.fn(),searchProject:vi.fn(),previewProjectDeletion:vi.fn(),
 }));
 vi.mock('../lib/api',()=>operationMocks);
 
@@ -39,6 +39,7 @@ describe('operational frontend pages',()=>{
     operationMocks.listTrashItems.mockResolvedValue([{id:'trash-1',project_id:'p1',resource_type:'asset_variant_state',resource_id:'state-1',name:'左臂擦伤',original_location:['作品主设定','第03集雨夜造型','左臂擦伤'],lineage:['作品主设定','第03集雨夜造型','左臂擦伤'],deleted_by:'林默',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:14,can_permanently_delete:false}]);
     operationMocks.restoreTrashItem.mockResolvedValue({restored:true,resource_type:'asset_variant_state',resource_id:'state-1'});
     operationMocks.getWorkspaceSummary.mockResolvedValue({active_project_count:2,active_task_count:4,pending_review_count:3,updated_today_count:1,projects:[{project_id:'p1',title:'长安风云',logline:'雨夜中的失踪案',volume_count:3,episode_count:1,scene_count:1,shot_count:1,open_task_count:3,pending_review_count:1,completion_percent:62,current_stage:'分镜制作中',latest_task_titles:['审核分镜草稿','生成角色状态参考','补齐环境音'],updated_at:'2026-07-12T10:24:00Z'}]});
+    operationMocks.previewProjectDeletion.mockResolvedValue({project_id:'p1',title:'长安风云',deleted:{episodes:1,characters:1,assets:8}});
     operationMocks.searchProject.mockResolvedValue({query:'左臂',results:[{kind:'asset_state',id:'state-1',title:'左臂擦伤',subtitle:'雨夜造型',hierarchy:['作品主设定','集级变体','左臂擦伤'],status:'',project_id:'p1',episode_id:'e1',scene_id:null,shot_id:null,character_id:'c1',variant_id:'v1',state_id:'state-1',library_asset_id:null,library_asset_kind:null,reference_count:14},{kind:'library_asset',id:'library-1',title:'左臂护具',subtitle:'雨夜行动使用',hierarchy:['长安风云','道具资产','左臂护具'],status:'ready',project_id:'p1',episode_id:null,scene_id:null,shot_id:null,character_id:null,variant_id:null,state_id:null,library_asset_id:'library-1',library_asset_kind:'prop',reference_count:1},{kind:'shot',id:'shot-1',title:'镜头 01',subtitle:'林默进入营地',hierarchy:['长安风云','雨夜抉择','珊瑚营地','镜头 01'],status:'draft',project_id:'p1',episode_id:'e1',scene_id:'s1',shot_id:'shot-1',character_id:null,variant_id:null,state_id:null,library_asset_id:null,library_asset_kind:null,reference_count:0}]});
   });
 
@@ -67,6 +68,24 @@ describe('operational frontend pages',()=>{
     expect(screen.getByRole('heading',{name:'我的作品'})).toBeVisible();
     expect(screen.getByText('个人作品 6')).toBeVisible();
     expect(screen.getByRole('button',{name:'我的作品'})).toHaveAttribute('aria-current','page');
+  });
+
+  it('previews project impact before permanently deleting a personal project',async()=>{
+    const onDeleteProject=vi.fn().mockResolvedValue({project_id:'p1',title:'长安风云',deleted:{episodes:1,characters:1,assets:8},deleted_project_id:'p1',cleanup_warnings:[]});
+    render(<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={vi.fn()} onCreateProject={vi.fn()} onDeleteProject={onDeleteProject} onNavigate={vi.fn()}/>);
+
+    await userEvent.click(screen.getByRole('button',{name:'删除作品'}));
+
+    expect(await screen.findByRole('dialog',{name:'永久删除作品'})).toBeVisible();
+    expect(screen.getByText('1 个剧集')).toBeVisible();
+    expect(screen.getByText('1 个角色')).toBeVisible();
+    expect(screen.getByText('8 个媒体素材')).toBeVisible();
+    expect(operationMocks.previewProjectDeletion).toHaveBeenCalledWith('p1');
+    expect(onDeleteProject).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button',{name:'永久删除'}));
+
+    expect(onDeleteProject).toHaveBeenCalledWith('p1');
   });
 
   it('searches across assets, shots, scripts, and review work',async()=>{
