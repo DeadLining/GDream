@@ -395,6 +395,53 @@ def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(cli
         ]["visual_review_instruction"]
 
 
+def test_episode_scope_acceptance_targets_one_character_in_multi_character_shot(client):
+    project,shot_id,source_id,candidate_id=_graph(client)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        target=models.Character(
+            project_id=project["id"],name="林夏",role="主角",appearance_bible="短发",
+            personality="冷静",continuity_rules="保持脸型",negative_constraints="",
+            voice_speaker="v1",
+        )
+        other=models.Character(
+            project_id=project["id"],name="顾川",role="搭档",appearance_bible="卷发",
+            personality="谨慎",continuity_rules="保持发型",negative_constraints="",
+            voice_speaker="v2",
+        )
+        session.add_all([target,other]);session.flush()
+        shot.character_state={target.id:{},other.id:{}}
+        session.commit();target_id=target.id;other_id=other.id
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"林夏降低惊恐感","modification_scope":"episode"},
+    ).json()
+    candidate=client.post(
+        f"/api/visual-review-threads/{thread['id']}/candidates",
+        json={"asset_id":candidate_id,"generation_metadata":{}},
+    ).json()
+
+    missing_target=client.post(f"/api/visual-review-candidates/{candidate['id']}/accept")
+
+    assert missing_target.status_code==409
+    assert missing_target.json()["detail"]=="Target character is required for multi-character review scope"
+
+    accepted=client.post(
+        f"/api/visual-review-candidates/{candidate['id']}/accept",
+        json={"target_character_id":target_id},
+    )
+
+    assert accepted.status_code==200
+    metadata=accepted.json()["generation_metadata"]["acceptance"]
+    assert len(metadata["variant_ids"])==1
+    with client.app.state.session_factory() as session:
+        variant=session.get(models.AssetVariant,metadata["variant_ids"][0])
+        assert variant.character_id==target_id
+        assert session.scalar(
+            select(models.AssetVariant).where(models.AssetVariant.character_id==other_id)
+        ) is None
+
+
 def test_master_scope_acceptance_creates_new_master_version_and_impact(client):
     project,shot_id,source_id,candidate_id=_graph(client)
     with client.app.state.session_factory() as session:

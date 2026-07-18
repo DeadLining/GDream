@@ -2,7 +2,7 @@ import {act,cleanup, fireEvent, render, screen, waitFor, within} from '@testing-
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fitImageWithin,VisualReviewWorkspace} from '../components/VisualReviewWorkspace';
-import type {EpisodeDetail} from '../lib/types';
+import type {Character,EpisodeDetail} from '../lib/types';
 import {readAllStyles} from './_styles';
 
 const mocks = vi.hoisted(() => ({getAsset: vi.fn(),panelVersions:vi.fn(),threads:vi.fn(),patchThread:vi.fn(),message:vi.fn(),accept:vi.fn(),reject:vi.fn(),createThread:vi.fn(),annotation:vi.fn(),updateAnnotation:vi.fn(),deleteAnnotation:vi.fn(),startReview:vi.fn(),poll:vi.fn()}));
@@ -156,6 +156,27 @@ describe('VisualReviewWorkspace', () => {
     await waitFor(()=>expect(mocks.accept).toHaveBeenCalledWith('candidate-1'));
     expect(onCandidateAccepted).toHaveBeenCalledWith('asset-2');
     expect(screen.queryByRole('button',{name:'采纳候选'})).not.toBeInTheDocument();
+  });
+
+  it('requires an explicit target character before accepting multi-character episode feedback', async () => {
+    const candidate={id:'candidate-1',thread_id:'thread-1',asset_id:'asset-2',status:'ready' as const,generation_metadata:{scope:'episode'},created_at:'',updated_at:''};
+    const characters:Character[]=[
+      {id:'character-1',project_id:'project-1',name:'林夏',role:'主角',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:'',created_at:'',updated_at:''},
+      {id:'character-2',project_id:'project-1',name:'顾川',role:'搭档',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:'',created_at:'',updated_at:''},
+    ];
+    const multiCharacterEpisode:EpisodeDetail={...episode,scenes:[{...episode.scenes[0],shots:[{...episode.scenes[0].shots[0],character_state:{'character-1':{},'character-2':{}}}]}]};
+    mocks.getAsset.mockResolvedValue({id:'asset-1',media_url:'/media/frame.png'});
+    mocks.threads.mockResolvedValue([{...reviewThread,modification_scope:'episode' as const,candidates:[candidate]}]);
+    mocks.accept.mockResolvedValue({...candidate,status:'accepted'});
+
+    render(<VisualReviewWorkspace episode={multiCharacterEpisode} characters={characters} selectedShotId="shot-1"/>);
+    await screen.findByRole('img',{name:'角色发现线索'});
+
+    expect(screen.getByRole('button',{name:'采纳候选'})).toBeDisabled();
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'影响角色'}),'character-1');
+    await userEvent.click(screen.getByRole('button',{name:'采纳候选'}));
+
+    await waitFor(()=>expect(mocks.accept).toHaveBeenCalledWith('candidate-1',{target_character_id:'character-1'}));
   });
 
   it('shows real generation progress and keeps the original image when generation fails', async () => {
