@@ -49,7 +49,7 @@ def _register_render(client, project_id, episode_id, *, overall_pass=True, name=
     return relative_path
 
 
-def test_publish_gate_requires_resolved_critical_threads_and_is_idempotent(client):
+def test_publish_gate_ignores_retired_review_threads_and_is_idempotent(client):
     _project,episode,shot_id=_ready_episode(client)
     thread=client.post(
         f"/api/episodes/{episode['id']}/review-threads",
@@ -70,15 +70,10 @@ def test_publish_gate_requires_resolved_critical_threads_and_is_idempotent(clien
     assert candidate.status_code==201
     candidate=candidate.json()
 
-    blocked=client.post(f"/api/release-candidates/{candidate['id']}/approve")
-    assert blocked.status_code==409
-    assert blocked.json()["detail"]=="Release candidate is blocked"
     gate=client.get(f"/api/release-candidates/{candidate['id']}/gate").json()
-    assert gate["ready"] is False
-    assert gate["open_critical_threads"]==[thread["id"]]
+    assert gate["ready"] is True
+    assert gate["open_critical_threads"]==[]
 
-    resolved=client.patch(f"/api/review-threads/{thread['id']}",json={"status":"resolved"})
-    assert resolved.status_code==200
     approved=client.post(f"/api/release-candidates/{candidate['id']}/approve")
     assert approved.status_code==200
     assert approved.json()["status"]=="approved"

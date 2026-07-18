@@ -35,6 +35,16 @@ describe('ReviewPanel', () => {
   beforeEach(()=>{mocks.getAsset.mockResolvedValue({id:'asset-1',media_url:'/media/frame.png'});mocks.candidates.mockResolvedValue([]);mocks.renderReview.mockRejectedValue(new Error('No render review'));mocks.visualThreads.mockResolvedValue([]);});
   afterEach(()=>{cleanup();vi.clearAllMocks();});
 
+  it('does not expose the retired review comment workflow', async () => {
+    mocks.threads.mockResolvedValue([]);
+    render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={() => {}} />);
+
+    expect(screen.queryByRole('heading', {name: '审阅评论'})).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('待处理评论')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: '新建终审评论'})).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.threads).not.toHaveBeenCalled());
+  });
+
   it('derives one row per blocker shot and deduplicates blocker labels', () => {
     mocks.threads.mockResolvedValue([]);
     render(<ReviewPanel episode={episode} readiness={readiness} onSelectShot={() => {}} />);

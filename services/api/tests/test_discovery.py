@@ -210,3 +210,31 @@ def test_project_search_rejects_blank_and_caps_result_count(client):
     missing = client.get("/api/projects/missing/search", params={"q":"雨夜"})
     assert blank.status_code == 422
     assert missing.status_code == 404
+
+
+def test_project_search_omits_retired_review_comments(client):
+    project = _project(client)
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title":"第一集","premise":"寻找线索","target_duration_seconds":60},
+    ).json()
+    with client.app.state.session_factory() as session:
+        session.add(
+            models.ReviewThread(
+                episode_id=episode["id"],
+                shot_id=None,
+                timecode_seconds=0,
+                severity="critical",
+                title="角色脸型漂移",
+                status="open",
+            )
+        )
+        session.commit()
+
+    response = client.get(
+        f"/api/projects/{project['id']}/search",
+        params={"q":"角色脸型漂移"},
+    )
+
+    assert response.status_code == 200
+    assert all(item["kind"] != "review" for item in response.json()["results"])
