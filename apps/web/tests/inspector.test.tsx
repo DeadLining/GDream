@@ -2,11 +2,12 @@ import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {Inspector} from '../components/Inspector';
+import {ApiError} from '../lib/api/core';
 import type {Asset, Job, Shot} from '../lib/types';
 
 const mocks = vi.hoisted(() => ({
   listPanelVersions: vi.fn(), updateShot: vi.fn(), startPanelGeneration: vi.fn(),
-  activatePanel: vi.fn(), listVideoVersions: vi.fn(),
+  activatePanel: vi.fn(), listVideoVersions: vi.fn(), getShotGenerationReadiness:vi.fn(),
   pollJob: vi.fn(),
 }));
 vi.mock('../lib/api', () => ({...mocks, mediaUrl: (path:string) => path}));
@@ -30,7 +31,7 @@ function deferred<T>() {
 
 describe('Inspector', () => {
   afterEach(cleanup);
-  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);});
+  beforeEach(() => {vi.clearAllMocks();mocks.listPanelVersions.mockResolvedValue([]);mocks.listVideoVersions.mockResolvedValue([]);mocks.getShotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:[]});});
 
   it('keeps only shot controls in the inspector and routes heavy workflows to production', async () => {
     mocks.listPanelVersions.mockResolvedValue([asset]);
@@ -100,6 +101,45 @@ describe('Inspector', () => {
     await waitFor(()=>expect(mocks.listPanelVersions).toHaveBeenCalledTimes(2));
   });
 
+  it('blocks generation and routes each missing condition to the right workspace',async()=>{
+    const onOpenAssets=vi.fn();const onOpenDirector=vi.fn();
+    mocks.getShotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:false,asset_ready:false,blocking_ready:false,camera_ready:false,blockers:['missing_character_reference','missing_background','blocking_not_initialized','director_preview_missing'],requirement_ids:['requirement-1']});
+    render(<Inspector shot={shot} onOpenAssets={onOpenAssets} onOpenDirector={onOpenDirector}/>);
+
+    expect(await screen.findByText('缺少角色参考图')).toBeVisible();
+    expect(screen.getByText('缺少场景背景')).toBeVisible();
+    expect(screen.getByText('尚未建立镜头站位')).toBeVisible();
+    expect(screen.getByText('尚未保存导演预览')).toBeVisible();
+    expect(screen.getByRole('button',{name:'生成画面'})).toBeDisabled();
+    await userEvent.click(screen.getByRole('button',{name:'去完善资产'}));
+    await userEvent.click(screen.getByRole('button',{name:'打开 3D 导演台'}));
+    expect(onOpenAssets).toHaveBeenCalledWith({target:'character',shotId:'shot-1',requirementIds:['requirement-1']});expect(onOpenDirector).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes a missing background to the scene asset category',async()=>{
+    const onOpenAssets=vi.fn();
+    mocks.getShotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:true,blockers:['missing_background'],requirement_ids:['requirement-1']});
+    render(<Inspector shot={shot} onOpenAssets={onOpenAssets}/>);
+
+    await userEvent.click(await screen.findByRole('button',{name:'去完善资产'}));
+
+    expect(onOpenAssets).toHaveBeenCalledWith({target:'scene',shotId:'shot-1',requirementIds:['requirement-1']});
+  });
+
+  it('rechecks readiness immediately before starting generation',async()=>{
+    const ready={shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:[]};
+    const blocked={...ready,ready:false,camera_ready:false,blockers:['director_preview_missing']};
+    mocks.getShotGenerationReadiness.mockResolvedValueOnce(ready).mockResolvedValueOnce(blocked);
+    render(<Inspector shot={shot}/>);
+    const generate=await screen.findByRole('button',{name:'生成画面'});
+    await waitFor(()=>expect(generate).toBeEnabled());
+
+    await userEvent.click(generate);
+
+    expect(await screen.findByText('生成条件已变化，请先补齐缺失项')).toBeVisible();
+    expect(mocks.startPanelGeneration).not.toHaveBeenCalled();
+  });
+
   it('shows panel generation request failures and releases the action', async () => {
     mocks.startPanelGeneration.mockRejectedValue(new Error('本地 API 暂时不可用，请稍后重试'));
     render(<Inspector shot={shot}/>);
@@ -108,6 +148,26 @@ describe('Inspector', () => {
 
     expect(await screen.findByText('本地 API 暂时不可用，请稍后重试')).toBeVisible();
     expect(screen.getByRole('button',{name:'生成画面'})).toBeEnabled();
+  });
+
+  it('refreshes blockers when the panel request loses a readiness race',async()=>{
+    const onOpenAssets=vi.fn();const onOpenDirector=vi.fn();
+    const ready={shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:[]};
+    const blocked={...ready,ready:false,asset_ready:false,camera_ready:false,blockers:['missing_background','director_preview_missing']};
+    mocks.getShotGenerationReadiness.mockResolvedValueOnce(ready).mockResolvedValueOnce(ready).mockResolvedValueOnce(blocked);
+    mocks.startPanelGeneration.mockRejectedValue(new ApiError(JSON.stringify({code:'shot_generation_not_ready',blocked_shots:{'shot-1':blocked.blockers}}),409,JSON.stringify({code:'shot_generation_not_ready',blocked_shots:{'shot-1':blocked.blockers}})));
+    render(<Inspector shot={shot} onOpenAssets={onOpenAssets} onOpenDirector={onOpenDirector}/>);
+    const generate=await screen.findByRole('button',{name:'生成画面'});await waitFor(()=>expect(generate).toBeEnabled());
+
+    await userEvent.click(generate);
+
+    expect(await screen.findByText('生成条件已变化，请先补齐缺失项')).toBeVisible();
+    expect(screen.getByText('缺少场景背景')).toBeVisible();
+    expect(screen.getByText('尚未保存导演预览')).toBeVisible();
+    expect(screen.getByRole('button',{name:'生成画面'})).toBeDisabled();
+    expect(mocks.getShotGenerationReadiness).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('button',{name:'去完善资产'})).toBeVisible();
+    expect(screen.getByRole('button',{name:'打开 3D 导演台'})).toBeVisible();
   });
 
   it('activates panel versions without embedding dialogue editing', async () => {

@@ -5,6 +5,7 @@ from comic_studio.assets import AssetStore
 from comic_studio.providers.gpt_image import ImageResult
 from comic_studio.services.character_references import CharacterReferenceService
 from comic_studio.services.panels import PanelService
+from comic_studio.services.prompt_suggestions import PromptSuggestionService
 from comic_studio.services.shot_inputs import ShotInputCompiler
 from tests.test_character_references import PNG
 
@@ -241,6 +242,89 @@ def test_panel_generation_fails_when_present_character_lacks_reference(
         )
 
 
+def test_generate_panel_includes_character_placed_on_director_stage(
+    db_session, tmp_path
+):
+    project, shot = seed_shot(db_session)
+    character = models.Character(
+        project_id=project.id,
+        name="林夏",
+        role="主角",
+        appearance_bible="黑色风衣",
+        personality="冷静",
+        continuity_rules="耳钉",
+        voice_speaker="v1",
+    )
+    db_session.add(character)
+    db_session.flush()
+    reference, reference_asset = asyncio.run(
+        CharacterReferenceService(db_session, tmp_path).generate(
+            character.id,
+            "primary",
+            label="正面",
+            provider=FakeImageProvider(),
+        )
+    )
+    reference.review_status = "approved"
+    CharacterReferenceService(db_session, tmp_path).activate(character.id, reference.id)
+    stage = models.DirectorStage(scene_id=shot.scene_id, environment={})
+    db_session.add(stage)
+    db_session.flush()
+    db_session.add(
+        models.DirectorObject(
+            stage_id=stage.id,
+            kind="character",
+            source_type="character_reference",
+            source_id=character.id,
+            label=character.name,
+            transform={
+                "position": [0, 0, 0],
+                "rotation": [0, 0, 0],
+                "scale": [1, 1, 1],
+            },
+        )
+    )
+    db_session.add(
+        models.ShotCamera(
+            stage_id=stage.id,
+            shot_id=shot.id,
+            position=[0, 1.6, 5],
+            target=[0, 1.2, 0],
+            focal_length_mm=50,
+            shot_size="medium",
+            camera_motion="static",
+        )
+    )
+    db_session.commit()
+
+    class Provider:
+        model = "test-image"
+        references = None
+
+        async def edit(self, prompt, references, size="1024x1536", quality="auto"):
+            self.references = references
+            return ImageResult(PNG, media_type="image/png")
+
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("director character must use its approved reference")
+
+    provider = Provider()
+    context = PromptSuggestionService(db_session, None).generation_context(
+        shot.id, "panel"
+    )
+    asset = asyncio.run(
+        PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
+    )
+
+    assert provider.references == [(PNG, "image/png")]
+    assert [item.asset_id for item in context.references] == [reference_asset.id]
+    assert context.references[0].role == "character_reference"
+    assert context.references[0].label == "林夏 · 主参考图"
+    assert context.references[0].media_url == f"/media/{reference_asset.local_path}"
+    assert context.references[0].media_type == "image/png"
+    assert asset.request_metadata["reference_asset_ids"] == [reference_asset.id]
+
+
 def test_generate_panel_injects_previous_shot_tail_frame(db_session, tmp_path):
     """Tail-frame continuity (M3.2): a shot with ``previous_shot_tail_asset_id``
     should receive that asset as the first reference image, and the prompt should
@@ -300,6 +384,9 @@ def test_generate_panel_injects_previous_shot_tail_frame(db_session, tmp_path):
             raise AssertionError("must not use text-only generation")
 
     provider = Provider()
+    context = PromptSuggestionService(db_session, None).generation_context(
+        shot.id, "panel"
+    )
     asset = asyncio.run(
         PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
     )
@@ -308,6 +395,11 @@ def test_generate_panel_injects_previous_shot_tail_frame(db_session, tmp_path):
     assert provider.references[0] == (PNG, "image/png")
     assert "tail frame" in provider.prompt.lower()
     assert asset.request_metadata["reference_asset_ids"][0] == f"tail:{tail.id}"
+    assert [item.asset_id for item in context.references] == [tail.id, _asset.id]
+    assert [item.role for item in context.references] == [
+        "previous_shot_tail",
+        "character_reference",
+    ]
 
 
 def test_generate_panel_uses_saved_director_preview_as_composition_reference(
@@ -409,6 +501,9 @@ def test_generate_panel_uses_saved_director_preview_as_composition_reference(
         PanelService(db_session, tmp_path, provider).generate_panel(shot.id)
     )
 
+    context = PromptSuggestionService(db_session, None).generation_context(
+        shot.id, "panel"
+    )
     assert provider.references == [(PNG, "image/png")] * 5
     assert "3d director preview" in provider.prompt.lower()
     assert "silhouette guidance" in provider.prompt.lower()
@@ -422,6 +517,11 @@ def test_generate_panel_uses_saved_director_preview_as_composition_reference(
         depth.id,
         object_mask.id,
     ]
+    assert [item.asset_id for item in context.references] == asset.request_metadata[
+        "reference_asset_ids"
+    ]
+    assert context.references[0].label == "镜头 01 · 3D 导演构图"
+    assert context.references[1].label == "镜头 01 · 轮廓引导"
     assert asset.request_metadata["input_snapshot"]["director"]["camera"]["preview_asset_id"] == preview.id
     assert asset.request_metadata["input_snapshot"]["director"]["camera"]["guidance_asset_ids"] == camera.guidance_asset_ids
 
@@ -623,6 +723,9 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
             return ImageResult(PNG, media_type="image/png")
 
     provider = Provider()
+    context = PromptSuggestionService(db_session, None).generation_context(
+        shot.id, "panel"
+    )
     asset = asyncio.run(PanelService(db_session, tmp_path, provider).generate_panel(shot.id))
 
     assert "深色雨衣" in provider.prompt
@@ -664,4 +767,13 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "version" not in snapshot["director"]["camera"]
     assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id, costume_asset.id]
     assert costume_media.id in asset.request_metadata["reference_asset_ids"]
+    assert [item.asset_id for item in context.references] == asset.request_metadata[
+        "reference_asset_ids"
+    ]
+    assert any(
+        item.asset_id == costume_media.id
+        and item.role == "bound_asset"
+        and item.label == "黑色长风衣 · 服装"
+        for item in context.references
+    )
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64

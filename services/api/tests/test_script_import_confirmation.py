@@ -216,3 +216,42 @@ def test_confirmation_records_episode_provenance(client):
         ).one()
         assert link.episode_id == episode_ids[0]
         assert link.draft_episode_id == "ep-1"
+
+
+def test_confirmation_syncs_asset_requirements_for_current_script_revision(client):
+    project, import_id = _ready_import(client)
+    with client.app.state.session_factory() as session:
+        script_import = session.get(models.ScriptImport, import_id)
+        document = models.ScriptDocument(
+            project_id=project["id"],
+            title="主剧本",
+            source_type="paste",
+            status="ready",
+        )
+        session.add(document)
+        session.flush()
+        revision = models.ScriptRevision(
+            document_id=document.id,
+            revision_number=1,
+            status="finalized",
+            content="天台。林夏：别回头。",
+            checksum="confirmed-script",
+            creation_method="paste",
+        )
+        session.add(revision)
+        session.flush()
+        document.current_revision_id = revision.id
+        script_import.script_revision_id = revision.id
+        session.commit()
+
+    response = client.post(f"/api/script-imports/{import_id}/confirm", json={})
+
+    assert response.status_code == 200
+    requirements = client.get(
+        f"/api/projects/{project['id']}/asset-requirements"
+    )
+    assert requirements.status_code == 200
+    assert {item["kind"] for item in requirements.json()} == {
+        "character",
+        "scene",
+    }

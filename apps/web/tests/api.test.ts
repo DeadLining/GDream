@@ -18,6 +18,8 @@ import {
   createDirectorSuggestion,
   deleteDirectorObject,
   getDirectorStage,
+  getShotGenerationReadiness,
+  inheritDirectorBlocking,
   listDirectorRevisions,
   restoreDirectorRevision,
   updateDirectorStage,
@@ -69,6 +71,8 @@ import {
   unbindLibraryAssetFromScene,
   updateLibraryAsset,
   uploadLibraryAssetMedia,
+  listAssetRequirements,
+  syncAssetRequirements,
 } from '../lib/api';
 
 describe('apiRequest', () => {
@@ -139,6 +143,8 @@ describe('project library asset api',()=>{
     await listSceneLibraryAssets('scene-1');
     await bindLibraryAssetToScene('scene-1','asset-1');
     await unbindLibraryAssetFromScene('scene-1','asset-1');
+    await listAssetRequirements('project-1','scene');
+    await syncAssetRequirements('project-1');
     await deleteLibraryAsset('asset-1');
 
     expect(fetchMock.mock.calls.map(call=>[String(call[0]),(call[1] as RequestInit|undefined)?.method??'GET'])).toEqual([
@@ -149,6 +155,8 @@ describe('project library asset api',()=>{
       ['/api/scenes/scene-1/library-assets','GET'],
       ['/api/scenes/scene-1/library-assets/asset-1','PUT'],
       ['/api/scenes/scene-1/library-assets/asset-1','DELETE'],
+      ['/api/projects/project-1/asset-requirements?kind=scene','GET'],
+      ['/api/projects/project-1/asset-requirements/sync','POST'],
       ['/api/library-assets/asset-1','DELETE'],
     ]);
   });
@@ -292,17 +300,22 @@ describe('director api', () => {
     vi.stubGlobal('fetch',fetchMock);
     await createDirectorStage('scene-1');
     await getDirectorStage('scene-1');
+    await getShotGenerationReadiness('shot-1');
     await updateDirectorCamera('stage-1','shot-1',2,{focal_length_mm:85});
+    await inheritDirectorBlocking('stage-1','shot-1',3);
     await createDirectorSuggestion('stage-1','shot-1','shot_composition');
     await applyDirectorSuggestionToShot('stage-1','shot-1','suggestion-1',['composition']);
     expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual([
       '/api/scenes/scene-1/director-stage',
       '/api/scenes/scene-1/director-stage',
+      '/api/shots/shot-1/generation-readiness',
       '/api/director-stages/stage-1/shots/shot-1/camera',
+      '/api/director-stages/stage-1/shots/shot-1/inherit-blocking',
       '/api/director-stages/stage-1/suggestions',
       '/api/director-stages/stage-1/shots/shot-1/apply-to-shot',
     ]);
-    expect(fetchMock.mock.calls[2][1]).toMatchObject({method:'PUT',body:JSON.stringify({expected_version:2,camera:{focal_length_mm:85}})});
+    expect(fetchMock.mock.calls[3][1]).toMatchObject({method:'PUT',body:JSON.stringify({expected_version:2,camera:{focal_length_mm:85}})});
+    expect(fetchMock.mock.calls[4][1]).toMatchObject({method:'POST',body:JSON.stringify({expected_version:3})});
   });
 
   it('updates director environment settings with optimistic locking',async()=>{

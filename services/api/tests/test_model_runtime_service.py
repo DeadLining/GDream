@@ -8,6 +8,7 @@ from comic_studio.model_runtime.contracts import Capability, TextStreamRequest
 from comic_studio.model_runtime.errors import ModelRuntimeError, RuntimeErrorCode
 from comic_studio.model_runtime.service import ModelRuntimeService
 from comic_studio.providers.gpt_image import ImageResult
+from comic_studio.services.asset_requirements import ShotGenerationNotReady
 from tests.test_character_references import PNG
 
 
@@ -215,6 +216,72 @@ async def test_library_scene_asset_generation_uses_image_runtime_and_persists_me
         stored = session.get(models.LibraryAsset, asset_id)
         assert stored.media_asset_id == result["asset_id"]
         assert stored.media_asset.provider == "gpt-image"
+
+
+@pytest.mark.anyio
+async def test_internal_shot_image_execution_rejects_blocked_script_driven_shot(
+    tmp_path,
+):
+    service, adapter, character_id = image_runtime(tmp_path)
+    with service.session_factory() as session:
+        character = session.get(models.Character, character_id)
+        document = models.ScriptDocument(
+            project_id=character.project_id,
+            title="Runtime script",
+            source_type="upload",
+            status="ready",
+        )
+        session.add(document)
+        session.flush()
+        revision = models.ScriptRevision(
+            document_id=document.id,
+            revision_number=1,
+            status="finalized",
+            content="林夏站在雨夜天台。",
+            checksum="runtime-script",
+            creation_method="upload",
+        )
+        session.add(revision)
+        session.flush()
+        document.current_revision_id = revision.id
+        episode = models.Episode(
+            project_id=character.project_id,
+            title="Episode",
+            premise="Test",
+            target_duration_seconds=30,
+        )
+        session.add(episode)
+        session.flush()
+        scene = models.Scene(
+            episode_id=episode.id,
+            position=1,
+            location="雨夜天台",
+            summary="林夏等待",
+        )
+        session.add(scene)
+        session.flush()
+        shot = models.Shot(
+            scene_id=scene.id,
+            position=1,
+            shot_type="medium",
+            duration_seconds=4,
+            composition="林夏站在画面中央",
+            character_state={character.id: {}},
+        )
+        session.add(shot)
+        session.commit()
+        shot_id = shot.id
+
+    with pytest.raises(ShotGenerationNotReady) as raised:
+        await service.execute_image("shot", shot_id, {"activate": True})
+
+    assert raised.value.blocked_shots[shot_id] == [
+        "missing_character_reference",
+        "missing_background",
+        "blocking_not_initialized",
+        "director_preview_missing",
+    ]
+    assert adapter.generated_prompts == []
 
 
 @pytest.mark.anyio

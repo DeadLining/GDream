@@ -10,9 +10,9 @@ const fixture:EpisodeProductionGraph={
     {id:'scene-2',position:2,location:'正厅',summary:'冲突'},
   ],
   shots:[
-    {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'中景',duration_seconds:4,composition:'入场',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-1',active_panel_media_url:'/media/panel-1.png',active_video_asset_id:null,active_video_media_url:null},
-    {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'近景',duration_seconds:3,composition:'反应',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-2',active_panel_media_url:'/media/panel-2.png',active_video_asset_id:null,active_video_media_url:null,dialogue_ids:['line-1','line-2'],dialogue_count:2,speech_ready_count:1},
-    {id:'shot-3',scene_id:'scene-2',position:1,shot_type:'全景',duration_seconds:5,composition:'对峙',review_status:'draft',render_status:'pending',video_render_status:'pending',active_panel_asset_id:null,active_panel_media_url:null,active_video_asset_id:null,active_video_media_url:null},
+    {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'中景',duration_seconds:4,composition:'入场',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-1',active_panel_media_url:'/media/panel-1.png',active_video_asset_id:null,active_video_media_url:null,director_ready:true,director_asset_ready:true,director_blocking_ready:true,director_camera_ready:true,director_blockers:[]},
+    {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'近景',duration_seconds:3,composition:'反应',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-2',active_panel_media_url:'/media/panel-2.png',active_video_asset_id:null,active_video_media_url:null,dialogue_ids:['line-1','line-2'],dialogue_count:2,speech_ready_count:1,director_ready:false,director_asset_ready:true,director_blocking_ready:true,director_camera_ready:false,director_blockers:['director_preview_missing']},
+    {id:'shot-3',scene_id:'scene-2',position:1,shot_type:'全景',duration_seconds:5,composition:'对峙',review_status:'draft',render_status:'pending',video_render_status:'pending',active_panel_asset_id:null,active_panel_media_url:null,active_video_asset_id:null,active_video_media_url:null,director_ready:false,director_asset_ready:false,director_blocking_ready:false,director_camera_ready:false,director_blockers:['missing_background','blocking_not_initialized','director_preview_missing']},
   ],
   assets:[{id:'variant-1',kind:'variant',label:'主造型',media_url:null,version:1,status:'approved',shot_ids:['shot-1','shot-2']}],
   production_items:[],media_dependencies:[],workflow_bindings:[],
@@ -41,8 +41,14 @@ describe('production canvas graph',()=>{
       expect.objectContaining({source:'shot:shot-2',target:'director:shot-2',type:'dependency',sourceHandle:'director-branch',targetHandle:'production-main',data:expect.objectContaining({lineStyle:'dashed'})}),
       expect.objectContaining({source:'director:shot-2',target:'panel-render:shot-2:panel-2',type:'dependency',sourceHandle:'production-main',targetHandle:'director-branch',data:expect.objectContaining({lineStyle:'dashed'})}),
     ]));
-    expect(graph.nodes.find(node=>node.id==='director:shot-2')?.data).toEqual(expect.objectContaining({optional:true,statusLabel:'可选'}));
+    expect(graph.nodes.find(node=>node.id==='director:shot-2')?.data).toEqual(expect.objectContaining({optional:false,complete:false,statusLabel:'待完成',detail:'缺少预览'}));
     expect(graph.edges.some(edge=>edge.source==='dialogue:shot-2'&&edge.target==='tts:shot-2')).toBe(true);
+  });
+
+  it('shows a ready director node from authoritative shot readiness',()=>{
+    const graph=buildProductionCanvasGraph(fixture,{selectedShotId:'shot-1'});
+
+    expect(graph.nodes.find(node=>node.id==='director:shot-1')?.data).toEqual(expect.objectContaining({optional:false,complete:true,statusLabel:'已就绪',detail:'资产、站位和预览已保存'}));
   });
 
   it('locks review and video behind their real prerequisites',()=>{

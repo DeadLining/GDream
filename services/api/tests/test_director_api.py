@@ -165,6 +165,72 @@ def test_director_routes_create_stage_object_and_update_camera(client):
     assert camera.json()["focal_length_mm"]==85
 
 
+def test_director_route_inherits_previous_shot_blocking(client):
+    scene_id, first_shot_id = _scene_via_client(client)
+    with client.app.state.session_factory() as session:
+        scene = session.get(models.Scene, scene_id)
+        second = models.Shot(
+            scene_id=scene.id,
+            position=2,
+            shot_type="medium",
+            duration_seconds=5,
+            composition="反打",
+        )
+        session.add(second)
+        session.commit()
+        second_shot_id = second.id
+    stage = client.post(f"/api/scenes/{scene_id}/director-stage").json()
+    character = client.post(
+        f"/api/director-stages/{stage['id']}/objects",
+        json={
+            "expected_version": stage["version"],
+            "object": {
+                "kind": "character",
+                "source_type": "placeholder",
+                "label": "林夏",
+            },
+        },
+    ).json()
+    first_camera = next(
+        item for item in stage["shot_cameras"] if item["shot_id"] == first_shot_id
+    )
+    updated = client.put(
+        f"/api/director-stages/{stage['id']}/shots/{first_shot_id}/camera",
+        json={
+            "expected_version": first_camera["version"],
+            "camera": {
+                "object_overrides": {
+                    character["id"]: {
+                        "transform": {
+                            "position": [1.5, 0, 0],
+                            "rotation": [0, 0, 0],
+                            "scale": [1, 1, 1],
+                        }
+                    }
+                }
+            },
+        },
+    )
+    assert updated.status_code == 200
+    current = client.get(f"/api/scenes/{scene_id}/director-stage").json()
+    second_camera = next(
+        item
+        for item in current["shot_cameras"]
+        if item["shot_id"] == second_shot_id
+    )
+
+    inherited = client.post(
+        f"/api/director-stages/{stage['id']}/shots/{second_shot_id}/inherit-blocking",
+        json={"expected_version": second_camera["version"]},
+    )
+
+    assert inherited.status_code == 200
+    assert inherited.json()["initialized_from_shot_id"] == first_shot_id
+    assert inherited.json()["object_overrides"][character["id"]]["transform"][
+        "position"
+    ] == [1.5, 0.0, 0.0]
+
+
 def test_director_route_returns_structured_version_conflict(client):
     scene_id,shot_id=_scene_via_client(client);stage=client.post(f"/api/scenes/{scene_id}/director-stage").json()
     client.put(f"/api/director-stages/{stage['id']}/shots/{shot_id}/camera",json={"expected_version":1,"camera":{"focal_length_mm":85}})
@@ -304,7 +370,13 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     synced_stage = synced.json()
     assert synced_stage["environment"]["location"] == "天台"
     assert {item["kind"] for item in synced_stage["objects"]} == {"background", "character", "prop"}
-    assert len(synced_stage["objects"]) == 5
+    assert len(synced_stage["objects"]) == 4
+    synced_backgrounds = [
+        item for item in synced_stage["objects"] if item["kind"] == "background"
+    ]
+    assert len(synced_backgrounds) == 1
+    assert synced_backgrounds[0]["source_type"] == "library_asset"
+    assert synced_backgrounds[0]["source_id"] == scene_asset.id
     synced_character = next(item for item in synced_stage["objects"] if item["kind"] == "character")
     assert "image_url" not in synced_character["appearance"]
     assert synced_character["appearance"]["fallback_image_url"].endswith("/primary.png")
@@ -341,4 +413,4 @@ def test_director_asset_catalog_and_sync_use_real_character_references(client):
     )
     assert repeated.status_code == 200
     assert repeated.json()["version"] == synced_stage["version"]
-    assert len(repeated.json()["objects"]) == 5
+    assert len(repeated.json()["objects"]) == 4

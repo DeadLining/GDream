@@ -20,8 +20,8 @@ const graph:EpisodeProductionGraph={
   episode_id:'episode-1',project_id:'project-1',
   scenes:[{id:'scene-1',position:1,location:'庭院',summary:'相遇'}],
   shots:[
-    {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'中景',duration_seconds:4,composition:'入场',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-1',active_panel_media_url:'/media/panel-1.png',active_video_asset_id:null,active_video_media_url:null},
-    {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'近景',duration_seconds:3,composition:'反应',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-2',active_panel_media_url:'/media/panel-2.png',active_video_asset_id:null,active_video_media_url:null},
+    {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'中景',duration_seconds:4,composition:'入场',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-1',active_panel_media_url:'/media/panel-1.png',active_video_asset_id:null,active_video_media_url:null,director_ready:true,director_asset_ready:true,director_blocking_ready:true,director_camera_ready:true,director_blockers:[]},
+    {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'近景',duration_seconds:3,composition:'反应',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-2',active_panel_media_url:'/media/panel-2.png',active_video_asset_id:null,active_video_media_url:null,director_ready:false,director_asset_ready:true,director_blocking_ready:true,director_camera_ready:false,director_blockers:['director_preview_missing']},
   ],
   assets:[{id:'variant-1',kind:'variant',label:'唐代造型',media_url:null,version:1,status:'approved',shot_ids:['shot-1','shot-2']}],
   production_items:[],media_dependencies:[],workflow_bindings:[
@@ -40,6 +40,8 @@ it('renders scene groups, peer shots, shared assets, and the selected shot chain
   expect(screen.getByRole('button',{name:'镜头 01：中景'})).toBeVisible();
   expect(screen.getByRole('button',{name:'镜头 02：近景'})).toBeVisible();
   expect(screen.getByRole('button',{name:'唐代造型'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'镜头 02 3D 导演'})).toHaveTextContent('缺少预览');
+  expect(screen.getByRole('button',{name:'镜头 02 3D 导演'})).toHaveTextContent('待完成');
   expect(screen.getByRole('button',{name:/镜头 02 分镜渲染/})).toBeVisible();
 });
 

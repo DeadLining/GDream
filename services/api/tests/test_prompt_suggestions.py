@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 from pydantic import ValidationError
 
@@ -136,7 +138,46 @@ def _graph(session):
     session.commit()
     stage = DirectorStageService(session).get_or_create_stage(scene.id)
     stage.environment = {"rain": True}
-    stage.shot_cameras[1].focal_length_mm = 85
+    director_character = models.DirectorObject(
+        stage=stage,
+        kind="character",
+        source_type="placeholder",
+        label="林夏站位",
+        position=1,
+        transform={
+            "position": [0, 0, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1],
+        },
+        appearance={},
+        metadata={},
+        visible=True,
+    )
+    scene_asset = models.LibraryAsset(
+        project=project,
+        kind="scene",
+        name="雨夜天台",
+        description="湿润水泥地和霓虹护栏",
+        tags=["雨夜", "天台"],
+    )
+    session.add_all([director_character, scene_asset])
+    session.flush()
+    session.add(
+        models.LibraryAssetSceneBinding(library_asset=scene_asset, scene=scene)
+    )
+    camera = stage.shot_cameras[1]
+    camera.focal_length_mm = 85
+    camera.object_overrides = {
+        director_character.id: {
+            "transform": {
+                "position": [2, 0, -1],
+                "rotation": [0, math.pi / 2, 0],
+                "scale": [2, 2, 2],
+            },
+            "pose_preset": "action",
+            "facial_expression": "angry",
+        }
+    }
     session.commit()
     return shot, previous
 
@@ -156,11 +197,49 @@ async def test_prompt_suggestion_uses_bounded_trusted_context_without_mutating_s
     assert provider.context["characters"][0]["name"] == "林夏"
     assert provider.context["asset_usages"][0]["variant_label"] == "黑色风衣主造型"
     assert provider.context["director"]["camera"]["focal_length_mm"] == 85
+    assert "object_overrides" not in provider.context["director"]["camera"]
+    assert provider.context["director"]["objects"] == [
+        {
+            "id": provider.context["director"]["objects"][0]["id"],
+            "kind": "character",
+            "source_type": "placeholder",
+            "source_id": None,
+            "label": "林夏站位",
+            "position": [2, 0, -1],
+            "horizontal_facing_degrees": 90,
+        }
+    ]
+    assert provider.context["library_assets"][0]["name"] == "雨夜天台"
+    assert "scale" not in str(provider.context["director"]["objects"])
+    assert "pose_preset" not in str(provider.context["director"])
+    assert "facial_expression" not in str(provider.context["director"])
     assert provider.context["visual_reviews"][0]["scope"] == "shot"
     assert provider.context["visual_reviews"][0]["annotations"][0]["label"] == "眉眼区域"
     assert provider.context["visual_reviews"][0]["messages"][0]["content"] == "降低惊恐感，但不要改变脸型。"
     assert db_session.get(models.Shot, shot.id).image_prompt == "existing prompt"
     assert "api_key" not in str(provider.context).lower()
+
+
+def test_generation_context_previews_the_effective_compiled_inputs(db_session):
+    shot, _previous = _graph(db_session)
+
+    context = PromptSuggestionService(db_session, None).generation_context(
+        shot.id, "panel"
+    )
+
+    assert context.shot_id == shot.id
+    assert context.mode == "panel"
+    assert context.snapshot_hash
+    assert "Director camera" in context.prompt_constraints
+    assert context.library_assets[0].name == "雨夜天台"
+    assert context.director is not None
+    assert context.director.camera is not None
+    assert context.director.camera.focal_length_mm == 85
+    assert context.director.objects[0].label == "林夏站位"
+    assert context.director.objects[0].position == [2, 0, -1]
+    assert context.director.objects[0].horizontal_facing_degrees == 90
+    assert "scale" not in context.model_dump_json()
+    assert "pose_preset" not in context.model_dump_json()
 
 
 def test_prompt_suggestion_route_validates_mode_and_returns_reviewable_draft(client, monkeypatch):
@@ -180,6 +259,12 @@ def test_prompt_suggestion_route_validates_mode_and_returns_reviewable_draft(cli
     assert client.post(
         f"/api/shots/{shot_id}/prompt-suggestion", json={"mode": "invalid"}
     ).status_code == 422
+    context = client.get(
+        f"/api/shots/{shot_id}/generation-context", params={"mode": "panel"}
+    )
+    assert context.status_code == 200
+    assert context.json()["shot_id"] == shot_id
+    assert context.json()["mode"] == "panel"
 
     class FailingProvider:
         async def suggest_media_prompt(self, _context):

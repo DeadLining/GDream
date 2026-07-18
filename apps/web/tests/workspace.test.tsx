@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   getProjectOverviewMetrics:vi.fn(),
   getAsset: vi.fn(),
   createProject: vi.fn(), createEpisode: vi.fn(), startPlanning: vi.fn(),
-  listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
+  listPanelVersions: vi.fn(), getProductionReadiness: vi.fn(), getShotGenerationReadiness:vi.fn(), getShotGenerationContext:vi.fn(), getProviderHealth: vi.fn(), startRender: vi.fn(), pollJob: vi.fn(),
   getProductionRun: vi.fn(), createProductionRun: vi.fn(), continueProductionRun: vi.fn(), pauseProductionRun: vi.fn(),
   listProductionItems: vi.fn(), retryProductionRun: vi.fn(),
   getProviderChannels: vi.fn(), updateProviderChannel: vi.fn(), testProviderChannel: vi.fn(),
@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   listVideoVersions: vi.fn(), startVideoGeneration: vi.fn(), activateVideo: vi.fn(),
   listVisualReviewThreads:vi.fn(),updateVisualReviewThread:vi.fn(),createVisualReviewMessage:vi.fn(),createVisualReviewThread:vi.fn(),acceptVisualReviewCandidate:vi.fn(),
   listReviewThreads:vi.fn(),createReviewMessage:vi.fn(),updateReviewThread:vi.fn(),listReleaseCandidates:vi.fn(),
-  listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindLibraryAssetToScene:vi.fn(),unbindLibraryAssetFromScene:vi.fn(),searchProject:vi.fn(),
+  listLibraryAssets:vi.fn(),listSceneLibraryAssets:vi.fn(),bindLibraryAssetToScene:vi.fn(),unbindLibraryAssetFromScene:vi.fn(),listAssetRequirements:vi.fn(),syncAssetRequirements:vi.fn(),
+  searchProject:vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -33,6 +34,8 @@ vi.mock('../lib/api', () => ({
   createEpisode: mocks.createEpisode, startPlanning: mocks.startPlanning,
   listPanelVersions: mocks.listPanelVersions,
   getProductionReadiness: mocks.getProductionReadiness,
+  getShotGenerationReadiness:mocks.getShotGenerationReadiness,
+  getShotGenerationContext:mocks.getShotGenerationContext,
   getProviderHealth: mocks.getProviderHealth, startRender: mocks.startRender,
   getProductionRun: mocks.getProductionRun, createProductionRun: mocks.createProductionRun,
   continueProductionRun: mocks.continueProductionRun, pauseProductionRun: mocks.pauseProductionRun,
@@ -46,11 +49,13 @@ vi.mock('../lib/api', () => ({
   listVideoVersions: mocks.listVideoVersions, startVideoGeneration: mocks.startVideoGeneration, activateVideo: mocks.activateVideo,
   listVisualReviewThreads:mocks.listVisualReviewThreads,updateVisualReviewThread:mocks.updateVisualReviewThread,createVisualReviewMessage:mocks.createVisualReviewMessage,createVisualReviewThread:mocks.createVisualReviewThread,acceptVisualReviewCandidate:mocks.acceptVisualReviewCandidate,
   listReviewThreads:mocks.listReviewThreads,createReviewMessage:mocks.createReviewMessage,updateReviewThread:mocks.updateReviewThread,listReleaseCandidates:mocks.listReleaseCandidates,
-  listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,searchProject:mocks.searchProject,
+  listLibraryAssets:mocks.listLibraryAssets,listSceneLibraryAssets:mocks.listSceneLibraryAssets,bindLibraryAssetToScene:mocks.bindLibraryAssetToScene,unbindLibraryAssetFromScene:mocks.unbindLibraryAssetFromScene,listAssetRequirements:mocks.listAssetRequirements,syncAssetRequirements:mocks.syncAssetRequirements,
+  searchProject:mocks.searchProject,
   mediaUrl: (path: string) => path,
 }));
 vi.mock('../lib/jobs', () => ({pollJob: mocks.pollJob}));
 vi.mock('../components/ScriptLibrary',()=>({ScriptLibrary:({initialView,initialStorylineId,onConfirmed}:{initialView?:string;initialStorylineId?:string;onConfirmed:()=>void})=><main><h1>{initialView==='storyline'?'故事线画布':'剧本与版本'}</h1>{initialStorylineId&&<span>聚焦故事线 {initialStorylineId}</span>}<button onClick={onConfirmed}>模拟剧本状态变化</button></main>}));
+vi.mock('../components/director/DirectorWorkspace',()=>({DirectorWorkspace:({onReturnToGeneration}:{onReturnToGeneration?:()=>void})=><main><h1>3D 导演台</h1>{onReturnToGeneration&&<button type="button" onClick={onReturnToGeneration}>返回当前镜头生成</button>}</main>}));
 
 const project: Project = {
   id: 'project-1', title: '霓虹夜行', logline: '寻找记忆', story_bible: '近未来重庆',
@@ -157,10 +162,14 @@ describe('Workspace', () => {
     mocks.listReviewThreads.mockResolvedValue([]);
     mocks.listReleaseCandidates.mockResolvedValue([]);
     mocks.listLibraryAssets.mockResolvedValue([]);
+    mocks.listAssetRequirements.mockResolvedValue([]);
+    mocks.syncAssetRequirements.mockResolvedValue([]);
     mocks.listSceneLibraryAssets.mockResolvedValue([]);
     mocks.getAsset.mockResolvedValue({id: 'asset-2', kind: 'panel', media_url: '/media/panel.png', media_type: 'image/png', provider: 'test', model: 'test', generation_attempt: 1, review_status: 'approved', width: 1024, height: 1536, duration_seconds: null, created_at: ''});
     mocks.listVideoVersions.mockResolvedValue([]);
     mocks.getProductionReadiness.mockResolvedValue(readiness);
+    mocks.getShotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:[]});
+    mocks.getShotGenerationContext.mockResolvedValue({shot_id:'shot-1',mode:'panel',snapshot_hash:'hash',prompt_constraints:'',library_assets:[],director:null,references:[]});
     mocks.listProductionItems.mockResolvedValue([]);
     mocks.getMockSshHosts.mockResolvedValue([{id: 'a800_94', name: 'A800 94', type: 'ssh'}]);
     mocks.getMockSshStatus.mockResolvedValue({desired_running: false, state: 'stopped', host_id: null, alias: null, port: null, error: null, reused: false});
@@ -606,6 +615,52 @@ describe('Workspace', () => {
     expect(document.querySelector('.workspace-inspector')).not.toBeInTheDocument();
   });
 
+  it('opens the scene catalog for a missing background blocker', async () => {
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getShotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:true,blockers:['missing_background'],requirement_ids:[]});
+    mocks.listAssetRequirements.mockResolvedValue([{id:'req-scene',project_id:'project-1',script_revision_id:'revision-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜巷道',description:'发现芯片',required:true,status:'missing',binding_type:'',binding_id:null,source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''}]);
+
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('tab',{name:'分镜'}));
+    await userEvent.click(await screen.findByRole('button',{name:'去完善资产'}));
+
+    expect(await screen.findByRole('heading',{name:'场景资产'})).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('当前镜头需要：雨夜巷道');
+    await userEvent.click(screen.getByRole('button',{name:'返回原镜头'}));
+    expect(await screen.findByRole('heading',{name:'镜头 1'})).toBeVisible();
+    expect(screen.getByRole('tab',{name:'分镜'})).toHaveAttribute('aria-selected','true');
+  });
+
+  it('returns from assets and the director to the originating panel generation workspace',async()=>{
+    const needsAssets={shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:false,blockers:['missing_background','director_preview_missing'],requirement_ids:['req-scene']};
+    const needsDirector={...needsAssets,asset_ready:true,blockers:['director_preview_missing']};
+    const ready={...needsDirector,ready:true,camera_ready:true,blockers:[]};
+    mocks.listProjects.mockResolvedValue([project]);
+    mocks.getProject.mockResolvedValue(projectDetail);
+    mocks.getEpisode.mockResolvedValue(plannedEpisode);
+    mocks.getShotGenerationReadiness.mockResolvedValue(needsAssets);
+    mocks.listAssetRequirements.mockResolvedValue([{id:'req-scene',project_id:'project-1',script_revision_id:'revision-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜巷道',description:'发现芯片',required:true,status:'ready',binding_type:'library_asset',binding_id:'asset-scene',source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''}]);
+
+    render(<Workspace/>);
+    await userEvent.click(await screen.findByRole('tab',{name:'分镜'}));
+    await userEvent.click(screen.getByRole('button',{name:'管理分镜版本'}));
+    expect(await screen.findByRole('heading',{name:'分镜生成'})).toBeVisible();
+
+    mocks.getShotGenerationReadiness.mockResolvedValue(needsDirector);
+    await userEvent.click(screen.getByRole('button',{name:'去完善资产'}));
+    expect(await screen.findByRole('heading',{name:'场景资产'})).toBeVisible();
+    await userEvent.click(await screen.findByRole('button',{name:'打开 3D 导演台'}));
+    expect(await screen.findByRole('heading',{name:'3D 导演台'})).toBeVisible();
+
+    mocks.getShotGenerationReadiness.mockResolvedValue(ready);
+    await userEvent.click(screen.getByRole('button',{name:'返回当前镜头生成'}));
+
+    expect(await screen.findByRole('heading',{name:'分镜生成'})).toBeVisible();
+    expect(screen.getByRole('button',{name:'生成新分镜'})).toBeEnabled();
+  });
+
   it('keeps only the selected mobile work area visible', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query === '(max-width: 899px)',
@@ -726,6 +781,12 @@ describe('Workspace', () => {
   it('uses a non-clipping flex layout for toolbar, tabs, and workspace', () => {
     expect(workspaceStyles).toMatch(/\.app-shell\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column/);
     expect(workspaceStyles).toMatch(/\.workspace-grid\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0[^}]*height:\s*auto/);
+  });
+
+  it('keeps director readiness on a separate desktop toolbar row',()=>{
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)[\s\S]*?\.director-workspace\s*\{[^}]*grid-template-rows:\s*70px/);
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)[\s\S]*?\.director-toolbar\s*\{[^}]*row-gap:\s*0/);
+    expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)[\s\S]*?\.director-current-shot\s*\{[^}]*grid-column:\s*1\s*\/\s*-1[^}]*grid-row:\s*2/);
   });
 
   it('keeps responsive workspace grid overrides after the modern desktop rule', () => {

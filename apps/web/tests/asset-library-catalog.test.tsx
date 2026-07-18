@@ -2,7 +2,8 @@ import {cleanup,render,screen,within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from 'vitest';
 import {AssetCatalogView} from '../components/assets/AssetLibraryViews';
-import type {AssetVariant,Character,LibraryAsset} from '../lib/types';
+import type {AssetVariant,Character,LibraryAsset,ShotGenerationReadiness} from '../lib/types';
+import type {AssetRequirement} from '../lib/shot-generation-readiness';
 
 const character:Character={id:'c1',project_id:'p1',name:'林夏',role:'主角',appearance_bible:'',personality:'',continuity_rules:'',negative_constraints:'',voice_speaker:'',voice_instruction:'',created_at:'',updated_at:''};
 const supportingCharacter:Character={...character,id:'c2',name:'周然',role:'搭档'};
@@ -15,6 +16,8 @@ const assets:LibraryAsset[]=[
   {id:'la4',project_id:'p1',kind:'costume',name:'黑色风衣',description:'主角常服',tags:['主角'],metadata:{},created_at:'',updated_at:''},
   {id:'la5',project_id:'p1',kind:'sound',name:'城市雨声',description:'环境音',tags:['环境'],metadata:{},created_at:'',updated_at:''},
 ];
+const sceneRequirement:AssetRequirement={id:'req-scene',project_id:'p1',script_revision_id:'rev-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜天台',description:'霓虹灯下的天台',required:true,status:'pending',binding_type:'library_asset',binding_id:'la1',source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{time_of_day:'night'},created_at:'',updated_at:''};
+const propRequirement:AssetRequirement={...sceneRequirement,id:'req-prop',kind:'prop',canonical_key:'prop:scene-1:铜制钥匙',name:'铜制钥匙',description:'打开主控室',status:'missing',binding_type:'',binding_id:null};
 
 afterEach(cleanup);
 
@@ -96,6 +99,62 @@ it('creates, edits, and deletes a project library asset',async()=>{
 
   await user.click(screen.getByRole('button',{name:'删除资产'}));
   expect(onDelete).toHaveBeenCalledWith('la3');
+});
+
+it('binds an existing asset to the selected shot requirement',async()=>{
+  const onBind=vi.fn().mockResolvedValue(undefined);
+  render(<AssetCatalogView characters={[]} character={null} references={[]} variants={[]} requestedCategory="scene" libraryAssets={assets} requirements={[sceneRequirement]} onSelect={vi.fn()} onOpen={vi.fn()} onBindLibraryAsset={onBind}/>);
+
+  expect(screen.getByRole('status')).toHaveTextContent('当前镜头需要：雨夜天台');
+  await userEvent.click(screen.getByRole('button',{name:'绑定到当前场景'}));
+
+  expect(onBind).toHaveBeenCalledWith('la1','req-scene');
+});
+
+it('prefills and binds a newly created asset from the selected requirement',async()=>{
+  const created={...assets[2],id:'la-new',name:'铜制钥匙',description:'打开主控室'};
+  const onCreate=vi.fn().mockResolvedValue(created);
+  const onBind=vi.fn().mockResolvedValue(undefined);
+  render(<AssetCatalogView characters={[]} character={null} references={[]} variants={[]} requestedCategory="prop" libraryAssets={assets} requirements={[propRequirement]} onSelect={vi.fn()} onOpen={vi.fn()} onCreateLibraryAsset={onCreate} onBindLibraryAsset={onBind}/>);
+
+  await userEvent.click(screen.getByRole('button',{name:'按需求新建道具'}));
+  expect(screen.getByRole('textbox',{name:'资产名称'})).toHaveValue('铜制钥匙');
+  expect(screen.getByRole('textbox',{name:'资产描述'})).toHaveValue('打开主控室');
+  await userEvent.click(screen.getByRole('button',{name:'保存资产'}));
+
+  expect(onBind).toHaveBeenCalledWith('la-new','req-prop');
+});
+
+it('offers the next director step after the shot assets become ready',async()=>{
+  const onReturn=vi.fn();const onOpenDirector=vi.fn();
+  const readiness:ShotGenerationReadiness={shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:true,blocking_ready:false,camera_ready:false,blockers:['blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']};
+  render(<AssetCatalogView characters={[]} character={null} references={[]} variants={[]} requestedCategory="scene" libraryAssets={assets} requirements={[{...sceneRequirement,status:'ready'}]} generationReadiness={readiness} onReturnToShot={onReturn} onOpenDirector={onOpenDirector} onSelect={vi.fn()} onOpen={vi.fn()}/>);
+
+  expect(screen.getByRole('status')).toHaveTextContent('资产已就绪，下一步完成导演站位与机位');
+  await userEvent.click(screen.getByRole('button',{name:'打开 3D 导演台'}));
+  await userEvent.click(screen.getByRole('button',{name:'返回原镜头'}));
+  expect(onOpenDirector).toHaveBeenCalledTimes(1);
+  expect(onReturn).toHaveBeenCalledTimes(1);
+});
+
+it('returns to generation when every shot condition is ready',async()=>{
+  const onReturn=vi.fn();
+  const readiness:ShotGenerationReadiness={shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:['req-scene']};
+  render(<AssetCatalogView characters={[]} character={null} references={[]} variants={[]} requestedCategory="scene" libraryAssets={assets} requirements={[{...sceneRequirement,status:'ready'}]} generationReadiness={readiness} onReturnToShot={onReturn} onSelect={vi.fn()} onOpen={vi.fn()}/>);
+
+  expect(screen.getByRole('status')).toHaveTextContent('镜头生成条件已完成');
+  await userEvent.click(screen.getByRole('button',{name:'返回原镜头继续生成'}));
+  expect(onReturn).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the originating-shot action visible for a character requirement',async()=>{
+  const onReturn=vi.fn();
+  const characterRequirement:AssetRequirement={...sceneRequirement,id:'req-character',kind:'character',canonical_key:'character:c1',name:'林夏',description:'主角身份参考',status:'missing',binding_type:'character',binding_id:'c1'};
+  render(<AssetCatalogView characters={[character]} character={character} references={[]} variants={[]} requestedCategory="character" requirements={[characterRequirement]} onReturnToShot={onReturn} onSelect={vi.fn()} onOpen={vi.fn()}/>);
+
+  expect(screen.getByRole('status')).toHaveTextContent('当前镜头需要：林夏');
+  await userEvent.click(screen.getByRole('button',{name:'返回原镜头'}));
+  expect(onReturn).toHaveBeenCalledTimes(1);
 });
 
 it('uploads kind-specific media for a library asset',async()=>{

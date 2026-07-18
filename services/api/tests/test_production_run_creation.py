@@ -129,6 +129,31 @@ def seed_grid_episode(client):
         return episode.id, [shot.id for shot in shots]
 
 
+def enable_script_driven_generation(client, episode_id):
+    with client.app.state.session_factory() as session:
+        episode = session.get(models.Episode, episode_id)
+        document = models.ScriptDocument(
+            project_id=episode.project_id,
+            title="Production script",
+            source_type="upload",
+            status="ready",
+        )
+        session.add(document)
+        session.flush()
+        revision = models.ScriptRevision(
+            document_id=document.id,
+            revision_number=1,
+            status="finalized",
+            content="Generate the episode from bound assets and director blocking.",
+            checksum=f"script-{episode.id}",
+            creation_method="upload",
+        )
+        session.add(revision)
+        session.flush()
+        document.current_revision_id = revision.id
+        session.commit()
+
+
 def test_grid_mode_groups_shots_by_scene_in_chunks_of_four(client):
     episode_id, shot_ids = seed_grid_episode(client)
 
@@ -147,3 +172,54 @@ def test_grid_mode_groups_shots_by_scene_in_chunks_of_four(client):
     assert items[1]["target_type"] == "grid_panel"
     assert items[1]["target_id"] == shot_ids[4]
     assert all(item["status"] == "queued" for item in items)
+
+
+def test_script_driven_panel_run_skips_shot_until_generation_is_ready(client):
+    episode_id, _, missing_shot, _, _ = seed_mixed_episode(client)
+    enable_script_driven_generation(client, episode_id)
+
+    response = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels"], "shot_ids": [missing_shot]},
+    )
+
+    assert response.status_code == 202
+    item = client.get(
+        f"/api/production-runs/{response.json()['id']}/items"
+    ).json()[0]
+    assert item["status"] == "skipped"
+    assert item["result_metadata"] == {
+        "reason": "generation_not_ready",
+        "blockers": [
+            "missing_background",
+            "blocking_not_initialized",
+            "director_preview_missing",
+        ],
+    }
+
+
+def test_script_driven_grid_run_skips_chunk_and_records_blocked_shots(client):
+    episode_id, shot_ids = seed_grid_episode(client)
+    enable_script_driven_generation(client, episode_id)
+
+    response = client.post(
+        f"/api/episodes/{episode_id}/production-runs",
+        json={"stages": ["panels"], "panel_generation_mode": "grid"},
+    )
+
+    assert response.status_code == 202
+    items = client.get(
+        f"/api/production-runs/{response.json()['id']}/items"
+    ).json()
+    assert all(item["status"] == "skipped" for item in items)
+    assert items[0]["result_metadata"] == {
+        "reason": "generation_not_ready",
+        "blocked_shots": {
+            shot_id: [
+                "missing_background",
+                "blocking_not_initialized",
+                "director_preview_missing",
+            ]
+            for shot_id in shot_ids[:4]
+        },
+    }

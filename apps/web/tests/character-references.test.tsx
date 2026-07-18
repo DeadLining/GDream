@@ -9,6 +9,8 @@ const mocks=vi.hoisted(()=>({
   createCharacter:vi.fn(),updateCharacter:vi.fn(),
   retry:vi.fn(),pollJob:vi.fn(),variants:vi.fn(),
   libraryAssets:vi.fn(),createLibraryAsset:vi.fn(),updateLibraryAsset:vi.fn(),deleteLibraryAsset:vi.fn(),
+  assetRequirements:vi.fn(),syncAssetRequirements:vi.fn(),bindLibraryAsset:vi.fn(),
+  shotGenerationReadiness:vi.fn(),
   suggestVariant:vi.fn(),
   representations:vi.fn(),uploadRepresentation:vi.fn(),
   generateModel3D:vi.fn(),latestModel3D:vi.fn(),approveModel3D:vi.fn(),
@@ -25,6 +27,10 @@ vi.mock('../lib/api',()=>({
   createLibraryAsset:mocks.createLibraryAsset,
   updateLibraryAsset:mocks.updateLibraryAsset,
   deleteLibraryAsset:mocks.deleteLibraryAsset,
+  listAssetRequirements:mocks.assetRequirements,
+  syncAssetRequirements:mocks.syncAssetRequirements,
+  bindLibraryAssetToScene:mocks.bindLibraryAsset,
+  getShotGenerationReadiness:mocks.shotGenerationReadiness,
   uploadCharacterReference:mocks.upload,
   uploadCharacter3DRepresentation:mocks.uploadRepresentation,
   generateModel3D:mocks.generateModel3D,
@@ -75,6 +81,10 @@ beforeEach(()=>{
   mocks.stateImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
   mocks.createProductionRun.mockResolvedValue({id:'run-impact'});
   mocks.libraryAssets.mockResolvedValue([]);
+  mocks.assetRequirements.mockResolvedValue([]);
+  mocks.syncAssetRequirements.mockResolvedValue([]);
+  mocks.bindLibraryAsset.mockResolvedValue(undefined);
+  mocks.shotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:false,blockers:['missing_background','director_preview_missing'],requirement_ids:['req-scene']});
   mocks.createCharacter.mockResolvedValue({...character,id:'c-new',name:'周然',role:'搭档'});
   mocks.updateCharacter.mockResolvedValue({...character,name:'林夏·修订',role:'调查员'});
   mocks.deleteReference.mockResolvedValue(undefined);
@@ -109,6 +119,38 @@ it('manages project asset catalogs even before the project has characters',async
   await user.click(screen.getByRole('button',{name:'保存资产'}));
   expect(mocks.createLibraryAsset).toHaveBeenCalledWith('p1',{kind:'scene',name:'地下车库',description:'追逐场景',tags:['室内'],metadata:{}});
   expect(onMetricsChanged).toHaveBeenCalledTimes(1);
+});
+
+it('loads the selected shot requirements and binds an existing scene asset',async()=>{
+  const requirement={id:'req-scene',project_id:'p1',script_revision_id:'rev-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜天台',description:'霓虹灯下的天台',required:true,status:'pending',binding_type:'library_asset',binding_id:'la1',source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''};
+  const asset={id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},created_at:'',updated_at:''};
+  mocks.libraryAssets.mockResolvedValue([asset]);
+  mocks.assetRequirements.mockResolvedValue([requirement]);
+  mocks.syncAssetRequirements.mockResolvedValue([{...requirement,status:'ready'}]);
+
+  render(<CharacterWorkspace projectId="p1" characters={[]} requestedAssetRequest={{target:'scene',shotId:'shot-1',requirementIds:['req-scene']}}/>);
+  await userEvent.click(await screen.findByRole('button',{name:'绑定到当前场景'}));
+
+  expect(mocks.assetRequirements).toHaveBeenCalledWith('p1','scene');
+  expect(mocks.bindLibraryAsset).toHaveBeenCalledWith('scene-1','la1');
+  expect(mocks.syncAssetRequirements).toHaveBeenCalledWith('p1');
+});
+
+it('refreshes shot readiness and opens the originating shot in the director',async()=>{
+  const requirement={id:'req-scene',project_id:'p1',script_revision_id:'rev-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜天台',description:'霓虹灯下的天台',required:true,status:'pending',binding_type:'library_asset',binding_id:'la1',source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''};
+  const asset={id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},media_asset_id:'media-1',media_url:'/media/scene.png',media_type:'image/png',created_at:'',updated_at:''};
+  const onOpenDirector=vi.fn();
+  mocks.libraryAssets.mockResolvedValue([asset]);
+  mocks.assetRequirements.mockResolvedValue([requirement]);
+  mocks.syncAssetRequirements.mockResolvedValue([{...requirement,status:'ready'}]);
+  mocks.shotGenerationReadiness.mockResolvedValueOnce({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:false,blocking_ready:false,camera_ready:false,blockers:['missing_background','blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']}).mockResolvedValue({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:true,blocking_ready:false,camera_ready:false,blockers:['blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']});
+
+  render(<CharacterWorkspace projectId="p1" characters={[]} requestedAssetRequest={{target:'scene',shotId:'shot-1',requirementIds:['req-scene']}} onOpenDirector={onOpenDirector}/>);
+  await userEvent.click(await screen.findByRole('button',{name:'绑定到当前场景'}));
+  await userEvent.click(await screen.findByRole('button',{name:'打开 3D 导演台'}));
+
+  expect(mocks.shotGenerationReadiness).toHaveBeenCalledTimes(2);
+  expect(onOpenDirector).toHaveBeenCalledWith('shot-1');
 });
 
 it('creates and edits characters from the asset catalog',async()=>{
@@ -283,6 +325,15 @@ it('opens the master setting, variant editor, and lineage from the asset catalog
   expect(screen.getByRole('heading',{name:'角色列表'})).toBeVisible();
   expect(screen.getByLabelText('谱系画布工具栏')).toBeVisible();
   expect(screen.queryByRole('heading',{name:'资产谱系'})).not.toBeInTheDocument();
+});
+
+it('opens and updates the requested asset category',async()=>{
+  const {rerender}=render(<CharacterWorkspace projectId="p1" characters={[]} requestedAssetRequest={{target:'scene',shotId:'',requirementIds:[]}}/>);
+
+  expect(await screen.findByRole('heading',{name:'场景资产'})).toBeVisible();
+
+  rerender(<CharacterWorkspace projectId="p1" characters={[]} requestedAssetRequest={{target:'prop',shotId:'',requirementIds:[]}}/>);
+  expect(await screen.findByRole('heading',{name:'道具资产'})).toBeVisible();
 });
 
 it('uploads a GLB proxy from the character master setting',async()=>{

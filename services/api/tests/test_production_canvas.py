@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from comic_studio import models
+from comic_studio.services.asset_requirements import AssetRequirementService
 
 
 def _episode(db_session):
@@ -218,6 +219,34 @@ def test_episode_production_graph_returns_peer_shots_and_real_dependencies(clien
         edge["source_shot_id"] == edge["target_shot_id"]
         for edge in payload["media_dependencies"]
     )
+
+
+def test_episode_production_graph_exposes_director_readiness(client, monkeypatch):
+    episode_id, _, shot_ids, _ = _seed_graph(client)
+
+    def shot_readiness(_service, shot_id):
+        ready = shot_id == shot_ids[0]
+        return {
+            "ready": ready,
+            "asset_ready": True,
+            "blocking_ready": True,
+            "camera_ready": ready,
+            "blockers": [] if ready else ["director_preview_missing"],
+        }
+
+    monkeypatch.setattr(AssetRequirementService, "shot_readiness", shot_readiness)
+
+    response = client.get(f"/api/episodes/{episode_id}/production-graph")
+
+    assert response.status_code == 200
+    shots = {shot["id"]: shot for shot in response.json()["shots"]}
+    assert shots[shot_ids[0]]["director_ready"] is True
+    assert shots[shot_ids[0]]["director_camera_ready"] is True
+    assert shots[shot_ids[1]]["director_ready"] is False
+    assert shots[shot_ids[1]]["director_asset_ready"] is True
+    assert shots[shot_ids[1]]["director_blocking_ready"] is True
+    assert shots[shot_ids[1]]["director_camera_ready"] is False
+    assert shots[shot_ids[1]]["director_blockers"] == ["director_preview_missing"]
 
 
 def test_canvas_layout_round_trips(client):
