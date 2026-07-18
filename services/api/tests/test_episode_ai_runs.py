@@ -95,13 +95,27 @@ def test_episode_ai_run_api_enforces_one_active_run_and_supports_controls(client
     cancelled = client.post(f"/api/episode-ai-runs/{created['id']}/cancel")
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
-    assert client.get(f"/api/episodes/{episode['id']}/ai-runs/active").status_code == 404
+    inactive = client.get(f"/api/episodes/{episode['id']}/ai-runs/active")
+    assert inactive.status_code == 200
+    assert inactive.json() is None
 
     replacement = client.post(
         f"/api/episodes/{episode['id']}/ai-runs",
         json={"idempotency_key": "replacement"},
     )
     assert replacement.status_code == 202
+
+
+def test_active_episode_ai_run_distinguishes_empty_state_from_missing_episode(client):
+    episode = _episode(client)
+
+    empty = client.get(f"/api/episodes/{episode['id']}/ai-runs/active")
+    missing = client.get("/api/episodes/missing-episode/ai-runs/active")
+
+    assert empty.status_code == 200
+    assert empty.json() is None
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "Episode not found"
 
 
 def test_episode_ai_run_service_retries_review_block_without_losing_attempts(db_session):
