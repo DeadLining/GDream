@@ -110,19 +110,45 @@ class EpisodeDeletionService:
             render_paths.extend(
                 [str(relative), str(relative.with_suffix(".manifest.json"))]
             )
+        delivery_paths: list[str] = []
+        delivery_packages = self.session.scalars(
+            select(models.DeliveryPackage).where(
+                models.DeliveryPackage.episode_id == episode.id
+            )
+        )
+        expected_delivery_prefix = (
+            "projects",
+            episode.project_id,
+            "episodes",
+            episode.id,
+            "delivery",
+        )
+        for package in delivery_packages:
+            if not package.artifact_path:
+                continue
+            relative = PurePosixPath(package.artifact_path)
+            if (
+                relative.is_absolute()
+                or relative.parts[:5] != expected_delivery_prefix
+            ):
+                if "Skipped unsafe media path" not in cleanup_warnings:
+                    cleanup_warnings.append("Skipped unsafe media path")
+                continue
+            delivery_paths.append(str(relative))
         return EpisodeDeletionImpact(
             episode_id=episode.id,
             title=episode.title,
             scenes=len(episode.scenes),
             shots=len(shots),
             dialogue_lines=len(dialogue),
-            assets=len(assets) + len(render_paths) // 2,
+            assets=len(assets) + len(render_paths) // 2 + len(delivery_paths),
             shot_ids=shot_ids,
             dialogue_ids=dialogue_ids,
             asset_ids=tuple(asset.id for asset in assets),
             local_paths=(
                 *(asset.local_path for asset in assets if asset.local_path),
                 *render_paths,
+                *delivery_paths,
             ),
             cleanup_warnings=tuple(cleanup_warnings),
         )
@@ -143,6 +169,11 @@ class EpisodeDeletionService:
             )
         )
         try:
+            self.session.execute(
+                delete(models.DeliveryPackage).where(
+                    models.DeliveryPackage.episode_id == episode_id
+                )
+            )
             if impact.asset_ids:
                 self.session.execute(
                     delete(models.Asset).where(models.Asset.id.in_(impact.asset_ids))
