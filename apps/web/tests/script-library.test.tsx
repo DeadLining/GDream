@@ -188,7 +188,8 @@ it('parses the current script into a reviewable episode draft before confirmatio
 });
 
 it('contains the horizontal version strip inside the mobile viewport',()=>{
-  expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-library-list\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/);
+  expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-library\s*\{[^}]*overflow-x:\s*hidden/);
+  expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-library-list\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%[^}]*contain:\s*layout paint/);
   expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-library-main\s*\{[^}]*min-width:\s*0/);
   expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-version-actions\s*\{[^}]*flex-wrap:\s*wrap/);
 });
