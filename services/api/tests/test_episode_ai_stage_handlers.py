@@ -261,6 +261,25 @@ def test_panel_review_blocks_missing_active_panel(tmp_path):
         asyncio.run(handlers.panel_review(_context(episode_id, "panel_review")))
 
 
+def test_episode_ai_panels_regenerate_stale_active_panel(tmp_path):
+    session_factory, data_root, episode_id, _character_id, shot_id, _dialogue_id = (
+        _seed_episode(tmp_path)
+    )
+    runtime = FakeImageRuntime(session_factory, data_root)
+    handlers = EpisodeAIStageHandlers(session_factory, data_root, runtime)
+
+    first = asyncio.run(handlers.panels(_context(episode_id, "panels")))
+    with session_factory() as session:
+        shot = session.get(models.Shot, shot_id)
+        shot.image_prompt = "updated after the active panel was generated"
+        session.commit()
+
+    refreshed = asyncio.run(handlers.panels(_context(episode_id, "panels")))
+
+    assert refreshed["asset_ids"][0] != first["asset_ids"][0]
+    assert [call[0] for call in runtime.calls] == ["shot", "shot"]
+
+
 def test_script_driven_episode_ai_panels_stop_before_generating_blocked_shots(
     tmp_path,
 ):
