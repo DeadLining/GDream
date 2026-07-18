@@ -285,6 +285,15 @@ describe('operational frontend pages',()=>{
     expect(operationMocks.restoreTrashItem).toHaveBeenCalledWith('trash-1');
   });
 
+  it('labels the recycle bin as asset-only instead of implying project recovery',async()=>{
+    render(<RecycleBin project={project}/>);
+
+    expect(screen.getByRole('button',{name:'资产回收站'})).toHaveAttribute('aria-current','page');
+    expect(screen.getByRole('heading',{name:'资产回收站'})).toBeVisible();
+    expect(screen.getByText('这里只保留角色资产变体与状态；作品和剧集永久删除后无法恢复。')).toBeVisible();
+    expect(screen.queryByRole('button',{name:'回收站'})).not.toBeInTheDocument();
+  });
+
   it('filters recycle items by content type without team actor controls',async()=>{
     operationMocks.listTrashItems.mockResolvedValue([
       {id:'trash-1',project_id:'p1',resource_type:'asset_variant_state',resource_id:'state-1',name:'左臂擦伤',original_location:['作品主设定','雨夜造型','左臂擦伤'],lineage:['作品主设定','雨夜造型','左臂擦伤'],deleted_by:'林默',deleted_at:'2026-07-13T08:00:00Z',expires_at:'2026-08-12T08:00:00Z',reference_count:0,can_permanently_delete:true},
