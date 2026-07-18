@@ -104,17 +104,22 @@ describe('DirectorWorkspace',()=>{
   it('shows asset, blocking, and preview readiness on every shot in the strip',async()=>{
     const shot2={...scene.shots[0],id:'shot-2',position:2,shot_type:'close_up'};
     const camera2={...camera,id:'camera-2',shot_id:'shot-2'};
+    const onSelectShot=vi.fn();
     mocks.getDirectorStage.mockResolvedValue({...stage,shot_cameras:[camera,camera2]});
     mocks.getShotGenerationReadiness.mockImplementation(async(shotId:string)=>shotId==='shot-1'
       ? {shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:[]}
       : {shot_id:'shot-2',project_id:'project-1',script_revision_id:'revision-1',ready:false,asset_ready:true,blocking_ready:true,camera_ready:false,blockers:['director_preview_missing'],requirement_ids:[]});
 
-    render(<DirectorWorkspace scene={{...scene,shots:[scene.shots[0],shot2]}} selectedShotId="shot-1" mobile={false} onSelectShot={vi.fn()}/>);
+    render(<DirectorWorkspace scene={{...scene,shots:[scene.shots[0],shot2]}} selectedShotId="shot-1" mobile={false} onSelectShot={onSelectShot}/>);
 
     expect(await screen.findByLabelText('镜头 01 预览已保存')).toBeVisible();
-    expect(await screen.findByLabelText('镜头 02 资产已就绪')).toBeVisible();
+    const assetStatus=await screen.findByLabelText('镜头 02 资产已就绪');
+    expect(assetStatus).toBeVisible();
+    expect(assetStatus.closest('button')).toBeNull();
     expect(screen.getByLabelText('镜头 02 站位已就绪')).toBeVisible();
     expect(screen.getByLabelText('镜头 02 预览未保存')).toBeVisible();
+    await userEvent.click(assetStatus);
+    expect(onSelectShot).not.toHaveBeenCalled();
   });
 
   it('uses scene progress to jump to the next incomplete shot',async()=>{
