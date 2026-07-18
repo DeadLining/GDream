@@ -4,6 +4,7 @@ import {useEffect, useMemo, useRef, useState} from 'react';
 import {createEpisode,createProject,createVolume,deleteEpisode,deleteProject,deleteVolume,getEpisode,getProductionReadiness,getProject,getProjectOverviewMetrics,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
+import {markProjectAccess} from '../lib/recent-projects';
 import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,ProductionTask,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,ProjectSearchResult,Shot,Storyline,Volume} from '../lib/types';
 import {AppToolbar, type GlobalSection} from './AppToolbar';
 import {CreateEpisodeDialog} from './CreateEpisodeDialog';
@@ -118,6 +119,7 @@ export function Workspace() {
     setStorylines(loadedStorylines);
     setOverviewMetrics(loadedOverviewMetrics);
     setReadinessByEpisode({});
+    markProjectAccess(id);
     localStorage.setItem('ai-comic-project', id);
     const preferred = localStorage.getItem('ai-comic-episode');
     const selected = loaded.episodes.find(item => item.id === preferred) ?? loaded.episodes[0];

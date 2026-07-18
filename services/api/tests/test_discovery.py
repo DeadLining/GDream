@@ -18,7 +18,7 @@ def _project(client, title="发现页作品"):
 
 
 def test_workspace_today_uses_shanghai_calendar_boundary():
-    now = datetime(2026, 7, 18, 16, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 18, 0, 30, tzinfo=timezone.utc)
     updated = datetime(2026, 7, 17, 16, 45, tzinfo=timezone.utc)
 
     assert updated_on_workspace_today(updated, now=now) is True

@@ -1,9 +1,28 @@
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from comic_studio import models, schemas
+
+
+WORKSPACE_TIMEZONE = ZoneInfo("Asia/Shanghai")
+
+
+def updated_on_workspace_today(
+    updated_at: datetime | None, *, now: datetime | None = None
+) -> bool:
+    if updated_at is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    return updated_at.astimezone(WORKSPACE_TIMEZONE).date() == current.astimezone(
+        WORKSPACE_TIMEZONE
+    ).date()
 
 
 class DiscoveryService:
@@ -21,7 +40,6 @@ class DiscoveryService:
         rows: list[schemas.WorkspaceProjectSummary] = []
         total_tasks = 0
         total_pending = 0
-        today = datetime.now(timezone.utc).date()
         updated_today = 0
         for project in projects:
             volume_count = self._count(models.Volume.id, models.Volume.project_id == project.id)
@@ -61,8 +79,7 @@ class DiscoveryService:
             stage = "待审核" if pending_review and completion >= 60 else "制作中" if episode_count else "项目初始化"
             total_tasks += open_tasks
             total_pending += pending_review
-            updated = project.updated_at
-            if updated and updated.date() == today:
+            if updated_on_workspace_today(project.updated_at):
                 updated_today += 1
             rows.append(
                 schemas.WorkspaceProjectSummary(
