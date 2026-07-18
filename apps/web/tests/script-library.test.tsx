@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {ScriptLibrary} from '../components/ScriptLibrary';
 import type {ScriptDocument, ScriptDocumentSummary} from '../lib/types';
+import {readAllStyles} from './_styles';
 
 const mocks=vi.hoisted(()=>({
   list:vi.fn(),get:vi.fn(),project:vi.fn(),create:vi.fn(),patch:vi.fn(),finalize:vi.fn(),stream:vi.fn(),remove:vi.fn(),removeRevision:vi.fn(),upload:vi.fn(),revisions:vi.fn(),restore:vi.fn(),volumes:vi.fn(),storylines:vi.fn(),parse:vi.fn(),updateImport:vi.fn(),confirmImport:vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('../lib/api',async importOriginal=>({
 const revision=(content='第一集',checksum='old')=>({id:'r1',document_id:'s1',revision_number:1,status:'working' as const,content,checksum,creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'',generation_brief:'',generation_metadata:{},created_at:'2026-07-12T00:00:00Z'});
 const document:ScriptDocument={id:'s1',project_id:'p1',title:'雨夜',source_type:'paste',status:'draft',revision_count:1,current_revision_id:'r1',created_at:'2026-07-12T00:00:00Z',updated_at:'2026-07-12T01:00:00Z',current_revision:revision(),latest_import_id:null,parse_is_stale:false};
 const summary:ScriptDocumentSummary={...document};
+const workspaceStyles=readAllStyles();
 
 beforeEach(()=>{
   mocks.list.mockResolvedValue([summary]);mocks.get.mockResolvedValue(document);
@@ -183,6 +185,12 @@ it('parses the current script into a reviewable episode draft before confirmatio
   await waitFor(()=>expect(mocks.updateImport).toHaveBeenCalledWith('i1',expect.objectContaining({episodes:expect.any(Array)})));
   expect(mocks.confirmImport).toHaveBeenCalledWith('i1');
   expect(onConfirmed).toHaveBeenCalled();
+});
+
+it('contains the horizontal version strip inside the mobile viewport',()=>{
+  expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-library-list\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/);
+  expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-library-main\s*\{[^}]*min-width:\s*0/);
+  expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*\.script-version-actions\s*\{[^}]*flex-wrap:\s*wrap/);
 });
 
 it('opens the storyline canvas without replacing the script document',async()=>{
