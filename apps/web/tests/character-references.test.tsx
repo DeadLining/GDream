@@ -136,6 +136,27 @@ it('loads the selected shot requirements and binds an existing scene asset',asyn
   expect(mocks.syncAssetRequirements).toHaveBeenCalledWith('p1');
 });
 
+it('shows project-level missing props and creates the selected requirement',async()=>{
+  const requirement={id:'req-prop',project_id:'p1',script_revision_id:'rev-1',kind:'prop',canonical_key:'prop:scene-1:怀表',name:'怀表',description:'黄铜外壳，黑色表盘',required:true,status:'missing',binding_type:'',binding_id:null,source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''};
+  const created={id:'la-watch',project_id:'p1',kind:'prop',name:'怀表',description:'黄铜外壳，黑色表盘',tags:[],metadata:{},created_at:'',updated_at:''};
+  mocks.assetRequirements.mockResolvedValue([requirement]);
+  mocks.createLibraryAsset.mockResolvedValue(created);
+  mocks.syncAssetRequirements.mockResolvedValue([{...requirement,status:'pending',binding_type:'library_asset',binding_id:created.id}]);
+
+  render(<CharacterWorkspace projectId="p1" characters={[]}/>);
+  await userEvent.click(await screen.findByRole('button',{name:'道具 0'}));
+
+  expect(screen.getByRole('status')).toHaveTextContent('项目待补资产：怀表');
+  await userEvent.click(screen.getByRole('button',{name:'按需求新建道具'}));
+  expect(screen.getByRole('textbox',{name:'资产名称'})).toHaveValue('怀表');
+  expect(screen.getByRole('textbox',{name:'资产描述'})).toHaveValue('黄铜外壳，黑色表盘');
+  await userEvent.click(screen.getByRole('button',{name:'保存资产'}));
+
+  expect(mocks.assetRequirements).toHaveBeenCalledWith('p1');
+  expect(mocks.bindLibraryAsset).toHaveBeenCalledWith('scene-1','la-watch');
+  expect(mocks.syncAssetRequirements).toHaveBeenCalledWith('p1');
+});
+
 it('refreshes shot readiness and opens the originating shot in the director',async()=>{
   const requirement={id:'req-scene',project_id:'p1',script_revision_id:'rev-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜天台',description:'霓虹灯下的天台',required:true,status:'pending',binding_type:'library_asset',binding_id:'la1',source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''};
   const asset={id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},media_asset_id:'media-1',media_url:'/media/scene.png',media_type:'image/png',created_at:'',updated_at:''};
