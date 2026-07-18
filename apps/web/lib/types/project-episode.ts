@@ -21,6 +21,8 @@ export type Project = {
 };
 export type ProjectDetail = Project & {characters: Character[]; episodes: EpisodeSummary[]};
 export type ProjectOverviewMetrics={project_id:string;scene_count:number;script_locked:boolean;asset_total:number;asset_ready:number};
+export type ProjectDeletionPreview={project_id:string;title:string;deleted:{episodes:number;characters:number;assets:number}};
+export type ProjectDeletionResult=ProjectDeletionPreview&{deleted_project_id:string;cleanup_warnings:string[]};
 export type DialogueLine = {
   id: string; character_id: string | null; position: number; text: string;
   subtitle_text: string; emotion: string; performance_instruction: string;

@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {createEpisode,createProject,createVolume,deleteEpisode,deleteVolume,getEpisode,getProductionReadiness,getProject,getProjectOverviewMetrics,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
+import {createEpisode,createProject,createVolume,deleteEpisode,deleteProject,deleteVolume,getEpisode,getProductionReadiness,getProject,getProjectOverviewMetrics,listProjects,listStorylines,listVolumes,moveEpisodeToVolume,previewEpisodeDeletion,startPlanning,updateProject,updateVolume} from '../lib/api';
 import {pollJob} from '../lib/jobs';
 import {globalSectionWorkAreas, resolveOperationsPage, type PlatformPage} from '../lib/navigation';
 import type {EpisodeCreate,EpisodeDeletionPreview,EpisodeDetail,EpisodeSummary,Job,ProductionReadiness,ProductionTask,Project,ProjectCreate,ProjectDetail,ProjectOverviewMetrics,ProjectSearchResult,Shot,Storyline,Volume} from '../lib/types';
@@ -172,6 +172,7 @@ export function Workspace() {
       setWorkArea('overview');
     }
   };
+  const deleteProjectFromHome=async(id:string)=>{const result=await deleteProject(id);if(localStorage.getItem('ai-comic-project')===id)localStorage.removeItem('ai-comic-project');await reloadProjects();return result;};
 
   useEffect(() => {
     reloadProjects()
@@ -285,7 +286,7 @@ export function Workspace() {
   if (loading) return <div className="app-shell">{toolbar}<main className="center-state"><h1>正在加载工作台</h1></main></div>;
   if (platformPage === 'models') return <div className="app-shell">{toolbar}<ModelCenter onDirtyChange={setSettingsDirty} onSaved={() => setHealthRefreshKey(value => value + 1)}/>{searchOverlay}</div>;
   if(platformPage==='settings'&&project){const sceneCount=episode?.scenes.length??0;const shotCount=episode?.scenes.reduce((sum,scene)=>sum+scene.shots.length,0)??0;return <div className="app-shell">{toolbar}<ProjectSettings project={project} volumes={volumes} sceneCount={sceneCount} shotCount={shotCount} onDirtyChange={setSettingsDirty} onImported={async result=>{await reloadProjects(result.project_id);setPlatformPage('project');setGlobalSection('episode');setWorkArea('overview');}} onSave={async data=>{const updated=await updateProject(project.id,data);setProject(current=>current?{...current,...updated}:current);setProjects(current=>current.map(item=>item.id===updated.id?updated:item));}}/>{searchOverlay}</div>;}
-  if(platformPage==='home')return <div className="app-shell">{toolbar}<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={id=>{void loadProject(id);setPlatformPage('project');setGlobalSection('episode');setWorkArea('overview');}} onCreateProject={()=>setProjectDialog(true)} onNavigate={navigateOperations}/><CreateProjectDialog open={projectDialog} onClose={()=>setProjectDialog(false)} onCreate={async(data:ProjectCreate)=>{const created=await createProject(data);setProjectDialog(false);await reloadProjects(created.id);setPlatformPage('project');}}/>{searchOverlay}</div>;
+  if(platformPage==='home')return <div className="app-shell">{toolbar}<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={id=>{void loadProject(id);setPlatformPage('project');setGlobalSection('episode');setWorkArea('overview');}} onCreateProject={()=>setProjectDialog(true)} onDeleteProject={deleteProjectFromHome} onNavigate={navigateOperations}/><CreateProjectDialog open={projectDialog} onClose={()=>setProjectDialog(false)} onCreate={async(data:ProjectCreate)=>{const created=await createProject(data);setProjectDialog(false);await reloadProjects(created.id);setPlatformPage('project');}}/>{searchOverlay}</div>;
   if(platformPage==='tasks')return <div className="app-shell">{toolbar}<TaskCenter project={project} episode={episode} initialTaskId={searchTarget?.kind==='task'?searchTarget.id:undefined} onOpenTarget={openTaskTarget}/>{searchOverlay}</div>;
   if(platformPage==='versions')return <div className="app-shell">{toolbar}<VersionHistory episode={episode} onRestored={()=>episode?loadProject(episode.project_id):Promise.resolve()}/>{searchOverlay}</div>;
   if(platformPage==='trash')return <div className="app-shell">{toolbar}<RecycleBin project={project}/>{searchOverlay}</div>;
