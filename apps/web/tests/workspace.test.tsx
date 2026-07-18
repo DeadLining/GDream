@@ -789,6 +789,12 @@ describe('Workspace', () => {
     expect(workspaceStyles).toMatch(/@media\s*\(min-width:\s*900px\)[\s\S]*?\.director-current-shot\s*\{[^}]*grid-column:\s*1\s*\/\s*-1[^}]*grid-row:\s*2/);
   });
 
+  it('keeps mobile director commands in a clipped horizontal toolbar lane',()=>{
+    expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(84px,auto\)\s+minmax\(0,1fr\)/);
+    expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar-actions\s*\{[^}]*grid-column:\s*2[^}]*width:\s*100%[^}]*overflow-x:\s*auto/);
+    expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar-actions\s+\.command-button\s*\{[^}]*flex:\s*0\s+0\s+34px[^}]*overflow:\s*hidden[^}]*font-size:\s*0\s*!important/);
+  });
+
   it('keeps responsive workspace grid overrides after the modern desktop rule', () => {
     const modernDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 248px minmax(480px, 1fr) 326px;');
     const compactDesktopRule = workspaceStyles.lastIndexOf('.workspace-grid { grid-template-columns: 210px minmax(400px, 1fr) 296px;');
