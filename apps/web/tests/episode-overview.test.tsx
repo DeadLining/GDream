@@ -166,6 +166,34 @@ describe('episode overview', () => {
     expect(onOpenProduction).toHaveBeenCalledOnce();
   });
 
+  it('uses final video readiness and shows missing and stale video blockers', () => {
+    const videoBlockedReadiness: ProductionReadiness = {
+      ...readiness,
+      ready: true,
+      video_ready: false,
+      blockers: {
+        ...readiness.blockers,
+        missing_videos: ['shot-2'],
+        stale_videos: ['shot-1'],
+      },
+    };
+    expect(deriveEpisodeOverview(episode, videoBlockedReadiness).renderReady).toBe(false);
+    render(
+      <EpisodeOverview
+        episode={episode}
+        episodeNumber={1}
+        readiness={videoBlockedReadiness}
+        onSelectShot={vi.fn()}
+        onOpenProduction={vi.fn()}
+        onOpenReview={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('尚未就绪')).toBeVisible();
+    expect(screen.getByText('缺少视频 1')).toBeVisible();
+    expect(screen.getByText('过期视频 1')).toBeVisible();
+  });
+
   it('uses an explicit episode number instead of deriving one from an opaque id', () => {
     const uuidEpisode = {...episode, id: '550e8400-e29b-41d4-a716-44665544abcd'};
 

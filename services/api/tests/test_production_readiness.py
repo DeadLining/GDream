@@ -77,3 +77,81 @@ def test_readiness_reports_stale_active_panels(client):
     assert report["blockers"]["missing_panels"] == []
     assert report["blockers"]["stale_panels"] == [shot_id]
     assert report["ready_counts"]["panels"] == 0
+
+
+def test_readiness_rejects_invalid_and_stale_active_videos(client):
+    episode_id, shot_id, line_id, project_id = seed_graph(client)
+    with client.app.state.session_factory() as session:
+        panel = models.Asset(
+            project_id=project_id,
+            kind=f"panel:{shot_id}",
+            local_path="panel.png",
+            media_type="image/png",
+            provider="test",
+            model="test",
+            checksum="0" * 64,
+        )
+        audio = models.Asset(
+            project_id=project_id,
+            kind=f"dialogue:{line_id}",
+            local_path="line.wav",
+            media_type="audio/wav",
+            provider="test",
+            model="test",
+            checksum="1" * 64,
+            duration_seconds=1.0,
+        )
+        session.add_all([panel, audio])
+        session.flush()
+        shot = session.get(models.Shot, shot_id)
+        line = session.get(models.DialogueLine, line_id)
+        shot.active_panel_asset_id = panel.id
+        shot.active_video_asset_id = panel.id
+        shot.review_status = "approved"
+        line.audio_asset_id = audio.id
+        line.duration_seconds = 1.0
+        stamp_panel_provenance(session, shot, panel)
+        session.commit()
+
+    report = client.get(f"/api/episodes/{episode_id}/production-readiness").json()
+
+    assert report["blockers"]["missing_videos"] == [shot_id]
+    assert report["blockers"]["stale_videos"] == []
+    assert report["ready_counts"]["videos"] == 0
+
+    with client.app.state.session_factory() as session:
+        shot = session.get(models.Shot, shot_id)
+        old_panel_id = shot.active_panel_asset_id
+        video = models.Asset(
+            project_id=project_id,
+            kind=f"video:{shot_id}",
+            local_path="video.mp4",
+            media_type="video/mp4",
+            provider="test",
+            model="test",
+            checksum="2" * 64,
+            duration_seconds=4,
+            parent_asset_id=old_panel_id,
+        )
+        replacement_panel = models.Asset(
+            project_id=project_id,
+            kind=f"panel:{shot_id}",
+            local_path="panel-v2.png",
+            media_type="image/png",
+            provider="test",
+            model="test",
+            checksum="3" * 64,
+        )
+        session.add_all([video, replacement_panel])
+        session.flush()
+        stamp_panel_provenance(session, shot, replacement_panel)
+        shot.active_panel_asset_id = replacement_panel.id
+        shot.active_video_asset_id = video.id
+        session.commit()
+
+    report = client.get(f"/api/episodes/{episode_id}/production-readiness").json()
+
+    assert report["blockers"]["missing_videos"] == []
+    assert report["blockers"]["stale_videos"] == [shot_id]
+    assert report["ready_counts"]["videos"] == 0
+    assert report["video_ready"] is False
