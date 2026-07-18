@@ -178,6 +178,10 @@ class RenderingService:
                     video = self.session.get(models.Asset, shot.active_video_asset_id)
                     if video is None or video.kind != f"video:{shot.id}":
                         raise ValueError(f"Shot {shot.id} active video asset is invalid")
+                    if video.parent_asset_id != panel.id:
+                        raise ValueError(
+                            f"Shot {shot.id} video source panel is stale"
+                        )
                     video_file = (self.data_root / video.local_path).resolve()
                     if self.data_root not in video_file.parents or not video_file.is_file():
                         raise ValueError(f"Shot {shot.id} active video file is missing")
