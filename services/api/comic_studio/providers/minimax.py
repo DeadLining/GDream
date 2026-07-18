@@ -26,6 +26,9 @@ character IDs exactly. Do not use Markdown fences."""
 SCRIPT_IMPORT_SYSTEM_PROMPT = """You are the script import engine for a Chinese dynamic comic studio.
 Return one JSON object only using the supplied strict schema. Convert prose into ordered episodes,
 scenes, shots, and dialogue when needed. Give every draft character and episode a stable draft_id.
+Characters contain only living or performing story entities and must set entity_kind to character.
+Never register props, locations, vehicles, or other objects as characters; put every such object in
+the relevant scene props list instead.
 Dialogue must reference a supplied character draft_id or be explicitly marked as narration. Preserve
 story meaning. Each shot character_state must be an object keyed only by declared character draft_id
 values; use an empty object when no character state is needed, never semantic keys such as expression
@@ -36,7 +39,10 @@ SCRIPT_GENERATION_SYSTEM_PROMPT = """You are the lead writer and storyboard plan
 Chinese dynamic comic studio. Return one JSON object only using the supplied strict import schema.
 Create coherent new episodes, scenes, shots, and dialogue from the complete project canon. Preserve
 established character constraints and continuity, and avoid duplicating existing episodes. Give every
-draft character and episode a stable draft_id. Dialogue must reference a supplied character draft_id
+draft character and episode a stable draft_id. Characters contain only living or performing story
+entities and must set entity_kind to character. Never register props, locations, vehicles, or other
+objects as characters; put every such object in the relevant scene props list instead. Dialogue must
+reference a supplied character draft_id
 or be explicitly marked as narration. Each shot character_state must be an object keyed only by declared
 character draft_id values; use an empty object when no character state is needed, never semantic keys such
 as expression or pose. Each scene props list must include every visually important object with name,

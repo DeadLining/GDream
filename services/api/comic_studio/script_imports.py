@@ -16,6 +16,13 @@ class ScriptImportProjectSuggestion(StrictDraftModel):
 
 
 class ScriptImportCharacter(StrictDraftModel):
+    entity_kind: Literal["character"] = Field(
+        default="character",
+        description=(
+            "Only a living or performing story entity. Props, locations, vehicles, "
+            "and other objects must not be registered as characters."
+        ),
+    )
     draft_id: str = Field(min_length=1, max_length=120)
     name: str = Field(min_length=1, max_length=120)
     aliases: list[str] = []
@@ -67,7 +74,10 @@ class ScriptImportScene(StrictDraftModel):
     time_of_day: str = ""
     summary: str = Field(min_length=1)
     continuity_state: dict = {}
-    props: list[ScriptImportProp] = []
+    props: list[ScriptImportProp] = Field(
+        default_factory=list,
+        description="Visually important objects and narrative props used in this scene.",
+    )
     estimated_duration_seconds: float = Field(gt=0)
     shots: list[ScriptImportShot] = Field(min_length=1)
 
@@ -89,7 +99,12 @@ class ScriptImportWarning(StrictDraftModel):
 
 class ScriptImportDraft(StrictDraftModel):
     project: ScriptImportProjectSuggestion
-    characters: list[ScriptImportCharacter]
+    characters: list[ScriptImportCharacter] = Field(
+        description=(
+            "Living or performing story entities only. Store every object or narrative "
+            "prop in the relevant scene props list instead."
+        )
+    )
     episodes: list[ScriptImportEpisode] = Field(min_length=1)
     warnings: list[ScriptImportWarning] = []
 
