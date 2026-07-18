@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from pydantic import ValidationError
 
 from comic_studio import models, schemas
+from comic_studio.services.panel_freshness import PanelFreshnessService
 
 
 class VisualReviewReferenceError(ValueError):
@@ -200,9 +201,7 @@ class VisualReviewService:
         self.session.refresh(candidate)
         return candidate
 
-    def _scope_revisions(
-        self, thread: models.VisualReviewThread, asset: models.Asset
-    ) -> dict:
+    def _scope_revisions(self, thread: models.VisualReviewThread) -> dict:
         shot = thread.shot
         character_ids = {
             key
@@ -261,6 +260,16 @@ class VisualReviewService:
         }
         variant_ids: list[str] = []
         usage_ids: list[str] = []
+        instruction_parts = [thread.title.strip()]
+        instruction_parts.extend(
+            item.label.strip() for item in thread.annotations if item.label.strip()
+        )
+        instruction_parts.extend(
+            item.content.strip() for item in thread.messages if item.content.strip()
+        )
+        review_instruction = "；".join(
+            dict.fromkeys(item for item in instruction_parts if item)
+        )[:3000]
         for character_id in sorted(character_ids):
             kind = thread.modification_scope
             version_conditions = [
@@ -296,7 +305,7 @@ class VisualReviewService:
                 kind=kind,
                 label=f"{thread.title} V{version}",
                 inherited_fields=["identity", "face", "hair", "body", "outfit"],
-                overrides={},
+                overrides={"visual_review_instruction": review_instruction},
                 version=version,
                 review_status="approved",
             )
@@ -307,7 +316,7 @@ class VisualReviewService:
                 usage = models.AssetVariantUsage(
                     variant_id=variant.id,
                     shot_id=affected_shot.id,
-                    asset_id=asset.id,
+                    asset_id=None,
                     usage_kind="reference",
                 )
                 self.session.add(usage)
@@ -346,6 +355,8 @@ class VisualReviewService:
             raise VisualReviewReferenceError(
                 "Candidate asset must be a panel for the review shot"
             )
+        if PanelFreshnessService(self.session).inspect(shot.id, asset).is_stale:
+            raise VisualReviewReferenceError("Candidate panel is stale")
         for other in thread.candidates:
             if other.id != candidate.id and other.status == "ready":
                 other.status = "rejected"
@@ -356,7 +367,7 @@ class VisualReviewService:
         shot.review_status = "approved"
         candidate.generation_metadata = {
             **candidate.generation_metadata,
-            "acceptance": self._scope_revisions(thread, asset),
+            "acceptance": self._scope_revisions(thread),
         }
         self.session.commit()
         self.session.refresh(candidate)
