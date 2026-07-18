@@ -3,12 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 from typing import Any, Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
+from comic_studio.services.director_generation import (
+    sanitize_director_generation_snapshot,
+)
 
 
 class ShotInputReferenceError(ValueError):
@@ -292,33 +296,20 @@ class ShotInputCompiler:
             if not item["visible"]:
                 continue
             transform = item["transform"]
-            expression = item["appearance"].get("facial_expression", "neutral")
-            morph_weights = item["appearance"].get("morph_target_weights", {})
-            head_yaw = item["appearance"].get("head_yaw_degrees")
-            head_pitch = item["appearance"].get("head_pitch_degrees")
-            gaze_target = item["appearance"].get("gaze_target")
-            morph_summary = (
-                ", ".join(
-                    f"{name}={self._format_number(weight)}"
-                    for name, weight in sorted(morph_weights.items())
-                    if isinstance(name, str)
-                    and isinstance(weight, (int, float))
-                    and not isinstance(weight, bool)
-                )
-                if isinstance(morph_weights, dict)
-                else ""
-            )
+            rotation = transform.get("rotation", [0, 0, 0])
+            horizontal_facing = 0
+            if (
+                isinstance(rotation, (list, tuple))
+                and len(rotation) > 1
+                and isinstance(rotation[1], (int, float))
+                and not isinstance(rotation[1], bool)
+            ):
+                horizontal_facing = round(math.degrees(rotation[1]))
             prompt_lines.append(
                 f"- Director object: {item['kind']} {item['label']}; "
                 f"source {item['source_type']}:{item['source_id'] or 'none'}; "
                 f"position {self._format_vector(transform.get('position', [0, 0, 0]))}; "
-                f"rotation {self._format_vector(transform.get('rotation', [0, 0, 0]))}; "
-                f"scale {self._format_vector(transform.get('scale', [1, 1, 1]))}; "
-                f"pose {item['appearance'].get('pose_preset', 'neutral')}; "
-                f"expression {expression}"
-                f"{f'; morph targets {morph_summary}' if morph_summary else ''}"
-                f"{f'; head direction yaw {self._format_number(head_yaw or 0)} degrees, pitch {self._format_number(head_pitch or 0)} degrees' if isinstance(head_yaw, (int, float)) or isinstance(head_pitch, (int, float)) else ''}"
-                f"{f'; gaze target {self._format_vector(gaze_target)}' if isinstance(gaze_target, (list, tuple)) else ''}"
+                f"horizontal facing {horizontal_facing} degrees"
             )
         prompt_constraints = (
             "Bound production inputs:\n" + "\n".join(prompt_lines)
@@ -414,7 +405,7 @@ class ShotInputCompiler:
                     "visible": visible,
                 }
             )
-        return {
+        return sanitize_director_generation_snapshot({
             "stage_id": stage.id if stage is not None else None,
             "stage_version": stage.version if stage is not None else None,
             "environment": stage.environment if stage is not None else {},
@@ -437,7 +428,7 @@ class ShotInputCompiler:
                 if camera is not None
                 else None
             ),
-        }
+        })
 
     @classmethod
     def _format_mapping(cls, value: dict[str, Any]) -> str:

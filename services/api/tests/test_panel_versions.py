@@ -630,11 +630,13 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert "85mm" in provider.prompt
     assert "林夏" in provider.prompt
     assert "position [2, 0, 0]" in provider.prompt
-    assert "pose action" in provider.prompt
-    assert "expression happy" in provider.prompt
-    assert "morph targets Smile=0.7" in provider.prompt
-    assert "head direction yaw 25 degrees, pitch -8 degrees" in provider.prompt
-    assert "gaze target [4, 1.8, 3]" in provider.prompt
+    assert "horizontal facing 29 degrees" in provider.prompt
+    assert "scale [1.2, 1.2, 1.2]" not in provider.prompt
+    assert "pose action" not in provider.prompt
+    assert "expression happy" not in provider.prompt
+    assert "morph targets Smile=0.7" not in provider.prompt
+    assert "head direction yaw 25 degrees, pitch -8 degrees" not in provider.prompt
+    assert "gaze target [4, 1.8, 3]" not in provider.prompt
     assert "隐藏证物箱" not in provider.prompt
     assert "camera position [1, 2, 6]" in provider.prompt
     assert "target [0, 1, 0]" in provider.prompt
@@ -654,12 +656,12 @@ def test_generate_panel_compiles_bound_variant_state_and_director_input(
     assert snapshot["asset_bindings"][0]["binding_updated_at"]
     assert snapshot["director"]["camera"]["focal_length_mm"] == 85
     assert snapshot["director"]["objects"][0]["transform"]["position"] == [2, 0, 0]
-    assert snapshot["director"]["objects"][0]["appearance"]["pose_preset"] == "action"
-    assert snapshot["director"]["objects"][0]["appearance"]["facial_expression"] == "happy"
-    assert snapshot["director"]["objects"][0]["appearance"]["morph_target_weights"] == {"Smile": 0.7}
-    assert snapshot["director"]["objects"][0]["appearance"]["head_yaw_degrees"] == 25
-    assert snapshot["director"]["objects"][0]["appearance"]["head_pitch_degrees"] == -8
-    assert snapshot["director"]["objects"][0]["appearance"]["gaze_target"] == [4, 1.8, 3]
+    assert snapshot["director"]["objects"][0]["transform"]["rotation"] == [0, 0.5, 0]
+    assert "scale" not in snapshot["director"]["objects"][0]["transform"]
+    assert "appearance" not in snapshot["director"]["objects"][0]
+    assert "object_overrides" not in snapshot["director"]["camera"]
+    assert "stage_version" not in snapshot["director"]
+    assert "version" not in snapshot["director"]["camera"]
     assert [item["id"] for item in snapshot["library_assets"]] == [scene_asset.id, prop_asset.id, costume_asset.id]
     assert costume_media.id in asset.request_metadata["reference_asset_ids"]
     assert len(asset.request_metadata["input_snapshot_hash"]) == 64
