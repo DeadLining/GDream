@@ -47,7 +47,7 @@ describe('operational frontend pages',()=>{
     const onOpenProject=vi.fn();
     render(<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={onOpenProject} onCreateProject={vi.fn()} onNavigate={vi.fn()}/>);
     expect(screen.getByRole('heading',{name:'工作台'})).toBeVisible();
-    expect(screen.getByText('进行中作品')).toBeVisible();
+    expect(screen.getByText('作品总数')).toBeVisible();
     expect(await screen.findByText('3卷 · 1集 · 1场景 · 1镜头')).toBeVisible();
     expect(operationMocks.getWorkspaceSummary).toHaveBeenCalledOnce();
     await userEvent.click(screen.getByRole('button',{name:'进入单集制作'}));
