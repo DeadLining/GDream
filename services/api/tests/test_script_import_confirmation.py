@@ -1,8 +1,8 @@
 from comic_studio import models
 
 
-def _draft(character_name="林夏"):
-    return {
+def _draft(character_name="林夏", *, include_props=False):
+    draft = {
         "project": {"title": "雨夜失忆", "logline": "追查记忆交易"},
         "characters": [
             {
@@ -95,9 +95,18 @@ def _draft(character_name="林夏"):
         ],
         "warnings": [],
     }
+    if include_props:
+        draft["episodes"][1]["scenes"][0]["props"] = [
+            {
+                "name": "记忆芯片",
+                "description": "雨夜交易留下的银色芯片",
+                "required": True,
+            }
+        ]
+    return draft
 
 
-def _ready_import(client, *, character_name="林夏"):
+def _ready_import(client, *, character_name="林夏", include_props=False):
     project = client.post(
         "/api/projects",
         json={
@@ -116,7 +125,7 @@ def _ready_import(client, *, character_name="林夏"):
             source_format="paste",
             checksum="d" * 64,
             extracted_text="剧本",
-            structured_draft=_draft(character_name),
+            structured_draft=_draft(character_name, include_props=include_props),
         )
         session.add(script_import)
         session.commit()
@@ -219,7 +228,7 @@ def test_confirmation_records_episode_provenance(client):
 
 
 def test_confirmation_syncs_asset_requirements_for_current_script_revision(client):
-    project, import_id = _ready_import(client)
+    project, import_id = _ready_import(client, include_props=True)
     with client.app.state.session_factory() as session:
         script_import = session.get(models.ScriptImport, import_id)
         document = models.ScriptDocument(
@@ -254,4 +263,8 @@ def test_confirmation_syncs_asset_requirements_for_current_script_revision(clien
     assert {item["kind"] for item in requirements.json()} == {
         "character",
         "scene",
+        "prop",
     }
+    prop = next(item for item in requirements.json() if item["kind"] == "prop")
+    assert prop["name"] == "记忆芯片"
+    assert prop["description"] == "雨夜交易留下的银色芯片"

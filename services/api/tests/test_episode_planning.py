@@ -15,6 +15,13 @@ class FakePlanner:
                     time_of_day="night",
                     summary="林默发现线索",
                     continuity_state={"weather": "rain"},
+                    props=[
+                        schemas.PlannedProp(
+                            name="记忆芯片",
+                            description="交易留下的银色芯片",
+                            required=True,
+                        )
+                    ],
                     estimated_duration_seconds=8,
                     shots=[
                         schemas.PlannedShot(
@@ -69,6 +76,13 @@ def test_planning_persists_a_complete_ordered_graph(db_session):
     assert planned.status == "planned"
     assert len(planned.scenes) == 1
     assert planned.scenes[0].position == 1
+    assert planned.scenes[0].continuity_state["props"] == [
+        {
+            "name": "记忆芯片",
+            "description": "交易留下的银色芯片",
+            "required": True,
+        }
+    ]
     assert planned.scenes[0].shots[0].position == 1
     assert planned.scenes[0].shots[0].dialogue[0].position == 1
 

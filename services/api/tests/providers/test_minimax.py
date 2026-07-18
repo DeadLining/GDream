@@ -15,6 +15,13 @@ VALID_PLAN = {
             "time_of_day": "night",
             "summary": "林默发现记忆交易留下的线索",
             "continuity_state": {"weather": "heavy rain"},
+            "props": [
+                {
+                    "name": "记忆芯片",
+                    "description": "银色交易芯片",
+                    "required": True,
+                }
+            ],
             "estimated_duration_seconds": 12,
             "shots": [
                 {
@@ -157,6 +164,8 @@ async def test_minimax_uses_m3_anthropic_contract():
     assert request.url.path == "/anthropic/v1/messages"
     assert request.headers["anthropic-version"] == "2023-06-01"
     assert body["model"] == "MiniMax-M3"
+    assert "props" in body["system"]
+    assert plan.scenes[0].props[0].name == "记忆芯片"
     assert plan.scenes[0].shots[0].dialogue[0].character_id == "char-1"
 
 
