@@ -54,6 +54,18 @@ describe('operational frontend pages',()=>{
     expect(onOpenProject).toHaveBeenCalledWith('p1');
   });
 
+  it('labels workspace metrics with the backend counts they actually represent',async()=>{
+    render(<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={vi.fn()} onCreateProject={vi.fn()} onNavigate={vi.fn()}/>);
+
+    expect(await screen.findByText('作品总数')).toBeVisible();
+    expect(screen.getByText('未通过镜头')).toBeVisible();
+    expect(screen.getByText('未完成任务')).toBeVisible();
+    expect(screen.getByText('今日更新')).toBeVisible();
+    expect(screen.queryByText('进行中作品')).not.toBeInTheDocument();
+    expect(screen.queryByText('今日待审核')).not.toBeInTheDocument();
+    expect(screen.queryByText('生成任务')).not.toBeInTheDocument();
+  });
+
   it('separates recent projects from all personal projects without fake controls',async()=>{
     const manyProjects:Project[]=Array.from({length:6},(_,index)=>({...projects[0],id:`project-${index+1}`,title:`个人作品 ${index+1}`,updated_at:`2026-07-${String(17-index).padStart(2,'0')}T10:00:00Z`}));
     render(<WorkspaceHome projects={manyProjects} selectedProject={null} onOpenProject={vi.fn()} onCreateProject={vi.fn()} onNavigate={vi.fn()}/>);
