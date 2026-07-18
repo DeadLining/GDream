@@ -21,6 +21,14 @@ class AssetStore:
         self.session = session
         self.data_root = data_root.resolve()
 
+    @staticmethod
+    def _activate_panel(shot: models.Shot, asset_id: str) -> None:
+        if shot.active_panel_asset_id == asset_id:
+            return
+        shot.active_panel_asset_id = asset_id
+        shot.active_video_asset_id = None
+        shot.video_render_status = "pending"
+
     def register_panel(
         self,
         *,
@@ -77,7 +85,7 @@ class AssetStore:
 
         asset.local_path = str(relative_path)
         if activate:
-            shot.active_panel_asset_id = asset.id
+            self._activate_panel(shot, asset.id)
         self.session.commit()
         self.session.refresh(asset)
         return asset
@@ -147,7 +155,7 @@ class AssetStore:
         asset = self.session.get(models.Asset, asset_id)
         if shot is None or asset is None or asset.kind != f"panel:{shot_id}":
             return None
-        shot.active_panel_asset_id = asset.id
+        self._activate_panel(shot, asset.id)
         self.session.commit()
         self.session.refresh(shot)
         return shot
