@@ -106,11 +106,34 @@ def test_render_manifest_rejects_stale_active_panel(db_session, tmp_path):
 
 def test_render_manifest_includes_active_video_and_keeps_panel_fallback(db_session,tmp_path):
     episode=seed_episode(db_session,tmp_path); shot=episode.scenes[0].shots[0]
-    video=models.Asset(project_id=episode.project_id,kind=f"video:{shot.id}",local_path="projects/shot.mp4",media_type="video/mp4",provider="test",model="video",checksum="2"*64,duration_seconds=5)
+    video=models.Asset(project_id=episode.project_id,kind=f"video:{shot.id}",local_path="projects/shot.mp4",media_type="video/mp4",provider="test",model="video",checksum="2"*64,duration_seconds=5,parent_asset_id=shot.active_panel_asset_id)
     db_session.add(video); db_session.flush(); shot.active_video_asset_id=video.id; db_session.commit(); (tmp_path/video.local_path).write_bytes(b'\x00\x00\x00\x18ftypmp42video')
     manifest=RenderingService(db_session,tmp_path,tmp_path).build_manifest(episode.id)
     assert manifest['shots'][0]['videoPath'].endswith('projects/shot.mp4')
     assert manifest['shots'][0]['panelPath'].endswith('projects/panel.png')
+
+
+def test_render_manifest_rejects_video_from_inactive_panel(db_session,tmp_path):
+    episode=seed_episode(db_session,tmp_path);shot=episode.scenes[0].shots[0]
+    old_panel=models.Asset(
+        project_id=episode.project_id,kind=f"panel:{shot.id}",local_path="projects/old.png",
+        media_type="image/png",provider="test",model="test",checksum="3"*64,
+    )
+    db_session.add(old_panel);db_session.flush()
+    video=models.Asset(
+        project_id=episode.project_id,kind=f"video:{shot.id}",local_path="projects/old-shot.mp4",
+        media_type="video/mp4",provider="test",model="video",checksum="4"*64,
+        duration_seconds=5,parent_asset_id=old_panel.id,
+    )
+    db_session.add(video);db_session.flush();shot.active_video_asset_id=video.id;db_session.commit()
+    (tmp_path/video.local_path).write_bytes(b'\x00\x00\x00\x18ftypmp42video')
+
+    try:
+        RenderingService(db_session,tmp_path,tmp_path).build_manifest(episode.id)
+    except ValueError as exc:
+        assert "video source panel is stale" in str(exc)
+    else:
+        raise AssertionError("Expected inactive source panel to block rendering")
 
 
 def test_render_manifest_includes_bound_scene_sound(db_session, tmp_path):
