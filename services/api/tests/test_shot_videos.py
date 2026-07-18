@@ -285,3 +285,35 @@ def test_video_api_job_lists_and_activates_versions(client):
     assert len(versions) == 1
     active = client.put(f"/api/shots/{shot_id}/videos/{versions[0]['id']}/active")
     assert active.json()["active_video_asset_id"] == versions[0]["id"]
+
+
+def test_video_api_rejects_version_generated_from_inactive_panel(client):
+    with client.app.state.session_factory() as session:
+        project, shot, _panel = _eligible(
+            session, client.app.state.settings.data_root
+        )
+        video = asyncio.run(
+            VideoService(
+                session, client.app.state.settings.data_root, Provider()
+            ).generate(shot.id, activate=True)
+        )
+        AssetStore(session, client.app.state.settings.data_root).register_panel(
+            project_id=project.id,
+            shot_id=shot.id,
+            content=b"new-active-panel",
+            media_type="image/png",
+            provider="test",
+            model="image",
+            request_metadata={},
+            activate=True,
+        )
+        shot_id=shot.id;video_id=video.id
+
+    response=client.put(f"/api/shots/{shot_id}/videos/{video_id}/active")
+
+    assert response.status_code==409
+    assert response.json()["detail"]=="Video version was generated from a different panel"
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        assert shot.active_video_asset_id is None
+        assert shot.video_render_status=="pending"
