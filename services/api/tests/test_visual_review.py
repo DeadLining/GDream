@@ -113,6 +113,52 @@ def test_visual_review_persists_annotation_conversation_and_candidate(client):
     assert production_shot["review_status"]=="approved"
 
 
+def test_accepting_visual_review_candidate_invalidates_current_shot_video(client):
+    project,shot_id,source_id,candidate_id=_graph(client)
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        video=models.Asset(
+            project_id=project["id"],kind=f"video:{shot_id}",
+            local_path="old-video.mp4",media_type="video/mp4",provider="test",
+            model="test",request_metadata={},checksum="old-video",
+            review_status="approved",parent_asset_id=source_id,
+        )
+        session.add(video);session.flush()
+        shot.active_panel_asset_id=source_id
+        shot.review_status="approved"
+        shot.active_video_asset_id=video.id
+        shot.video_render_status="completed"
+        session.commit();video_id=video.id
+    thread=client.post(
+        f"/api/shots/{shot_id}/visual-review-threads",
+        json={"source_asset_id":source_id,"title":"替换当前画面","modification_scope":"shot"},
+    ).json()
+    candidate=client.post(
+        f"/api/visual-review-threads/{thread['id']}/candidates",
+        json={"asset_id":candidate_id,"generation_metadata":{}},
+    ).json()
+
+    accepted=client.post(f"/api/visual-review-candidates/{candidate['id']}/accept")
+
+    assert accepted.status_code==200
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        assert shot.active_panel_asset_id==candidate_id
+        assert shot.review_status=="approved"
+        assert shot.active_video_asset_id is None
+        assert shot.video_render_status=="pending"
+        assert session.get(models.Asset,video_id) is not None
+
+    run=client.post(
+        f"/api/episodes/{thread['episode_id']}/production-runs",
+        json={"stages":["videos"]},
+    )
+    assert run.status_code==202
+    items=client.get(f"/api/production-runs/{run.json()['id']}/items").json()
+    item=next(item for item in items if item["target_id"]==shot_id)
+    assert item["status"]=="queued"
+
+
 def test_visual_review_generation_uses_thread_feedback_and_registers_candidate(client):
     _project,shot_id,source_id,_candidate_id=_graph(client)
     source_path=client.app.state.settings.data_root/"source.png"
