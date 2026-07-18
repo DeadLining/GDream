@@ -23,6 +23,6 @@ export function deriveEpisodeOverview(
     panelProgress: {ready: readiness.ready_counts.panels, total: readiness.totals.shots},
     speechProgress: {ready: readiness.ready_counts.speech, total: readiness.totals.dialogue},
     reviewProgress: {ready: readiness.ready_counts.approved, total: readiness.totals.shots},
-    renderReady: readiness.ready,
+    renderReady: readiness.video_ready ?? readiness.ready,
   };
 }

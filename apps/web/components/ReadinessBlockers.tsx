@@ -22,6 +22,8 @@ export function ReadinessBlockers({
         <li>过期画面 {blockers.stale_panels?.length ?? 0}</li>
         <li>未审核镜头 {blockers.unapproved_shots.length}</li>
         <li>缺少配音 {blockers.missing_speech.length}</li>
+        <li>缺少视频 {blockers.missing_videos?.length ?? 0}</li>
+        <li>过期视频 {blockers.stale_videos?.length ?? 0}</li>
       </ul>}
       {!ready && !compact && <div className="readiness-blocker-actions">
         <button type="button" onClick={onOpenProduction}>处理画面与配音</button>

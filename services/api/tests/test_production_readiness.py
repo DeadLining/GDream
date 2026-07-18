@@ -53,7 +53,7 @@ def test_readiness_becomes_true_when_required_assets_are_ready(client):
     report = client.get(f"/api/episodes/{episode_id}/production-readiness").json()
 
     assert report["ready"] is True
-    assert report["blockers"] == {"missing_panels": [], "stale_panels": [], "unapproved_shots": [], "missing_speech": [], "missing_videos": [shot_id]}
+    assert report["blockers"] == {"missing_panels": [], "stale_panels": [], "unapproved_shots": [], "missing_speech": [], "missing_videos": [shot_id], "stale_videos": []}
     assert report["ready"] is True
     assert report["video_ready"] is False
 

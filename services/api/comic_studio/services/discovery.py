@@ -131,6 +131,7 @@ class DiscoveryService:
                 "unapproved_shots",
                 "missing_speech",
                 "missing_videos",
+                "stale_videos",
             )
         }
         if total_shots == 0:
@@ -141,7 +142,7 @@ class DiscoveryService:
             stage = "镜头审核"
         elif blockers["missing_speech"]:
             stage = "配音制作"
-        elif blockers["missing_videos"]:
+        elif blockers["missing_videos"] or blockers["stale_videos"]:
             stage = "视频制作"
         else:
             stage = "素材就绪"

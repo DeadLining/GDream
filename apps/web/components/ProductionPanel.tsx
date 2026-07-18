@@ -251,6 +251,7 @@ export function ProductionPanel({
         <span>未审核 {displayedReadiness.blockers.unapproved_shots.length}</span>
         <span>缺少配音 {displayedReadiness.blockers.missing_speech.length}</span>
         <span>缺少视频 {displayedReadiness.blockers.missing_videos?.length ?? 0}</span>
+        <span>过期视频 {displayedReadiness.blockers.stale_videos?.length ?? 0}</span>
       </div>}
     </header>
     <div className="production-canvas-stage">

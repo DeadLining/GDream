@@ -178,7 +178,7 @@ describe('episode overview', () => {
       },
     };
     expect(deriveEpisodeOverview(episode, videoBlockedReadiness).renderReady).toBe(false);
-    render(
+    const {container} = render(
       <EpisodeOverview
         episode={episode}
         episodeNumber={1}
@@ -189,9 +189,10 @@ describe('episode overview', () => {
       />,
     );
 
-    expect(screen.getByText('尚未就绪')).toBeVisible();
-    expect(screen.getByText('缺少视频 1')).toBeVisible();
-    expect(screen.getByText('过期视频 1')).toBeVisible();
+    const view = within(container);
+    expect(view.getByText('尚未就绪')).toBeVisible();
+    expect(view.getByText('缺少视频 1')).toBeVisible();
+    expect(view.getByText('过期视频 1')).toBeVisible();
   });
 
   it('uses an explicit episode number instead of deriving one from an opaque id', () => {

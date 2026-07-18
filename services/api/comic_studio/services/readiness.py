@@ -28,18 +28,43 @@ class ReadinessService:
                 stale_panels.append(shot.id)
         unapproved = [shot.id for shot in shots if shot.review_status != "approved"]
         missing_speech = [line.id for line in lines if not line.audio_asset_id or line.duration_seconds <= 0]
-        missing_videos = [shot.id for shot in shots if not shot.active_video_asset_id]
+        missing_videos = []
+        stale_videos = []
+        invalid_panels = set(missing_panels) | set(stale_panels)
+        for shot in shots:
+            video = (
+                self.session.get(models.Asset, shot.active_video_asset_id)
+                if shot.active_video_asset_id
+                else None
+            )
+            if (
+                video is None
+                or video.kind != f"video:{shot.id}"
+                or not video.media_type.startswith("video/")
+                or not video.duration_seconds
+                or video.duration_seconds <= 0
+            ):
+                missing_videos.append(shot.id)
+            elif (
+                shot.id in invalid_panels
+                or video.parent_asset_id != shot.active_panel_asset_id
+            ):
+                stale_videos.append(shot.id)
         blockers = {"missing_panels": missing_panels, "stale_panels": stale_panels, "unapproved_shots": unapproved, "missing_speech": missing_speech}
         return {
             "episode_id": episode.id,
             "ready": not any(blockers.values()),
-            "video_ready": not missing_videos and not any(blockers.values()),
+            "video_ready": not missing_videos and not stale_videos and not any(blockers.values()),
             "totals": {"shots": len(shots), "dialogue": len(lines)},
             "ready_counts": {
                 "panels": len(shots) - len(missing_panels) - len(stale_panels),
                 "approved": len(shots) - len(unapproved),
                 "speech": len(lines) - len(missing_speech),
-                "videos": len(shots) - len(missing_videos),
+                "videos": len(shots) - len(missing_videos) - len(stale_videos),
             },
-            "blockers": {**blockers, "missing_videos": missing_videos},
+            "blockers": {
+                **blockers,
+                "missing_videos": missing_videos,
+                "stale_videos": stale_videos,
+            },
         }
