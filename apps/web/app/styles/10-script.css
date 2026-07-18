@@ -67,9 +67,9 @@
 .script-version-delete:hover:not(:disabled) { background: #fbeceb; color: #a53c35; }
 .script-version-delete:disabled { cursor: not-allowed; opacity: .3; }
 .script-library-main { position: relative; display: flex; flex-direction: column; background: var(--color-surface); }
-.script-version-actions { flex: 0 0 50px; display: flex; align-items: center; justify-content: flex-end; padding: 8px 24px; border-bottom: 1px solid var(--color-line); background: #fbfcfd; }
-.script-ai-version-button { min-height: 34px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #9eabb3; border-radius: 5px; background: #fff; padding: 0 12px; color: #344a57; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgb(30 43 51 / 6%); }
-.script-ai-version-button:hover { border-color: #5f7785; background: #f4f7f8; }
+.script-version-actions { flex: 0 0 50px; display: flex; align-items: center; justify-content: flex-end; gap:8px; padding: 8px 24px; border-bottom: 1px solid var(--color-line); background: #fbfcfd; }
+.script-ai-version-button,.script-parse-version-button { min-height: 34px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #9eabb3; border-radius: 5px; background: #fff; padding: 0 12px; color: #344a57; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgb(30 43 51 / 6%); }
+.script-ai-version-button:hover,.script-parse-version-button:hover { border-color: #5f7785; background: #f4f7f8; }
 .script-ai-version-button.generating { border-color: #c77b75; background: #fff7f6; color: #9b3d37; }
 .script-editor { flex: 1; height: auto; padding: 22px 28px 0; overflow: hidden; }
 .script-editor-header { flex: 0 0 auto; min-height: 72px; align-items: center; padding-bottom: 16px; }

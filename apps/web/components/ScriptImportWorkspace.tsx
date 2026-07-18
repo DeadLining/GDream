@@ -23,15 +23,15 @@ function loadLocalDraft(projectId:string):{brief:string;draft:string}{
   } catch {return {brief:'',draft:''};}
 }
 
-export function ScriptImportWorkspace({projectId,onConfirmed}:{projectId:string;onConfirmed:()=>Promise<void>|void}) {
+export function ScriptImportWorkspace({projectId,onConfirmed,initialImport=null,onCancel}:{projectId:string;onConfirmed:()=>Promise<void>|void;initialImport?:ScriptImport|null;onCancel?:()=>void}) {
   const initial=typeof window==='undefined'?{brief:'',draft:''}:loadLocalDraft(projectId);
   const [mode,setMode]=useState<ScriptImportMode>('generate');
   const [brief,setBrief]=useState(initial.brief);
   const [aiDraft,setAiDraft]=useState(initial.draft);
   const [sourceText,setSourceText]=useState('');
   const [file,setFile]=useState<File|null>(null);
-  const [current,setCurrent]=useState<ScriptImport|null>(null);
-  const [preview,setPreview]=useState<ScriptImportDraft|null>(null);
+  const [current,setCurrent]=useState<ScriptImport|null>(initialImport);
+  const [preview,setPreview]=useState<ScriptImportDraft|null>(initialImport?.status==='ready'?initialImport.structured_draft as ScriptImportDraft:null);
   const [busy,setBusy]=useState(false);
   const [streamState,setStreamState]=useState<StreamState>(initial.draft?'complete':'idle');
   const [error,setError]=useState('');
@@ -43,9 +43,9 @@ export function ScriptImportWorkspace({projectId,onConfirmed}:{projectId:string;
   useEffect(()=>{
     streamGeneration.current+=1;controller.current?.abort();controller.current=null;
     const saved=loadLocalDraft(projectId);setBrief(saved.brief);setAiDraft(saved.draft);setStreamState(saved.draft?'complete':'idle');
-    setSourceText('');setFile(null);setCurrent(null);setPreview(null);setBusy(false);setError('');
+    setSourceText('');setFile(null);setCurrent(initialImport);setPreview(initialImport?.status==='ready'?initialImport.structured_draft as ScriptImportDraft:null);setBusy(false);setError('');
     return()=>{streamGeneration.current+=1;controller.current?.abort();};
-  },[projectId]);
+  },[projectId,initialImport?.id]);
 
   const changeBrief=(value:string)=>{setBrief(value);persist(value,aiDraft);};
   const changeDraft=(value:string)=>{setAiDraft(value);persist(brief,value);};
@@ -81,7 +81,7 @@ export function ScriptImportWorkspace({projectId,onConfirmed}:{projectId:string;
 
   const hasDraft=Boolean(aiDraft)||streamState==='streaming';
   return <main className="script-import-workspace">
-    <header><div><h1>剧本创作</h1><p>AI 生成或识别的草稿，确认后才会写入角色、剧集和分镜。</p></div>{preview&&<button className="command-button" disabled={busy} onClick={confirm}><Sparkles size={16}/>确认导入</button>}</header>
+    <header><div><h1>{initialImport?'结构化解析预览':'剧本创作'}</h1><p>AI 生成或识别的草稿，确认后才会写入角色、剧集和分镜。</p></div>{preview&&<div className="script-import-header-actions">{onCancel&&<button type="button" disabled={busy} onClick={onCancel}>返回正文</button>}<button className="command-button" disabled={busy} onClick={confirm}><Sparkles size={16}/>确认导入</button></div>}</header>
     {!preview?<section className="script-import-source">
       <div className="mode-segments script-mode-segments" role="group" aria-label="创作模式">{([['generate','AI生成'],['auto','自动识别']] as const).map(([value,label])=><button key={value} className={`script-mode-segment${mode===value?' active':''}`} onClick={()=>{if(streamState==='streaming')stopStream();setMode(value);setCurrent(null);setError('');}}>{value==='generate'&&<Sparkles aria-hidden="true" size={15}/>}<span>{label}</span></button>)}</div>
       {mode==='generate'?<>
