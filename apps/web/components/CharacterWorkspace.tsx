@@ -196,18 +196,25 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
 
   useEffect(()=>{
     let active=true;
-    if(!resolvedProjectId||!requestedAssetRequest.shotId){setAssetRequirements([]);setAssetRequirementError('');return;}
-    void listAssetRequirements(resolvedProjectId,requestedAssetRequest.target).then(items=>{if(active){const next=requirementsForRequest(items,requestedAssetRequest);setAssetRequirements(next);setAssetRequirementError('');}}).catch(cause=>{if(active){setAssetRequirements([]);setAssetRequirementError(cause instanceof Error?cause.message:'无法读取镜头资产需求');}});
+    if(!resolvedProjectId){setAssetRequirements([]);setAssetRequirementError('');return;}
+    const request=requestedAssetRequest.shotId?listAssetRequirements(resolvedProjectId,requestedAssetRequest.target):listAssetRequirements(resolvedProjectId);
+    void request.then(items=>{if(active){const next=requestedAssetRequest.shotId?requirementsForRequest(items,requestedAssetRequest):items;setAssetRequirements(next);setAssetRequirementError('');}}).catch(cause=>{if(active){setAssetRequirements([]);setAssetRequirementError(cause instanceof Error?cause.message:'无法读取作品资产需求');}});
     return()=>{active=false;};
   },[resolvedProjectId,requestedAssetRequest.target,requestedAssetRequest.shotId,requestedRequirementIds]);
   useEffect(()=>{if(requestedAssetRequest.target==='character'){const characterId=assetRequirements.find(item=>item.binding_id)?.binding_id;if(characterId&&workspaceCharacters.some(item=>item.id===characterId))setSelected(characterId);}},[requestedAssetRequest.target,assetRequirements,characterIds]);
   useEffect(()=>{let active=true;if(!requestedAssetRequest.shotId){setGenerationReadiness(null);return;}void getShotGenerationReadiness(requestedAssetRequest.shotId).then(value=>{if(active)setGenerationReadiness(value);}).catch(()=>{if(active)setGenerationReadiness(null);});return()=>{active=false;};},[requestedAssetRequest.shotId]);
 
   const refreshAssetRequirements=async()=>{
-    if(!resolvedProjectId||!requestedAssetRequest.shotId)return;
-    const [items,readiness]=await Promise.all([syncAssetRequirements(resolvedProjectId),getShotGenerationReadiness(requestedAssetRequest.shotId)]);
-    setAssetRequirements(requirementsForRequest(items,requestedAssetRequest));
-    setGenerationReadiness(readiness);
+    if(!resolvedProjectId)return;
+    const items=await syncAssetRequirements(resolvedProjectId);
+    if(requestedAssetRequest.shotId){
+      const readiness=await getShotGenerationReadiness(requestedAssetRequest.shotId);
+      setAssetRequirements(requirementsForRequest(items,requestedAssetRequest));
+      setGenerationReadiness(readiness);
+    }else{
+      setAssetRequirements(items);
+      setGenerationReadiness(null);
+    }
     setAssetRequirementError('');
   };
 
@@ -240,7 +247,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
   const loadLibraryModelJob=(id:string)=>getLatestModel3DJob('library_asset',id);
   const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
   const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
-  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} requirements={assetRequirements} requirementError={assetRequirementError} generationReadiness={generationReadiness} onBindLibraryAsset={bindLibraryAsset} onReturnToShot={requestedAssetRequest.shotId&&onReturnToShot?()=>onReturnToShot(requestedAssetRequest.shotId):undefined} onOpenDirector={requestedAssetRequest.shotId&&onOpenDirector?()=>onOpenDirector(requestedAssetRequest.shotId):undefined} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
+  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} requirements={assetRequirements} requirementScope={requestedAssetRequest.shotId?'shot':'project'} requirementError={assetRequirementError} generationReadiness={generationReadiness} onBindLibraryAsset={bindLibraryAsset} onReturnToShot={requestedAssetRequest.shotId&&onReturnToShot?()=>onReturnToShot(requestedAssetRequest.shotId):undefined} onOpenDirector={requestedAssetRequest.shotId&&onOpenDirector?()=>onOpenDirector(requestedAssetRequest.shotId):undefined} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
 
   if(!character)return catalog;
 
