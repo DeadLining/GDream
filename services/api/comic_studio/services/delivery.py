@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
+from comic_studio.services.review_publication import ReviewPublicationService
 
 
 class DeliveryValidationError(ValueError):
@@ -16,6 +17,10 @@ class DeliveryValidationError(ValueError):
 
 
 class DeliveryCandidateNotApproved(RuntimeError):
+    pass
+
+
+class DeliveryCandidateRenderStale(RuntimeError):
     pass
 
 
@@ -44,6 +49,10 @@ class DeliveryPackageService:
             )
         if candidate.status not in {"approved", "published"}:
             raise DeliveryCandidateNotApproved
+        if not ReviewPublicationService(
+            self.session, self.data_root
+        ).candidate_render_is_current(candidate):
+            raise DeliveryCandidateRenderStale
 
         enabled = {item.kind for item in data.outputs if item.enabled}
         if not enabled:

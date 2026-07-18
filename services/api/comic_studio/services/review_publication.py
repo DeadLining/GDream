@@ -110,7 +110,7 @@ class ReviewPublicationService:
             return False
         return stored_hash == current_hash
 
-    def _candidate_render_is_current(
+    def candidate_render_is_current(
         self,
         candidate: models.ReleaseCandidate,
     ) -> bool:
@@ -220,7 +220,7 @@ class ReviewPublicationService:
         open_critical = list(self.session.scalars(statement))
         production_ready = bool(readiness and readiness["video_ready"])
         qc_pass = candidate.qc_snapshot.get("overall_pass") is True
-        render_current = self._candidate_render_is_current(candidate)
+        render_current = self.candidate_render_is_current(candidate)
         blockers = dict((readiness or {}).get("blockers", {}))
         if not render_current:
             blockers["stale_render"] = [candidate.id]

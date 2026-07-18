@@ -51,6 +51,90 @@ def _project_episode_shot(client, title="运营作品"):
         return project, episode, scene.id, shot.id
 
 
+def _release_candidate(
+    client,
+    project,
+    episode,
+    shot_id,
+    render_relative,
+    *,
+    status,
+):
+    data_root = client.app.state.settings.data_root
+    with client.app.state.session_factory() as session:
+        shot = session.get(models.Shot, shot_id)
+        shot.review_status = "approved"
+        panel = models.Asset(
+            project_id=project["id"],
+            kind=f"panel:{shot.id}",
+            local_path=f"panels/{shot.id}.png",
+            media_type="image/png",
+            provider="test",
+            model="test",
+            request_metadata={},
+            checksum="panel",
+            review_status="approved",
+        )
+        video = models.Asset(
+            project_id=project["id"],
+            kind=f"video:{shot.id}",
+            local_path=f"videos/{shot.id}.mp4",
+            media_type="video/mp4",
+            provider="test",
+            model="test",
+            request_metadata={},
+            checksum="video",
+            review_status="approved",
+            duration_seconds=shot.duration_seconds,
+        )
+        session.add_all([panel, video])
+        session.flush()
+        (data_root / panel.local_path).parent.mkdir(parents=True, exist_ok=True)
+        (data_root / panel.local_path).write_bytes(b"panel")
+        (data_root / video.local_path).parent.mkdir(parents=True, exist_ok=True)
+        (data_root / video.local_path).write_bytes(b"\x00\x00\x00\x18ftypmp42video")
+        video.parent_asset_id = panel.id
+        shot.active_panel_asset_id = panel.id
+        shot.active_video_asset_id = video.id
+        session.flush()
+        compiled = ShotInputCompiler(session).compile(
+            shot.id, usage_kinds={"panel", "reference"}
+        )
+        panel.request_metadata = {
+            "input_snapshot": compiled.snapshot,
+            "input_snapshot_hash": compiled.snapshot_hash,
+        }
+        session.flush()
+        input_snapshot_hash = RenderingService(
+            session, data_root, data_root
+        ).input_snapshot_hash(episode["id"])
+        job = models.Job(
+            operation="render_episode",
+            target_type="episode",
+            target_id=episode["id"],
+            status="succeeded",
+            progress=100,
+            request_payload={},
+            result_metadata={
+                "episode_id": episode["id"],
+                "output_path": render_relative,
+                "input_snapshot_hash": input_snapshot_hash,
+            },
+        )
+        session.add(job)
+        session.flush()
+        candidate = models.ReleaseCandidate(
+            episode_id=episode["id"],
+            version="V1",
+            render_path=render_relative,
+            qc_snapshot={"overall_pass": True, "job_id": job.id},
+            status=status,
+        )
+        session.add(candidate)
+        session.commit()
+        return candidate.id
+
+
 def test_personal_app_does_not_publish_project_member_endpoints(client):
     paths = client.get("/openapi.json").json()["paths"]
 
@@ -224,14 +308,6 @@ def test_delivery_packages_require_approved_release_candidate(client):
     render_path.parent.mkdir(parents=True, exist_ok=True)
     render_path.write_bytes(b"real-render")
     with client.app.state.session_factory() as session:
-        row = models.ReleaseCandidate(
-            episode_id=episode["id"],
-            version="V1",
-            render_path=render_relative,
-            qc_snapshot={"overall_pass": True},
-            status="draft",
-        )
-        session.add(row)
         session.add(
             models.DialogueLine(
                 shot_id=shot_id,
@@ -246,7 +322,14 @@ def test_delivery_packages_require_approved_release_candidate(client):
             )
         )
         session.commit()
-        candidate_id = row.id
+    candidate_id = _release_candidate(
+        client,
+        project,
+        episode,
+        shot_id,
+        render_relative,
+        status="draft",
+    )
     body = {
         "release_candidate_id": candidate_id,
         "preset_name": "平台标准包",
@@ -313,79 +396,14 @@ def test_delivery_package_rejects_approved_candidate_after_render_inputs_change(
     render_path.parent.mkdir(parents=True, exist_ok=True)
     render_path.write_bytes(b"approved-render")
 
-    with client.app.state.session_factory() as session:
-        shot = session.get(models.Shot, shot_id)
-        shot.review_status = "approved"
-        panel = models.Asset(
-            project_id=project["id"],
-            kind=f"panel:{shot.id}",
-            local_path=f"panels/{shot.id}.png",
-            media_type="image/png",
-            provider="test",
-            model="test",
-            request_metadata={},
-            checksum="panel",
-            review_status="approved",
-        )
-        video = models.Asset(
-            project_id=project["id"],
-            kind=f"video:{shot.id}",
-            local_path=f"videos/{shot.id}.mp4",
-            media_type="video/mp4",
-            provider="test",
-            model="test",
-            request_metadata={},
-            checksum="video",
-            review_status="approved",
-            duration_seconds=shot.duration_seconds,
-        )
-        session.add_all([panel, video])
-        session.flush()
-        (data_root / panel.local_path).parent.mkdir(parents=True, exist_ok=True)
-        (data_root / panel.local_path).write_bytes(b"panel")
-        (data_root / video.local_path).parent.mkdir(parents=True, exist_ok=True)
-        (data_root / video.local_path).write_bytes(b"\x00\x00\x00\x18ftypmp42video")
-        video.parent_asset_id = panel.id
-        shot.active_panel_asset_id = panel.id
-        shot.active_video_asset_id = video.id
-        session.flush()
-        compiled = ShotInputCompiler(session).compile(
-            shot.id, usage_kinds={"panel", "reference"}
-        )
-        panel.request_metadata = {
-            "input_snapshot": compiled.snapshot,
-            "input_snapshot_hash": compiled.snapshot_hash,
-        }
-        session.flush()
-
-        input_snapshot_hash = RenderingService(
-            session, data_root, data_root
-        ).input_snapshot_hash(episode["id"])
-        job = models.Job(
-            operation="render_episode",
-            target_type="episode",
-            target_id=episode["id"],
-            status="succeeded",
-            progress=100,
-            request_payload={},
-            result_metadata={
-                "episode_id": episode["id"],
-                "output_path": render_relative,
-                "input_snapshot_hash": input_snapshot_hash,
-            },
-        )
-        session.add(job)
-        session.flush()
-        candidate = models.ReleaseCandidate(
-            episode_id=episode["id"],
-            version="V1",
-            render_path=render_relative,
-            qc_snapshot={"overall_pass": True, "job_id": job.id},
-            status="approved",
-        )
-        session.add(candidate)
-        session.commit()
-        candidate_id = candidate.id
+    candidate_id = _release_candidate(
+        client,
+        project,
+        episode,
+        shot_id,
+        render_relative,
+        status="approved",
+    )
 
     with client.app.state.session_factory() as session:
         shot = session.get(models.Shot, shot_id)

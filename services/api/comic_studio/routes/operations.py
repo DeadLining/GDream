@@ -8,6 +8,7 @@ from comic_studio import schemas
 from comic_studio.db import get_session
 from comic_studio.services.delivery import (
     DeliveryCandidateNotApproved,
+    DeliveryCandidateRenderStale,
     DeliveryPackageService,
     DeliveryValidationError,
 )
@@ -90,6 +91,11 @@ def create_delivery_package(episode_id: str, data: schemas.DeliveryPackageCreate
         _unprocessable(exc)
     except DeliveryCandidateNotApproved as exc:
         raise HTTPException(status_code=409, detail="Delivery package requires an approved release candidate") from exc
+    except DeliveryCandidateRenderStale as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Delivery package requires a current release render",
+        ) from exc
     if package is None: raise HTTPException(status_code=404, detail="Episode not found")
     return package
 
