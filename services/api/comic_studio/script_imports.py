@@ -56,11 +56,18 @@ class ScriptImportShot(StrictDraftModel):
     dialogue: list[ScriptImportDialogue] = []
 
 
+class ScriptImportProp(StrictDraftModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    required: bool = True
+
+
 class ScriptImportScene(StrictDraftModel):
     location: str = Field(min_length=1, max_length=200)
     time_of_day: str = ""
     summary: str = Field(min_length=1)
     continuity_state: dict = {}
+    props: list[ScriptImportProp] = []
     estimated_duration_seconds: float = Field(gt=0)
     shots: list[ScriptImportShot] = Field(min_length=1)
 

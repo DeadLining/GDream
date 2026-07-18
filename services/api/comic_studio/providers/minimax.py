@@ -15,8 +15,9 @@ from comic_studio.script_imports import ScriptImportDraft
 
 SYSTEM_PROMPT = """You are the planning engine for a serialized Chinese dynamic comic.
 Return one JSON object only. It must contain a non-empty scenes array. Each scene must
-contain location, time_of_day, summary, continuity_state,
-estimated_duration_seconds, and a non-empty shots array. Each shot must contain
+contain location, time_of_day, summary, continuity_state, props,
+estimated_duration_seconds, and a non-empty shots array. Props must list every
+visually important scene object with name, description, and required. Each shot must contain
 shot_type, duration_seconds, composition, camera_motion, character_state,
 image_prompt, negative_prompt, and dialogue. Dialogue entries contain character_id,
 text, subtitle_text, emotion, and performance_instruction. Preserve the supplied
@@ -28,7 +29,8 @@ scenes, shots, and dialogue when needed. Give every draft character and episode 
 Dialogue must reference a supplied character draft_id or be explicitly marked as narration. Preserve
 story meaning. Each shot character_state must be an object keyed only by declared character draft_id
 values; use an empty object when no character state is needed, never semantic keys such as expression
-or pose. Expose uncertainty through warnings, and do not use Markdown fences."""
+or pose. Each scene props list must include every visually important object with name, description,
+and required. Expose uncertainty through warnings, and do not use Markdown fences."""
 
 SCRIPT_GENERATION_SYSTEM_PROMPT = """You are the lead writer and storyboard planner for a serialized
 Chinese dynamic comic studio. Return one JSON object only using the supplied strict import schema.
@@ -37,7 +39,8 @@ established character constraints and continuity, and avoid duplicating existing
 draft character and episode a stable draft_id. Dialogue must reference a supplied character draft_id
 or be explicitly marked as narration. Each shot character_state must be an object keyed only by declared
 character draft_id values; use an empty object when no character state is needed, never semantic keys such
-as expression or pose. Expose uncertainty through warnings and do not use Markdown fences."""
+as expression or pose. Each scene props list must include every visually important object with name,
+description, and required. Expose uncertainty through warnings and do not use Markdown fences."""
 
 READABLE_SCRIPT_SYSTEM_PROMPT = """You are the lead writer for a Chinese dynamic-comic studio.
 Write a readable Chinese dynamic-comic script, not JSON. Use clear episode, scene, action, speaker,

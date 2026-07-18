@@ -231,13 +231,18 @@ class ScriptImportConfirmationService:
                 for scene_position, planned_scene in enumerate(
                     planned_episode.scenes, start=1
                 ):
+                    continuity_state = dict(planned_scene.continuity_state)
+                    if planned_scene.props:
+                        continuity_state["props"] = [
+                            prop.model_dump() for prop in planned_scene.props
+                        ]
                     scene = models.Scene(
                         episode_id=episode.id,
                         position=scene_position,
                         location=planned_scene.location,
                         time_of_day=planned_scene.time_of_day,
                         summary=planned_scene.summary,
-                        continuity_state=planned_scene.continuity_state,
+                        continuity_state=continuity_state,
                         estimated_duration_seconds=planned_scene.estimated_duration_seconds,
                     )
                     self.session.add(scene)

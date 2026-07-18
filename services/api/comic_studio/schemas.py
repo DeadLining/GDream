@@ -1178,11 +1178,18 @@ class PlannedShot(BaseModel):
         return {"description": value} if isinstance(value, str) else value
 
 
+class PlannedProp(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+    required: bool = True
+
+
 class PlannedScene(BaseModel):
     location: str = Field(min_length=1)
     time_of_day: str = ""
     summary: str = Field(min_length=1)
     continuity_state: dict = {}
+    props: list[PlannedProp] = []
     estimated_duration_seconds: float = Field(gt=0)
     shots: list[PlannedShot] = Field(min_length=1)
 

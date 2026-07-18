@@ -64,7 +64,13 @@ class PlanningService:
 
         try:
             for scene_position, planned_scene in enumerate(plan.scenes, start=1):
-                scene_data = planned_scene.model_dump(exclude={"shots"})
+                scene_data = planned_scene.model_dump(exclude={"shots", "props"})
+                continuity_state = dict(planned_scene.continuity_state)
+                if planned_scene.props:
+                    continuity_state["props"] = [
+                        prop.model_dump() for prop in planned_scene.props
+                    ]
+                scene_data["continuity_state"] = continuity_state
                 scene = models.Scene(
                     episode_id=episode.id,
                     position=scene_position,
