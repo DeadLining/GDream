@@ -16,6 +16,10 @@ EXTENSIONS = {
 }
 
 
+class StaleVideoVersionError(ValueError):
+    pass
+
+
 class AssetStore:
     def __init__(self, session: Session, data_root: Path):
         self.session = session
@@ -234,6 +238,10 @@ class AssetStore:
         asset = self.session.get(models.Asset, asset_id)
         if shot is None or asset is None or asset.kind != f"video:{shot_id}":
             return None
+        if asset.parent_asset_id != shot.active_panel_asset_id:
+            raise StaleVideoVersionError(
+                "Video version was generated from a different panel"
+            )
         shot.active_video_asset_id = asset.id
         shot.video_render_status = "completed"
         self.session.commit()

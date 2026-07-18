@@ -1,10 +1,9 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 
 from comic_studio import models, schemas
-from comic_studio.assets import AssetStore
+from comic_studio.assets import AssetStore, StaleVideoVersionError
 from comic_studio.jobs import JobStore
 from comic_studio.routes.assets import asset_response
-from comic_studio.services.videos import VideoService
 
 
 router = APIRouter(tags=["videos"])
@@ -66,9 +65,12 @@ def list_videos(shot_id: str, request: Request):
 )
 def activate_video(shot_id: str, asset_id: str, request: Request):
     with request.app.state.session_factory() as session:
-        shot = AssetStore(session, request.app.state.settings.data_root).activate_video(
-            shot_id, asset_id
-        )
+        try:
+            shot = AssetStore(
+                session, request.app.state.settings.data_root
+            ).activate_video(shot_id, asset_id)
+        except StaleVideoVersionError as exc:
+            raise HTTPException(409, str(exc)) from exc
         if shot is None:
             raise HTTPException(422, "Asset is not a video version for this shot")
         return schemas.ShotRead.model_validate(shot)
