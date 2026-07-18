@@ -206,6 +206,51 @@ def test_delete_removes_episode_graph_assets_jobs_runs_and_local_files(
     assert not render_manifest.exists()
 
 
+def test_delete_removes_delivery_package_rows_and_archive(db_session, tmp_path: Path):
+    target, _unrelated, _assets, _unrelated_asset, _line_b = _episode_graph(
+        db_session
+    )
+    data_root = tmp_path / "media"
+    candidate = models.ReleaseCandidate(
+        episode_id=target.id,
+        version="V1",
+        render_path=(
+            f"projects/{target.project_id}/episodes/{target.id}/renders/final.mp4"
+        ),
+        qc_snapshot={"overall_pass": True},
+        status="published",
+    )
+    db_session.add(candidate)
+    db_session.flush()
+    package = models.DeliveryPackage(
+        project_id=target.project_id,
+        episode_id=target.id,
+        release_candidate_id=candidate.id,
+        preset_name="个人交付包",
+        outputs=[],
+        checks={"archive_created": True},
+        status="completed",
+        artifact_path=(
+            f"projects/{target.project_id}/episodes/{target.id}/delivery/package.zip"
+        ),
+    )
+    db_session.add(package)
+    db_session.commit()
+    archive_path = data_root / package.artifact_path
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    archive_path.write_bytes(b"delivery")
+    candidate_id = candidate.id
+    package_id = package.id
+
+    result = EpisodeDeletionService(db_session, data_root).delete(target.id)
+
+    assert result is not None
+    assert package.artifact_path in result.impact.local_paths
+    assert db_session.get(models.ReleaseCandidate, candidate_id) is None
+    assert db_session.get(models.DeliveryPackage, package_id) is None
+    assert not archive_path.exists()
+
+
 def test_delete_skips_symlink_escape_without_exposing_paths(db_session, tmp_path: Path):
     target, _unrelated, assets, _unrelated_asset, _line_b = _episode_graph(db_session)
     data_root = tmp_path / "media"
