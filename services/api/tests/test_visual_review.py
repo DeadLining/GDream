@@ -320,12 +320,15 @@ def test_episode_scope_acceptance_creates_episode_variant_and_records_impact(cli
         assert variant.episode_id==thread["episode_id"]
         assert {usage.shot_id for usage in variant.usages}=={shot_id,other_shot_id}
         assert {usage.usage_kind for usage in variant.usages}=={"reference"}
-        assert {usage.asset_id for usage in variant.usages}=={candidate_id}
+        assert {usage.asset_id for usage in variant.usages}=={None}
         compiled=ShotInputCompiler(session).compile(
             other_shot_id,usage_kinds={"panel","reference"}
         )
-        assert candidate_id in compiled.reference_asset_ids
+        assert candidate_id not in compiled.reference_asset_ids
         assert compiled.snapshot["asset_bindings"][0]["variant_id"]==variant.id
+        assert "降低惊恐感" in compiled.snapshot["asset_bindings"][0][
+            "resolved_overrides"
+        ]["visual_review_instruction"]
 
 
 def test_master_scope_acceptance_creates_new_master_version_and_impact(client):
@@ -365,6 +368,7 @@ def test_master_scope_acceptance_creates_new_master_version_and_impact(client):
         assert revision.version==2
         assert revision.id!=existing.id
         assert revision.parent_variant_id==existing.id
+        assert "更新主设定表情" in revision.overrides["visual_review_instruction"]
 
 
 def test_visual_review_candidate_can_be_rejected(client):
