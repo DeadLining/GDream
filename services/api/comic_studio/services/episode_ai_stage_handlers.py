@@ -285,22 +285,12 @@ class EpisodeAIStageHandlers:
         return {"shot_ids": shot_ids, "asset_ids": asset_ids}
 
     def _render_input_snapshot_hash(self, episode_id: str) -> str:
-        import hashlib
-        import json
-
         with self.session_factory() as session:
-            manifest = RenderingService(
+            return RenderingService(
                 session,
                 self.data_root,
                 self.compositor_root or self.data_root,
-            ).build_manifest(episode_id)
-        serialized = json.dumps(
-            manifest,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+            ).input_snapshot_hash(episode_id)
 
     def _latest_render_job(
         self,
@@ -508,7 +498,7 @@ class EpisodeAIStageHandlers:
 
     async def release_gate(self, context: EpisodeAIStageContext) -> dict:
         with self.session_factory() as session:
-            service = ReviewPublicationService(session)
+            service = ReviewPublicationService(session, self.data_root)
             candidate = self._candidate(context, session)
             gate = service.gate(candidate.id)
             if gate is None or not gate.ready:
@@ -525,7 +515,7 @@ class EpisodeAIStageHandlers:
 
     async def published(self, context: EpisodeAIStageContext) -> dict:
         with self.session_factory() as session:
-            service = ReviewPublicationService(session)
+            service = ReviewPublicationService(session, self.data_root)
             candidate = self._candidate(context, session)
             record, _created = service.publish(
                 candidate.id,

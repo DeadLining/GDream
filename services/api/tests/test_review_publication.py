@@ -3,6 +3,7 @@ from pathlib import Path
 from comic_studio import models
 from comic_studio.assets import AssetStore
 from comic_studio.services.episode_ai_stage_handlers import EpisodeAIStageHandlers
+from comic_studio.services.rendering import RenderingService
 from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
@@ -17,6 +18,11 @@ def _ready_episode(client, *, video_ready=True):
         asset=models.Asset(project_id=project["id"],kind=f"panel:{shot.id}",local_path="panel.png",media_type="image/png",provider="test",model="test",request_metadata={},checksum="panel",review_status="approved")
         video=models.Asset(project_id=project["id"],kind=f"video:{shot.id}",local_path="video.mp4",media_type="video/mp4",provider="test",model="test",request_metadata={},checksum="video",review_status="approved")
         session.add_all([asset,video]);session.flush()
+        data_root=client.app.state.settings.data_root
+        (data_root/asset.local_path).write_bytes(b"panel")
+        (data_root/video.local_path).write_bytes(b"\x00\x00\x00\x18ftypmp42video")
+        video.parent_asset_id=asset.id
+        video.duration_seconds=8
         shot.active_panel_asset_id=asset.id
         shot.active_video_asset_id=video.id if video_ready else None
         compiled=ShotInputCompiler(session).compile(shot.id,usage_kinds={"panel","reference"})
@@ -31,7 +37,12 @@ def _register_render(client, project_id, episode_id, *, overall_pass=True, name=
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_bytes(b"render")
     with client.app.state.session_factory() as session:
-        job=models.Job(operation="render_episode",target_type="episode",target_id=episode_id,status="succeeded",progress=100,request_payload={},result_metadata={"episode_id":episode_id,"output_path":relative_path})
+        input_snapshot_hash=RenderingService(
+            session,
+            client.app.state.settings.data_root,
+            client.app.state.settings.data_root,
+        ).input_snapshot_hash(episode_id)
+        job=models.Job(operation="render_episode",target_type="episode",target_id=episode_id,status="succeeded",progress=100,request_payload={},result_metadata={"episode_id":episode_id,"output_path":relative_path,"input_snapshot_hash":input_snapshot_hash})
         session.add(job);session.flush()
         session.add(models.RenderReviewRecord(episode_id=episode_id,job_id=job.id,render_path=str(output),ffprobe_json={},black_frame_positions=[] if overall_pass else [1.0],silence_ranges=[],subtitle_present=True,overall_pass=overall_pass,findings=[] if overall_pass else [{"code":"black_frames","severity":"critical"}]))
         session.commit()
@@ -184,7 +195,17 @@ def test_release_gate_rejects_candidate_after_render_inputs_change(client):
         f"/api/episodes/{episode['id']}/release-candidates",
         json={"version":"V1","render_path":render_path,"qc_snapshot":{}},
     ).json()
-    assert client.get(f"/api/release-candidates/{candidate['id']}/gate").json()["ready"] is True
+    with client.app.state.session_factory() as session:
+        stored_candidate=session.get(models.ReleaseCandidate,candidate["id"])
+        stored_job=session.get(models.Job,stored_candidate.qc_snapshot["job_id"])
+        current_hash=RenderingService(session,data_root,data_root).input_snapshot_hash(
+            episode["id"]
+        )
+        assert stored_job.result_metadata["input_snapshot_hash"]==current_hash
+        assert stored_candidate.qc_snapshot["overall_pass"] is True
+    initial_gate=client.get(f"/api/release-candidates/{candidate['id']}/gate").json()
+    assert initial_gate["ready"] is True, initial_gate
+    assert client.post(f"/api/release-candidates/{candidate['id']}/approve").status_code==200
 
     with client.app.state.session_factory() as session:
         shot=session.get(models.Shot,shot_id)
@@ -204,5 +225,11 @@ def test_release_gate_rejects_candidate_after_render_inputs_change(client):
 
     assert gate["production_ready"] is True
     assert gate["ready"] is False
+    publish=client.post(
+        f"/api/release-candidates/{candidate['id']}/publish",
+        json={"platform":"internal_master","idempotency_key":"stale-render"},
+    )
+    assert publish.status_code==409
+    assert publish.json()["detail"]=="Release candidate is blocked"
     with client.app.state.session_factory() as session:
         assert session.get(models.Shot,shot_id).active_video_asset_id==replacement.id

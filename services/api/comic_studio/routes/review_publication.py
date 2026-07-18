@@ -63,24 +63,24 @@ def list_release_candidates(episode_id:str,session:SessionDependency):
 
 
 @router.get("/api/release-candidates/{candidate_id}/gate",response_model=schemas.ReleaseGateRead)
-def release_gate(candidate_id:str,session:SessionDependency):
-    gate=ReviewPublicationService(session).gate(candidate_id)
+def release_gate(candidate_id:str,request:Request,session:SessionDependency):
+    gate=ReviewPublicationService(session,request.app.state.settings.data_root).gate(candidate_id)
     if gate is None: raise HTTPException(404,"Release candidate not found")
     return gate
 
 
 @router.post("/api/release-candidates/{candidate_id}/approve",response_model=schemas.ReleaseCandidateRead)
-def approve_release(candidate_id:str,session:SessionDependency):
-    try: candidate=ReviewPublicationService(session).approve(candidate_id)
+def approve_release(candidate_id:str,request:Request,session:SessionDependency):
+    try: candidate=ReviewPublicationService(session,request.app.state.settings.data_root).approve(candidate_id)
     except ReleaseBlockedError as exc: raise HTTPException(409,"Release candidate is blocked") from exc
     if candidate is None: raise HTTPException(404,"Release candidate not found")
     return candidate
 
 
 @router.post("/api/release-candidates/{candidate_id}/publish",response_model=schemas.PublicationRead,status_code=status.HTTP_201_CREATED)
-def publish_release(candidate_id:str,data:schemas.PublicationCreate,response:Response,session:SessionDependency):
-    try: record,created=ReviewPublicationService(session).publish(candidate_id,data)
-    except ReleaseBlockedError as exc: raise HTTPException(409,"Release candidate must be approved") from exc
+def publish_release(candidate_id:str,data:schemas.PublicationCreate,request:Request,response:Response,session:SessionDependency):
+    try: record,created=ReviewPublicationService(session,request.app.state.settings.data_root).publish(candidate_id,data)
+    except ReleaseBlockedError as exc: raise HTTPException(409,"Release candidate is blocked" if str(exc)=="blocked" else "Release candidate must be approved") from exc
     if record is None: raise HTTPException(404,"Release candidate not found")
     if not created: response.status_code=status.HTTP_200_OK
     return record

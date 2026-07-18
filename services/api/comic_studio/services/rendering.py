@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -14,6 +15,19 @@ class RenderingService:
         self.session = session
         self.data_root = data_root.resolve()
         self.compositor_root = compositor_root.resolve()
+
+    @staticmethod
+    def manifest_snapshot_hash(manifest: dict) -> str:
+        serialized = json.dumps(
+            manifest,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def input_snapshot_hash(self, episode_id: str) -> str:
+        return self.manifest_snapshot_hash(self.build_manifest(episode_id))
 
     @staticmethod
     def _srt_timestamp(seconds: float) -> str:

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from comic_studio import models, schemas
 from comic_studio.models import utc_now
 from comic_studio.services.readiness import ReadinessService
+from comic_studio.services.rendering import RenderingService
 
 
 class ReviewPublicationReferenceError(ValueError):
@@ -76,6 +77,10 @@ class ReviewPublicationService:
             raise ReviewPublicationReferenceError(
                 "Successful render must have a completed quality review"
             )
+        if not self._render_job_is_current(episode, job):
+            raise ReviewPublicationReferenceError(
+                "Successful render does not match current episode inputs"
+            )
         stored_path = Path(review.render_path)
         if not stored_path.is_absolute():
             stored_path = self.data_root / stored_path
@@ -84,6 +89,35 @@ class ReviewPublicationService:
                 "Quality review does not match the rendered file"
             )
         return review
+
+    def _render_job_is_current(
+        self,
+        episode: models.Episode,
+        job: models.Job | None,
+    ) -> bool:
+        if self.data_root is None or job is None:
+            return False
+        stored_hash = job.result_metadata.get("input_snapshot_hash")
+        if not isinstance(stored_hash, str) or not stored_hash:
+            return False
+        try:
+            current_hash = RenderingService(
+                self.session,
+                self.data_root,
+                self.data_root,
+            ).input_snapshot_hash(episode.id)
+        except (KeyError, RuntimeError, ValueError):
+            return False
+        return stored_hash == current_hash
+
+    def _candidate_render_is_current(
+        self,
+        candidate: models.ReleaseCandidate,
+    ) -> bool:
+        job_id = candidate.qc_snapshot.get("job_id")
+        job = self.session.get(models.Job, job_id) if isinstance(job_id, str) else None
+        episode = self.session.get(models.Episode, candidate.episode_id)
+        return episode is not None and self._render_job_is_current(episode, job)
 
     def create_review_thread(
         self, episode_id: str, data: schemas.ReviewThreadCreate
@@ -186,10 +220,14 @@ class ReviewPublicationService:
         open_critical = list(self.session.scalars(statement))
         production_ready = bool(readiness and readiness["video_ready"])
         qc_pass = candidate.qc_snapshot.get("overall_pass") is True
+        render_current = self._candidate_render_is_current(candidate)
+        blockers = dict((readiness or {}).get("blockers", {}))
+        if not render_current:
+            blockers["stale_render"] = [candidate.id]
         return schemas.ReleaseGateRead(
-            ready=production_ready and qc_pass and not open_critical,
+            ready=production_ready and qc_pass and render_current and not open_critical,
             production_ready=production_ready,
-            production_blockers=(readiness or {}).get("blockers", {}),
+            production_blockers=blockers,
             open_critical_threads=open_critical,
         )
 
@@ -221,6 +259,8 @@ class ReviewPublicationService:
             return existing, False
         if candidate.status not in {"approved", "published"}:
             raise ReleaseBlockedError("candidate_not_approved")
+        if not self.gate(candidate.id).ready:
+            raise ReleaseBlockedError("blocked")
         record = models.PublicationRecord(
             candidate_id=candidate.id,
             platform=data.platform,
