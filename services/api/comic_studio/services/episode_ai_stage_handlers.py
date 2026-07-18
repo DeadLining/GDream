@@ -309,6 +309,14 @@ class EpisodeAIStageHandlers:
                         f"Shot is not ready for video: {shot_id}"
                     )
                 asset_id = shot.active_video_asset_id
+                if asset_id is not None:
+                    video = session.get(models.Asset, asset_id)
+                    if (
+                        video is None
+                        or video.kind != f"video:{shot_id}"
+                        or video.parent_asset_id != shot.active_panel_asset_id
+                    ):
+                        asset_id = None
             if asset_id is None:
                 asset = await self.model_runtime.execute_video(shot_id, True)
                 asset_id = asset.id
@@ -374,6 +382,9 @@ class EpisodeAIStageHandlers:
             ).render(episode_id, output_path)
 
     async def rendering(self, context: EpisodeAIStageContext) -> dict:
+        await self.panels(context)
+        await self.panel_review(context)
+        await self.videos(context)
         input_snapshot_hash = self._render_input_snapshot_hash(context.episode_id)
         existing = self._latest_render_job(
             context.episode_id,
