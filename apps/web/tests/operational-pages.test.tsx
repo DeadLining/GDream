@@ -77,6 +77,13 @@ describe('operational frontend pages',()=>{
     expect(within(row).queryByText('待安排')).not.toBeInTheDocument();
   });
 
+  it('identifies completion as production asset progress',async()=>{
+    render(<WorkspaceHome projects={projects} selectedProject={project} onOpenProject={vi.fn()} onCreateProject={vi.fn()} onNavigate={vi.fn()}/>);
+
+    expect(screen.getByRole('columnheader',{name:'素材进度'})).toBeVisible();
+    expect(screen.queryByRole('columnheader',{name:'完成度'})).not.toBeInTheDocument();
+  });
+
   it('separates recent projects from all personal projects without fake controls',async()=>{
     const manyProjects:Project[]=Array.from({length:6},(_,index)=>({...projects[0],id:`project-${index+1}`,title:`个人作品 ${index+1}`,updated_at:`2026-07-${String(17-index).padStart(2,'0')}T10:00:00Z`}));
     render(<WorkspaceHome projects={manyProjects} selectedProject={null} onOpenProject={vi.fn()} onCreateProject={vi.fn()} onNavigate={vi.fn()}/>);

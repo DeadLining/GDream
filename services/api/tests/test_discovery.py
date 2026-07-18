@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from comic_studio import models
 from comic_studio.services.discovery import updated_on_workspace_today
+from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
 def _project(client, title="发现页作品"):
@@ -63,6 +64,65 @@ def test_workspace_summary_uses_real_project_task_and_review_counts(client):
         "pending_review_count": 1,
         "latest_task_titles": ["补齐环境音"],
     }
+
+
+def test_workspace_progress_includes_panel_and_video_readiness(client):
+    project = _project(client, "真实进度")
+    episode = client.post(
+        f"/api/projects/{project['id']}/episodes",
+        json={"title": "第一集", "premise": "寻找线索", "target_duration_seconds": 60},
+    ).json()
+    with client.app.state.session_factory() as session:
+        scene = models.Scene(
+            episode_id=episode["id"],
+            position=1,
+            location="旧城",
+            time_of_day="night",
+            summary="追踪",
+            continuity_state={},
+            estimated_duration_seconds=12,
+        )
+        session.add(scene)
+        session.flush()
+        shot = models.Shot(
+            scene_id=scene.id,
+            position=1,
+            shot_type="close_up",
+            duration_seconds=4,
+            composition="查看怀表",
+            camera_motion="static",
+            character_state={},
+            image_prompt="watch",
+            negative_prompt="",
+            review_status="approved",
+        )
+        session.add(shot)
+        session.flush()
+        panel = models.Asset(
+            project_id=project["id"],
+            kind=f"panel:{shot.id}",
+            local_path="panel.png",
+            media_type="image/png",
+            provider="test",
+            model="test",
+            checksum="0" * 64,
+        )
+        session.add(panel)
+        session.flush()
+        compiled = ShotInputCompiler(session).compile(
+            shot.id, usage_kinds={"panel", "reference"}
+        )
+        panel.request_metadata = {
+            "input_snapshot": compiled.snapshot,
+            "input_snapshot_hash": compiled.snapshot_hash,
+        }
+        shot.active_panel_asset_id = panel.id
+        session.commit()
+
+    row = client.get("/api/workspace/summary").json()["projects"][0]
+
+    assert row["completion_percent"] == 67
+    assert row["current_stage"] == "视频制作"
 
 
 def test_project_search_returns_navigable_results_across_real_resources(client):
