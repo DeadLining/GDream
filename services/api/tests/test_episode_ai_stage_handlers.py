@@ -352,6 +352,40 @@ def test_media_handlers_generate_all_dialogue_and_shot_outputs(tmp_path):
         assert shot.video_render_status == "completed"
 
 
+def test_rendering_stage_repairs_stale_panel_and_video_before_render(tmp_path):
+    session_factory, data_root, episode_id, _character_id, shot_id, _dialogue_id = (
+        _seed_episode(tmp_path)
+    )
+    runtime = FakeImageRuntime(session_factory, data_root)
+
+    def render_executor(_episode_id, output_path):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 128)
+        return {"streams": [{"codec_type": "video"}]}
+
+    handlers = EpisodeAIStageHandlers(
+        session_factory,
+        data_root,
+        runtime,
+        render_executor=render_executor,
+    )
+    asyncio.run(handlers.panels(_context(episode_id, "panels")))
+    asyncio.run(handlers.panel_review(_context(episode_id, "panel_review")))
+    first_video = asyncio.run(handlers.videos(_context(episode_id, "videos")))
+    with session_factory() as session:
+        shot = session.get(models.Shot, shot_id)
+        shot.image_prompt = "updated after panel and video generation"
+        session.commit()
+
+    rendered = asyncio.run(handlers.rendering(_context(episode_id, "rendering")))
+
+    assert rendered["probe"] == {"streams": [{"codec_type": "video"}]}
+    with session_factory() as session:
+        shot = session.get(models.Shot, shot_id)
+        assert shot.active_video_asset_id != first_video["asset_ids"][0]
+    assert [call[0] for call in runtime.calls] == ["shot", "video", "shot", "video"]
+
+
 def test_episode_ai_speech_stage_generates_narration_without_character(tmp_path):
     session_factory, data_root, episode_id, _character_id, _shot_id, dialogue_id = (
         _seed_episode(tmp_path)
