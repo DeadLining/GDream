@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from comic_studio import models
+from comic_studio.assets import AssetStore
+from comic_studio.services.episode_ai_stage_handlers import EpisodeAIStageHandlers
 from comic_studio.services.shot_inputs import ShotInputCompiler
 
 
@@ -150,3 +152,57 @@ def test_release_gate_requires_active_videos_for_every_shot(client):
     assert gate["ready"] is False
     assert gate["production_ready"] is False
     assert gate["production_blockers"]["missing_videos"]
+
+
+def test_release_gate_rejects_candidate_after_render_inputs_change(client):
+    project,episode,shot_id=_ready_episode(client)
+    data_root=client.app.state.settings.data_root
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        panel=session.get(models.Asset,shot.active_panel_asset_id)
+        video=session.get(models.Asset,shot.active_video_asset_id)
+        (data_root/panel.local_path).write_bytes(b"panel")
+        (data_root/video.local_path).write_bytes(b"\x00\x00\x00\x18ftypmp42video")
+        video.parent_asset_id=panel.id
+        video.duration_seconds=8
+        session.commit()
+    handlers=EpisodeAIStageHandlers(
+        client.app.state.session_factory,
+        data_root,
+        client.app.state.model_runtime,
+    )
+    original_hash=handlers._render_input_snapshot_hash(episode["id"])
+    render_path=_register_render(client,project["id"],episode["id"])
+    with client.app.state.session_factory() as session:
+        job=session.query(models.Job).filter(
+            models.Job.operation=="render_episode",
+            models.Job.target_id==episode["id"],
+        ).order_by(models.Job.created_at.desc()).first()
+        job.result_metadata={**job.result_metadata,"input_snapshot_hash":original_hash}
+        session.commit()
+    candidate=client.post(
+        f"/api/episodes/{episode['id']}/release-candidates",
+        json={"version":"V1","render_path":render_path,"qc_snapshot":{}},
+    ).json()
+    assert client.get(f"/api/release-candidates/{candidate['id']}/gate").json()["ready"] is True
+
+    with client.app.state.session_factory() as session:
+        shot=session.get(models.Shot,shot_id)
+        replacement=AssetStore(session,data_root).register_video(
+            project_id=project["id"],
+            shot_id=shot.id,
+            source_panel_id=shot.active_panel_asset_id,
+            content=b"\x00\x00\x00\x18ftypmp42replacement",
+            provider="test",
+            model="video-test",
+            request_metadata={"prompt":"new motion"},
+            duration_seconds=8,
+            activate=True,
+        )
+
+    gate=client.get(f"/api/release-candidates/{candidate['id']}/gate").json()
+
+    assert gate["production_ready"] is True
+    assert gate["ready"] is False
+    with client.app.state.session_factory() as session:
+        assert session.get(models.Shot,shot_id).active_video_asset_id==replacement.id
