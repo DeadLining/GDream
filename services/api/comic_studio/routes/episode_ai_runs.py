@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from comic_studio import schemas
+from comic_studio import models, schemas
 from comic_studio.db import get_session
 from comic_studio.services.episode_ai_runs import (
     EpisodeAIRunConflict,
@@ -49,12 +49,12 @@ def create_episode_ai_run(
 
 @router.get(
     "/api/episodes/{episode_id}/ai-runs/active",
-    response_model=schemas.EpisodeAIRunRead,
+    response_model=schemas.EpisodeAIRunRead | None,
 )
 def get_active_episode_ai_run(episode_id: str, session: SessionDependency):
     run = EpisodeAIRunService(session).active(episode_id)
-    if run is None:
-        raise HTTPException(404, "Active episode AI run not found")
+    if run is None and session.get(models.Episode, episode_id) is None:
+        raise HTTPException(404, "Episode not found")
     return run
 
 
