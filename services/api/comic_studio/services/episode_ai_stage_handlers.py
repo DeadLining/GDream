@@ -284,22 +284,50 @@ class EpisodeAIStageHandlers:
             asset_ids.append(asset_id)
         return {"shot_ids": shot_ids, "asset_ids": asset_ids}
 
-    def _latest_render_job(self, episode_id: str):
+    def _render_input_snapshot_hash(self, episode_id: str) -> str:
+        import hashlib
+        import json
+
         with self.session_factory() as session:
-            job = session.scalar(
-                select(models.Job)
-                .where(
-                    models.Job.operation == "render_episode",
-                    models.Job.target_type == "episode",
-                    models.Job.target_id == episode_id,
-                    models.Job.status == "succeeded",
+            manifest = RenderingService(
+                session,
+                self.data_root,
+                self.compositor_root or self.data_root,
+            ).build_manifest(episode_id)
+        serialized = json.dumps(
+            manifest,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def _latest_render_job(
+        self,
+        episode_id: str,
+        input_snapshot_hash: str | None = None,
+    ):
+        current_hash = input_snapshot_hash or self._render_input_snapshot_hash(
+            episode_id
+        )
+        with self.session_factory() as session:
+            jobs = list(
+                session.scalars(
+                    select(models.Job)
+                    .where(
+                        models.Job.operation == "render_episode",
+                        models.Job.target_type == "episode",
+                        models.Job.target_id == episode_id,
+                        models.Job.status == "succeeded",
+                    )
+                    .order_by(models.Job.created_at.desc())
                 )
-                .order_by(models.Job.created_at.desc())
             )
-            if job is None:
-                return None
-            session.expunge(job)
-            return job
+            for job in jobs:
+                if job.result_metadata.get("input_snapshot_hash") == current_hash:
+                    session.expunge(job)
+                    return job
+            return None
 
     def _render_path(self, job: models.Job) -> tuple[str, Path]:
         relative = str(job.result_metadata.get("output_path", ""))
@@ -324,7 +352,11 @@ class EpisodeAIStageHandlers:
             ).render(episode_id, output_path)
 
     async def rendering(self, context: EpisodeAIStageContext) -> dict:
-        existing = self._latest_render_job(context.episode_id)
+        input_snapshot_hash = self._render_input_snapshot_hash(context.episode_id)
+        existing = self._latest_render_job(
+            context.episode_id,
+            input_snapshot_hash,
+        )
         if existing is not None:
             relative, _path = self._render_path(existing)
             return {
@@ -367,6 +399,7 @@ class EpisodeAIStageHandlers:
                         "output_path": relative,
                         "media_url": f"/media/{relative}",
                         "probe": probe,
+                        "input_snapshot_hash": input_snapshot_hash,
                     },
                 )
         except Exception as exc:
