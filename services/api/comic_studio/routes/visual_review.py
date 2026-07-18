@@ -166,9 +166,16 @@ def add_candidate(
     "/api/visual-review-candidates/{candidate_id}/accept",
     response_model=schemas.VisualReviewCandidateRead,
 )
-def accept_candidate(candidate_id: str, session: SessionDependency):
+def accept_candidate(
+    candidate_id: str,
+    session: SessionDependency,
+    data: schemas.VisualReviewCandidateAccept | None = None,
+):
     try:
-        candidate = VisualReviewService(session).accept_candidate(candidate_id)
+        candidate = VisualReviewService(session).accept_candidate(
+            candidate_id,
+            target_character_id=data.target_character_id if data else None,
+        )
     except VisualReviewReferenceError as exc:
         raise HTTPException(409, str(exc)) from exc
     if candidate is None:

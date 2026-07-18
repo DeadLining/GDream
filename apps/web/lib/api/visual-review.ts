@@ -13,5 +13,5 @@ export const updateVisualAnnotation=(id:string,data:Partial<Pick<VisualReviewThr
 export async function deleteVisualAnnotation(id:string):Promise<void>{const response=await fetch(`${API_BASE}/api/visual-annotations/${id}`,{method:'DELETE'});if(!response.ok){const body=await response.json() as {detail?:unknown};const detail=String(body.detail??'删除视觉圈点失败');throw new ApiError(detail,response.status,detail);}}
 export const createVisualReviewCandidate=(id:string,data:{asset_id:string;generation_metadata:Record<string,unknown>})=>apiRequest<VisualReviewCandidate>(`/api/visual-review-threads/${id}/candidates`,json('POST',data));
 export const startVisualReviewGeneration=(id:string)=>apiRequest<ModelRuntimeJob>(`/api/visual-review-threads/${id}/generate`,json('POST'));
-export const acceptVisualReviewCandidate=(id:string)=>apiRequest<VisualReviewCandidate>(`/api/visual-review-candidates/${id}/accept`,json('POST'));
+export const acceptVisualReviewCandidate=(id:string,data?:{target_character_id:string|null})=>apiRequest<VisualReviewCandidate>(`/api/visual-review-candidates/${id}/accept`,json('POST',data));
 export const rejectVisualReviewCandidate=(id:string)=>apiRequest<VisualReviewCandidate>(`/api/visual-review-candidates/${id}/reject`,json('POST'));

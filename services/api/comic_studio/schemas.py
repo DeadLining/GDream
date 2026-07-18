@@ -496,6 +496,11 @@ class VisualReviewCandidateCreate(BaseModel):
     generation_metadata: dict = Field(default_factory=dict)
 
 
+class VisualReviewCandidateAccept(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_character_id: str | None = Field(default=None, max_length=36)
+
+
 class VisualAnnotationRead(VisualAnnotationCreate):
     model_config = ConfigDict(from_attributes=True)
     id: str

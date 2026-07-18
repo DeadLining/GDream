@@ -201,7 +201,11 @@ class VisualReviewService:
         self.session.refresh(candidate)
         return candidate
 
-    def _scope_revisions(self, thread: models.VisualReviewThread) -> dict:
+    def _scope_revisions(
+        self,
+        thread: models.VisualReviewThread,
+        target_character_id: str | None = None,
+    ) -> dict:
         shot = thread.shot
         character_ids = {
             key
@@ -223,6 +227,17 @@ class VisualReviewService:
                 "affected_shot_ids": [shot.id],
                 "affected_episode_ids": [thread.episode_id],
             }
+        if target_character_id is None:
+            if len(character_ids) > 1:
+                raise VisualReviewReferenceError(
+                    "Target character is required for multi-character review scope"
+                )
+            target_character_id = next(iter(character_ids))
+        elif target_character_id not in character_ids:
+            raise VisualReviewReferenceError(
+                "Target character must appear in the review shot"
+            )
+        character_ids = {target_character_id}
 
         conditions = [
             models.Episode.project_id == self._shot_project_id(shot)
@@ -330,6 +345,7 @@ class VisualReviewService:
         ] or [shot]
         return {
             "scope": thread.modification_scope,
+            "target_character_id": target_character_id,
             "variant_ids": variant_ids,
             "usage_ids": usage_ids,
             "affected_shot_ids": sorted({item.id for item in affected_shots}),
@@ -338,7 +354,12 @@ class VisualReviewService:
             ),
         }
 
-    def accept_candidate(self, candidate_id: str):
+    def accept_candidate(
+        self,
+        candidate_id: str,
+        *,
+        target_character_id: str | None = None,
+    ):
         candidate = self.session.get(models.VisualReviewCandidate, candidate_id)
         if candidate is None:
             return None
@@ -357,6 +378,7 @@ class VisualReviewService:
             )
         if PanelFreshnessService(self.session).inspect(shot.id, asset).is_stale:
             raise VisualReviewReferenceError("Candidate panel is stale")
+        acceptance = self._scope_revisions(thread, target_character_id)
         for other in thread.candidates:
             if other.id != candidate.id and other.status == "ready":
                 other.status = "rejected"
@@ -367,7 +389,7 @@ class VisualReviewService:
         shot.review_status = "approved"
         candidate.generation_metadata = {
             **candidate.generation_metadata,
-            "acceptance": self._scope_revisions(thread),
+            "acceptance": acceptance,
         }
         self.session.commit()
         self.session.refresh(candidate)

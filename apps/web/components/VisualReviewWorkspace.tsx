@@ -3,9 +3,9 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {CSSProperties} from 'react';
 import {ArrowLeft,Check, Circle, GitCompareArrows, MessageSquareText, MousePointer2, PenLine, RectangleHorizontal, Sparkles, Trash2} from 'lucide-react';
-import {acceptVisualReviewCandidate,createVisualAnnotation,createVisualReviewMessage,createVisualReviewThread,deleteVisualAnnotation,getAsset,listVisualReviewThreads,mediaUrl,rejectVisualReviewCandidate,startVisualReviewGeneration,updateVisualAnnotation,updateVisualReviewThread} from '../lib/api';
+import {acceptVisualReviewCandidate,createVisualAnnotation,createVisualReviewMessage,createVisualReviewThread,deleteVisualAnnotation,getAsset,getProject,listVisualReviewThreads,mediaUrl,rejectVisualReviewCandidate,startVisualReviewGeneration,updateVisualAnnotation,updateVisualReviewThread} from '../lib/api';
 import {pollJob} from '../lib/jobs';
-import type {EpisodeDetail,VisualReviewThread} from '../lib/types';
+import type {Character,EpisodeDetail,VisualReviewThread} from '../lib/types';
 import {ReviewVersionStrip} from './ReviewVersionStrip';
 
 type Scope = 'shot' | 'episode' | 'master';
@@ -78,7 +78,7 @@ const scopeNote: Record<Scope, string> = {
   master: '将更新作品主设定，并提示全部下游影响',
 };
 
-export function VisualReviewWorkspace({episode,selectedShotId,onBackToProduction,onCandidateAccepted}: {episode:EpisodeDetail;selectedShotId:string|null;onBackToProduction?:()=>void;onCandidateAccepted?:(assetId:string)=>void|Promise<void>}) {
+export function VisualReviewWorkspace({episode,characters=[],selectedShotId,onBackToProduction,onCandidateAccepted}: {episode:EpisodeDetail;characters?:Character[];selectedShotId:string|null;onBackToProduction?:()=>void;onCandidateAccepted?:(assetId:string)=>void|Promise<void>}) {
   const shots = useMemo(() => episode.scenes.flatMap(scene => scene.shots.map(shot => ({shot, scene}))), [episode]);
   const selected = shots.find(item => item.shot.id === selectedShotId) ?? shots[0] ?? null;
   const [threads,setThreads]=useState<VisualReviewThread[]>([]);
@@ -86,6 +86,8 @@ export function VisualReviewWorkspace({episode,selectedShotId,onBackToProduction
   const [annotationId,setAnnotationId]=useState('');
   const [annotationLabel,setAnnotationLabel]=useState('');
   const [scope, setScope] = useState<Scope>('shot');
+  const [targetCharacterId,setTargetCharacterId]=useState('');
+  const [projectCharacters,setProjectCharacters]=useState<Character[]>(characters);
   const [panelUrl, setPanelUrl] = useState<string | null>(null);
   const [sourcePanelUrl,setSourcePanelUrl]=useState<string|null>(null);
   const [previewAssetId,setPreviewAssetId]=useState<string|null>(null);
@@ -105,6 +107,10 @@ export function VisualReviewWorkspace({episode,selectedShotId,onBackToProduction
   const [annotationDrag,setAnnotationDrag]=useState<AnnotationDrag|null>(null);
   const thread=threads.find(item=>item.id===threadId)??threads[0]??null;
   const annotation=thread?.annotations.find(item=>item.id===annotationId)??thread?.annotations[0]??null;
+  const reviewCharacters=useMemo(()=>{if(!selected)return[];const ids=new Set<string>(Object.keys(selected.shot.character_state));selected.shot.dialogue.forEach(line=>{if(line.character_id)ids.add(line.character_id);});const byId=new Map(projectCharacters.map(character=>[character.id,character]));return [...ids].map(id=>({id,name:byId.get(id)?.name??id}));},[projectCharacters,selected]);
+  const propagatedScope=scope!=='shot';
+  const requiresTargetCharacter=propagatedScope&&reviewCharacters.length>1;
+  const effectiveTargetCharacterId=propagatedScope?(targetCharacterId||reviewCharacters[0]?.id||null):null;
   const imageFrameStyle=useMemo<CSSProperties|undefined>(()=>{if(!imageNaturalSize||!canvasFitSize)return;const fitted=fitImageWithin(canvasFitSize.width,canvasFitSize.height,imageNaturalSize.width,imageNaturalSize.height);return fitted.width&&fitted.height?fitted:undefined;},[canvasFitSize,imageNaturalSize]);
 
   useEffect(() => {
@@ -118,15 +124,16 @@ export function VisualReviewWorkspace({episode,selectedShotId,onBackToProduction
     getAsset(selected.shot.active_panel_asset_id).then(asset => {if(current){const url=mediaUrl(asset.media_url);setPanelUrl(url);setSourcePanelUrl(url);}}).catch(() => {if(current){setPanelUrl(null);setSourcePanelUrl(null);}});
     return () => {current = false;};
   }, [selected?.shot.active_panel_asset_id]);
+  useEffect(()=>{let current=true;if(characters.length){setProjectCharacters(characters);return()=>{current=false;};}getProject(episode.project_id).then(project=>{if(current)setProjectCharacters(project.characters);}).catch(()=>{if(current)setProjectCharacters([]);});return()=>{current=false;};},[characters,episode.project_id]);
 
   useEffect(()=>{const element=reviewCanvasFitRef.current;if(!element)return;const update=()=>{const width=element.clientWidth,height=element.clientHeight;if(width>0&&height>0)setCanvasFitSize({width,height});};update();if(typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(update);observer.observe(element);return()=>observer.disconnect();},[]);
 
-  useEffect(()=>{let current=true;setThreads([]);setThreadId('');setAnnotationId('');if(!selected)return()=>{current=false;};listVisualReviewThreads(selected.shot.id).then(items=>{if(!current)return;setThreads(items);setThreadId(items[0]?.id??'');setAnnotationId(items[0]?.annotations[0]?.id??'');setScope(items[0]?.modification_scope??'shot');}).catch(()=>{if(current)setThreads([]);});return()=>{current=false;};},[selected?.shot.id]);
+  useEffect(()=>{let current=true;setThreads([]);setThreadId('');setAnnotationId('');setTargetCharacterId('');if(!selected)return()=>{current=false;};listVisualReviewThreads(selected.shot.id).then(items=>{if(!current)return;setThreads(items);setThreadId(items[0]?.id??'');setAnnotationId(items[0]?.annotations[0]?.id??'');setScope(items[0]?.modification_scope??'shot');}).catch(()=>{if(current)setThreads([]);});return()=>{current=false;};},[selected?.shot.id]);
   useEffect(()=>{setAnnotationLabel(annotation?.label??'');},[annotation?.id,annotation?.label]);
 
-  const changeScope=async(next:Scope)=>{setScope(next);if(!thread)return;const updated=await updateVisualReviewThread(thread.id,{modification_scope:next});setThreads(current=>current.map(item=>item.id===updated.id?updated:item));};
+  const changeScope=async(next:Scope)=>{setScope(next);setTargetCharacterId('');if(!thread)return;const updated=await updateVisualReviewThread(thread.id,{modification_scope:next});setThreads(current=>current.map(item=>item.id===updated.id?updated:item));};
   const sendMessage=async()=>{const content=messageDraft.trim();if(!thread||!content||threadBusy)return;setThreadBusy(true);try{const message=await createVisualReviewMessage(thread.id,{author_kind:'user',content});setThreads(current=>current.map(item=>item.id===thread.id?{...item,messages:[...item.messages,message]}:item));setMessageDraft('');}finally{setThreadBusy(false);}};
-  const acceptCandidate=async(id:string)=>{if(threadBusy)return;setThreadBusy(true);setGenerationError('');try{const accepted=await acceptVisualReviewCandidate(id);setThreads(current=>current.map(item=>item.id===accepted.thread_id?{...item,status:'resolved',candidates:item.candidates.map(candidate=>candidate.id===accepted.id?accepted:candidate)}:item));setPreviewAssetId(accepted.asset_id);await onCandidateAccepted?.(accepted.asset_id);}catch(cause){setGenerationError(cause instanceof Error?cause.message:'采纳候选失败');}finally{setThreadBusy(false);}};
+  const acceptCandidate=async(id:string)=>{if(threadBusy||(requiresTargetCharacter&&!targetCharacterId))return;setThreadBusy(true);setGenerationError('');try{const accepted=propagatedScope?await acceptVisualReviewCandidate(id,{target_character_id:effectiveTargetCharacterId}):await acceptVisualReviewCandidate(id);setThreads(current=>current.map(item=>item.id===accepted.thread_id?{...item,status:'resolved',candidates:item.candidates.map(candidate=>candidate.id===accepted.id?accepted:candidate)}:item));setPreviewAssetId(accepted.asset_id);await onCandidateAccepted?.(accepted.asset_id);}catch(cause){setGenerationError(cause instanceof Error?cause.message:'采纳候选失败');}finally{setThreadBusy(false);}};
   const rejectCandidate=async(id:string)=>{const rejected=await rejectVisualReviewCandidate(id);setThreads(current=>current.map(item=>item.id===rejected.thread_id?{...item,candidates:item.candidates.map(candidate=>candidate.id===rejected.id?rejected:candidate)}:item));};
   const normalizedClientPoint=(clientX:number,clientY:number):Point|null=>{const rect=annotationLayerRef.current?.getBoundingClientRect();if(!rect?.width||!rect.height)return null;return{x:rounded(clamp((clientX-rect.left)/rect.width)),y:rounded(clamp((clientY-rect.top)/rect.height))};};
   const normalizedPoint=(event:React.PointerEvent<HTMLDivElement>):Point|null=>normalizedClientPoint(event.clientX,event.clientY);
@@ -164,11 +171,11 @@ export function VisualReviewWorkspace({episode,selectedShotId,onBackToProduction
       {annotation&&<section className="review-annotation-editor"><label>修改说明<input aria-label="修改说明" value={annotationLabel} onChange={event=>setAnnotationLabel(event.target.value)}/></label><div><button type="button" disabled={!annotationLabel.trim()||threadBusy} onClick={()=>void saveAnnotation()}>保存说明</button><button type="button" className="danger-action" disabled={threadBusy} onClick={()=>void removeAnnotation()}><Trash2 size={14}/>删除标注</button></div></section>}
       <div className="conversation-thread">{thread?.messages.map(message=>message.author_kind==='assistant'?<div key={message.id} className="conversation-ai"><Sparkles size={16}/><p>{message.content}</p></div>:<div key={message.id} className="conversation-user">{message.content}</div>)}</div>
       <label className="review-global-note"><span>整图补充说明（可选）</span><div className="review-message-compose"><input aria-label="整图补充说明（可选）" value={messageDraft} onChange={event=>setMessageDraft(event.target.value)} placeholder="仅填写无法圈选的整图要求"/><button aria-label="发送视觉审阅消息" disabled={!thread||!messageDraft.trim()||threadBusy} onClick={()=>void sendMessage()}><MessageSquareText size={15}/></button></div></label>
-      <section className="review-scope"><h3>修改范围</h3><div>{([['shot','仅当前镜头'],['episode','本集角色变体'],['master','作品主设定']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={scope === value} disabled={!thread} onClick={() => void changeScope(value)}>{label}</button>)}</div><p>{scopeNote[scope]}</p></section>
+      <section className="review-scope"><h3>修改范围</h3><div>{([['shot','仅当前镜头'],['episode','本集角色变体'],['master','作品主设定']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={scope === value} disabled={!thread} onClick={() => void changeScope(value)}>{label}</button>)}</div><p>{scopeNote[scope]}</p>{propagatedScope&&reviewCharacters.length>0?<label className="review-target-character"><span>影响角色</span><select aria-label="影响角色" value={effectiveTargetCharacterId??''} onChange={event=>setTargetCharacterId(event.target.value)}>{requiresTargetCharacter?<option value="">选择角色</option>:null}{reviewCharacters.map(character=><option key={character.id} value={character.id}>{character.name}</option>)}</select></label>:null}</section>
       <div className="review-locks"><span><Check size={14}/>锁定身份特征</span><span><Check size={14}/>保持服装与构图</span></div>
       <button className="review-generate" disabled={!thread||threadBusy} onClick={()=>void generateCandidate()}><Sparkles size={16}/>{threadBusy&&generationProgress>0?`生成中 ${generationProgress}%`:'生成修改版本'}</button>
       {generationError&&<p className="review-generation-error" role="alert">{generationError}</p>}
-      {thread?.candidates.filter(candidate=>candidate.status==='ready').map((candidate,index)=><section key={candidate.id} className="review-candidate"><header><h3>候选版本 V{index+1}</h3><span>待确认</span></header><div className="candidate-comparison"><span>{sourcePanelUrl ? <img src={sourcePanelUrl} alt="修改前"/> : null}<small>修改前</small></span><GitCompareArrows size={18}/><span><small>资产 {candidate.asset_id}</small></span></div><div><button className="accept" onClick={()=>void acceptCandidate(candidate.id)}><Check size={15}/>采纳候选</button><button onClick={()=>void rejectCandidate(candidate.id)}>继续圈点</button></div></section>)}
+      {thread?.candidates.filter(candidate=>candidate.status==='ready').map((candidate,index)=><section key={candidate.id} className="review-candidate"><header><h3>候选版本 V{index+1}</h3><span>待确认</span></header><div className="candidate-comparison"><span>{sourcePanelUrl ? <img src={sourcePanelUrl} alt="修改前"/> : null}<small>修改前</small></span><GitCompareArrows size={18}/><span><small>资产 {candidate.asset_id}</small></span></div><div><button className="accept" disabled={threadBusy||(requiresTargetCharacter&&!targetCharacterId)} onClick={()=>void acceptCandidate(candidate.id)}><Check size={15}/>采纳候选</button><button onClick={()=>void rejectCandidate(candidate.id)}>继续圈点</button></div></section>)}
     </aside>
   </main>;
 }

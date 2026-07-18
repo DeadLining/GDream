@@ -5,8 +5,8 @@ import {fitImageWithin,VisualReviewWorkspace} from '../components/VisualReviewWo
 import type {Character,EpisodeDetail} from '../lib/types';
 import {readAllStyles} from './_styles';
 
-const mocks = vi.hoisted(() => ({getAsset: vi.fn(),panelVersions:vi.fn(),threads:vi.fn(),patchThread:vi.fn(),message:vi.fn(),accept:vi.fn(),reject:vi.fn(),createThread:vi.fn(),annotation:vi.fn(),updateAnnotation:vi.fn(),deleteAnnotation:vi.fn(),startReview:vi.fn(),poll:vi.fn()}));
-vi.mock('../lib/api', () => ({getAsset: mocks.getAsset,listPanelVersions:mocks.panelVersions,listVisualReviewThreads:mocks.threads,updateVisualReviewThread:mocks.patchThread,createVisualReviewMessage:mocks.message,acceptVisualReviewCandidate:mocks.accept,rejectVisualReviewCandidate:mocks.reject,createVisualReviewThread:mocks.createThread,createVisualAnnotation:mocks.annotation,updateVisualAnnotation:mocks.updateAnnotation,deleteVisualAnnotation:mocks.deleteAnnotation,startVisualReviewGeneration:mocks.startReview,mediaUrl: (path: string) => path}));
+const mocks = vi.hoisted(() => ({getAsset: vi.fn(),getProject:vi.fn(),panelVersions:vi.fn(),threads:vi.fn(),patchThread:vi.fn(),message:vi.fn(),accept:vi.fn(),reject:vi.fn(),createThread:vi.fn(),annotation:vi.fn(),updateAnnotation:vi.fn(),deleteAnnotation:vi.fn(),startReview:vi.fn(),poll:vi.fn()}));
+vi.mock('../lib/api', () => ({getAsset: mocks.getAsset,getProject:mocks.getProject,listPanelVersions:mocks.panelVersions,listVisualReviewThreads:mocks.threads,updateVisualReviewThread:mocks.patchThread,createVisualReviewMessage:mocks.message,acceptVisualReviewCandidate:mocks.accept,rejectVisualReviewCandidate:mocks.reject,createVisualReviewThread:mocks.createThread,createVisualAnnotation:mocks.annotation,updateVisualAnnotation:mocks.updateAnnotation,deleteVisualAnnotation:mocks.deleteAnnotation,startVisualReviewGeneration:mocks.startReview,mediaUrl: (path: string) => path}));
 vi.mock('../lib/jobs',()=>({pollJob:mocks.poll}));
 
 const episode: EpisodeDetail = {
@@ -20,7 +20,7 @@ const reviewThread={id:'thread-1',episode_id:'episode-1',shot_id:'shot-1',source
 const styles=readAllStyles();
 
 describe('VisualReviewWorkspace', () => {
-  beforeEach(()=>mocks.panelVersions.mockResolvedValue([]));
+  beforeEach(()=>{mocks.panelVersions.mockResolvedValue([]);mocks.getProject.mockResolvedValue({characters:[]});});
   afterEach(() => {cleanup(); vi.clearAllMocks();});
 
   it('binds an annotation to conversation and revision scope', async () => {
