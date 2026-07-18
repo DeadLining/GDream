@@ -793,6 +793,7 @@ describe('Workspace', () => {
     expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(84px,auto\)\s+minmax\(0,1fr\)/);
     expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar-actions\s*\{[^}]*grid-column:\s*2[^}]*width:\s*100%[^}]*overflow-x:\s*auto/);
     expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar-actions\s+\.command-button\s*\{[^}]*flex:\s*0\s+0\s+34px[^}]*justify-content:\s*center[^}]*overflow:\s*hidden[^}]*font-size:\s*0\s*!important/);
+    expect(workspaceStyles).toMatch(/@media\s*\(max-width:\s*899px\)[\s\S]*?\.director-toolbar-actions\s+\.command-button\s+svg\s*\{[^}]*flex:\s*0\s+0\s+15px[^}]*width:\s*15px/);
   });
 
   it('keeps responsive workspace grid overrides after the modern desktop rule', () => {
