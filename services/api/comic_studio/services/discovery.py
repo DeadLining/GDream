@@ -5,6 +5,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from comic_studio import models, schemas
+from comic_studio.services.readiness import ReadinessService
 
 
 WORKSPACE_TIMEZONE = ZoneInfo("Asia/Shanghai")
@@ -75,8 +76,7 @@ class DiscoveryService:
             )
             tasks = list(self.session.scalars(task_query))
             open_tasks = len(tasks)
-            completion = round(((shot_count - pending_review) / shot_count) * 100) if shot_count else 0
-            stage = "待审核" if pending_review and completion >= 60 else "制作中" if episode_count else "项目初始化"
+            completion, stage = self._production_progress(episode_ids)
             total_tasks += open_tasks
             total_pending += pending_review
             if updated_on_workspace_today(project.updated_at):
@@ -105,6 +105,47 @@ class DiscoveryService:
             updated_today_count=updated_today,
             projects=rows,
         )
+
+    def _production_progress(self, episode_ids: tuple[str, ...]) -> tuple[int, str]:
+        if not episode_ids:
+            return 0, "项目初始化"
+        readiness = ReadinessService(self.session)
+        reports = [readiness.inspect(episode_id) for episode_id in episode_ids]
+        reports = [report for report in reports if report is not None]
+        total_shots = sum(report["totals"]["shots"] for report in reports)
+        total_dialogue = sum(report["totals"]["dialogue"] for report in reports)
+        total_steps = total_shots * 3 + total_dialogue
+        ready_steps = sum(
+            report["ready_counts"]["panels"]
+            + report["ready_counts"]["approved"]
+            + report["ready_counts"]["videos"]
+            + report["ready_counts"]["speech"]
+            for report in reports
+        )
+        completion = round((ready_steps / total_steps) * 100) if total_steps else 0
+        blockers = {
+            key: any(report["blockers"][key] for report in reports)
+            for key in (
+                "missing_panels",
+                "stale_panels",
+                "unapproved_shots",
+                "missing_speech",
+                "missing_videos",
+            )
+        }
+        if total_shots == 0:
+            stage = "分镜规划"
+        elif blockers["missing_panels"] or blockers["stale_panels"]:
+            stage = "画面制作"
+        elif blockers["unapproved_shots"]:
+            stage = "镜头审核"
+        elif blockers["missing_speech"]:
+            stage = "配音制作"
+        elif blockers["missing_videos"]:
+            stage = "视频制作"
+        else:
+            stage = "素材就绪"
+        return completion, stage
 
     def _count(self, column, *conditions) -> int:
         return int(self.session.scalar(select(func.count(column)).where(*conditions)) or 0)

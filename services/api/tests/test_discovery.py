@@ -62,6 +62,8 @@ def test_workspace_summary_uses_real_project_task_and_review_counts(client):
         "shot_count": 1,
         "open_task_count": 1,
         "pending_review_count": 1,
+        "completion_percent": 0,
+        "current_stage": "画面制作",
         "latest_task_titles": ["补齐环境音"],
     }
 
@@ -123,6 +125,29 @@ def test_workspace_progress_includes_panel_and_video_readiness(client):
 
     assert row["completion_percent"] == 67
     assert row["current_stage"] == "视频制作"
+
+    with client.app.state.session_factory() as session:
+        shot = session.get(models.Shot, shot.id)
+        video = models.Asset(
+            project_id=project["id"],
+            kind=f"video:{shot.id}",
+            local_path="video.mp4",
+            media_type="video/mp4",
+            provider="test",
+            model="test",
+            checksum="1" * 64,
+            duration_seconds=4,
+            parent_asset_id=shot.active_panel_asset_id,
+        )
+        session.add(video)
+        session.flush()
+        shot.active_video_asset_id = video.id
+        session.commit()
+
+    row = client.get("/api/workspace/summary").json()["projects"][0]
+
+    assert row["completion_percent"] == 100
+    assert row["current_stage"] == "素材就绪"
 
 
 def test_project_search_returns_navigable_results_across_real_resources(client):
