@@ -17,7 +17,7 @@ from comic_studio.provider_channels import validate_http_url
 
 AspectRatio = Literal["9:16", "16:9", "1:1"]
 ReviewStatus = Literal["draft", "needs_changes", "approved"]
-ProviderChannelKind = Literal["llm", "image", "tts", "video", "model3d"]
+ProviderChannelKind = Literal["llm", "image", "tts", "video"]
 SafeIdentifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")]
 
 
@@ -130,7 +130,6 @@ class ProviderChannelsRead(BaseModel):
     image: ProviderChannelRead
     tts: ProviderChannelRead
     video: ProviderChannelRead
-    model3d: ProviderChannelRead
     persistence: ProviderChannelPersistenceRead
     reloaded_at: datetime
 
@@ -171,7 +170,6 @@ class ProviderHealthRead(BaseModel):
     image: ProviderHealthStatusRead
     tts: ProviderHealthStatusRead
     video: ProviderHealthStatusRead
-    model3d: ProviderHealthStatusRead
 
 
 class PatchModel(BaseModel):
@@ -293,15 +291,10 @@ class AssetVariantUsageRead(AssetVariantUsageCreate):
     variant_id: str
     effective_variant_id: str | None
     effective_state_id: str | None
-    effective_representation_id: str | None
-    effective_representation_version: int | None
-    director_object_id: str | None
     binding_status: Literal[
         "pending",
         "resolved",
         "fallback",
-        "missing_representation",
-        "missing_director_object",
         "invalid_scope",
     ]
     binding_updated_at: datetime | None
@@ -1053,29 +1046,6 @@ class CharacterReferenceRead(BaseModel):
     asset: AssetRead
 
 
-class Character3DRepresentationRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    character_id: str
-    variant_id: str | None
-    state_id: str | None
-    asset_id: str
-    label: str
-    format: Literal["glb"]
-    version: int
-    is_active: bool
-    review_status: ReviewStatus
-    model_url: str
-    mesh_count: int
-    triangle_count: int
-    material_count: int
-    has_skeleton: bool
-    bounds: dict
-    metadata: dict
-    created_at: datetime
-    updated_at: datetime
-
-
 ProductionStage = Literal["panels", "speech", "videos"]
 
 
@@ -1399,11 +1369,6 @@ class ProductionGraphShotRead(BaseModel):
     dialogue_ids: list[str] = Field(default_factory=list)
     dialogue_count: int = 0
     speech_ready_count: int = 0
-    director_ready: bool = False
-    director_asset_ready: bool = False
-    director_blocking_ready: bool = False
-    director_camera_ready: bool = False
-    director_blockers: list[str] = Field(default_factory=list)
 
 
 class ProductionGraphAssetRead(BaseModel):

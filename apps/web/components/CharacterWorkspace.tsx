@@ -1,10 +1,9 @@
 'use client';
 
-import {Box,Check,ImagePlus,LoaderCircle,Pencil,RefreshCw,Sparkles,Trash2} from 'lucide-react';
-import {Fragment,useEffect,useRef,useState} from 'react';
+import {Check,ImagePlus,LoaderCircle,Pencil,RefreshCw,Sparkles,Trash2} from 'lucide-react';
+import {useEffect,useRef,useState} from 'react';
 import {
   activateCharacterReference,
-  approveModel3DJob,
   bindLibraryAssetToScene,
   createCharacter,
   createLibraryAsset,
@@ -17,16 +16,13 @@ import {
   deleteAssetVariantState,
   generateCharacterReferenceSet,
   generateLibraryAssetImage,
-  generateModel3D,
   getAssetVariantImpact,
   getAssetVariantStateImpact,
   getCharacterImpact,
-  getLatestModel3DJob,
   getShotGenerationReadiness,
   getEpisodeProductionGraph,
   createProductionRun,
   listCharacterReferences,
-  listCharacter3DRepresentations,
   listAssetRequirements,
   listLibraryAssets,
   listAssetVariants,
@@ -39,7 +35,6 @@ import {
   updateCharacter,
   updateLibraryAsset,
   uploadCharacterReference,
-  uploadCharacter3DRepresentation,
   uploadLibraryAssetMedia,
 } from '../lib/api';
 import {pollJob} from '../lib/jobs';
@@ -68,7 +63,6 @@ import {
 } from './assets/AssetLibraryViews';
 import {AssetLineageCanvas} from './canvas/AssetLineageCanvas';
 import {normalizeAssetImpact} from '../lib/asset-impact';
-import {CharacterModelPreview} from './assets/CharacterModelPreview';
 import type {AssetRequirement,GenerationAssetRequest} from '../lib/shot-generation-readiness';
 
 const types:Array<[CharacterReferenceType,string]>=[
@@ -77,19 +71,6 @@ const types:Array<[CharacterReferenceType,string]>=[
 ];
 const labels=Object.fromEntries(types) as Record<CharacterReferenceType,string>;
 const setMetadata=(job:Job|null)=>job?.result_metadata as Partial<CharacterReferenceSetMetadata>|undefined;
-const modelMetadata=(metadata:Record<string,unknown>|undefined)=>{
-  const skinCount=typeof metadata?.skin_count==='number'?metadata.skin_count:null;
-  const jointCount=typeof metadata?.joint_count==='number'?metadata.joint_count:null;
-  const clips=Array.isArray(metadata?.animation_clips)?metadata.animation_clips:[];
-  const animationClips=clips.flatMap(item=>{
-    if(!item||typeof item!=='object')return[];
-    const clip=item as Record<string,unknown>;
-    if(typeof clip.name!=='string')return[];
-    return[{name:clip.name,duration:typeof clip.duration_seconds==='number'&&Number.isFinite(clip.duration_seconds)?clip.duration_seconds:null}];
-  });
-  const morphTargets=Array.from(new Set((Array.isArray(metadata?.morph_targets)?metadata.morph_targets:[]).filter((name):name is string=>typeof name==='string'&&Boolean(name.trim())).map(name=>name.trim())));
-  return{skinCount,jointCount,animationClips,morphTargets};
-};
 const defaultAssetRequest:GenerationAssetRequest={target:'character',shotId:'',requirementIds:[]};
 const requirementsForRequest=(items:AssetRequirement[],request:GenerationAssetRequest)=>items.filter(item=>{
   if(item.kind!==request.target)return false;
@@ -98,7 +79,7 @@ const requirementsForRequest=(items:AssetRequirement[],request:GenerationAssetRe
   return Boolean(request.shotId&&shotIds.includes(request.shotId));
 });
 
-export function CharacterWorkspace({projectId,characters,episodes=[],requestedAssetRequest=defaultAssetRequest,searchTarget,onCharactersChanged,onMetricsChanged,onReturnToShot,onOpenDirector}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];requestedAssetRequest?:GenerationAssetRequest;searchTarget?:ProjectSearchResult|null;onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void;onReturnToShot?:(shotId:string)=>void;onOpenDirector?:(shotId:string)=>void}){
+export function CharacterWorkspace({projectId,characters,episodes=[],requestedAssetRequest=defaultAssetRequest,searchTarget,onCharactersChanged,onMetricsChanged,onReturnToShot}:{projectId?:string;characters:Character[];episodes?:EpisodeSummary[];requestedAssetRequest?:GenerationAssetRequest;searchTarget?:ProjectSearchResult|null;onCharactersChanged?:()=>Promise<void>|void;onMetricsChanged?:()=>Promise<void>|void;onReturnToShot?:(shotId:string)=>void}){
   const [workspaceCharacters,setWorkspaceCharacters]=useState(characters);
   const [selected,setSelected]=useState(characters[0]?.id??'');
   const [view,setView]=useState<AssetWorkspaceView>('catalog');
@@ -112,13 +93,6 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
   const [error,setError]=useState('');
   const [generating,setGenerating]=useState(false);
   const [currentJob,setCurrentJob]=useState<Job|null>(null);
-  const [model3dJob,setModel3dJob]=useState<Job|null>(null);
-  const [model3dBusy,setModel3dBusy]=useState(false);
-  const [model3dError,setModel3dError]=useState('');
-  const [modelScope,setModelScope]=useState('master');
-  const [modelImpact,setModelImpact]=useState<AssetImpact|null>(null);
-  const [modelImpactLoading,setModelImpactLoading]=useState(false);
-  const [modelImpactMessage,setModelImpactMessage]=useState('');
   const [editingReferenceId,setEditingReferenceId]=useState('');
   const [editingReferenceLabel,setEditingReferenceLabel]=useState('');
   const completedCount=useRef(0);
@@ -130,8 +104,6 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
   const character=workspaceCharacters.find(item=>item.id===selected)??workspaceCharacters[0];
   const references=character?assetData[character.id]?.references??[]:[];
   const variants=character?assetData[character.id]?.variants??[]:[];
-  const representations=character?assetData[character.id]?.representations??[]:[];
-  const selectedScope=(()=>{if(modelScope.startsWith('state:')){const stateId=modelScope.slice(6);const variant=variants.find(item=>item.states.some(state=>state.id===stateId));return{variantId:variant?.id??null,stateId};}if(modelScope.startsWith('variant:'))return{variantId:modelScope.slice(8),stateId:null};return{variantId:null,stateId:null};})();
   const characterIds=workspaceCharacters.map(item=>item.id).join('|');
   const requestedRequirementIds=requestedAssetRequest.requirementIds.join('|');
   const searchCategory=searchTarget?.kind==='library_asset'&&searchTarget.library_asset_kind?searchTarget.library_asset_kind:requestedAssetRequest.target;
@@ -140,9 +112,9 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
     const request=(loadRequests.current[id]??0)+1;
     loadRequests.current[id]=request;
     try{
-      const [nextReferences,nextVariants,nextRepresentations]=await Promise.all([listCharacterReferences(id),listAssetVariants(id),listCharacter3DRepresentations(id)]);
+      const [nextReferences,nextVariants]=await Promise.all([listCharacterReferences(id),listAssetVariants(id)]);
       if(request!==loadRequests.current[id])return;
-      setAssetData(current=>({...current,[id]:{references:nextReferences,variants:nextVariants,representations:nextRepresentations}}));
+      setAssetData(current=>({...current,[id]:{references:nextReferences,variants:nextVariants}}));
       setError('');
     }catch(cause){
       if(request!==loadRequests.current[id])return;
@@ -171,13 +143,6 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
     if(searchTarget.kind==='character')setView('master');
     else if(searchTarget.kind==='asset_variant'||searchTarget.kind==='asset_state')setView('variant');
   },[searchTarget,characterIds]);
-  useEffect(()=>setModelScope('master'),[character?.id]);
-  useEffect(()=>{
-    let current=true;
-    if(!character){setModel3dJob(null);return;}
-    void getLatestModel3DJob('character',character.id,selectedScope.variantId,selectedScope.stateId).then(job=>{if(current)setModel3dJob(job);}).catch(()=>{if(current)setModel3dJob(null);});
-    return()=>{current=false;};
-  },[character?.id,modelScope,selectedScope.variantId,selectedScope.stateId]);
 
   const reloadLibraryAssets=async()=>{
     if(!resolvedProjectId){setLibraryAssets([]);return;}
@@ -229,13 +194,6 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
   const removeLibraryAsset=async(id:string)=>{await deleteLibraryAsset(id);await reloadLibraryAssets();await onMetricsChanged?.();};
   const uploadLibraryMedia=async(id:string,file:File)=>{await uploadLibraryAssetMedia(id,file,file.name);await reloadLibraryAssets();await refreshAssetRequirements();await onMetricsChanged?.();};
   const generateLibraryImage=async(id:string)=>{const started=await generateLibraryAssetImage(id);const finished=await pollJob(started.job_id);if(finished.status==='failed')throw new Error(finished.error||'场景参考图生成失败');await reloadLibraryAssets();await refreshAssetRequirements();await onMetricsChanged?.();};
-  const generateLibraryModel=async(id:string,referenceAssetId:string)=>{
-    const started=await generateModel3D('library_asset',id,referenceAssetId);
-    const finished=await pollJob(started.job_id);
-    if(finished.status==='failed')throw new Error(finished.error||'3D 生成失败');
-    return finished;
-  };
-  const approveLibraryModel=async(jobId:string)=>{await approveModel3DJob(jobId);await reloadLibraryAssets();await onMetricsChanged?.();};
   const bindLibraryAsset=async(assetId:string,requirementId:string)=>{
     const requirement=assetRequirements.find(item=>item.id===requirementId);
     if(!requirement)throw new Error('镜头资产需求已变化，请重新进入');
@@ -244,10 +202,9 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
     for(const sceneId of sceneIds)await bindLibraryAssetToScene(sceneId,assetId);
     await reloadLibraryAssets();await refreshAssetRequirements();await onMetricsChanged?.();
   };
-  const loadLibraryModelJob=(id:string)=>getLatestModel3DJob('library_asset',id);
   const addCharacter=async(data:CharacterDraft)=>{if(!resolvedProjectId)throw new Error('缺少项目 ID，无法创建角色');const created=await createCharacter(resolvedProjectId,data);setWorkspaceCharacters(current=>[...current,created]);setAssetData(current=>({...current,[created.id]:{references:[],variants:[]}}));setSelected(created.id);await onCharactersChanged?.();};
   const editCharacter=async(id:string,data:CharacterDraft)=>{const updated=await updateCharacter(id,data);setWorkspaceCharacters(current=>current.map(item=>item.id===id?{...item,...updated,id}:item));await onCharactersChanged?.();};
-  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} requirements={assetRequirements} requirementScope={requestedAssetRequest.shotId?'shot':'project'} requirementError={assetRequirementError} generationReadiness={generationReadiness} onBindLibraryAsset={bindLibraryAsset} onReturnToShot={requestedAssetRequest.shotId&&onReturnToShot?()=>onReturnToShot(requestedAssetRequest.shotId):undefined} onOpenDirector={requestedAssetRequest.shotId&&onOpenDirector?()=>onOpenDirector(requestedAssetRequest.shotId):undefined} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage} onGenerateLibraryAssetModel={generateLibraryModel} onApproveLibraryAssetModel={approveLibraryModel} onLoadLibraryAssetModelJob={loadLibraryModelJob}/>;
+  const catalog=<AssetCatalogView characters={workspaceCharacters} character={character??null} references={references} variants={variants} characterAssets={assetData} libraryAssets={libraryAssets} libraryError={libraryError} requestedCategory={searchCategory} initialLibraryAssetId={searchTarget?.kind==='library_asset'?searchTarget.library_asset_id??'':''} requirements={assetRequirements} requirementScope={requestedAssetRequest.shotId?'shot':'project'} requirementError={assetRequirementError} generationReadiness={generationReadiness} onBindLibraryAsset={bindLibraryAsset} onReturnToShot={requestedAssetRequest.shotId&&onReturnToShot?()=>onReturnToShot(requestedAssetRequest.shotId):undefined} onSelect={setSelected} onOpen={setView} onCreateCharacter={addCharacter} onUpdateCharacter={editCharacter} onCreateLibraryAsset={addLibraryAsset} onUpdateLibraryAsset={editLibraryAsset} onDeleteLibraryAsset={removeLibraryAsset} onUploadLibraryAssetMedia={uploadLibraryMedia} onGenerateLibraryAssetImage={generateLibraryImage}/>;
 
   if(!character)return catalog;
 
@@ -255,53 +212,6 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
     if(!file)return;
     try{await uploadCharacterReference(character.id,filter,file);await load(character.id);}
     catch(cause){setError(cause instanceof Error?cause.message:'上传失败');}
-  };
-  const uploadModel=async(file:File|null)=>{if(!file)return;try{if(selectedScope.variantId||selectedScope.stateId)await uploadCharacter3DRepresentation(character.id,file,'',selectedScope.variantId,selectedScope.stateId);else await uploadCharacter3DRepresentation(character.id,file);await load(character.id);}catch(cause){setError(cause instanceof Error?cause.message:'3D 模型上传失败');}};
-  const approvedReferenceFor=(...referenceTypes:CharacterReferenceType[])=>references.find(item=>referenceTypes.includes(item.reference_type)&&item.review_status==='approved'&&item.is_active)??references.find(item=>referenceTypes.includes(item.reference_type)&&item.review_status==='approved')??null;
-  const modelReferences=[
-    approvedReferenceFor('primary','front'),
-    approvedReferenceFor('three_quarter'),
-    approvedReferenceFor('side'),
-    approvedReferenceFor('back'),
-  ].filter((item):item is CharacterReference=>item!==null);
-  const modelReference=modelReferences[0]??null;
-  const modelReferenceIds=modelReferences.map(item=>item.asset.id);
-  const generateCharacterModel=async()=>{
-    if(model3dBusy)return;
-    if(!modelReference){setModel3dError('请先批准至少一张角色参考图');return;}
-    setModel3dBusy(true);setModel3dError('');
-    try{
-      const started=await generateModel3D(
-        'character',
-        character.id,
-        modelReference.asset.id,
-        selectedScope.variantId,
-        selectedScope.stateId,
-        modelReferenceIds,
-      );
-      const finished=await pollJob(started.job_id,{onUpdate:setModel3dJob});
-      setModel3dJob(finished);
-      if(finished.status==='failed')throw new Error(finished.error||'3D 生成失败');
-      await load(character.id);
-    }catch(cause){setModel3dError(cause instanceof Error?cause.message:'3D 生成失败');}
-    finally{setModel3dBusy(false);}
-  };
-  const confirmApproveCharacterModel=async(regenerate:boolean)=>{
-    if(!model3dJob||model3dBusy)return;
-    setModel3dBusy(true);setModel3dError('');
-    try{await approveModel3DJob(model3dJob.id);await load(character.id);setModel3dJob(current=>current?{...current,result_metadata:{...current.result_metadata,review_status:'approved',is_active:true}}:current);await onMetricsChanged?.();}
-    catch(cause){setModel3dError(cause instanceof Error?cause.message:'批准 3D 候选失败');setModel3dBusy(false);return;}
-    if(!regenerate||!modelImpact){setModelImpact(null);setModel3dBusy(false);return;}
-    try{await regenerateImpact(modelImpact);setModelImpactMessage(`3D 候选已批准，已启动 ${modelImpact.episodes.length} 集的画面重生成`);}
-    catch(cause){setModelImpactMessage(`3D 候选已批准；${cause instanceof Error?cause.message:'启动画面重生成失败'}`);}
-    finally{setModel3dBusy(false);}
-  };
-  const requestApproveCharacterModel=async()=>{
-    if(model3dBusy)return;
-    setModelImpactLoading(true);setModel3dError('');setModelImpactMessage('');
-    try{setModelImpact(await analyzeImpact({characterId:character.id,variantId:selectedScope.variantId,stateId:selectedScope.stateId}));}
-    catch(cause){setModel3dError(cause instanceof Error?cause.message:'分析 3D 变更影响失败');}
-    finally{setModelImpactLoading(false);}
   };
   const follow=async(jobId:string)=>{
     const finished=await pollJob(jobId,{
@@ -373,16 +283,6 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
     {error&&<div className="form-error reference-set-error" role="alert"><span>{error}</span>{canRetry&&<button onClick={retry} disabled={generating}><RefreshCw size={14}/>继续未完成项</button>}</div>}
     <div className="reference-grid">{visible.map(reference=>{const label=reference.label||labels[reference.reference_type];const editing=editingReferenceId===reference.id;return <article key={reference.id} className={reference.is_active?'active':''}><img src={mediaUrl(reference.asset.media_url)} alt={`${character.name}${label}`}/><div>{editing?<><input aria-label="参考图名称" value={editingReferenceLabel} onChange={event=>setEditingReferenceLabel(event.target.value)}/><button aria-label="保存参考图名称" onClick={()=>void renameReference(reference)}><Check size={14}/></button></>:<span>{label}</span>}<small>{reference.review_status==='approved'?'已批准':'待审核'}{reference.is_active?' · 使用中':''}</small></div><div className="reference-commands">{reference.review_status!=='approved'&&<button onClick={()=>approve(reference)}><Check size={14}/>批准</button>}{reference.review_status==='approved'&&!reference.is_active&&<button onClick={()=>activate(reference)}>设为使用</button>}<button aria-label={`重命名${label}`} onClick={()=>{setEditingReferenceId(reference.id);setEditingReferenceLabel(label);}}><Pencil size={14}/></button><button aria-label={`删除${label}`} title={reference.is_active?'使用中的参考图不能删除':'删除参考图'} disabled={reference.is_active} onClick={()=>void removeReference(reference)}><Trash2 size={14}/></button></div></article>;})}</div>
   </section>;
-  const scopedRepresentations=representations.filter(item=>item.variant_id===selectedScope.variantId&&item.state_id===selectedScope.stateId);
-  const candidateId=String(model3dJob?.result_metadata?.representation_id??'');
-  const candidateRepresentation=scopedRepresentations.find(item=>item.id===candidateId)??scopedRepresentations.find(item=>!item.is_active&&item.review_status!=='approved')??null;
-  const activeRepresentation=scopedRepresentations.find(item=>item.is_active)??null;
-  const visibleRepresentation=candidateRepresentation??activeRepresentation;
-  const visibleModelMetadata=modelMetadata(visibleRepresentation?.metadata);
-  const candidatePending=Boolean(candidateRepresentation&&model3dJob?.status==='succeeded'&&model3dJob.result_metadata?.is_active!==true);
-  const modelManager=<><section className="character-model-section"><header><div><strong>3D 导演代理</strong><small>角色必须使用 GLB；AI 候选批准后才进入导演台</small><small>{modelReferenceIds.length?`将使用 ${modelReferenceIds.length} 张已批准视图`:'需要已批准的主参考或结构视图'}</small></div><div className="character-model-actions"><select aria-label="3D 模型作用域" value={modelScope} onChange={event=>setModelScope(event.target.value)}><option value="master">作品主设定</option>{variants.filter(item=>item.kind==='episode').map(variant=><Fragment key={variant.id}><option value={`variant:${variant.id}`}>{variant.label}</option>{variant.states.map(state=><option key={state.id} value={`state:${state.id}`}>{variant.label} / {state.label}</option>)}</Fragment>)}</select><button type="button" onClick={()=>void generateCharacterModel()} disabled={model3dBusy||!modelReference}>{model3dBusy?<LoaderCircle className="reference-spinner" size={15}/>:<Sparkles size={15}/>}根据参考图生成 3D</button><label>上传 GLB<input aria-label="上传角色 3D 模型" type="file" accept=".glb,model/gltf-binary" onChange={event=>void uploadModel(event.target.files?.[0]??null)}/></label></div></header>{visibleRepresentation?<><CharacterModelPreview url={visibleRepresentation.model_url}/><div className="character-model-meta"><strong>{visibleRepresentation.label}</strong><span>{visibleRepresentation.triangle_count.toLocaleString()} 三角面</span><span>{visibleRepresentation.has_skeleton?'含骨骼':'静态代理'}</span>{candidatePending&&<button type="button" className="primary-action" onClick={()=>void requestApproveCharacterModel()} disabled={model3dBusy||modelImpactLoading}><Check size={14}/>{modelImpactLoading?'正在分析':'批准使用 3D 候选'}</button>}</div></>:<div className="character-model-empty"><Box size={24}/><span>{model3dBusy?'正在生成 3D 候选':'当前作用域尚未准备 GLB'}</span></div>}{model3dError&&<p className="form-error" role="alert">{model3dError}</p>}</section>{modelImpact&&<div className="dialog-backdrop"><section className="form-dialog impact-dialog" role="dialog" aria-label="确认 3D 变更影响"><header><div><h2>确认 3D 变更影响</h2><small>批准后会影响 {modelImpact.shots.length} 个已绑定镜头</small></div><button type="button" aria-label="关闭 3D 影响" onClick={()=>setModelImpact(null)}>×</button></header><div className="impact-report">{modelImpact.episodes.length?modelImpact.episodes.map(episode=><section key={episode.episode_id}><h3>{episode.episode_title}</h3>{episode.scenes.map(scene=><div className="impact-scene" key={scene.scene_id}><strong>{scene.scene_label}</strong>{scene.shots.map(shot=><p key={shot.id}>镜头 {String(shot.position).padStart(2,'0')} · {shot.composition}</p>)}</div>)}</section>):<p>当前 3D 作用域没有已绑定镜头。</p>}</div>{modelImpactMessage&&<p role="status" className="impact-message">{modelImpactMessage}</p>}<footer><button type="button" onClick={()=>setModelImpact(null)}>{modelImpactMessage?'关闭':'取消'}</button>{!modelImpactMessage&&<><button type="button" onClick={()=>void confirmApproveCharacterModel(false)} disabled={model3dBusy}>{model3dBusy?'正在批准':'仅批准'}</button>{modelImpact.shots.length>0&&<button type="button" className="primary-action" onClick={()=>void confirmApproveCharacterModel(true)} disabled={model3dBusy}>{model3dBusy?'正在处理':'批准并重生成'}</button>}</>}</footer></section></div>}</>;
-  const modelMetadataSummary=visibleRepresentation?<div className="character-model-meta"><span>{visibleModelMetadata.skinCount!==null&&visibleModelMetadata.jointCount!==null?`${visibleModelMetadata.skinCount} 套骨骼 · ${visibleModelMetadata.jointCount} 个关节`:''}</span>{visibleModelMetadata.animationClips.map(clip=><span key={clip.name}>动画片段：{clip.name}{clip.duration!==null?`（${clip.duration} 秒）`:''}</span>)}{visibleModelMetadata.morphTargets.length>0&&<span>表情目标：{visibleModelMetadata.morphTargets.join('、')}</span>}</div>:null;
-
   if(view!=='catalog')return <CharacterMasterView
     characters={workspaceCharacters}
     character={character}
@@ -391,7 +291,7 @@ export function CharacterWorkspace({projectId,characters,episodes=[],requestedAs
     referenceManager={referenceManager}
     variantWorkspace={<AssetVariantEditorView embedded character={character} references={references} variants={variants} episodes={episodes} initialVariantId={searchTarget?.variant_id??undefined} initialStateId={searchTarget?.state_id??undefined} onOpen={setView} onCreateVariant={addEpisodeVariant} onCreateState={addState}/>}
     lineageWorkspace={<AssetLineageCanvas character={character} references={references} variants={variants} episodes={episodes} onCreateVariant={addVariant} onUpdateVariant={editVariant} onDeleteVariant={removeVariant} onCreateState={addState} onUpdateState={editState} onDeleteState={removeState} onLoadEpisodeShots={loadEpisodeShots} onCreateUsage={addUsage} onAnalyzeImpact={analyzeImpact} onRegenerateImpact={regenerateImpact}/>}
-    modelManager={<>{modelManager}{modelMetadataSummary}</>}
+    modelManager={null}
     initialTab={view==='variant'?'variant':view==='lineage'?'lineage':'master'}
     onSelect={setSelected}
     onOpen={setView}

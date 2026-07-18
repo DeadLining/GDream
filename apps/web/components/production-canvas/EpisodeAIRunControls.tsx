@@ -75,7 +75,7 @@ const sleep=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Aborted','AbortError'));},{once:true});
 });
 
-export function EpisodeAIRunControls({episodeId,onCompleted,onOpenAssets,onOpenDirector}:{episodeId:string;onCompleted?:()=>void;onOpenAssets?:(request:GenerationAssetRequest)=>void;onOpenDirector?:(shotId:string)=>void}){
+export function EpisodeAIRunControls({episodeId,onCompleted,onOpenAssets}:{episodeId:string;onCompleted?:()=>void;onOpenAssets?:(request:GenerationAssetRequest)=>void}){
   const [run,setRun]=useState<EpisodeAIRun|null>(null);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
@@ -151,7 +151,6 @@ export function EpisodeAIRunControls({episodeId,onCompleted,onOpenAssets,onOpenD
   const displayedError=error||run.error;
   const generationReadiness=generationReadinessFromRun(run)??parseGenerationReadinessError(displayedError);
   const needsAssets=generationReadiness?.blockers.some(item=>['missing_character_reference','missing_background','missing_required_prop'].includes(item));
-  const needsDirector=generationReadiness?.blockers.some(item=>['blocking_not_initialized','director_preview_missing'].includes(item));
   return <section className={`episode-ai-run status-${run.status}`} aria-label="整集 AI 任务">
     <header>
       <div className="episode-ai-run-title">{completed?<Check size={18}/>:run.status==='failed'||run.status==='needs_review'?<AlertTriangle size={18}/>:<Sparkles size={18}/>}<span><strong>{completed?'整集成片已完成':'整集 AI 成片'}</strong><small>{completed?'已通过质检并登记内部母版':`当前：${currentLabel}`}</small></span></div>
@@ -173,7 +172,6 @@ export function EpisodeAIRunControls({episodeId,onCompleted,onOpenAssets,onOpenD
       <span>{generationReadiness.blockers.map(shotGenerationBlockerLabel).join('、')}</span>
       <div className="episode-ai-error-actions">
         {needsAssets&&onOpenAssets?<button type="button" onClick={()=>onOpenAssets({target:generationAssetTargetForBlockers(generationReadiness.blockers),shotId:generationReadiness.blockedShots[0].shotId,requirementIds:generationReadiness.blockedShots[0].requirementIds})}>完善项目资产</button>:null}
-        {needsDirector&&onOpenDirector?<button type="button" aria-label="打开首个阻塞镜头的 3D 导演台" onClick={()=>onOpenDirector(generationReadiness.blockedShots[0].shotId)}>打开 3D 导演台</button>:null}
       </div>
     </div>:<p className="episode-ai-error" role="alert">{friendlyError(displayedError)}</p>)}
   </section>;

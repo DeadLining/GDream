@@ -1,0 +1,438 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1760 1240" font-family="-apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif">
+  <!-- ===== Palette =====
+       主线节点  fill="#2563eb" (blue-600)   文字 white
+       主线产出 fill="#1e40af" (blue-800)   文字 white (数据产出)
+       分支节点  fill="#f59e0b" (amber-500) 文字 #1f2937
+       回环节点  fill="#dc2626" (red-600)   文字 white
+       能力侧栏  fill="#7c3aed" (violet-600) 文字 white
+       数据侧栏  fill="#059669" (emerald-600) 文字 white
+       辅助/旁挂 fill="#9ca3af" (gray-400) 文字 #1f2937
+       背景      fill="#f9fafb" (gray-50)
+       主线边    stroke="#2563eb" stroke-width=2.4
+       分支边    stroke="#f59e0b" stroke-width=1.8 stroke-dasharray="6 4"
+       回环边    stroke="#dc2626" stroke-width=2.2 marker-end arrow
+       虚线归属 stroke="#9ca3af" stroke-width=1 stroke-dasharray="3 3"
+  -->
+
+  <defs>
+    <marker id="arrow-main" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-branch" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-faint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/>
+    </marker>
+  </defs>
+
+  <rect width="1760" height="1240" fill="#f9fafb"/>
+
+  <!-- ===== Title ===== -->
+  <text x="880" y="44" text-anchor="middle" font-size="28" font-weight="700" fill="#111827">AI Comic Studio · 项目功能流程图</text>
+  <text x="880" y="70" text-anchor="middle" font-size="14" fill="#6b7280">主线（剧本 → 成片）· 分支（旁支功能）· 回环（反馈/重试/驳回）· 能力与数据域侧栏</text>
+
+  <!-- ===== Legend ===== -->
+  <g transform="translate(40, 96)">
+    <rect width="420" height="138" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="14" y="22" font-size="12" font-weight="700" fill="#374151">图例</text>
+    <rect x="14" y="32" width="20" height="14" rx="3" fill="#2563eb"/><text x="42" y="44" font-size="11" fill="#374151">主线步骤</text>
+    <rect x="14" y="52" width="20" height="14" rx="3" fill="#1e40af"/><text x="42" y="64" font-size="11" fill="#374151">主线产出 / 数据落点</text>
+    <rect x="14" y="72" width="20" height="14" rx="3" fill="#f59e0b"/><text x="42" y="84" font-size="11" fill="#374151">分支（旁支功能）</text>
+    <rect x="14" y="92" width="20" height="14" rx="3" fill="#dc2626"/><text x="42" y="104" font-size="11" fill="#374151">回环节点（重试 / 驳回 / 阻塞）</text>
+    <rect x="150" y="32" width="20" height="14" rx="3" fill="#7c3aed"/><text x="178" y="44" font-size="11" fill="#374151">模型能力</text>
+    <rect x="150" y="52" width="20" height="14" rx="3" fill="#059669"/><text x="178" y="64" font-size="11" fill="#374151">数据域</text>
+    <rect x="150" y="72" width="20" height="14" rx="3" fill="#9ca3af"/><text x="178" y="84" font-size="11" fill="#374151">辅助 / 未启用</text>
+    <line x1="150" y1="100" x2="180" y2="100" stroke="#2563eb" stroke-width="2.4" marker-end="url(#arrow-main)"/><text x="188" y="104" font-size="11" fill="#374151">主线调用</text>
+    <line x1="270" y1="100" x2="300" y2="100" stroke="#dc2626" stroke-width="2.2" stroke-dasharray="5 3" marker-end="url(#arrow-loop)"/><text x="308" y="104" font-size="11" fill="#374151">回环</text>
+    <line x1="150" y1="120" x2="180" y2="120" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow-branch)"/><text x="188" y="124" font-size="11" fill="#374151">分支岔出</text>
+  </g>
+
+  <!-- ===== Right-side note: 12-stage AI 编排 ===== -->
+  <g transform="translate(1280, 96)">
+    <rect width="440" height="138" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="14" y="22" font-size="12" font-weight="700" fill="#374151">一键 AI 编排（EpisodeAIRun · 12 stage 顺序执行）</text>
+    <text x="14" y="42" font-size="10.5" fill="#6b7280">services/episode_ai_runs.py:10-21 · orchestrator.run 严格按 current_stage 推进</text>
+    <text x="14" y="62" font-size="10.5" fill="#374151">scripting → structuring → references → panels → panel_review →</text>
+    <text x="14" y="78" font-size="10.5" fill="#374151">speech → videos → rendering → quality_review → release_candidate →</text>
+    <text x="14" y="94" font-size="10.5" fill="#374151">release_gate → published</text>
+    <text x="14" y="114" font-size="10.5" fill="#dc2626">scripting / structuring 默认 skipped（剧本由用户导入）</text>
+    <text x="14" y="128" font-size="10.5" fill="#dc2626">handler 抛 EpisodeAIStageNeedsReview → run 暂停待人工 review</text>
+  </g>
+
+  <!-- ===== 左侧栏：模型能力 ===== -->
+  <g transform="translate(40, 260)">
+    <rect width="180" height="360" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect width="180" height="28" rx="8" fill="#7c3aed"/>
+    <rect y="20" width="180" height="8" fill="#7c3aed"/>
+    <text x="90" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">模型能力（Capability）</text>
+    <text x="14" y="48" font-size="10" fill="#6b7280">model_runtime/service.py</text>
+
+    <rect x="14" y="58" width="152" height="42" rx="5" fill="#7c3aed"/>
+    <text x="90" y="75" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">TEXT</text>
+    <text x="90" y="91" text-anchor="middle" font-size="10" fill="#e9d5ff">MiniMaxProvider · M3</text>
+
+    <rect x="14" y="108" width="152" height="42" rx="5" fill="#7c3aed"/>
+    <text x="90" y="125" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">IMAGE</text>
+    <text x="90" y="141" text-anchor="middle" font-size="10" fill="#e9d5ff">GPTImageProvider · gpt-image-2</text>
+
+    <rect x="14" y="158" width="152" height="42" rx="5" fill="#7c3aed"/>
+    <text x="90" y="175" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">SPEECH</text>
+    <text x="90" y="191" text-anchor="middle" font-size="10" fill="#e9d5ff">QwenTTSProvider · 经 SSH→A800</text>
+
+    <rect x="14" y="208" width="152" height="42" rx="5" fill="#7c3aed"/>
+    <text x="90" y="225" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">VIDEO</text>
+    <text x="90" y="241" text-anchor="middle" font-size="10" fill="#e9d5ff">MiniMax / Wan 双 adapter</text>
+
+    <text x="14" y="276" font-size="10" fill="#6b7280">provider_channels.json 持久化</text>
+    <text x="14" y="294" font-size="10" fill="#6b7280">/api/model-runtime/health 健康检查</text>
+    <text x="14" y="312" font-size="10" fill="#6b7280">/api/providers/health 探活</text>
+  </g>
+
+  <!-- ===== 右侧栏：数据域 ===== -->
+  <g transform="translate(1540, 260)">
+    <rect width="180" height="780" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect width="180" height="28" rx="8" fill="#059669"/>
+    <rect y="20" width="180" height="8" fill="#059669"/>
+    <text x="90" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">数据域（45 表）</text>
+    <text x="14" y="48" font-size="10" fill="#6b7280">models.py · 按业务域分组</text>
+
+    <text x="14" y="68" font-size="11" font-weight="700" fill="#059669">主线域</text>
+    <text x="14" y="84" font-size="10" fill="#374151">项目/元数据 (3)</text>
+    <text x="14" y="98" font-size="10" fill="#374151">剧本域 (6)</text>
+    <text x="14" y="112" font-size="10" fill="#374151">集/分镜/对白 (4)</text>
+    <text x="14" y="126" font-size="10" fill="#374151">角色/资产库 (4)</text>
+    <text x="14" y="140" font-size="10" fill="#374151">资产变体谱系 (4)</text>
+    <text x="14" y="154" font-size="10" fill="#374151">生产运行 (2)</text>
+    <text x="14" y="168" font-size="10" fill="#374151">Episode AI (2)</text>
+    <text x="14" y="182" font-size="10" fill="#374151">基础设施 jobs/invocations (4)</text>
+
+    <text x="14" y="208" font-size="11" font-weight="700" fill="#f59e0b">审阅/发布域（成片后）</text>
+    <text x="14" y="224" font-size="10" fill="#374151">视觉审阅 (4)</text>
+    <text x="14" y="238" font-size="10" fill="#374151">最终审核/发布 (4)</text>
+    <text x="14" y="252" font-size="10" fill="#374151">渲染审阅 (1)</text>
+
+    <text x="14" y="278" font-size="11" font-weight="700" fill="#9ca3af">旁支域</text>
+    <text x="14" y="294" font-size="10" fill="#374151">叙事/卷宗 (3) — 孤岛</text>
+    <text x="14" y="308" font-size="10" fill="#374151">运营/交付 (3)</text>
+    <text x="14" y="322" font-size="10" fill="#374151">回收站 (1)</text>
+    <text x="14" y="336" font-size="10" fill="#374151">画布布局 (1)</text>
+    <text x="14" y="350" font-size="10" fill="#374151">图片代理缓存 (1)</text>
+
+    <text x="14" y="376" font-size="11" font-weight="700" fill="#059669">二维生成约束</text>
+    <text x="14" y="392" font-size="10" fill="#374151">composition / camera_motion</text>
+    <text x="14" y="406" font-size="10" fill="#374151">站位 / 深度 / body_plan</text>
+    <text x="14" y="420" font-size="10" fill="#374151">连续性 / variant / state</text>
+    <text x="14" y="434" font-size="10" fill="#374151">角色 / 场景 / 道具图片参考</text>
+
+    <line x1="14" y1="458" x2="166" y2="458" stroke="#e5e7eb"/>
+    <text x="14" y="478" font-size="10" fill="#6b7280">前向迁移 20260729_37</text>
+    <text x="14" y="492" font-size="10" fill="#6b7280">删除 6 张退役 3D 表及</text>
+    <text x="14" y="506" font-size="10" fill="#6b7280">usage 中表示/导演绑定列。</text>
+
+    <text x="14" y="532" font-size="10" fill="#6b7280">历史迁移不改写；旧 provider</text>
+    <text x="14" y="546" font-size="10" fill="#6b7280">JSON 的 model3d 键读取时丢弃</text>
+  </g>
+
+  <!-- ===== 主线横轴：12 节点（y=480 中心带）===== -->
+  <!-- 主线节点宽 120 高 56，间距 12，从 x=250 开始 -->
+  <!-- 节点坐标:
+       1. 项目创建      (250, 480)
+       2. 剧本导入      (382, 480)
+       3. 结构提取      (514, 480)
+       4. 资产需求      (646, 480)
+       5. 角色参考      (778, 480)
+       6. 分镜编辑      (910, 480)
+       7. 出图 panels   (1042, 480)
+       8. 配音 speech   (1174, 480)
+       9. 出视频 video  (1306, 480)
+       10. 合成渲染     (1438, 480)  ← 右边到 1558
+       （11/12 审核发布 在主线下方作为接续，避免过宽）
+  -->
+
+  <!-- 主线标签 -->
+  <text x="904" y="252" text-anchor="middle" font-size="14" font-weight="700" fill="#2563eb">主链路 · 剧本 → 成片（10 步，承重）</text>
+  <text x="904" y="270" text-anchor="middle" font-size="11" fill="#6b7280">蓝色为用户可见步骤，深蓝为数据产出节点</text>
+
+  <!-- 主线节点 -->
+  <g>
+    <!-- 1 项目创建 -->
+    <rect x="250" y="480" width="120" height="56" rx="6" fill="#2563eb"/>
+    <text x="310" y="503" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">1 项目创建</text>
+    <text x="310" y="520" text-anchor="middle" font-size="9.5" fill="#dbeafe">POST /api/projects</text>
+
+    <!-- 2 剧本导入 -->
+    <rect x="382" y="480" width="120" height="56" rx="6" fill="#2563eb"/>
+    <text x="442" y="503" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">2 剧本导入</text>
+    <text x="442" y="520" text-anchor="middle" font-size="9.5" fill="#dbeafe">script_documents</text>
+
+    <!-- 3 结构提取 -->
+    <rect x="514" y="480" width="120" height="56" rx="6" fill="#1e40af"/>
+    <text x="574" y="503" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">3 结构提取</text>
+    <text x="574" y="520" text-anchor="middle" font-size="9.5" fill="#bfdbfe">scenes / shots / dialogue</text>
+
+    <!-- 4 资产需求 -->
+    <rect x="646" y="480" width="120" height="56" rx="6" fill="#2563eb"/>
+    <text x="706" y="503" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">4 资产需求</text>
+    <text x="706" y="520" text-anchor="middle" font-size="9.5" fill="#dbeafe">asset_requirements</text>
+
+    <!-- 5 角色参考 -->
+    <rect x="778" y="480" width="120" height="56" rx="6" fill="#2563eb"/>
+    <text x="838" y="503" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">5 角色参考</text>
+    <text x="838" y="520" text-anchor="middle" font-size="9.5" fill="#dbeafe">character_references</text>
+
+    <!-- 6 分镜编辑 -->
+    <rect x="910" y="480" width="120" height="56" rx="6" fill="#2563eb"/>
+    <text x="970" y="503" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">6 分镜编辑</text>
+    <text x="970" y="520" text-anchor="middle" font-size="9.5" fill="#dbeafe">Inspector · prompt/时长/运镜</text>
+
+    <!-- 7 出图 panels -->
+    <rect x="1042" y="480" width="120" height="56" rx="6" fill="#1e40af"/>
+    <text x="1102" y="500" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">7 出图 panels</text>
+    <text x="1102" y="516" text-anchor="middle" font-size="9.5" fill="#bfdbfe">PanelService · IMAGE</text>
+    <text x="1102" y="528" text-anchor="middle" font-size="9.5" fill="#bfdbfe">shot_inputs.compile</text>
+
+    <!-- 8 配音 speech -->
+    <rect x="1174" y="480" width="120" height="56" rx="6" fill="#1e40af"/>
+    <text x="1234" y="500" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">8 配音 speech</text>
+    <text x="1234" y="516" text-anchor="middle" font-size="9.5" fill="#bfdbfe">SpeechService · SPEECH</text>
+    <text x="1234" y="528" text-anchor="middle" font-size="9.5" fill="#bfdbfe">Qwen TTS</text>
+
+    <!-- 9 出视频 video -->
+    <rect x="1306" y="480" width="120" height="56" rx="6" fill="#1e40af"/>
+    <text x="1366" y="500" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">9 出视频 video</text>
+    <text x="1366" y="516" text-anchor="middle" font-size="9.5" fill="#bfdbfe">VideoService · VIDEO</text>
+    <text x="1366" y="528" text-anchor="middle" font-size="9.5" fill="#bfdbfe">MiniMax / Wan</text>
+
+    <!-- 10 合成渲染 -->
+    <rect x="1438" y="480" width="120" height="56" rx="6" fill="#1e40af"/>
+    <text x="1498" y="500" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">10 合成渲染</text>
+    <text x="1498" y="516" text-anchor="middle" font-size="9.5" fill="#bfdbfe">compositor · Remotion</text>
+    <text x="1498" y="528" text-anchor="middle" font-size="9.5" fill="#bfdbfe">→ MP4</text>
+  </g>
+
+  <!-- 主线横向箭头 -->
+  <g stroke="#2563eb" stroke-width="2.4" fill="none">
+    <line x1="370" y1="508" x2="378" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="502" y1="508" x2="510" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="634" y1="508" x2="642" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="766" y1="508" x2="774" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="898" y1="508" x2="906" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="1030" y1="508" x2="1038" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="1162" y1="508" x2="1170" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="1294" y1="508" x2="1302" y2="508" marker-end="url(#arrow-main)"/>
+    <line x1="1426" y1="508" x2="1434" y2="508" marker-end="url(#arrow-main)"/>
+  </g>
+
+  <!-- ===== 主线后段：审核/发布（在主线右下方接续）===== -->
+  <g>
+    <rect x="1438" y="600" width="120" height="56" rx="6" fill="#2563eb"/>
+    <text x="1498" y="620" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">11 审核</text>
+    <text x="1498" y="636" text-anchor="middle" font-size="9.5" fill="#dbeafe">quality_review</text>
+    <text x="1498" y="648" text-anchor="middle" font-size="9.5" fill="#dbeafe">+ visual_review</text>
+
+    <rect x="1306" y="600" width="120" height="56" rx="6" fill="#1e40af"/>
+    <text x="1366" y="620" text-anchor="middle" font-size="12" font-weight="600" fill="#ffffff">12 发布</text>
+    <text x="1366" y="636" text-anchor="middle" font-size="9.5" fill="#bfdbfe">release_candidate</text>
+    <text x="1366" y="648" text-anchor="middle" font-size="9.5" fill="#bfdbfe">→ release_gate → published</text>
+  </g>
+  <!-- 10 → 11 -->
+  <line x1="1498" y1="536" x2="1498" y2="596" stroke="#2563eb" stroke-width="2.4" fill="none" marker-end="url(#arrow-main)"/>
+  <!-- 11 → 12 -->
+  <line x1="1438" y1="628" x2="1428" y2="628" stroke="#2563eb" stroke-width="2.4" fill="none" marker-end="url(#arrow-main)"/>
+
+  <!-- ===== 上方分支：旁支功能（y=300-380 带）===== -->
+  <text x="904" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#f59e0b">分支 · 旁支功能（虚线岔出，主线不强依赖）</text>
+
+  <!-- B1 作品总览/故事线（叙事卷宗孤岛） -->
+  <rect x="250" y="312" width="120" height="50" rx="5" fill="#9ca3af"/>
+  <text x="310" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">作品总览</text>
+  <text x="310" y="348" text-anchor="middle" font-size="9.5" fill="#374151">volumes/storylines</text>
+  <text x="310" y="358" text-anchor="middle" font-size="9.5" fill="#374151">（孤岛 · 后端零引用）</text>
+
+  <!-- B2 章节事件图谱 -->
+  <rect x="382" y="312" width="120" height="50" rx="5" fill="#f59e0b"/>
+  <text x="442" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">章节事件图谱</text>
+  <text x="442" y="348" text-anchor="middle" font-size="9.5" fill="#1f2937">script_chapters</text>
+
+  <!-- B3 资产谱系画布 -->
+  <rect x="646" y="312" width="120" height="50" rx="5" fill="#f59e0b"/>
+  <text x="706" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">资产谱系画布</text>
+  <text x="706" y="348" text-anchor="middle" font-size="9.5" fill="#1f2937">asset_lineage</text>
+  <text x="706" y="358" text-anchor="middle" font-size="9.5" fill="#1f2937">variant → state → usage</text>
+
+  <!-- B4 角色工作台 -->
+  <rect x="778" y="312" width="120" height="50" rx="5" fill="#f59e0b"/>
+  <text x="838" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">角色工作台</text>
+  <text x="838" y="348" text-anchor="middle" font-size="9.5" fill="#1f2937">CharacterWorkspace</text>
+  <text x="838" y="358" text-anchor="middle" font-size="9.5" fill="#1f2937">图片参考 / body_plan</text>
+
+  <!-- B5 ComfyUI 画布（只读） -->
+  <rect x="1042" y="312" width="120" height="50" rx="5" fill="#9ca3af"/>
+  <text x="1102" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">ComfyUI 画布</text>
+  <text x="1102" y="348" text-anchor="middle" font-size="9.5" fill="#374151">production_canvas</text>
+  <text x="1102" y="358" text-anchor="middle" font-size="9.5" fill="#374151">（纯只读视图）</text>
+
+  <!-- B6 视觉审阅 -->
+  <rect x="1174" y="312" width="120" height="50" rx="5" fill="#f59e0b"/>
+  <text x="1234" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">视觉审阅</text>
+  <text x="1234" y="348" text-anchor="middle" font-size="9.5" fill="#1f2937">visual_review</text>
+  <text x="1234" y="358" text-anchor="middle" font-size="9.5" fill="#1f2937">圈点/候选/对话</text>
+
+  <!-- B7 提示词建议 -->
+  <rect x="910" y="312" width="120" height="50" rx="5" fill="#f59e0b"/>
+  <text x="970" y="332" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">提示词建议</text>
+  <text x="970" y="348" text-anchor="middle" font-size="9.5" fill="#1f2937">prompt_suggestions</text>
+  <text x="970" y="358" text-anchor="middle" font-size="9.5" fill="#1f2937">（可选 LLM 辅助）</text>
+
+  <!-- 分支虚线（从主线节点上沿岔到分支下沿） -->
+  <g stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="5 3" fill="none">
+    <line x1="310" y1="480" x2="310" y2="364" marker-end="url(#arrow-branch)"/>
+    <line x1="442" y1="480" x2="442" y2="364" marker-end="url(#arrow-branch)"/>
+    <line x1="706" y1="480" x2="706" y2="364" marker-end="url(#arrow-branch)"/>
+    <line x1="838" y1="480" x2="838" y2="364" marker-end="url(#arrow-branch)"/>
+    <line x1="970" y1="480" x2="970" y2="364" marker-end="url(#arrow-branch)"/>
+    <line x1="1102" y1="480" x2="1102" y2="364" marker-end="url(#arrow-branch)"/>
+    <line x1="1234" y1="480" x2="1234" y2="364" marker-end="url(#arrow-branch)"/>
+  </g>
+
+  <!-- ===== 下方回环：反馈/重试/驳回（y=700-820 带）===== -->
+  <text x="904" y="700" text-anchor="middle" font-size="13" font-weight="700" fill="#dc2626">回环 · 反馈 / 重试 / 驳回 / 阻塞（红色虚线绕回主线）</text>
+
+  <!-- L1 失败重试 -->
+  <rect x="1174" y="720" width="120" height="60" rx="5" fill="#dc2626"/>
+  <text x="1234" y="740" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">失败重试</text>
+  <text x="1234" y="756" text-anchor="middle" font-size="9.5" fill="#fecaca">POST /production-runs/</text>
+  <text x="1234" y="768" text-anchor="middle" font-size="9.5" fill="#fecaca">{id}/retry</text>
+  <text x="1234" y="778" text-anchor="middle" font-size="9" fill="#fecaca">（手动 · failed→queued）</text>
+
+  <!-- L2 暂停/续跑 -->
+  <rect x="1042" y="720" width="120" height="60" rx="5" fill="#dc2626"/>
+  <text x="1102" y="740" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">暂停 / 续跑</text>
+  <text x="1102" y="756" text-anchor="middle" font-size="9.5" fill="#fecaca">/pause · /continue</text>
+  <text x="1102" y="768" text-anchor="middle" font-size="9.5" fill="#fecaca">幂等：只取 queued</text>
+  <text x="1102" y="778" text-anchor="middle" font-size="9" fill="#fecaca">（重启后需手动续）</text>
+
+  <!-- L3 审核驳回 → 重生 -->
+  <rect x="1438" y="720" width="120" height="60" rx="5" fill="#dc2626"/>
+  <text x="1498" y="740" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">审核驳回</text>
+  <text x="1498" y="756" text-anchor="middle" font-size="9.5" fill="#fecaca">needs_changes</text>
+  <text x="1498" y="768" text-anchor="middle" font-size="9.5" fill="#fecaca">→ /panels 重生</text>
+  <text x="1498" y="778" text-anchor="middle" font-size="9" fill="#fecaca">（不自动 · 用户触发）</text>
+
+  <!-- L4 就绪门阻塞 -->
+  <rect x="910" y="720" width="120" height="60" rx="5" fill="#dc2626"/>
+  <text x="970" y="740" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">就绪门阻塞</text>
+  <text x="970" y="756" text-anchor="middle" font-size="9.5" fill="#fecaca">409 blockers[]</text>
+  <text x="970" y="768" text-anchor="middle" font-size="9.5" fill="#fecaca">missing_background</text>
+  <text x="970" y="778" text-anchor="middle" font-size="9" fill="#fecaca">（硬拒 · 补齐重发）</text>
+
+  <!-- L5 EpisodeAI NeedsReview -->
+  <rect x="778" y="720" width="120" height="60" rx="5" fill="#dc2626"/>
+  <text x="838" y="740" text-anchor="middle" font-size="11" font-weight="600" fill="#ffffff">AI 编排暂停</text>
+  <text x="838" y="756" text-anchor="middle" font-size="9.5" fill="#fecaca">EpisodeAIStage</text>
+  <text x="838" y="768" text-anchor="middle" font-size="9.5" fill="#fecaca">NeedsReview</text>
+  <text x="838" y="778" text-anchor="middle" font-size="9" fill="#fecaca">（人工 review 后续）</text>
+
+  <!-- 回环虚线（从回环节点绕回主线对应节点）-->
+  <g stroke="#dc2626" stroke-width="2" stroke-dasharray="6 4" fill="none">
+    <!-- L1 重试 → 回到 7/8/9 出图阶段 -->
+    <path d="M 1234,720 C 1234,690 1234,670 1234,640 L 1234,540" marker-end="url(#arrow-loop)"/>
+    <!-- L2 暂停续跑 → 回到 7 出图 -->
+    <path d="M 1102,720 L 1102,540" marker-end="url(#arrow-loop)"/>
+    <!-- L3 驳回 → 回到 7 出图（绕远路） -->
+    <path d="M 1498,720 C 1498,680 1498,660 1498,640 L 1498,540" marker-end="url(#arrow-loop)"/>
+    <!-- L4 就绪门 → 回到 4 资产需求 -->
+    <path d="M 970,720 L 970,580 C 970,570 800,570 760,560 L 720,540" marker-end="url(#arrow-loop)"/>
+    <!-- L5 AI 暂停 → 回到 6 分镜编辑（人工介入）-->
+    <path d="M 838,720 L 838,580 C 838,570 920,570 940,560 L 970,540" marker-end="url(#arrow-loop)"/>
+  </g>
+
+  <!-- ===== 底部：一键 AI 编排覆盖带 + 配置/运维区 ===== -->
+  <g transform="translate(40, 820)">
+    <rect width="1480" height="100" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="14" y="22" font-size="13" font-weight="700" fill="#7c3aed">一键 AI 编排（EpisodeAIRun）· 顺序覆盖主线 4→12 步</text>
+    <text x="14" y="40" font-size="10.5" fill="#6b7280">用户点「AI 生成整集」后，orchestrator.run 按 current_stage 严格顺序调用各 stage handler，等价于自动跑完主线后段</text>
+
+    <!-- 12 个迷你 stage 块 -->
+    <g font-size="9.5">
+      <rect x="14" y="54" width="110" height="32" rx="4" fill="#9ca3af"/><text x="69" y="74" text-anchor="middle" fill="#1f2937">scripting ✗skipped</text>
+      <rect x="130" y="54" width="110" height="32" rx="4" fill="#9ca3af"/><text x="185" y="74" text-anchor="middle" fill="#1f2937">structuring ✗skipped</text>
+      <rect x="246" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="296" y="74" text-anchor="middle" fill="#ffffff">references</text>
+      <rect x="352" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="402" y="74" text-anchor="middle" fill="#ffffff">panels</text>
+      <rect x="458" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="508" y="74" text-anchor="middle" fill="#ffffff">panel_review</text>
+      <rect x="564" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="614" y="74" text-anchor="middle" fill="#ffffff">speech</text>
+      <rect x="670" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="720" y="74" text-anchor="middle" fill="#ffffff">videos</text>
+      <rect x="776" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="826" y="74" text-anchor="middle" fill="#ffffff">rendering</text>
+      <rect x="882" y="54" width="110" height="32" rx="4" fill="#7c3aed"/><text x="937" y="74" text-anchor="middle" fill="#ffffff">quality_review</text>
+      <rect x="998" y="54" width="120" height="32" rx="4" fill="#7c3aed"/><text x="1058" y="74" text-anchor="middle" fill="#ffffff">release_candidate</text>
+      <rect x="1124" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="1174" y="74" text-anchor="middle" fill="#ffffff">release_gate</text>
+      <rect x="1230" y="54" width="100" height="32" rx="4" fill="#7c3aed"/><text x="1280" y="74" text-anchor="middle" fill="#ffffff">published</text>
+    </g>
+    <text x="1340" y="64" font-size="10" fill="#dc2626">NeedsReview →</text>
+    <text x="1340" y="78" font-size="10" fill="#dc2626">run 暂停待人工</text>
+    <text x="1340" y="92" font-size="10" fill="#6b7280">automation_policy</text>
+    <text x="1340" y="106" font-size="10" fill="#6b7280">决定 skip/继续</text>
+  </g>
+
+  <!-- ===== 底部配置/运维/平台页（旁挂入口） ===== -->
+  <g transform="translate(40, 940)">
+    <rect width="1480" height="160" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="14" y="22" font-size="13" font-weight="700" fill="#6b7280">配置 · 运维 · 平台页（前端 PlatformPage / GlobalSection，与主流程平行）</text>
+
+    <!-- 配置组 -->
+    <text x="14" y="46" font-size="11" font-weight="700" fill="#374151">配置</text>
+    <rect x="14" y="54" width="120" height="36" rx="4" fill="#9ca3af"/><text x="74" y="76" text-anchor="middle" font-size="10.5" fill="#1f2937">模型中心</text>
+    <rect x="142" y="54" width="120" height="36" rx="4" fill="#9ca3af"/><text x="202" y="76" text-anchor="middle" font-size="10.5" fill="#1f2937">作品设置</text>
+    <rect x="270" y="54" width="120" height="36" rx="4" fill="#9ca3af"/><text x="330" y="76" text-anchor="middle" font-size="10.5" fill="#1f2937">SSH 桥接配置</text>
+    <rect x="398" y="54" width="120" height="36" rx="4" fill="#9ca3af"/><text x="448" y="76" text-anchor="middle" font-size="10.5" fill="#1f2937">项目导入导出</text>
+
+    <!-- 运维组 -->
+    <text x="14" y="110" font-size="11" font-weight="700" fill="#374151">运维（只读 PlatformPage）</text>
+    <rect x="14" y="118" width="120" height="36" rx="4" fill="#9ca3af"/><text x="74" y="140" text-anchor="middle" font-size="10.5" fill="#1f2937">任务中心</text>
+    <rect x="142" y="118" width="120" height="36" rx="4" fill="#9ca3af"/><text x="202" y="140" text-anchor="middle" font-size="10.5" fill="#1f2937">版本历史</text>
+    <rect x="270" y="118" width="120" height="36" rx="4" fill="#9ca3af"/><text x="330" y="140" text-anchor="middle" font-size="10.5" fill="#1f2937">回收站</text>
+    <rect x="398" y="118" width="120" height="36" rx="4" fill="#9ca3af"/><text x="448" y="140" text-anchor="middle" font-size="10.5" fill="#1f2937">交付导出</text>
+
+    <!-- 注释 -->
+    <text x="540" y="64" font-size="10.5" fill="#6b7280">→ 均不参与主链路数据流</text>
+    <text x="540" y="80" font-size="10.5" fill="#6b7280">→ mock_ssh：SPEECH/VIDEO 能力</text>
+    <text x="540" y="96" font-size="10.5" fill="#6b7280">  经 SSH→A800_94 时启用</text>
+    <text x="540" y="128" font-size="10.5" fill="#6b7280">→ 任务/版本/回收站/导出</text>
+    <text x="540" y="144" font-size="10.5" fill="#6b7280">  均为只读运维视图</text>
+  </g>
+
+  <!-- ===== 底部右下：清理边界 ===== -->
+  <g transform="translate(1280, 940)">
+    <rect width="440" height="160" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="14" y="22" font-size="13" font-weight="700" fill="#059669">3D Director 清理完成</text>
+    <text x="14" y="42" font-size="10.5" fill="#6b7280">移除 MODEL_3D / FalTripoSR / Director 产品入口</text>
+    <text x="14" y="58" font-size="10.5" fill="#6b7280">移除 GLB 上传、预览、生成和 Three.js 依赖</text>
+    <text x="14" y="74" font-size="10.5" fill="#6b7280">前向迁移删除 6 张表和过时 usage 绑定列</text>
+    <text x="14" y="90" font-size="10.5" fill="#6b7280">运行能力仅 TEXT / IMAGE / SPEECH / VIDEO</text>
+    <text x="14" y="106" font-size="10.5" fill="#6b7280">保留 composition、运镜、站位、深度与 body_plan</text>
+    <text x="14" y="128" font-size="10.5" fill="#059669">保留 variant/state、连续性和图片参考</text>
+    <text x="14" y="144" font-size="10.5" fill="#059669">旧 provider JSON 兼容读取，不再对外暴露 model3d</text>
+  </g>
+
+  <!-- ===== 主线能力引用虚线（主线节点 → 左侧能力栏） ===== -->
+  <g stroke="#9ca3af" stroke-width="1" stroke-dasharray="3 3" fill="none">
+    <!-- 7 出图 → IMAGE -->
+    <line x1="1042" y1="508" x2="220" y2="360"/>
+    <!-- 8 配音 → SPEECH -->
+    <line x1="1174" y1="508" x2="220" y2="410"/>
+    <!-- 9 视频 → VIDEO -->
+    <line x1="1306" y1="508" x2="220" y2="460"/>
+    <!-- 3 结构提取 → TEXT (走剧本生成) -->
+    <line x1="514" y1="508" x2="220" y2="310"/>
+  </g>
+
+  <!-- ===== 底部脚注 ===== -->
+  <text x="880" y="1218" text-anchor="middle" font-size="10" fill="#9ca3af">
+    更新于 2026-07-18 · 清理后代码库 · 主线 10 步 + 审核/发布 2 步 + 12-stage AI 编排 + 7 分支 + 5 回环
+  </text>
+</svg>

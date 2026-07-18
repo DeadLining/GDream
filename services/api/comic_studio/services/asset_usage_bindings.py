@@ -1,10 +1,7 @@
-from pathlib import Path
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from comic_studio import models
-from comic_studio.services.character_3d import Character3DRepresentationService
 
 
 class AssetUsageBindingService:
@@ -31,9 +28,6 @@ class AssetUsageBindingService:
                 usage,
                 effective_variant_id=None,
                 effective_state_id=None,
-                effective_representation_id=None,
-                effective_representation_version=None,
-                director_object_id=None,
                 binding_status="invalid_scope",
                 binding_updated_at=models.utc_now(),
             )
@@ -50,63 +44,13 @@ class AssetUsageBindingService:
             and state.variant_id == variant.id
             else None
         )
-        representation = Character3DRepresentationService(
-            self.session, Path(".")
-        ).resolve(variant.character_id, shot.id)
-        stage = self.session.scalar(
-            select(models.DirectorStage).where(
-                models.DirectorStage.scene_id == shot.scene_id
-            )
-        )
-        stage_objects = (
-            list(
-                self.session.scalars(
-                    select(models.DirectorObject).where(
-                        models.DirectorObject.stage_id == stage.id,
-                        models.DirectorObject.kind == "character",
-                    )
-                )
-            )
-            if stage is not None
-            else []
-        )
-        director_object = next(
-            (
-                item
-                for item in stage_objects
-                if item.object_metadata.get("character_id") == variant.character_id
-            ),
-            None,
-        )
-
         invalid_scope = variant.deleted_at is not None
-        fallback = bool(
-            (usage.state_id is not None and valid_state_id is None)
-            or (
-                representation is not None
-                and (
-                    representation.variant_id != variant.id
-                    or representation.state_id != valid_state_id
-                )
-            )
-        )
-        if invalid_scope:
-            status = "invalid_scope"
-        elif representation is None:
-            status = "missing_representation"
-        elif director_object is None:
-            status = "missing_director_object"
-        elif fallback:
-            status = "fallback"
-        else:
-            status = "resolved"
+        fallback = usage.state_id is not None and valid_state_id is None
+        status = "invalid_scope" if invalid_scope else "fallback" if fallback else "resolved"
         return self._set(
             usage,
-            effective_variant_id=(representation.variant_id if representation else None),
-            effective_state_id=(representation.state_id if representation else None),
-            effective_representation_id=(representation.id if representation else None),
-            effective_representation_version=(representation.version if representation else None),
-            director_object_id=(director_object.id if director_object else None),
+            effective_variant_id=variant.id if not invalid_scope else None,
+            effective_state_id=valid_state_id,
             binding_status=status,
             binding_updated_at=models.utc_now(),
         )
@@ -116,19 +60,6 @@ class AssetUsageBindingService:
         for usage in usages:
             changed = self.refresh_usage(usage) or changed
         return changed
-
-    def refresh_for_stage(self, stage_id: str) -> bool:
-        stage = self.session.get(models.DirectorStage, stage_id)
-        if stage is None:
-            return False
-        usages = list(
-            self.session.scalars(
-                select(models.AssetVariantUsage)
-                .join(models.Shot)
-                .where(models.Shot.scene_id == stage.scene_id)
-            )
-        )
-        return self._refresh_all(usages)
 
     def refresh_for_character(self, character_id: str) -> bool:
         usages = list(

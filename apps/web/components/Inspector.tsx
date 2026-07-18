@@ -8,7 +8,7 @@ import type {Asset, Job, ReviewStatus, Shot, ShotGenerationReadiness} from '../l
 import {JobStatus} from './JobStatus';
 import {PanelVersions} from './PanelVersions';
 
-export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue,onOpenAssets,onOpenDirector}: {shot:Shot;onShotUpdated?:(shot:Shot)=>void;onOpenMedia?:(mode:'panel'|'video')=>void;onOpenDialogue?:()=>void;onOpenAssets?:(request:GenerationAssetRequest)=>void;onOpenDirector?:()=>void}) {
+export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue,onOpenAssets}: {shot:Shot;onShotUpdated?:(shot:Shot)=>void;onOpenMedia?:(mode:'panel'|'video')=>void;onOpenDialogue?:()=>void;onOpenAssets?:(request:GenerationAssetRequest)=>void}) {
   const [form, setForm] = useState(shot); const [assets, setAssets] = useState<Asset[]>([]); const [job, setJob] = useState<Job | null>(null); const [error, setError] = useState('');
   const [generatingPanel,setGeneratingPanel]=useState(false);
   const [generationReadiness,setGenerationReadiness]=useState<ShotGenerationReadiness|null>(null);
@@ -56,7 +56,7 @@ export function Inspector({shot,onShotUpdated,onOpenMedia,onOpenDialogue,onOpenA
       <details className="inspector-advanced"><summary>高级生成设置</summary><label htmlFor="shot-negative-prompt">负面提示词</label><textarea id="shot-negative-prompt" value={form.negative_prompt} onChange={event => setForm({...form, negative_prompt: event.target.value})} rows={2} className="prompt-field"/><div className="model-note"><Sparkles size={14}/><span>图像模型 <strong>gpt-image-2</strong></span></div></details>
       {error && <p className="form-error">{error}</p>}
       {stalePanelMessage&&<p className="panel-stale-notice" role="status">{stalePanelMessage}</p>}
-      {(readinessLoading||readinessError||generationBlockers.length>0)&&<div className="shot-generation-gate" role="status"><strong>{readinessLoading?'正在检查生成条件':'生成条件未完成'}</strong>{readinessError&&<p>{readinessError}</p>}{generationBlockers.length>0&&<ul>{generationBlockers.map(item=><li key={item}>{item}</li>)}</ul>}<div>{generationReadiness&&!generationReadiness.asset_ready&&onOpenAssets&&<button type="button" onClick={()=>onOpenAssets(generationAssetRequest(generationReadiness))}>去完善资产</button>}{generationReadiness&&(!generationReadiness.blocking_ready||!generationReadiness.camera_ready)&&onOpenDirector&&<button type="button" onClick={onOpenDirector}>打开 3D 导演台</button>}</div></div>}
+      {(readinessLoading||readinessError||generationBlockers.length>0)&&<div className="shot-generation-gate" role="status"><strong>{readinessLoading?'正在检查生成条件':'生成条件未完成'}</strong>{readinessError&&<p>{readinessError}</p>}{generationBlockers.length>0&&<ul>{generationBlockers.map(item=><li key={item}>{item}</li>)}</ul>}<div>{generationReadiness&&!generationReadiness.asset_ready&&onOpenAssets&&<button type="button" onClick={()=>onOpenAssets(generationAssetRequest(generationReadiness))}>去完善资产</button>}</div></div>}
       <div className="inspector-actions"><button onClick={save}><Save size={17}/>保存镜头</button><button className="primary-action" onClick={generate} disabled={generatingPanel||panelGenerationBlocked}><ImagePlus size={18}/>{generatingPanel?'生成中':activePanel?.is_stale?'重新生成画面':'生成画面'}</button></div>
       <JobStatus job={job}/>
     </section>

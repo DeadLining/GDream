@@ -32,7 +32,6 @@ from comic_studio.routes.script_imports import router as script_imports_router
 from comic_studio.routes.scripts import router as scripts_router
 from comic_studio.routes.character_references import router as character_references_router
 from comic_studio.routes.videos import router as videos_router
-from comic_studio.routes.director import router as director_router
 from comic_studio.routes.mock_ssh import router as mock_ssh_router
 from comic_studio.routes.model_runtime import router as model_runtime_router
 from comic_studio.routes.narrative import router as narrative_router
@@ -50,7 +49,6 @@ from comic_studio.routes.art_styles import router as art_styles_router
 from comic_studio.routes.image_proxy import router as image_proxy_router
 from comic_studio.routes.library_assets import router as library_assets_router
 from comic_studio.routes.prompt_suggestions import router as prompt_suggestions_router
-from comic_studio.routes.character_3d import router as character_3d_router
 from comic_studio.routes.episode_ai_runs import router as episode_ai_runs_router
 from comic_studio.routes.asset_requirements import router as asset_requirements_router
 from comic_studio import models
@@ -344,7 +342,6 @@ def create_app(
     app.include_router(scripts_router)
     app.include_router(character_references_router)
     app.include_router(videos_router)
-    app.include_router(director_router)
     app.include_router(mock_ssh_router)
     app.include_router(model_runtime_router)
     app.include_router(narrative_router)
@@ -362,7 +359,6 @@ def create_app(
     app.include_router(image_proxy_router)
     app.include_router(library_assets_router)
     app.include_router(prompt_suggestions_router)
-    app.include_router(character_3d_router)
     app.include_router(episode_ai_runs_router)
     app.include_router(asset_requirements_router)
     app.mount("/media", StaticFiles(directory=settings.data_root, check_dir=False), name="media")

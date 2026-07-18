@@ -26,7 +26,7 @@ import {AssetLineageCanvas} from '../components/canvas/AssetLineageCanvas';
 
 const character = {id:'c1',project_id:'p1',name:'林夏',role:'主角',appearance_bible:'黑色短发，银色耳钉',personality:'冷静',continuity_rules:'保持脸型与耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:'',created_at:'',updated_at:''};
 const reference = {id:'r1',character_id:'c1',reference_type:'primary' as const,label:'主参考',position:0,is_active:true,review_status:'approved' as const,created_at:'',asset:{id:'a1',kind:'character-reference',media_url:'/media/a.png',media_type:'image/png',provider:'upload',model:'local',generation_attempt:1,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''}};
-const variants=[{id:'v1',character_id:'c1',episode_id:null,parent_variant_id:null,kind:'master' as const,label:'作品主设定',inherited_fields:[],overrides:{identity:'脸型'},version:1,review_status:'approved' as const,created_at:'',updated_at:'',states:[],usages:[]},{id:'v2',character_id:'c1',episode_id:'e3',parent_variant_id:'v1',kind:'episode' as const,label:'受伤造型',inherited_fields:['identity','hair'],overrides:{injury:'左眉伤痕',outfit:'破损外套'},version:2,review_status:'draft' as const,created_at:'',updated_at:'',states:[{id:'st1',variant_id:'v2',kind:'expression' as const,label:'警惕',overrides:{eyes:'收紧'},version:1,created_at:'',updated_at:''}],usages:[{id:'u1',variant_id:'v2',state_id:'st1',shot_id:'shot-5',asset_id:null,usage_kind:'panel' as const,effective_variant_id:'v2',effective_state_id:'st1',effective_representation_id:'rep-3',effective_representation_version:3,director_object_id:'object-1',binding_status:'resolved' as const,binding_updated_at:'2026-07-15T00:00:00Z',created_at:''}]},{id:'v3',character_id:'c1',episode_id:'e3',parent_variant_id:'v1',kind:'episode' as const,label:'雨夜造型',inherited_fields:['identity'],overrides:{outfit:'雨衣'},version:1,review_status:'draft' as const,created_at:'',updated_at:'',states:[{id:'st2',variant_id:'v3',kind:'outfit' as const,label:'摘下雨帽',overrides:{hood:false},version:1,created_at:'',updated_at:''}],usages:[]}];
+const variants=[{id:'v1',character_id:'c1',episode_id:null,parent_variant_id:null,kind:'master' as const,label:'作品主设定',inherited_fields:[],overrides:{identity:'脸型'},version:1,review_status:'approved' as const,created_at:'',updated_at:'',states:[],usages:[]},{id:'v2',character_id:'c1',episode_id:'e3',parent_variant_id:'v1',kind:'episode' as const,label:'受伤造型',inherited_fields:['identity','hair'],overrides:{injury:'左眉伤痕',outfit:'破损外套'},version:2,review_status:'draft' as const,created_at:'',updated_at:'',states:[{id:'st1',variant_id:'v2',kind:'expression' as const,label:'警惕',overrides:{eyes:'收紧'},version:1,created_at:'',updated_at:''}],usages:[{id:'u1',variant_id:'v2',state_id:'st1',shot_id:'shot-5',asset_id:null,usage_kind:'panel' as const,effective_variant_id:'v2',effective_state_id:'st1',binding_status:'resolved' as const,binding_updated_at:'2026-07-15T00:00:00Z',created_at:''}]},{id:'v3',character_id:'c1',episode_id:'e3',parent_variant_id:'v1',kind:'episode' as const,label:'雨夜造型',inherited_fields:['identity'],overrides:{outfit:'雨衣'},version:1,review_status:'draft' as const,created_at:'',updated_at:'',states:[{id:'st2',variant_id:'v3',kind:'outfit' as const,label:'摘下雨帽',overrides:{hood:false},version:1,created_at:'',updated_at:''}],usages:[]}];
 const impact={shots:['shot-5','shot-8'],assets:[],usage_count:2,episodes:[{episode_id:'e3',episode_title:'第三集',scenes:[{scene_id:'scene-1',scene_label:'场景 01 · 巷道',shots:[{id:'shot-5',position:5,composition:'面部伤痕特写'}]}]},{episode_id:'e4',episode_title:'第四集',scenes:[{scene_id:'scene-2',scene_label:'场景 02 · 天台',shots:[{id:'shot-8',position:2,composition:'雨中回望'}]}]}]};
 
 describe('AssetLineageCanvas', () => {
@@ -51,15 +51,7 @@ describe('AssetLineageCanvas', () => {
     expect(screen.getByText('1 个镜头引用')).toBeVisible();
     expect(screen.getByRole('button',{name:'警惕'})).toBeVisible();
   });
-
-  it('shows the effective 3D and director binding for a shot usage', async () => {
-    render(<AssetLineageCanvas character={character} references={[reference]} variants={variants}/>);
-
-    await userEvent.click(screen.getByRole('button',{name:'镜头 shot-5'}));
-
-    expect(screen.getByText('覆盖：panel · 已解析')).toBeVisible();
-    expect(screen.getByText('3D V3 · 导演对象已绑定')).toBeVisible();
-  });
+;
 
   it('loads a real impact report and can regenerate all affected panels', async () => {
     const onAnalyzeImpact=vi.fn().mockResolvedValue(impact);

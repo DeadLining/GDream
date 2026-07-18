@@ -8,7 +8,6 @@ from comic_studio.model_runtime.contracts import (
     AssetVariantSuggestionRequest,
     Capability,
     ImageRuntimeRequest,
-    Model3DRuntimeRequest,
     RuntimeJobRead,
     SpeechRuntimeRequest,
     TextStreamRequest,
@@ -193,65 +192,6 @@ def video(
         "shot",
         payload.shot_id,
         {"activate": payload.activate},
-    )
-
-
-@router.post("/model3d", status_code=status.HTTP_202_ACCEPTED)
-def model3d(
-    payload: Model3DRuntimeRequest,
-    request: Request,
-    background_tasks: BackgroundTasks,
-):
-    scope = {
-        key: value
-        for key, value in {
-            "variant_id": payload.variant_id,
-            "state_id": payload.state_id,
-        }.items()
-        if value is not None
-    }
-    return _create_media_job(
-        request,
-        background_tasks,
-        Capability.MODEL_3D,
-        payload.target_type,
-        payload.target_id,
-        {
-            "reference_asset_id": payload.reference_asset_id,
-            "reference_asset_ids": payload.reference_asset_ids,
-            **scope,
-        },
-    )
-
-
-@router.post("/model3d/jobs/{job_id}/approve")
-def approve_model3d(job_id: str, request: Request):
-    try:
-        return request.app.state.model_runtime.approve_model3d_job(job_id)
-    except KeyError:
-        return JSONResponse(status_code=404, content={"detail": "3D candidate not found"})
-    except ValueError as exc:
-        return JSONResponse(status_code=409, content={"detail": str(exc)})
-
-
-@router.get("/model3d/latest")
-def latest_model3d(
-    request: Request,
-    target_type: str = Query(pattern="^(character|library_asset)$"),
-    target_id: str = Query(min_length=1, max_length=64),
-    variant_id: str | None = Query(default=None, max_length=36),
-    state_id: str | None = Query(default=None, max_length=36),
-):
-    if variant_id is None and state_id is None:
-        return request.app.state.model_runtime.latest_model3d_job(
-            target_type,
-            target_id,
-        )
-    return request.app.state.model_runtime.latest_model3d_job(
-        target_type,
-        target_id,
-        variant_id,
-        state_id,
     )
 
 

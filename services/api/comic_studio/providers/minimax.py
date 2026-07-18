@@ -6,7 +6,6 @@ from json_repair import repair_json
 from pydantic import ValidationError
 
 from comic_studio.providers.base import ProviderError
-from comic_studio.director import DirectorSuggestionPatch
 from comic_studio.model_runtime.contracts import AssetVariantSuggestion
 from comic_studio.prompt_suggestions import MediaPromptSuggestion
 from comic_studio.schemas import EpisodePlan
@@ -53,11 +52,6 @@ Write a readable Chinese dynamic-comic script, not JSON. Use clear episode, scen
 and dialogue headings. Preserve all supplied character and continuity constraints, avoid duplicating
 existing episodes, and make the result easy for a later structured parser to understand. Continue
 from an existing partial draft without repeating it when one is supplied."""
-
-DIRECTOR_SYSTEM_PROMPT = """You are a 3D staging and cinematography assistant for a Chinese
-dynamic-comic studio. Return one JSON object only using the supplied strict schema. Reference only
-the supplied object identifiers. Return transforms and camera parameters, never executable code.
-Treat the result as a reviewable suggestion and do not use Markdown fences."""
 
 ASSET_VARIANT_SYSTEM_PROMPT = """You are an asset art director for a serialized Chinese dynamic-comic studio.
 Turn the user's conversation and image annotations into one structured character asset proposal. Classify a
@@ -196,46 +190,6 @@ class MiniMaxProvider:
                         f"MiniMax returned an invalid episode plan: {validation_feedback}"
                     ) from exc
         raise ProviderError("MiniMax planning failed")
-
-    async def suggest_director(
-        self, context: dict[str, Any]
-    ) -> DirectorSuggestionPatch:
-        messages = [
-            {
-                "role": "user",
-                "content": (
-                    "Suggest a director layout or shot composition using this JSON schema:\n"
-                    + json.dumps(
-                        DirectorSuggestionPatch.model_json_schema(), ensure_ascii=False
-                    )
-                    + "\nTrusted project and stage context:\n"
-                    + json.dumps(context, ensure_ascii=False)
-                ),
-            }
-        ]
-        validation_feedback = ""
-        for attempt in range(2):
-            if validation_feedback:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "The prior response failed JSON schema validation. "
-                            f"Validation details: {validation_feedback}. Return corrected JSON only."
-                        ),
-                    }
-                )
-            try:
-                text = await self._request(messages, system=DIRECTOR_SYSTEM_PROMPT)
-                repaired = repair_json(_strip_fences(text), return_objects=True)
-                return DirectorSuggestionPatch.model_validate(repaired)
-            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
-                validation_feedback = str(exc)[:1500]
-                if attempt == 1:
-                    raise ProviderError(
-                        "MiniMax returned an invalid director suggestion"
-                    ) from exc
-        raise ProviderError("MiniMax director suggestion failed")
 
     async def suggest_media_prompt(
         self, context: dict[str, Any]

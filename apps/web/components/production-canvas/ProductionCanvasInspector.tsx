@@ -3,9 +3,9 @@ import type {ProductionGraphShot,ProductionItem,ProductionWorkflowBinding} from 
 import type {ProductionMediaMode} from './ProductionMediaWorkspace';
 import type {ProductionCanvasNode} from '../../lib/production-canvas';
 
-const labels:Record<string,string>={director:'3D 导演','panel-render':'分镜渲染',dialogue:'对白',tts:'Qwen TTS','video-render':'视频渲染','visual-review':'视觉审阅'};
+const labels:Record<string,string>={'panel-render':'分镜渲染',dialogue:'对白',tts:'Qwen TTS','video-render':'视频渲染','visual-review':'视觉审阅'};
 
-export function ProductionCanvasInspector({node,shot,workflows,items,pinned,onTogglePin,onOpenVisualReview,onOpenDirector,onOpenDialogue,onOpenMedia}:{node:ProductionCanvasNode|null;shot:ProductionGraphShot|null;workflows:ProductionWorkflowBinding[];items:ProductionItem[];pinned:boolean;onTogglePin:()=>void;onOpenVisualReview:()=>void;onOpenDirector:()=>void;onOpenDialogue:()=>void;onOpenMedia:(mode:ProductionMediaMode)=>void}){
+export function ProductionCanvasInspector({node,shot,workflows,items,pinned,onTogglePin,onOpenVisualReview,onOpenDialogue,onOpenMedia}:{node:ProductionCanvasNode|null;shot:ProductionGraphShot|null;workflows:ProductionWorkflowBinding[];items:ProductionItem[];pinned:boolean;onTogglePin:()=>void;onOpenVisualReview:()=>void;onOpenDialogue:()=>void;onOpenMedia:(mode:ProductionMediaMode)=>void}){
   if(!node)return <aside className="production-canvas-inspector" aria-label="生产节点检查器"><p>选择镜头或生产节点查看依赖</p></aside>;
   if(node.type==='scene-group')return <aside className="production-canvas-inspector" aria-label="生产节点检查器"><header><small>场景分组</small><h2>场景 {String(node.data.position).padStart(2,'0')}</h2></header><section><h3>{String(node.data.location)}</h3><p>{String(node.data.summary||'暂无场景说明')}</p></section><dl><div><dt>镜头数量</dt><dd>{String(node.data.shotCount)}</dd></div><div><dt>显示状态</dt><dd>{node.data.collapsed?'已折叠':'已展开'}</dd></div></dl></aside>;
   if(node.type==='asset')return <aside className="production-canvas-inspector" aria-label="生产节点检查器"><header><small>共享资产</small><h2>{String(node.data.label)}</h2></header><dl><div><dt>版本</dt><dd>v{String(node.data.version)}</dd></div><div><dt>状态</dt><dd>{String(node.data.status)}</dd></div><div><dt>使用镜头</dt><dd>{Array.isArray(node.data.shot_ids)?node.data.shot_ids.length:0}</dd></div></dl></aside>;
@@ -16,7 +16,7 @@ export function ProductionCanvasInspector({node,shot,workflows,items,pinned,onTo
   const capability=node.type==='panel-render'?'panel':node.type==='video-render'?'video':null;
   const binding=capability?workflows.find(item=>item.capability===capability&&item.enabled):null;
   const actionLabel=node.type==='panel-render'?'打开分镜工作区':node.type==='video-render'?'打开视频工作区':node.type==='dialogue'?'编辑对白':'打开配音编辑';
-  const actionHandler=node.type==='director'?onOpenDirector:node.type==='visual-review'?onOpenVisualReview:node.type==='dialogue'||node.type==='tts'?onOpenDialogue:node.type==='panel-render'?()=>onOpenMedia('panel'):node.type==='video-render'?()=>onOpenMedia('video'):undefined;
+  const actionHandler=node.type==='visual-review'?onOpenVisualReview:node.type==='dialogue'||node.type==='tts'?onOpenDialogue:node.type==='panel-render'?()=>onOpenMedia('panel'):node.type==='video-render'?()=>onOpenMedia('video'):undefined;
   const actionDisabled=Boolean(node.data.blocked)||!actionHandler;
   if(node.type!=='shot')return <aside className="production-canvas-inspector" aria-label="生产节点检查器">
     <header><small>镜头 {String(shot.position).padStart(2,'0')}</small><h2>{labels[node.type]??'生产节点'}</h2></header>
@@ -24,7 +24,7 @@ export function ProductionCanvasInspector({node,shot,workflows,items,pinned,onTo
     {binding&&<section><h3>自定义执行工作流</h3><p>{binding.workflow_id} · v{binding.workflow_version}</p><small>输入映射 v{binding.input_mapping_version}</small></section>}
     {Boolean(node.data.blockedReason)&&<section className="production-inspector-blocked"><h3>阻塞原因</h3><p>{String(node.data.blockedReason)}</p></section>}
     {task?.error&&<section className="production-inspector-error"><h3>失败原因</h3><p>{task.error}</p></section>}
-    {actionHandler&&<footer className="production-inspector-actions"><button type="button" disabled={actionDisabled} onClick={actionHandler}>{node.type==='director'?'打开 3D 导演':node.type==='visual-review'?'打开视觉审阅':actionLabel}</button></footer>}
+    {actionHandler&&<footer className="production-inspector-actions"><button type="button" disabled={actionDisabled} onClick={actionHandler}>{node.type==='visual-review'?'打开视觉审阅':actionLabel}</button></footer>}
   </aside>;
   return <aside className="production-canvas-inspector" aria-label="生产节点检查器">
     <header><div><small>镜头检查器</small><h2>镜头 {String(shot.position).padStart(2,'0')}</h2></div><button type="button" aria-label={`${pinned?'取消固定':'固定'}镜头 ${String(shot.position).padStart(2,'0')}`} onClick={onTogglePin}>{pinned?<PinOff size={16}/>:<Pin size={16}/>}</button></header>

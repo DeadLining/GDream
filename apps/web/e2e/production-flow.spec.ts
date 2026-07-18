@@ -22,11 +22,7 @@ const providerHealth: ProviderHealth = {
   image:{status:'ok',model:'gpt-image-2',host:'192.168.18.80',elapsed_ms:9,check_scope:'model',error:null},
   tts:{status:'ok',model:'Qwen3-TTS-12Hz-1.7B-CustomVoice',host:'192.168.18.94',elapsed_ms:12,check_scope:'audio',error:null},
   video:{status:'ok',model:'MiniMax-Hailuo-02',host:'api.minimaxi.com',elapsed_ms:11,check_scope:'endpoint',error:null},
-  model3d:{status:'disabled',model:'fal-ai/triposr',host:'fal.run',elapsed_ms:0,check_scope:'model',error:null},
 };
-const directorStage={id:'stage-1',scene_id:'scene-1',version:2,environment:{background_color:'#263238'},objects:[{id:'object-1',stage_id:'stage-1',kind:'character',source_type:'model',source_id:'representation-1',label:'林夏',position:1,transform:{position:[0,.4,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{model_url:'/media/linxia.glb',model_scale:1.4,model_offset_y:0},metadata:{asset_id:'model-asset-1',catalog_key:'character:character-1:representation:representation-1',has_skeleton:true},visible:true},{id:'object-2',stage_id:'stage-1',kind:'primitive',source_type:'placeholder',source_id:null,label:'线索箱',position:2,transform:{position:[1,0,0],rotation:[0,0,0],scale:[1,1,1]},appearance:{color:'#4f7b95'},metadata:{},visible:true}],shot_cameras:[{id:'camera-1',stage_id:'stage-1',shot_id:'shot-1',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:50,near:.1,far:1000,shot_size:'wide',camera_motion:'static',framing_guides:{},object_overrides:{},preview_asset_id:null},{id:'camera-2',stage_id:'stage-1',shot_id:'shot-2',version:1,position:[0,1.6,5],target:[0,1.2,0],rotation:[0,0,0],focal_length_mm:85,near:.1,far:1000,shot_size:'close_up',camera_motion:'push_in',framing_guides:{},object_overrides:{},preview_asset_id:null}]};
-const directorAssets=[{key:'character:character-1:representation:representation-1',kind:'character',source_type:'model',source_id:'representation-1',asset_id:'model-asset-1',label:'林夏',media_url:'/media/linxia.glb',media_type:'model/gltf-binary',metadata:{character_id:'character-1',representation_version:1}}];
-function triangleGlb(){const binary=Buffer.alloc(44);[[-.35,0,0],[.35,0,0],[0,1.4,0]].flat().forEach((value,index)=>binary.writeFloatLE(value,index*4));[0,1,2].forEach((value,index)=>binary.writeUInt16LE(value,36+index*2));const document={asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},indices:1}]}],buffers:[{byteLength:44}],bufferViews:[{buffer:0,byteOffset:0,byteLength:36,target:34962},{buffer:0,byteOffset:36,byteLength:6,target:34963}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[-.35,0,0],max:[.35,1.4,0]},{bufferView:1,componentType:5123,count:3,type:'SCALAR'}]};let json=Buffer.from(JSON.stringify(document));json=Buffer.concat([json,Buffer.alloc((4-json.length%4)%4,0x20)]);const jsonHeader=Buffer.alloc(8);jsonHeader.writeUInt32LE(json.length,0);jsonHeader.writeUInt32LE(0x4e4f534a,4);const binHeader=Buffer.alloc(8);binHeader.writeUInt32LE(binary.length,0);binHeader.writeUInt32LE(0x004e4942,4);const length=12+jsonHeader.length+json.length+binHeader.length+binary.length;const header=Buffer.alloc(12);header.write('glTF',0);header.writeUInt32LE(2,4);header.writeUInt32LE(length,8);return Buffer.concat([header,jsonHeader,json,binHeader,binary]);}
 const scriptDocument={id:'script-1',project_id:'project-1',title:'未命名剧本',source_type:'paste',status:'ready',revision_count:1,current_revision_id:'revision-1',created_at:'',updated_at:'',latest_import_id:null,parse_is_stale:true,current_revision:{id:'revision-1',document_id:'script-1',revision_number:1,status:'working',content:'',checksum:'empty',creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'text/plain',generation_brief:'',generation_metadata:{},created_at:''}};
 const productionGraph={episode_id:'episode-1',project_id:'project-1',scenes:[{id:'scene-1',position:1,location:'雨夜巷道',summary:'发现芯片'}],shots:[
   {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'wide',duration_seconds:4,composition:'林默走入巷道',review_status:'approved',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'asset-1',active_panel_media_url:'/media/panel.png',active_video_asset_id:null,active_video_media_url:null},
@@ -47,60 +43,6 @@ test.beforeEach(async ({page}) => {
   await page.route('**/api/providers/health', route => route.fulfill({json:providerHealth}));
   await page.route('**/api/episodes/episode-1/render', route => route.fulfill({status:202,json:{job_id:'render-1',status:'queued'}}));
   await page.route('**/api/jobs/render-1', route => route.fulfill({json:{id:'render-1',operation:'render_episode',target_type:'episode',target_id:'episode-1',status:'succeeded',progress:100,result_metadata:{media_url:'/media/render.mp4',probe:{format:{duration:'60'}}},error:'',retry_count:0,created_at:'',updated_at:''}}));
-});
-
-test('3D director renders, captures preview, and applies selected AI fields',async({page},testInfo)=>{
-  let previewUploads=0;let appliedFields:string[]=[];let modelRequests=0;const cameraWrites:any[]=[];
-  await page.route('**/api/scenes/scene-1/director-stage',route=>route.fulfill({json:directorStage}));
-  await page.route('**/api/director-stages/stage-1/assets**',route=>route.fulfill({json:directorAssets}));
-  await page.route('**/media/linxia.glb',route=>{modelRequests+=1;return route.fulfill({status:200,contentType:'model/gltf-binary',body:triangleGlb()});});
-  await page.route('**/api/director-stages/stage-1/shots/shot-1/camera',async route=>{const body=await route.request().postDataJSON();cameraWrites.push(body);await route.fulfill({json:{...directorStage.shot_cameras[0],...body.camera,version:2}});});
-  await page.route('**/api/director-cameras/camera-1/preview',async route=>{expect(route.request().headers()['content-type']).toContain('multipart/form-data');previewUploads+=1;await route.fulfill({status:201,json:{id:'preview-1',kind:'director_preview:camera-1',media_url:'/media/preview.png',media_type:'image/png',provider:'director',model:'threejs',generation_attempt:1,review_status:'draft',width:1262,height:900,duration_seconds:null,created_at:''}});});
-  await page.route('**/api/director-stages/stage-1/suggestions',route=>route.fulfill({status:201,json:{id:'suggestion-1',stage_id:'stage-1',shot_id:'shot-1',kind:'shot_composition',status:'ready',request_context:{},suggested_patch:{composition:'低机位雨夜对峙',camera_motion:'pan_left',image_prompt:'cinematic rain',rationale:'强化压迫感'},error_category:'',error:'',created_at:'',applied_at:null}}));
-  await page.route('**/api/director-stages/stage-1/shots/shot-1/apply-to-shot',async route=>{appliedFields=(await route.request().postDataJSON()).fields;await route.fulfill({json:{...episode.scenes[0].shots[0],composition:'低机位雨夜对峙'}});});
-  await page.goto('/');
-  await page.getByRole('button',{name:'单集制作',exact:true}).click();
-  await page.getByRole('tab',{name:'生产',exact:true}).click();
-  await page.getByRole('button',{name:'镜头 01：wide'}).click();
-  await page.getByRole('button',{name:'镜头 01 3D 导演'}).click();
-  await expect(page.getByRole('heading',{name:'3D 导演台'})).toBeVisible();
-  await expect.poll(()=>modelRequests,{timeout:10000}).toBeGreaterThan(0);
-  const pixelVariance=()=>page.locator('canvas').evaluate(canvas=>{const copy=document.createElement('canvas');copy.width=160;copy.height=100;const context=copy.getContext('2d',{willReadFrequently:true});if(!context)return 0;context.drawImage(canvas as HTMLCanvasElement,0,0,copy.width,copy.height);const pixels=context.getImageData(0,0,copy.width,copy.height).data;let min=765,max=0;for(let index=0;index<pixels.length;index+=16){const value=pixels[index]+pixels[index+1]+pixels[index+2];min=Math.min(min,value);max=Math.max(max,value);}return max-min;});
-  await expect.poll(pixelVariance,{timeout:10000}).toBeGreaterThan(6);
-  if(testInfo.project.name==='desktop'){
-    const canvas=page.locator('canvas');const initialBox=await canvas.boundingBox();expect(initialBox).not.toBeNull();
-    await page.getByRole('button',{name:'林夏',exact:true}).click();
-    await expect(page.locator('.director-inspector header strong')).toHaveText('林夏');
-    await page.getByRole('spinbutton',{name:'位置 X'}).fill('0.5');await page.getByRole('spinbutton',{name:'位置 X'}).press('Tab');
-    await expect.poll(()=>cameraWrites.length).toBe(1);
-    expect(cameraWrites[0].camera.object_overrides['object-1'].transform).toEqual({position:[.5,.4,0],rotation:[0,0,0],scale:[1,1,1]});
-    await page.getByRole('button',{name:'撤销对象变换'}).click();await expect.poll(()=>cameraWrites.length).toBe(2);
-    expect(cameraWrites[1].camera.object_overrides).toEqual({});
-    await canvas.click({position:{x:initialBox!.width*.06,y:initialBox!.height*.08}});
-    await expect(page.locator('.director-inspector header strong')).toHaveText('镜头相机');
-    const box=await canvas.boundingBox();expect(box).not.toBeNull();
-    await page.mouse.move(box!.x+box!.width*.55,box!.y+box!.height*.45);await page.mouse.down();await page.mouse.move(box!.x+box!.width*.68,box!.y+box!.height*.38,{steps:8});await page.mouse.up();
-    await page.getByRole('button',{name:'保存相机',exact:true}).click();
-    await expect.poll(()=>cameraWrites.length).toBe(3);
-    expect(cameraWrites[2].camera.position).not.toEqual(directorStage.shot_cameras[0].position);
-    expect(cameraWrites[2].camera).toEqual(expect.objectContaining({target:expect.any(Array),rotation:expect.any(Array),focal_length_mm:50}));
-    await page.getByRole('button',{name:'林夏',exact:true}).click();
-    await page.getByRole('button',{name:'网格吸附'}).click();
-    await expect(page.getByRole('button',{name:'网格吸附'})).toHaveAttribute('aria-pressed','true');
-    await page.getByRole('button',{name:'对象落地'}).click();
-    await expect.poll(()=>cameraWrites.length).toBe(4);
-    expect(cameraWrites[3].camera.object_overrides['object-1'].transform.position).toEqual([0,0,0]);
-    await page.getByRole('button',{name:'撤销对象变换'}).click();
-    await expect.poll(()=>cameraWrites.length).toBe(5);
-    expect(cameraWrites[4].camera.object_overrides).toEqual({});
-    await page.getByRole('button',{name:'重做对象变换'}).click();
-    await expect.poll(()=>cameraWrites.length).toBe(6);
-    expect(cameraWrites[5].camera.object_overrides['object-1'].transform.position).toEqual([0,0,0]);
-  }
-  await page.getByRole('button',{name:'保存相机预览'}).click();await expect.poll(()=>previewUploads).toBe(1);
-  await page.getByRole('button',{name:'AI构图建议'}).click();await expect(page.getByRole('dialog',{name:'AI 导演建议'})).toBeVisible();await page.getByLabel('运镜').uncheck();await page.getByRole('button',{name:'应用选中字段'}).click();await expect.poll(()=>appliedFields).toEqual(['composition']);
-  const dimensions=await page.evaluate(()=>({viewportWidth:window.innerWidth,scrollWidth:document.documentElement.scrollWidth}));expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
-  await page.screenshot({path:testInfo.outputPath('director-workspace.png'),fullPage:false});
 });
 
 test('model channels manage Mock SSH through authoritative route-backed status', async ({page}, testInfo) => {

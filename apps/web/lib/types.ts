@@ -12,7 +12,7 @@ export * from './types/script';
 export * from './types/chapter';
 export * from './types/character';
 export * from './types/review';
-export * from './types/director';
+export * from './types/shot-readiness';
 export * from './types/task';
 export * from './types/workspace';
 export * from './types/skill';

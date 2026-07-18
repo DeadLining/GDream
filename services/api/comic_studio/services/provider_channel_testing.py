@@ -12,11 +12,10 @@ import httpx
 from comic_studio.provider_channels import ProviderChannel
 from comic_studio.providers.qwen_tts import QwenTTSProvider
 from comic_studio.providers.wan_video import WanVideoProvider
-from comic_studio.providers.fal_triposr import FalTripoSRProvider
 from comic_studio.schemas import ProviderChannelTestRead, ProviderChannelUpdate
 
 
-ProviderKind = Literal["llm", "image", "tts", "video", "model3d"]
+ProviderKind = Literal["llm", "image", "tts", "video"]
 CONNECT_TIMEOUT_SECONDS = 2
 TOTAL_TIMEOUT_SECONDS = 8
 SSH_TIMEOUT_MARGIN_SECONDS = 0.25
@@ -80,18 +79,6 @@ def default_video_provider_factory(
     )
 
 
-def default_model3d_provider_factory(
-    channel: ProviderChannel,
-    client: httpx.AsyncClient,
-) -> FalTripoSRProvider:
-    return FalTripoSRProvider(
-        channel.api_key_value,
-        model=channel.model,
-        base_url=channel.base_url,
-        client=client,
-    )
-
-
 class ProviderChannelTestingService:
     def __init__(
         self,
@@ -103,7 +90,6 @@ class ProviderChannelTestingService:
         ] = default_provider_factory,
         tts_provider_factory: Callable[..., Any] = default_tts_provider_factory,
         video_provider_factory: Callable[..., Any] = default_video_provider_factory,
-        model3d_provider_factory: Callable[..., Any] = default_model3d_provider_factory,
         client_factory: Callable[..., Any] = default_client_factory,
         ssh_executor: Callable[[list[str], bytes], bytes] | None = None,
         subprocess_runner: Callable[..., Any] = subprocess.run,
@@ -116,7 +102,6 @@ class ProviderChannelTestingService:
         self._provider_factory = provider_factory
         self._tts_provider_factory = tts_provider_factory
         self._video_provider_factory = video_provider_factory
-        self._model3d_provider_factory = model3d_provider_factory
         self._client_factory = client_factory
         self._ssh_executor = ssh_executor
         self._subprocess_runner = subprocess_runner
@@ -176,10 +161,6 @@ class ProviderChannelTestingService:
                         else:
                             provider = self._provider_factory(kind, channel, client)
                         scope = await self._test_video(provider, channel)
-                    elif kind == "model3d":
-                        provider = self._model3d_provider_factory(channel, client)
-                        await provider.check_health()
-                        scope = "endpoint"
                     else:
                         provider_args = (
                             channel,
@@ -244,7 +225,7 @@ class ProviderChannelTestingService:
     def validate_channel(kind: ProviderKind, channel: ProviderChannel) -> None:
         if not channel.enabled:
             raise ProviderTestError(f"{kind} provider channel is not enabled")
-        if kind in {"llm", "image", "model3d"} and not channel.api_key_value:
+        if kind in {"llm", "image"} and not channel.api_key_value:
             raise ProviderTestError(f"Enabled {kind} channel requires an api_key")
 
     @staticmethod

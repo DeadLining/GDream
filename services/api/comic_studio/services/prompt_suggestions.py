@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from typing import Any, Literal
 
 from sqlalchemy import select
@@ -100,7 +99,7 @@ class PromptSuggestionService:
                     }
                     for item in compiled.snapshot["library_assets"]
                 ],
-                "director": self._director_context(compiled.snapshot["director"]),
+                "director": None,
                 "references": references,
             }
         )
@@ -238,7 +237,7 @@ class PromptSuggestionService:
                 }
                 for review in visual_reviews
             ],
-            "director": self._director_context(compiled.snapshot["director"]),
+            "director": None,
         }
 
     @staticmethod
@@ -254,56 +253,6 @@ class PromptSuggestionService:
             "negative_prompt": _text(shot.negative_prompt, 1500),
             "video_prompt": _text(shot.video_prompt, 3000),
             "negative_video_prompt": _text(shot.negative_video_prompt, 1500),
-        }
-
-    @staticmethod
-    def _director_context(director: dict[str, Any]) -> dict[str, Any] | None:
-        camera = director.get("camera")
-        objects = director.get("objects") or []
-        environment = director.get("environment") or {}
-        if not camera and not objects and not environment:
-            return None
-
-        director_objects = []
-        for item in objects[:60]:
-            transform = item.get("transform") or {}
-            rotation = transform.get("rotation") or [0, 0, 0]
-            horizontal_facing = 0
-            if (
-                isinstance(rotation, (list, tuple))
-                and len(rotation) > 1
-                and isinstance(rotation[1], (int, float))
-                and not isinstance(rotation[1], bool)
-            ):
-                horizontal_facing = round(math.degrees(rotation[1]))
-            director_objects.append(
-                {
-                    "id": _text(item.get("id"), 80),
-                    "kind": _text(item.get("kind"), 40),
-                    "source_type": _text(item.get("source_type"), 40),
-                    "source_id": item.get("source_id"),
-                    "label": _text(item.get("label"), 160),
-                    "position": _bounded_json(transform.get("position", [0, 0, 0])),
-                    "horizontal_facing_degrees": horizontal_facing,
-                }
-            )
-
-        return {
-            "environment": _bounded_json(environment),
-            "camera": (
-                {
-                    "position": _bounded_json(camera.get("position")),
-                    "target": _bounded_json(camera.get("target")),
-                    "rotation": _bounded_json(camera.get("rotation")),
-                    "focal_length_mm": camera.get("focal_length_mm"),
-                    "shot_size": _text(camera.get("shot_size"), 40),
-                    "camera_motion": _text(camera.get("camera_motion"), 80),
-                    "framing_guides": _bounded_json(camera.get("framing_guides", {})),
-                }
-                if camera
-                else None
-            ),
-            "objects": director_objects,
         }
 
     def _compile(self, shot_id: str, mode: PromptMode):

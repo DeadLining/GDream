@@ -280,50 +280,6 @@ def test_episode_ai_panels_regenerate_stale_active_panel(tmp_path):
     assert [call[0] for call in runtime.calls] == ["shot", "shot"]
 
 
-def test_script_driven_episode_ai_panels_stop_before_generating_blocked_shots(
-    tmp_path,
-):
-    session_factory, data_root, episode_id, _character_id, shot_id, _dialogue_id = (
-        _seed_episode(tmp_path)
-    )
-    with session_factory() as session:
-        episode = session.get(models.Episode, episode_id)
-        document = models.ScriptDocument(
-            project_id=episode.project_id,
-            title="AI episode script",
-            source_type="ai",
-            status="ready",
-        )
-        session.add(document)
-        session.flush()
-        revision = models.ScriptRevision(
-            document_id=document.id,
-            revision_number=1,
-            status="finalized",
-            content="林夏在旧车站发现线索。",
-            checksum="episode-ai-script",
-            creation_method="ai",
-        )
-        session.add(revision)
-        session.flush()
-        document.current_revision_id = revision.id
-        session.commit()
-
-    runtime = FakeImageRuntime(session_factory, data_root)
-    handlers = EpisodeAIStageHandlers(session_factory, data_root, runtime)
-    asyncio.run(handlers.references(_context(episode_id, "references")))
-
-    with pytest.raises(EpisodeAIStageNeedsReview) as raised:
-        asyncio.run(handlers.panels(_context(episode_id, "panels")))
-
-    blocked = raised.value.metadata["blocked_shots"][shot_id]
-    assert blocked["blockers"] == [
-        "missing_background",
-        "blocking_not_initialized",
-        "director_preview_missing",
-    ]
-    assert len(blocked["requirement_ids"]) == 2
-    assert [call[0] for call in runtime.calls] == ["character"]
 
 
 def test_media_handlers_generate_all_dialogue_and_shot_outputs(tmp_path):

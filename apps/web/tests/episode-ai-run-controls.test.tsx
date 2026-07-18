@@ -66,41 +66,5 @@ describe('EpisodeAIRunControls',()=>{
     expect(await screen.findByRole('alert')).toHaveTextContent('本集还没有分镜，请先解析剧本或创建镜头');
     expect(screen.queryByText('Episode has no shots')).not.toBeInTheDocument();
   });
-
-  it('shows generation blockers and routes the operator to assets or director',async()=>{
-    const onOpenAssets=vi.fn();
-    const onOpenDirector=vi.fn();
-    localStorage.setItem('ai-comic-episode-ai-ep-1','ai-run-1');
-    mocks.getEpisodeAIRun.mockResolvedValueOnce({
-      ...queued,
-      status:'needs_review',
-      current_stage:'panels',
-      error:'Shot generation is not ready',
-      stages:stages.map(item=>item.stage==='panels'?{
-        ...item,
-        status:'needs_review',
-        error:'Shot generation is not ready',
-        output_metadata:{
-          code:'shot_generation_not_ready',
-          blocked_shots:{
-            'shot-4':{blockers:['missing_background','blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']},
-            'shot-5':{blockers:['missing_required_prop','director_preview_missing'],requirement_ids:['req-prop']},
-          },
-        },
-      }:item),
-    });
-
-    render(<EpisodeAIRunControls episodeId="ep-1" onOpenAssets={onOpenAssets} onOpenDirector={onOpenDirector}/>);
-
-    const alert=await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('2 个镜头尚未满足画面生成条件');
-    expect(alert).toHaveTextContent('缺少场景背景');
-    expect(alert).toHaveTextContent('缺少必要道具');
-    expect(alert).toHaveTextContent('尚未建立镜头站位');
-    expect(alert).toHaveTextContent('尚未保存导演预览');
-    await userEvent.click(screen.getByRole('button',{name:'完善项目资产'}));
-    await userEvent.click(screen.getByRole('button',{name:'打开首个阻塞镜头的 3D 导演台'}));
-    expect(onOpenAssets).toHaveBeenCalledWith({target:'scene',shotId:'shot-4',requirementIds:['req-scene']});
-    expect(onOpenDirector).toHaveBeenCalledWith('shot-4');
-  });
+;
 });

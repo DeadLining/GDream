@@ -1,4 +1,4 @@
-import {AudioLines, Box, Film, Image, MessageSquareText} from 'lucide-react';
+import {AudioLines, Film, Image, MessageSquareText} from 'lucide-react';
 import type {ModelCapability, ModelRuntimeHealth} from '../lib/types';
 
 const capabilities: Array<{key: ModelCapability; label: string; Icon: typeof Film}> = [
@@ -6,7 +6,6 @@ const capabilities: Array<{key: ModelCapability; label: string; Icon: typeof Fil
   {key: 'image', label: '画面', Icon: Image},
   {key: 'speech', label: '语音', Icon: AudioLines},
   {key: 'video', label: '视频', Icon: Film},
-  {key: 'model3d', label: '3D 模型', Icon: Box},
 ];
 const statusLabel = {healthy: '正常', unavailable: '不可用', disabled: '未启用'};
 

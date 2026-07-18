@@ -30,8 +30,6 @@ from comic_studio.services.library_assets import LibraryAssetService
 from comic_studio.services.speech import SpeechService
 from comic_studio.services.videos import VideoService
 from comic_studio.services.visual_review import VisualReviewService
-from comic_studio.services.model_3d import Model3DGenerationService
-from comic_studio.services.model_3d_postprocess import Model3DPostProcessor
 
 
 provider_testing_client_factory = default_client_factory
@@ -47,7 +45,6 @@ class ModelRuntimeService:
         Capability.IMAGE: "image",
         Capability.SPEECH: "tts",
         Capability.VIDEO: "video",
-        Capability.MODEL_3D: "model3d",
     }
 
     def __init__(
@@ -59,7 +56,6 @@ class ModelRuntimeService:
         *,
         mock_ssh_manager=None,
         narrator_speaker: str = "dylan",
-        model3d_postprocessor_factory=Model3DPostProcessor,
     ):
         self.channel_store = channel_store
         self.session_factory = session_factory
@@ -67,7 +63,6 @@ class ModelRuntimeService:
         self.adapters = adapters
         self.mock_ssh_manager = mock_ssh_manager
         self.narrator_speaker = narrator_speaker
-        self.model3d_postprocessor_factory = model3d_postprocessor_factory
 
     @staticmethod
     def _adapter_identity(adapter) -> tuple[str, str]:
@@ -397,30 +392,6 @@ class ModelRuntimeService:
                 self.adapters.create(Capability.VIDEO),
             ).generate(shot_id, activate=activate)
 
-    async def execute_model3d(
-        self,
-        target_type: str,
-        target_id: str,
-        reference_asset_id: str | None,
-        variant_id: str | None = None,
-        state_id: str | None = None,
-        reference_asset_ids: list[str] | None = None,
-    ):
-        with self.session_factory() as session:
-            return await Model3DGenerationService(
-                session,
-                self.data_root,
-                self.adapters.create(Capability.MODEL_3D),
-                self.model3d_postprocessor_factory(self.data_root),
-            ).generate(
-                target_type,
-                target_id,
-                reference_asset_id,
-                variant_id,
-                state_id,
-                reference_asset_ids,
-            )
-
     def create_media_job(
         self,
         capability: Capability,
@@ -489,15 +460,6 @@ class ModelRuntimeService:
                 )
             elif capability is Capability.SPEECH:
                 result = await self.execute_speech(job.target_id)
-            elif capability is Capability.MODEL_3D:
-                result = await self.execute_model3d(
-                    job.target_type,
-                    job.target_id,
-                    job.request_payload.get("reference_asset_id"),
-                    job.request_payload.get("variant_id"),
-                    job.request_payload.get("state_id"),
-                    job.request_payload.get("reference_asset_ids"),
-                )
             else:
                 result = await self.execute_video(
                     job.target_id,
@@ -597,7 +559,7 @@ class ModelRuntimeService:
                 if update.clear_api_key
                 else replacement_key or current.api_key_value
             )
-            if capability in {Capability.TEXT, Capability.IMAGE, Capability.MODEL_3D} and update.enabled and not effective_key:
+            if capability in {Capability.TEXT, Capability.IMAGE} and update.enabled and not effective_key:
                 raise ValueError(f"Enabled {capability.value} channel requires an api_key")
             if capability not in {Capability.SPEECH, Capability.VIDEO} and update.ssh_host:
                 raise ValueError("ssh_host is only valid for speech and video")
@@ -743,38 +705,6 @@ class ModelRuntimeService:
             session.expunge(job)
             return job
 
-    def latest_model3d_job(
-        self,
-        target_type: str,
-        target_id: str,
-        variant_id: str | None = None,
-        state_id: str | None = None,
-    ):
-        with self.session_factory() as session:
-            jobs = list(
-                session.scalars(
-                    select(models.Job)
-                    .where(
-                        models.Job.operation == "runtime_model3d",
-                        models.Job.target_type == target_type,
-                        models.Job.target_id == target_id,
-                    )
-                    .order_by(models.Job.created_at.desc(), models.Job.id.desc())
-                )
-            )
-            job = next(
-                (
-                    item
-                    for item in jobs
-                    if item.request_payload.get("variant_id") == variant_id
-                    and item.request_payload.get("state_id") == state_id
-                ),
-                None,
-            )
-            if job is not None:
-                session.expunge(job)
-            return job
-
     def retry_job(self, job_id: str):
         with self.session_factory() as session:
             store = JobStore(session)
@@ -790,28 +720,6 @@ class ModelRuntimeService:
             )
             session.expunge(retried)
             return retried
-
-    def approve_model3d_job(self, job_id: str) -> dict:
-        with self.session_factory() as session:
-            job = JobStore(session).get(job_id)
-            if job is None:
-                raise KeyError(job_id)
-            if (
-                job.operation != "runtime_model3d"
-                or job.request_payload.get("capability") != Capability.MODEL_3D.value
-            ):
-                raise ValueError("job_is_not_model3d")
-            if job.status != "succeeded":
-                raise ValueError("model3d_candidate_not_ready")
-            approved = Model3DGenerationService.approve(
-                session,
-                job.target_type,
-                job.target_id,
-                job.result_metadata,
-            )
-            job.result_metadata = approved
-            session.commit()
-            return approved
 
     def recover_interrupted_jobs(self) -> list[str]:
         with self.session_factory() as session:

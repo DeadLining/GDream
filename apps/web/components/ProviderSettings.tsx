@@ -6,15 +6,14 @@ import type {ProviderChannelKind, ProviderChannelRead, ProviderChannelTestResult
 import {ProviderChannelSection, type ProviderChannelDraft} from './ProviderChannelSection';
 import {MockSshControl} from './MockSshControl';
 
-const kinds: ProviderChannelKind[] = ['llm', 'image', 'tts', 'video', 'model3d'];
-const labels: Record<ProviderChannelKind, string> = {llm: '剧本规划', image: '画面生成', tts: '语音合成', video: '视频生成', model3d: '3D 生成'};
+const kinds: ProviderChannelKind[] = ['llm', 'image', 'tts', 'video'];
+const labels: Record<ProviderChannelKind, string> = {llm: '剧本规划', image: '画面生成', tts: '语音合成', video: '视频生成'};
 type Drafts = Record<ProviderChannelKind, ProviderChannelDraft>;
 type KindState<T> = Partial<Record<ProviderChannelKind, T>>;
 
 const toDraft = (channel: ProviderChannelRead): ProviderChannelDraft => ({...channel, api_key: '', clear_api_key: false});
 const fallbackVideo: ProviderChannelRead = {name: 'MiniMax Video', enabled: false, base_url: 'https://api.minimaxi.com', model: 'MiniMax-Hailuo-02', ssh_host: '', api_key_configured: false, api_key_masked: ''};
-const fallbackModel3D: ProviderChannelRead = {name: 'fal.ai TripoSR', enabled: false, base_url: 'https://fal.run', model: 'fal-ai/triposr', ssh_host: '', api_key_configured: false, api_key_masked: ''};
-const toDrafts = (snapshot: ProviderChannelsRead): Drafts => ({llm: toDraft(snapshot.llm), image: toDraft(snapshot.image), tts: toDraft(snapshot.tts), video: toDraft(snapshot.video ?? fallbackVideo), model3d: toDraft(snapshot.model3d ?? fallbackModel3D)});
+const toDrafts = (snapshot: ProviderChannelsRead): Drafts => ({llm: toDraft(snapshot.llm), image: toDraft(snapshot.image), tts: toDraft(snapshot.tts), video: toDraft(snapshot.video ?? fallbackVideo)});
 const payload = (draft: ProviderChannelDraft): ProviderChannelUpdate => ({
   name: draft.name.trim(), enabled: draft.enabled, base_url: draft.base_url.trim(), model: draft.model.trim(),
   api_key: draft.api_key.trim(), clear_api_key: draft.clear_api_key, ssh_host: draft.ssh_host.trim(),
@@ -31,7 +30,7 @@ function validate(kind: ProviderChannelKind, draft: ProviderChannelDraft) {
     return '已启用渠道需要有效的 HTTP(S) Base URL。';
   }
   if (!draft.model.trim()) return '已启用渠道需要模型名称。';
-  if ((kind === 'llm' || kind === 'image' || kind === 'model3d') && (!draft.api_key_configured || draft.clear_api_key) && !draft.api_key.trim()) return '已启用渠道需要 API Key。';
+  if ((kind === 'llm' || kind === 'image') && (!draft.api_key_configured || draft.clear_api_key) && !draft.api_key.trim()) return '已启用渠道需要 API Key。';
   return '';
 }
 
@@ -50,8 +49,8 @@ export function ProviderSettings({onDirtyChange, onSaved, embedded = false}: {on
   const savingRef = useRef(false);
   const loadGeneration = useRef(0);
   const loadController = useRef<AbortController | null>(null);
-  const testGeneration = useRef<Record<ProviderChannelKind, number>>({llm: 0, image: 0, tts: 0, video: 0, model3d: 0});
-  const pendingTestRef = useRef<Record<ProviderChannelKind, boolean>>({llm: false, image: false, tts: false, video: false, model3d: false});
+  const testGeneration = useRef<Record<ProviderChannelKind, number>>({llm: 0, image: 0, tts: 0, video: 0});
+  const pendingTestRef = useRef<Record<ProviderChannelKind, boolean>>({llm: false, image: false, tts: false, video: false});
 
   const load = async () => {
     const generation = ++loadGeneration.current;

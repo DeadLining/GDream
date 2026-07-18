@@ -68,15 +68,6 @@ describe('Storyboard', () => {
     expect(screen.queryByRole('button', {name: /生成画面/})).not.toBeInTheDocument();
   });
 
-  it('opens the 3D director canvas for the selected shot', async () => {
-    const onOpenDirector = vi.fn();
-    render(<Storyboard episode={episode} selectedId="shot-2" onSelect={vi.fn()} onPlan={vi.fn()} onOpenDirector={onOpenDirector} job={null}/>);
-
-    await userEvent.click(screen.getByRole('button', {name: '打开 3D 导演台'}));
-
-    expect(onOpenDirector).toHaveBeenCalledWith('shot-2');
-  });
-
   it('renders tail-frame continuity links between shots', () => {
     const linkedEpisode: EpisodeDetail = {
       ...episode,

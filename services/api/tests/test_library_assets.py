@@ -6,7 +6,6 @@ import pytest
 
 from comic_studio import models
 from comic_studio.services.library_assets import LibraryAssetService
-from tests.test_character_3d_representations import _glb
 
 
 def _project(client, title: str = "资产目录"):
@@ -224,9 +223,9 @@ def test_library_assets_accept_kind_specific_media_uploads(client):
         f"/api/library-assets/{sound['id']}/media",
         files={"file": ("wrong.png", _png(), "image/png")},
     )
-    prop_model_upload = client.post(
+    prop_upload = client.post(
         f"/api/library-assets/{prop['id']}/media",
-        files={"file": ("watch.glb", _glb(), "model/gltf-binary")},
+        files={"file": ("watch.png", _png(), "image/png")},
     )
 
     assert costume_upload.status_code == 201
@@ -238,13 +237,13 @@ def test_library_assets_accept_kind_specific_media_uploads(client):
     assert sound_upload.json()["media_url"].endswith(".wav")
     assert invalid_sound.status_code == 422
     assert invalid_sound.json()["detail"] == "sound_asset_requires_audio"
-    assert prop_model_upload.status_code == 201
-    assert prop_model_upload.json()["media_type"] == "model/gltf-binary"
-    assert prop_model_upload.json()["media_url"].endswith(".glb")
+    assert prop_upload.status_code == 201
+    assert prop_upload.json()["media_type"] == "image/png"
+    assert prop_upload.json()["media_url"].endswith(".png")
 
 
-def test_library_asset_rejects_invalid_prop_glb(client):
-    project = _project(client, "道具模型校验")
+def test_library_asset_rejects_non_image_prop_media(client):
+    project = _project(client, "道具媒体校验")
     prop = client.post(
         f"/api/projects/{project['id']}/library-assets",
         json={"kind": "prop", "name": "损坏道具", "description": "", "tags": [], "metadata": {}},
@@ -252,14 +251,14 @@ def test_library_asset_rejects_invalid_prop_glb(client):
 
     response = client.post(
         f"/api/library-assets/{prop['id']}/media",
-        files={"file": ("broken.glb", b"not-a-glb", "model/gltf-binary")},
+        files={"file": ("broken.bin", b"not-an-image", "application/octet-stream")},
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "invalid_glb"
+    assert response.json()["detail"] == "visual_asset_requires_image"
 
 
-def test_library_asset_upload_cleans_model_file_when_commit_fails(
+def test_library_asset_upload_cleans_image_file_when_commit_fails(
     db_session, tmp_path, monkeypatch
 ):
     project = models.Project(
@@ -286,10 +285,10 @@ def test_library_asset_upload_cleans_model_file_when_commit_fails(
     with pytest.raises(RuntimeError, match="commit failed"):
         LibraryAssetService(db_session).upload_media(
             library_asset.id,
-            _glb(),
-            filename="watch.glb",
+            _png(),
+            filename="watch.png",
             data_root=tmp_path,
         )
 
-    assert list(tmp_path.rglob("*.glb")) == []
+    assert list(tmp_path.rglob("*.png")) == []
     assert list(tmp_path.rglob("*.tmp")) == []

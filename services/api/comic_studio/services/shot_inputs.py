@@ -3,16 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-import math
 from typing import Any, Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models
-from comic_studio.services.director_generation import (
-    sanitize_director_generation_snapshot,
-)
 
 
 class ShotInputReferenceError(ValueError):
@@ -35,8 +31,6 @@ class CompiledShotInput:
     prompt_constraints: str
     character_ids: frozenset[str]
     reference_asset_ids: tuple[str, ...]
-    director_preview_asset_id: str | None
-    director_guidance_asset_ids: tuple[tuple[str, str], ...]
 
     @property
     def snapshot_hash(self) -> str:
@@ -66,9 +60,6 @@ class ShotInputCompiler:
                 .selectinload(models.Episode.project)
                 .selectinload(models.Project.characters),
                 selectinload(models.Shot.dialogue),
-                selectinload(models.Shot.director_camera)
-                .selectinload(models.ShotCamera.stage)
-                .selectinload(models.DirectorStage.objects),
             )
             .where(models.Shot.id == shot_id)
         )
@@ -163,11 +154,6 @@ class ShotInputCompiler:
                 "reference_asset_id": reference_asset.id if reference_asset else None,
                 "effective_variant_id": usage.effective_variant_id,
                 "effective_state_id": usage.effective_state_id,
-                "effective_representation_id": usage.effective_representation_id,
-                "effective_representation_version": (
-                    usage.effective_representation_version
-                ),
-                "director_object_id": usage.director_object_id,
                 "binding_status": usage.binding_status,
                 "binding_updated_at": (
                     usage.binding_updated_at.isoformat()
@@ -243,74 +229,6 @@ class ShotInputCompiler:
                 f"- Bound {item.kind} asset: {item.name}{suffix}"
             )
 
-        director = self._director_snapshot(shot)
-        director_preview_asset_id = None
-        director_guidance_asset_ids: list[tuple[str, str]] = []
-        preview_asset_id = (
-            director["camera"].get("preview_asset_id")
-            if director["camera"]
-            else None
-        )
-        if preview_asset_id:
-            preview_asset = self.session.get(models.Asset, preview_asset_id)
-            if preview_asset is None or preview_asset.project_id != project.id:
-                raise ShotInputReferenceError(
-                    "Director preview asset must belong to the shot project"
-                )
-            if not preview_asset.media_type.startswith("image/"):
-                raise ShotInputReferenceError("Director preview asset must be an image")
-            director_preview_asset_id = preview_asset.id
-        guidance_ids = (
-            director["camera"].get("guidance_asset_ids", {})
-            if director["camera"]
-            else {}
-        )
-        if not isinstance(guidance_ids, dict):
-            guidance_ids = {}
-        for guidance_kind in ("silhouette", "skeleton_pose", "depth", "object_mask"):
-            guidance_asset_id = guidance_ids.get(guidance_kind)
-            if not guidance_asset_id:
-                continue
-            guidance_asset = self.session.get(models.Asset, guidance_asset_id)
-            if guidance_asset is None or guidance_asset.project_id != project.id:
-                raise ShotInputReferenceError(
-                    "Director guidance asset must belong to the shot project"
-                )
-            if not guidance_asset.media_type.startswith("image/"):
-                raise ShotInputReferenceError("Director guidance asset must be an image")
-            director_guidance_asset_ids.append((guidance_kind, guidance_asset.id))
-        if director["camera"]:
-            camera = director["camera"]
-            prompt_lines.append(
-                "- Director camera: "
-                f"{camera['shot_size']}, {self._format_number(camera['focal_length_mm'])}mm, "
-                f"motion {camera['camera_motion']}, "
-                f"camera position {self._format_vector(camera['position'])}, "
-                f"target {self._format_vector(camera['target'])}"
-            )
-        if director["environment"]:
-            prompt_lines.append(
-                f"- Director environment: {self._format_mapping(director['environment'])}"
-            )
-        for item in director["objects"]:
-            if not item["visible"]:
-                continue
-            transform = item["transform"]
-            rotation = transform.get("rotation", [0, 0, 0])
-            horizontal_facing = 0
-            if (
-                isinstance(rotation, (list, tuple))
-                and len(rotation) > 1
-                and isinstance(rotation[1], (int, float))
-                and not isinstance(rotation[1], bool)
-            ):
-                horizontal_facing = round(math.degrees(rotation[1]))
-            prompt_lines.append(
-                f"- Director object: {item['kind']} {item['label']}; "
-                f"source {item['source_type']}:{item['source_id'] or 'none'}; "
-                f"position {self._format_vector(transform.get('position', [0, 0, 0]))}; "
-                f"horizontal facing {horizontal_facing} degrees"
-            )
         prompt_constraints = (
             "Bound production inputs:\n" + "\n".join(prompt_lines)
             if prompt_lines
@@ -341,7 +259,6 @@ class ShotInputCompiler:
             },
             "asset_bindings": bindings,
             "library_assets": library_asset_snapshot,
-            "director": director,
             "reference_asset_ids": list(dict.fromkeys(reference_asset_ids)),
         }
         return CompiledShotInput(
@@ -349,8 +266,6 @@ class ShotInputCompiler:
             prompt_constraints=prompt_constraints,
             character_ids=frozenset(character_ids),
             reference_asset_ids=tuple(dict.fromkeys(reference_asset_ids)),
-            director_preview_asset_id=director_preview_asset_id,
-            director_guidance_asset_ids=tuple(director_guidance_asset_ids),
         )
 
     def _variant_lineage(
@@ -376,60 +291,6 @@ class ShotInputCompiler:
         lineage.reverse()
         return lineage
 
-    @staticmethod
-    def _director_snapshot(shot: models.Shot) -> dict[str, Any]:
-        camera = shot.director_camera
-        stage = camera.stage if camera is not None else None
-        overrides = camera.object_overrides if camera is not None else {}
-        objects = []
-        for item in (stage.objects if stage is not None else []):
-            override = overrides.get(item.id, {})
-            if not isinstance(override, dict):
-                override = {}
-            visible = override.get("visible", item.visible)
-            if not visible:
-                continue
-            appearance = dict(item.appearance or {})
-            for key in ("pose_preset", "facial_expression", "morph_target_weights", "head_yaw_degrees", "head_pitch_degrees", "gaze_target"):
-                if key in override:
-                    appearance[key] = override[key]
-            objects.append(
-                {
-                    "id": item.id,
-                    "kind": item.kind,
-                    "source_type": item.source_type,
-                    "source_id": item.source_id,
-                    "label": item.label,
-                    "transform": override.get("transform", item.transform),
-                    "appearance": appearance,
-                    "visible": visible,
-                }
-            )
-        return sanitize_director_generation_snapshot({
-            "stage_id": stage.id if stage is not None else None,
-            "stage_version": stage.version if stage is not None else None,
-            "environment": stage.environment if stage is not None else {},
-            "objects": objects,
-            "camera": (
-                {
-                    "id": camera.id,
-                    "version": camera.version,
-                    "position": camera.position,
-                    "target": camera.target,
-                    "rotation": camera.rotation,
-                    "focal_length_mm": camera.focal_length_mm,
-                    "shot_size": camera.shot_size,
-                    "camera_motion": camera.camera_motion,
-                    "framing_guides": camera.framing_guides,
-                    "object_overrides": camera.object_overrides,
-                    "preview_asset_id": camera.preview_asset_id,
-                    "guidance_asset_ids": camera.guidance_asset_ids,
-                }
-                if camera is not None
-                else None
-            ),
-        })
-
     @classmethod
     def _format_mapping(cls, value: dict[str, Any]) -> str:
         if not value:
@@ -444,13 +305,3 @@ class ShotInputCompiler:
         if isinstance(value, str):
             return value[:1000]
         return json.dumps(value, ensure_ascii=False, sort_keys=True)[:1000]
-
-    @staticmethod
-    def _format_number(value: float) -> str:
-        return str(int(value)) if float(value).is_integer() else str(value)
-
-    @classmethod
-    def _format_vector(cls, value: Any) -> str:
-        if not isinstance(value, (list, tuple)):
-            return "[]"
-        return "[" + ", ".join(cls._format_number(item) for item in value) + "]"

@@ -44,10 +44,6 @@ const snapshot: ProviderChannelsRead = {
     name: 'MiniMax Video', enabled: true, base_url: 'https://api.minimaxi.com',
     model: 'MiniMax-Hailuo-02', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-•••vid9',
   },
-  model3d: {
-    name: 'fal.ai TripoSR', enabled: false, base_url: 'https://fal.run',
-    model: 'fal-ai/triposr', ssh_host: '', api_key_configured: false, api_key_masked: '',
-  },
   persistence: {status: 'saved', file_path: 'data/provider-channels.json'},
   reloaded_at: '2026-07-11T10:00:00Z',
 };
@@ -60,7 +56,7 @@ function deferred<T>() {
   return {promise, resolve, reject};
 }
 
-function updateResponse(current: ProviderChannelsRead, kind: 'llm' | 'image' | 'tts' | 'video' | 'model3d') {
+function updateResponse(current: ProviderChannelsRead, kind: 'llm' | 'image' | 'tts' | 'video') {
   return {channel: current[kind], current};
 }
 
@@ -103,11 +99,10 @@ describe('ProviderSettings', () => {
   });
   afterEach(cleanup);
 
-  it('loads five accessible channel forms without exposing a full key', async () => {
+  it('loads four accessible channel forms without exposing a full key', async () => {
     render(<ProviderSettings/>);
 
-    expect(await screen.findAllByRole('form')).toHaveLength(5);
-    expect(screen.getByDisplayValue('fal-ai/triposr')).toBeVisible();
+    expect(await screen.findAllByRole('form')).toHaveLength(4);
     expect(screen.getByDisplayValue('MiniMax-Hailuo-02')).toBeVisible();
     expect(screen.getByRole('heading', {name: '模型渠道'})).toBeVisible();
     expect(screen.getByDisplayValue('MiniMax-M3')).toBeVisible();
@@ -261,7 +256,7 @@ describe('ProviderSettings', () => {
     save.click();
 
     expect(mocks.updateProviderChannel).toHaveBeenCalledTimes(1);
-    expect(document.querySelectorAll('.provider-channel-section fieldset[disabled]')).toHaveLength(5);
+    expect(document.querySelectorAll('.provider-channel-section fieldset[disabled]')).toHaveLength(4);
     expect(screen.getByLabelText('画面生成渠道名称')).toBeDisabled();
     expect(screen.getByLabelText('替换剧本规划 API Key')).toBeDisabled();
     expect(screen.getByRole('button', {name: '测试画面生成连接'})).toBeDisabled();
@@ -351,15 +346,15 @@ describe('ProviderSettings', () => {
     expect(settingsStyles).toMatch(/\.provider-test-result\.failure\s*\{[^}]*background:\s*#f8e4e2[^}]*color:\s*#8c2d27/);
   });
 
-  it('keeps five fixed channel sections linked to stable inline result regions', async () => {
+  it('keeps four fixed channel sections linked to stable inline result regions', async () => {
     render(<ProviderSettings/>);
 
     const forms = await screen.findAllByRole('form');
-    expect(forms.map(form => form.getAttribute('aria-label'))).toEqual(['剧本规划渠道', '画面生成渠道', '语音合成渠道', '视频生成渠道', '3D 生成渠道']);
-    for (const [index, label] of ['剧本规划', '画面生成', '语音合成', '视频生成', '3D 生成'].entries()) {
+    expect(forms.map(form => form.getAttribute('aria-label'))).toEqual(['剧本规划渠道', '画面生成渠道', '语音合成渠道', '视频生成渠道']);
+    for (const [index, label] of ['剧本规划', '画面生成', '语音合成', '视频生成'].entries()) {
       const button = within(forms[index]).getByRole('button', {name: `测试${label}连接`});
       const statusId = button.getAttribute('aria-describedby');
-      expect(statusId).toBe(`provider-${['llm', 'image', 'tts', 'video', 'model3d'][index]}-status`);
+      expect(statusId).toBe(`provider-${['llm', 'image', 'tts', 'video'][index]}-status`);
       expect(document.getElementById(statusId!)).toHaveAttribute('role', 'status');
     }
   });

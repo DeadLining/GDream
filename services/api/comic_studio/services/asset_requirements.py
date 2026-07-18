@@ -148,10 +148,6 @@ class AssetRequirementService:
             select(models.Shot)
             .options(
                 selectinload(models.Shot.scene).selectinload(models.Scene.episode),
-                selectinload(models.Shot.scene)
-                .selectinload(models.Scene.director_stage)
-                .selectinload(models.DirectorStage.objects),
-                selectinload(models.Shot.director_camera),
             )
             .where(models.Shot.id == shot_id)
         )
@@ -178,24 +174,6 @@ class AssetRequirementService:
         ):
             blockers.append("missing_required_prop")
 
-        stage = shot.scene.director_stage
-        required_object_ids = {
-            item.binding_id
-            for item in relevant
-            if item.kind in {"character", "prop"} and item.binding_id
-        }
-        stage_object_ids = (
-            {item.source_id for item in stage.objects if item.source_id}
-            if stage is not None
-            else set()
-        )
-        blocking_ready = bool(stage) and required_object_ids.issubset(stage_object_ids)
-        if not blocking_ready:
-            blockers.append("blocking_not_initialized")
-        camera = shot.director_camera
-        camera_ready = bool(camera and camera.preview_asset_id)
-        if not camera_ready:
-            blockers.append("director_preview_missing")
         return {
             "shot_id": shot.id,
             "project_id": project_id,
@@ -204,8 +182,8 @@ class AssetRequirementService:
             "asset_ready": not any(
                 item.status != "ready" and item.required for item in relevant
             ),
-            "blocking_ready": blocking_ready,
-            "camera_ready": camera_ready,
+            "blocking_ready": True,
+            "camera_ready": True,
             "blockers": blockers,
             "requirement_ids": [item.id for item in relevant],
         }

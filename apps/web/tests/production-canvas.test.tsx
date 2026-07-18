@@ -20,8 +20,8 @@ const graph:EpisodeProductionGraph={
   episode_id:'episode-1',project_id:'project-1',
   scenes:[{id:'scene-1',position:1,location:'庭院',summary:'相遇'}],
   shots:[
-    {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'中景',duration_seconds:4,composition:'入场',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-1',active_panel_media_url:'/media/panel-1.png',active_video_asset_id:null,active_video_media_url:null,director_ready:true,director_asset_ready:true,director_blocking_ready:true,director_camera_ready:true,director_blockers:[]},
-    {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'近景',duration_seconds:3,composition:'反应',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-2',active_panel_media_url:'/media/panel-2.png',active_video_asset_id:null,active_video_media_url:null,director_ready:false,director_asset_ready:true,director_blocking_ready:true,director_camera_ready:false,director_blockers:['director_preview_missing']},
+    {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'中景',duration_seconds:4,composition:'入场',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-1',active_panel_media_url:'/media/panel-1.png',active_video_asset_id:null,active_video_media_url:null},
+    {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'近景',duration_seconds:3,composition:'反应',review_status:'draft',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'panel-2',active_panel_media_url:'/media/panel-2.png',active_video_asset_id:null,active_video_media_url:null},
   ],
   assets:[{id:'variant-1',kind:'variant',label:'唐代造型',media_url:null,version:1,status:'approved',shot_ids:['shot-1','shot-2']}],
   production_items:[],media_dependencies:[],workflow_bindings:[
@@ -33,17 +33,7 @@ const graph:EpisodeProductionGraph={
 it('keeps production nodes clickable when connection hit areas cross them',()=>{
   expect(readAllStyles()).toMatch(/\.production-canvas-v2\s+\.react-flow__edge-interaction\s*\{[^}]*pointer-events:\s*none[^}]*\}/s);
 });
-
-it('renders scene groups, peer shots, shared assets, and the selected shot chain',async()=>{
-  render(<ProductionCanvas graph={graph} selectedShotId="shot-2" onSelectShot={vi.fn()}/>);
-  expect(await screen.findByRole('group',{name:'场景 01：庭院'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 01：中景'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 02：近景'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'唐代造型'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 02 3D 导演'})).toHaveTextContent('缺少预览');
-  expect(screen.getByRole('button',{name:'镜头 02 3D 导演'})).toHaveTextContent('待完成');
-  expect(screen.getByRole('button',{name:/镜头 02 分镜渲染/})).toBeVisible();
-});
+;
 
 it('selecting a shot expands its chain and opens the inspector',async()=>{
   const user=userEvent.setup();
@@ -135,30 +125,7 @@ it('renders the episode canvas navigation without a duplicate public asset dock'
   expect(screen.queryByRole('region',{name:'公共资产区'})).not.toBeInTheDocument();
   expect(screen.getByTestId('react-flow')).toHaveAttribute('data-nodes-connectable','false');
 });
-
-it('switches between materially different overview, shot focus, and asset relation views',async()=>{
-  const user=userEvent.setup();
-  render(<ProductionCanvas graph={graph} selectedShotId="shot-2" onSelectShot={vi.fn()}/>);
-
-  expect(await screen.findByRole('button',{name:'镜头 01：中景'})).toBeVisible();
-  await user.click(screen.getByRole('button',{name:'镜头聚焦'}));
-
-  expect(screen.getByRole('region',{name:'单集生产画布'})).toHaveAttribute('data-canvas-view','focus');
-  expect(screen.queryByRole('button',{name:'镜头 01：中景'})).not.toBeInTheDocument();
-  expect(screen.getByRole('button',{name:'镜头 02：近景'})).toBeVisible();
-  expect(screen.queryByRole('group',{name:'场景 01：庭院'})).not.toBeInTheDocument();
-  expect(screen.getByRole('button',{name:'镜头 02 3D 导演'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'唐代造型'})).toBeVisible();
-
-  await user.click(screen.getByRole('button',{name:'资产关系'}));
-
-  expect(screen.getByRole('region',{name:'单集生产画布'})).toHaveAttribute('data-canvas-view','assets');
-  expect(screen.getByRole('button',{name:'镜头 01：中景'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 02：近景'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'唐代造型'})).toBeVisible();
-  expect(screen.queryByRole('button',{name:'镜头 02 3D 导演'})).not.toBeInTheDocument();
-  expect(screen.getByText('1 项资产 · 2 个引用镜头')).toBeVisible();
-});
+;
 
 it('shows an honest empty state when the episode has no asset-to-shot bindings',async()=>{
   const user=userEvent.setup();
@@ -180,17 +147,7 @@ it('switches and remembers the canvas theme without changing the graph',async()=
   expect(localStorage.getItem('ai-comic-production-canvas-theme')).toBe('cream');
   expect(screen.getByRole('button',{name:'镜头 02：近景'})).toBeVisible();
 });
-
-it('expands AI comic domain nodes instead of a raw ComfyUI editor',async()=>{
-  render(<ProductionCanvas graph={graph} selectedShotId="shot-2" onSelectShot={vi.fn()}/>);
-
-  expect(await screen.findByRole('button',{name:'镜头 02 3D 导演'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 02 分镜渲染'})).toHaveTextContent('自定义工作流');
-  expect(screen.getByRole('button',{name:'镜头 02 视觉审阅'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 02 对白'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'镜头 02 Qwen TTS'})).toBeVisible();
-  expect(screen.queryByTitle('ComfyUI 节点编辑器')).not.toBeInTheDocument();
-});
+;
 
 it('opens the real visual review workspace from the selected review node',async()=>{
   const user=userEvent.setup();
@@ -202,16 +159,7 @@ it('opens the real visual review workspace from the selected review node',async(
   expect(onOpenVisualReview).toHaveBeenCalledWith('shot-2');
   expect(screen.queryByRole('region',{name:'镜头 02 圈点修改'})).not.toBeInTheDocument();
 });
-
-it('opens the real 3D director workspace from the selected optional node',async()=>{
-  const user=userEvent.setup();
-  const onOpenDirector=vi.fn();
-  render(<ProductionCanvas graph={graph} selectedShotId="shot-2" onSelectShot={vi.fn()} onOpenDirector={onOpenDirector}/>);
-
-  await user.click(await screen.findByRole('button',{name:'镜头 02 3D 导演'}));
-
-  expect(onOpenDirector).toHaveBeenCalledWith('shot-2');
-});
+;
 
 it('does not open visual review while the shot has no generated panel',async()=>{
   const user=userEvent.setup();

@@ -116,14 +116,6 @@ class ProviderChannels(BaseModel):
             model="MiniMax-Hailuo-02",
         )
     )
-    model3d: ProviderChannel = Field(
-        default_factory=lambda: ProviderChannel(
-            name="fal.ai TripoSR",
-            enabled=False,
-            base_url="https://fal.run",
-            model="fal-ai/triposr",
-        )
-    )
 
     model_config = ConfigDict(
         extra="forbid",
@@ -134,7 +126,7 @@ class ProviderChannels(BaseModel):
 
     @model_validator(mode="after")
     def validate_channel_semantics(self):
-        for channel_name in ("llm", "image", "model3d"):
+        for channel_name in ("llm", "image"):
             channel = getattr(self, channel_name)
             if channel.ssh_host is not None:
                 raise ValueError("ssh_host is only valid for tts and video channels")
@@ -180,13 +172,6 @@ def provider_channel_defaults(settings: Settings) -> ProviderChannels:
             model=settings.minimax_video_model,
             api_key=settings.minimax_video_api_key,
         ),
-        model3d=ProviderChannel(
-            name="fal.ai TripoSR",
-            enabled=bool(settings.fal_key),
-            base_url=settings.fal_model3d_base_url,
-            model=settings.fal_model3d_model,
-            api_key=settings.fal_key,
-        ),
     )
 
 
@@ -217,11 +202,11 @@ class ProviderChannelStore:
             else:
                 try:
                     payload = json.loads(self._path.read_text(encoding="utf-8"))
-                    for channel_name in ("video", "model3d"):
-                        if channel_name not in payload:
-                            payload[channel_name] = getattr(
-                                self._defaults, channel_name
-                            ).model_dump(mode="python")
+                    if "video" not in payload:
+                        payload["video"] = self._defaults.video.model_dump(
+                            mode="python"
+                        )
+                    payload.pop("model3d", None)
                     loaded = ProviderChannels.model_validate(payload)
                 except (
                     OSError,
@@ -340,7 +325,7 @@ class ProviderChannelStore:
     @staticmethod
     def _persistence_payload(channels: ProviderChannels) -> dict:
         payload = channels.model_dump(mode="json")
-        for channel_name in ("llm", "image", "tts", "video", "model3d"):
+        for channel_name in ("llm", "image", "tts", "video"):
             channel = getattr(channels, channel_name)
             payload[channel_name]["api_key"] = channel.api_key_value
         return payload

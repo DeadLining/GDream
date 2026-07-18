@@ -144,8 +144,15 @@ def test_fresh_database_upgrades_to_current_schema(tmp_path):
     assert "script_revisions" in inspector.get_table_names()
     assert "script_import_episodes" in inspector.get_table_names()
     assert "model_invocations" in inspector.get_table_names()
-    for table in ("director_stages", "director_objects", "shot_cameras", "director_revisions", "director_suggestions"):
-        assert table in inspector.get_table_names()
+    retired_tables = {
+        "director_stages",
+        "director_objects",
+        "shot_cameras",
+        "director_revisions",
+        "director_suggestions",
+        "character_3d_representations",
+    }
+    assert retired_tables.isdisjoint(inspector.get_table_names())
     for table in ("volumes", "storylines", "storyline_events"):
         assert table in inspector.get_table_names()
     for table in ("asset_variants", "asset_variant_states", "asset_variant_usages"):
@@ -165,9 +172,21 @@ def test_fresh_database_upgrades_to_current_schema(tmp_path):
     assert "regenerate_videos" in {
         column["name"] for column in inspector.get_columns("production_runs")
     }
-    assert "guidance_asset_ids" in {
-        column["name"] for column in inspector.get_columns("shot_cameras")
+    shot_columns = {column["name"] for column in inspector.get_columns("shots")}
+    assert {"composition", "camera_motion", "image_prompt"} <= shot_columns
+    usage_columns = {
+        column["name"] for column in inspector.get_columns("asset_variant_usages")
     }
+    assert {
+        "effective_variant_id",
+        "effective_state_id",
+        "asset_id",
+    } <= usage_columns
+    assert {
+        "effective_representation_id",
+        "effective_representation_version",
+        "director_object_id",
+    }.isdisjoint(usage_columns)
 
 
 def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
@@ -189,8 +208,15 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
     assert "script_revisions" in inspector.get_table_names()
     assert "script_import_episodes" in inspector.get_table_names()
     assert "model_invocations" in inspector.get_table_names()
-    for table in ("director_stages", "director_objects", "shot_cameras", "director_revisions", "director_suggestions"):
-        assert table in inspector.get_table_names()
+    retired_tables = {
+        "director_stages",
+        "director_objects",
+        "shot_cameras",
+        "director_revisions",
+        "director_suggestions",
+        "character_3d_representations",
+    }
+    assert retired_tables.isdisjoint(inspector.get_table_names())
     for table in ("volumes", "storylines", "storyline_events"):
         assert table in inspector.get_table_names()
     for table in ("asset_variants", "asset_variant_states", "asset_variant_usages"):
@@ -204,9 +230,21 @@ def test_legacy_database_is_stamped_and_upgraded_without_data_loss(tmp_path):
     assert "active_video_asset_id" in {
         column["name"] for column in inspector.get_columns("shots")
     }
-    assert "guidance_asset_ids" in {
-        column["name"] for column in inspector.get_columns("shot_cameras")
+    shot_columns = {column["name"] for column in inspector.get_columns("shots")}
+    assert {"composition", "camera_motion", "image_prompt"} <= shot_columns
+    usage_columns = {
+        column["name"] for column in inspector.get_columns("asset_variant_usages")
     }
+    assert {
+        "effective_variant_id",
+        "effective_state_id",
+        "asset_id",
+    } <= usage_columns
+    assert {
+        "effective_representation_id",
+        "effective_representation_version",
+        "director_object_id",
+    }.isdisjoint(usage_columns)
 
 
 def test_single_script_migration_merges_duplicate_documents_and_adds_constraint(tmp_path):

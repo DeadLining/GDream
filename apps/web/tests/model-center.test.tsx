@@ -19,7 +19,6 @@ const health = {
     image: {status: 'healthy', model: 'gpt-image-2', host: '192.168.18.80', elapsed_ms: 35, last_invocation_elapsed_ms: 9200, error: null},
     speech: {status: 'unavailable', model: 'Qwen3-TTS', host: '192.168.18.94', elapsed_ms: 0, last_invocation_elapsed_ms: null, error: 'Mock SSH is not running'},
     video: {status: 'disabled', model: 'MiniMax-Hailuo-02', host: 'api.minimaxi.com', elapsed_ms: 0, last_invocation_elapsed_ms: null, error: null},
-    model3d: {status: 'disabled', model: 'fal-ai/triposr', host: 'fal.run', elapsed_ms: 0, last_invocation_elapsed_ms: null, error: null},
   },
   infrastructure: {
     api: {status: 'healthy'},
@@ -43,7 +42,6 @@ describe('ModelCenter', () => {
       image: {name: 'Internal GPT Image', enabled: true, base_url: 'http://192.168.18.80:14000', model: 'gpt-image-2', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-****'},
       tts: {name: 'Qwen TTS', enabled: true, base_url: 'http://192.168.18.94:18080', model: 'Qwen3-TTS', ssh_host: 'ai-comic-tts', api_key_configured: false, api_key_masked: ''},
       video: {name: 'MiniMax Video', enabled: false, base_url: 'https://api.minimaxi.com', model: 'MiniMax-Hailuo-02', ssh_host: '', api_key_configured: true, api_key_masked: 'sk-****'},
-      model3d: {name: 'fal.ai TripoSR', enabled: false, base_url: 'https://fal.run', model: 'fal-ai/triposr', ssh_host: '', api_key_configured: false, api_key_masked: ''},
       persistence: {status: 'saved', file_path: 'data/provider-channels.json'}, reloaded_at: '',
     });
     mocks.getMockSshHosts.mockResolvedValue([]);
@@ -61,7 +59,7 @@ describe('ModelCenter', () => {
     expect(screen.getByText(/排队 2/)).toBeVisible();
     expect(screen.getByText('provider_timeout')).toBeVisible();
     expect(screen.getByRole('heading', {name: '渠道配置'})).toBeVisible();
-    expect(await screen.findAllByRole('form')).toHaveLength(5);
+    expect(await screen.findAllByRole('form')).toHaveLength(4);
   });
 
   it('keeps runtime health available when invocation history fails', async () => {
@@ -72,7 +70,7 @@ describe('ModelCenter', () => {
     expect(await screen.findByText('MiniMax-M3')).toBeVisible();
     expect(screen.getByText('运行正常')).toBeVisible();
     expect(screen.getByText('调用记录暂时不可用')).toBeVisible();
-    expect(await screen.findAllByRole('form')).toHaveLength(5);
+    expect(await screen.findAllByRole('form')).toHaveLength(4);
   });
 
   it('keeps invocation history available when runtime health fails', async () => {
@@ -83,7 +81,7 @@ describe('ModelCenter', () => {
     expect(await screen.findByText('provider_timeout')).toBeVisible();
     expect(screen.getByRole('heading', {name: '最近调用'})).toBeVisible();
     expect(screen.getByText('运行状态暂时不可用')).toBeVisible();
-    expect(await screen.findAllByRole('form')).toHaveLength(5);
+    expect(await screen.findAllByRole('form')).toHaveLength(4);
   });
 
   it('retries a retryable invocation and refreshes runtime state', async () => {

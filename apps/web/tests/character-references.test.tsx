@@ -12,15 +12,12 @@ const mocks=vi.hoisted(()=>({
   assetRequirements:vi.fn(),syncAssetRequirements:vi.fn(),bindLibraryAsset:vi.fn(),
   shotGenerationReadiness:vi.fn(),
   suggestVariant:vi.fn(),
-  representations:vi.fn(),uploadRepresentation:vi.fn(),
-  generateModel3D:vi.fn(),latestModel3D:vi.fn(),approveModel3D:vi.fn(),
   characterImpact:vi.fn(),variantImpact:vi.fn(),stateImpact:vi.fn(),createProductionRun:vi.fn(),
   createVariant:vi.fn(),createState:vi.fn(),updateVariant:vi.fn(),updateState:vi.fn(),deleteVariant:vi.fn(),deleteState:vi.fn(),
 }));
 vi.mock('../lib/api',()=>({
   listCharacterReferences:mocks.list,
   listAssetVariants:mocks.variants,
-  listCharacter3DRepresentations:mocks.representations,
   createCharacter:mocks.createCharacter,
   updateCharacter:mocks.updateCharacter,
   listLibraryAssets:mocks.libraryAssets,
@@ -32,10 +29,6 @@ vi.mock('../lib/api',()=>({
   bindLibraryAssetToScene:mocks.bindLibraryAsset,
   getShotGenerationReadiness:mocks.shotGenerationReadiness,
   uploadCharacterReference:mocks.upload,
-  uploadCharacter3DRepresentation:mocks.uploadRepresentation,
-  generateModel3D:mocks.generateModel3D,
-  getLatestModel3DJob:mocks.latestModel3D,
-  approveModel3DJob:mocks.approveModel3D,
   getCharacterImpact:mocks.characterImpact,
   getAssetVariantImpact:mocks.variantImpact,
   getAssetVariantStateImpact:mocks.stateImpact,
@@ -55,7 +48,6 @@ vi.mock('../lib/api',()=>({
   mediaUrl:(path:string)=>path,
 }));
 vi.mock('../lib/jobs',()=>({pollJob:mocks.pollJob}));
-vi.mock('../components/assets/CharacterModelPreview',()=>({CharacterModelPreview:({url}:{url:string})=><div data-testid="character-model-preview" data-url={url}/>}));
 
 const character={id:'c1',project_id:'p1',name:'林夏',role:'主角',body_plan:'humanoid' as const,appearance_bible:'黑色风衣',personality:'冷静',continuity_rules:'银色耳钉',negative_constraints:'',voice_speaker:'v1',voice_instruction:'',created_at:'',updated_at:''};
 const reference={id:'r1',character_id:'c1',reference_type:'primary' as const,label:'主参考',position:0,is_active:false,review_status:'draft' as const,created_at:'',asset:{id:'a1',kind:'character-reference',media_url:'/media/a.png',media_type:'image/png',provider:'upload',model:'local',generation_attempt:1,review_status:'draft',width:1,height:1,duration_seconds:null,created_at:''}};
@@ -72,10 +64,6 @@ beforeEach(()=>{
   vi.clearAllMocks();
   mocks.list.mockResolvedValue(allReferences);
   mocks.variants.mockResolvedValue(variants);
-  mocks.representations.mockResolvedValue([]);
-  mocks.latestModel3D.mockResolvedValue(null);
-  mocks.generateModel3D.mockResolvedValue({job_id:'job-3d',capability:'model3d',status:'queued'});
-  mocks.approveModel3D.mockResolvedValue({review_status:'approved',is_active:true});
   mocks.characterImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
   mocks.variantImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
   mocks.stateImpact.mockResolvedValue({shots:[],assets:[],usage_count:0,episodes:[]});
@@ -84,7 +72,7 @@ beforeEach(()=>{
   mocks.assetRequirements.mockResolvedValue([]);
   mocks.syncAssetRequirements.mockResolvedValue([]);
   mocks.bindLibraryAsset.mockResolvedValue(undefined);
-  mocks.shotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:false,blockers:['missing_background','director_preview_missing'],requirement_ids:['req-scene']});
+  mocks.shotGenerationReadiness.mockResolvedValue({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:false,blockers:['missing_background',],requirement_ids:['req-scene']});
   mocks.createCharacter.mockResolvedValue({...character,id:'c-new',name:'周然',role:'搭档'});
   mocks.updateCharacter.mockResolvedValue({...character,name:'林夏·修订',role:'调查员'});
   mocks.deleteReference.mockResolvedValue(undefined);
@@ -157,21 +145,21 @@ it('shows project-level missing props and creates the selected requirement',asyn
   expect(mocks.syncAssetRequirements).toHaveBeenCalledWith('p1');
 });
 
-it('refreshes shot readiness and opens the originating shot in the director',async()=>{
+it('refreshes shot readiness and returns to the originating shot',async()=>{
   const requirement={id:'req-scene',project_id:'p1',script_revision_id:'rev-1',kind:'scene',canonical_key:'scene:scene-1',name:'雨夜天台',description:'霓虹灯下的天台',required:true,status:'pending',binding_type:'library_asset',binding_id:'la1',source_context:{scene_ids:['scene-1'],shot_ids:['shot-1']},metadata:{},created_at:'',updated_at:''};
   const asset={id:'la1',project_id:'p1',kind:'scene',name:'雨夜天台',description:'霓虹灯下的天台',tags:['雨夜'],metadata:{},media_asset_id:'media-1',media_url:'/media/scene.png',media_type:'image/png',created_at:'',updated_at:''};
-  const onOpenDirector=vi.fn();
+  const onReturnToShot=vi.fn();
   mocks.libraryAssets.mockResolvedValue([asset]);
   mocks.assetRequirements.mockResolvedValue([requirement]);
   mocks.syncAssetRequirements.mockResolvedValue([{...requirement,status:'ready'}]);
-  mocks.shotGenerationReadiness.mockResolvedValueOnce({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:false,blocking_ready:false,camera_ready:false,blockers:['missing_background','blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']}).mockResolvedValue({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:true,blocking_ready:false,camera_ready:false,blockers:['blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']});
+  mocks.shotGenerationReadiness.mockResolvedValueOnce({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:false,blocking_ready:false,camera_ready:false,blockers:['missing_background',],requirement_ids:['req-scene']}).mockResolvedValue({shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:true,blocking_ready:false,camera_ready:false,blockers:[],requirement_ids:['req-scene']});
 
-  render(<CharacterWorkspace projectId="p1" characters={[]} requestedAssetRequest={{target:'scene',shotId:'shot-1',requirementIds:['req-scene']}} onOpenDirector={onOpenDirector}/>);
+  render(<CharacterWorkspace projectId="p1" characters={[]} requestedAssetRequest={{target:'scene',shotId:'shot-1',requirementIds:['req-scene']}} onReturnToShot={onReturnToShot}/>);
   await userEvent.click(await screen.findByRole('button',{name:'绑定到当前场景'}));
-  await userEvent.click(await screen.findByRole('button',{name:'打开 3D 导演台'}));
+  await userEvent.click(await screen.findByRole('button',{name:'返回原镜头'}));
 
   expect(mocks.shotGenerationReadiness).toHaveBeenCalledTimes(2);
-  expect(onOpenDirector).toHaveBeenCalledWith('shot-1');
+  expect(onReturnToShot).toHaveBeenCalledWith('shot-1');
 });
 
 it('creates and edits characters from the asset catalog',async()=>{
@@ -357,109 +345,6 @@ it('opens and updates the requested asset category',async()=>{
   expect(await screen.findByRole('heading',{name:'道具资产'})).toBeVisible();
 });
 
-it('uploads a GLB proxy from the character master setting',async()=>{
-  const representation={id:'rep-1',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-1',label:'林夏代理',format:'glb',version:1,is_active:true,review_status:'approved',model_url:'/media/linxia.glb',mesh_count:1,triangle_count:1200,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
-  mocks.uploadRepresentation.mockResolvedValue(representation);
-  mocks.representations.mockResolvedValueOnce([]).mockResolvedValue([representation]);
-  const user=userEvent.setup();
-  render(<CharacterWorkspace characters={[character]}/>);
-  await user.click(await screen.findByRole('button',{name:/林夏/}));
-  const file=new File([new Uint8Array([1,2,3])],'linxia.glb',{type:'model/gltf-binary'});
-
-  await user.upload(screen.getByLabelText('上传角色 3D 模型'),file);
-
-  await waitFor(()=>expect(mocks.uploadRepresentation).toHaveBeenCalledWith('c1',file));
-  expect(await screen.findByText('林夏代理')).toBeVisible();
-  expect(screen.getByText('1,200 三角面')).toBeVisible();
-});
-
-it('shows detected skeleton, animation clip, and morph target details for a GLB',async()=>{
-  const representation={id:'rep-rigged',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-rigged',label:'林夏绑定模型',format:'glb',version:2,is_active:true,review_status:'approved',model_url:'/media/linxia-rigged.glb',mesh_count:1,triangle_count:3200,material_count:2,has_skeleton:true,bounds:{},metadata:{skin_count:1,joint_count:24,skeletons:[{name:'Humanoid',root:'Root',joint_count:24,joints:['Hips','Spine']}],animation_clips:[{name:'Walk',duration_seconds:2.5,channel_count:12,target_nodes:['Hips'],target_paths:['translation']}],morph_targets:['Smile','Blink']},created_at:'',updated_at:''};
-  mocks.representations.mockResolvedValue([representation]);
-  render(<CharacterWorkspace characters={[character]}/>);
-
-  await userEvent.click(await screen.findByRole('button',{name:/林夏/}));
-
-  expect(await screen.findByText('1 套骨骼 · 24 个关节')).toBeVisible();
-  expect(screen.getByText('动画片段：Walk（2.5 秒）')).toBeVisible();
-  expect(screen.getByText('表情目标：Smile、Blink')).toBeVisible();
-});
-
-it('uploads a GLB for a selected episode state scope',async()=>{
-  const stateRepresentation={id:'rep-state',character_id:'c1',variant_id:'v2',state_id:'s1',asset_id:'model-state',label:'左臂擦伤代理',format:'glb',version:2,is_active:true,review_status:'approved',model_url:'/media/injured.glb',mesh_count:1,triangle_count:1400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
-  mocks.uploadRepresentation.mockResolvedValue(stateRepresentation);
-  mocks.representations.mockResolvedValueOnce([]).mockResolvedValue([stateRepresentation]);
-  const user=userEvent.setup();
-  render(<CharacterWorkspace characters={[character]}/>);
-  await user.click(await screen.findByRole('button',{name:/林夏/}));
-  await user.selectOptions(screen.getByLabelText('3D 模型作用域'),'state:s1');
-  const file=new File([new Uint8Array([1,2,3])],'injured.glb',{type:'model/gltf-binary'});
-
-  await user.upload(screen.getByLabelText('上传角色 3D 模型'),file);
-
-  await waitFor(()=>expect(mocks.uploadRepresentation).toHaveBeenCalledWith('c1',file,'','v2','s1'));
-  expect(await screen.findByText('左臂擦伤代理')).toBeVisible();
-});
-
-it('generates a reviewable 3D candidate for the selected state scope',async()=>{
-  const candidate={id:'rep-state-ai',character_id:'c1',variant_id:'v2',state_id:'s1',asset_id:'model-state-ai',label:'AI 生成 3D 候选',format:'glb',version:3,is_active:false,review_status:'draft',model_url:'/media/injured-ai.glb',mesh_count:1,triangle_count:1800,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
-  mocks.pollJob.mockResolvedValue({...job('succeeded',{capability:'model3d',representation_id:'rep-state-ai',model_url:'/media/injured-ai.glb',review_status:'draft',is_active:false}),id:'job-3d',operation:'runtime_model3d'});
-  const user=userEvent.setup();
-  render(<CharacterWorkspace characters={[character]}/>);
-  await user.click(await screen.findByRole('button',{name:/林夏/}));
-  await user.selectOptions(screen.getByLabelText('3D 模型作用域'),'state:s1');
-  mocks.representations.mockResolvedValue([candidate]);
-
-  await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
-
-  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith(
-    'character','c1','a2','v2','s1',['a2','a3','a4'],
-  ));
-  expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
-});
-
-it('generates a reviewable 3D candidate from an existing character reference',async()=>{
-  const candidate={id:'rep-ai',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-ai',label:'AI 生成 3D 候选',format:'glb',version:2,is_active:false,review_status:'draft',model_url:'/media/linxia-ai.glb',mesh_count:1,triangle_count:2400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
-  mocks.pollJob.mockResolvedValue({...job('succeeded',{capability:'model3d',representation_id:'rep-ai',model_url:'/media/linxia-ai.glb',review_status:'draft',is_active:false}),id:'job-3d',operation:'runtime_model3d'});
-  const user=userEvent.setup();
-  render(<CharacterWorkspace characters={[character]}/>);
-  await user.click(await screen.findByRole('button',{name:/林夏/}));
-  mocks.representations.mockResolvedValue([candidate]);
-
-  await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
-
-  expect(screen.getByText('将使用 3 张已批准视图')).toBeVisible();
-  await waitFor(()=>expect(mocks.generateModel3D).toHaveBeenCalledWith(
-    'character','c1','a2',null,null,['a2','a3','a4'],
-  ));
-  expect(await screen.findByText('AI 生成 3D 候选')).toBeVisible();
-  await user.click(screen.getByRole('button',{name:'批准使用 3D 候选'}));
-  expect(await screen.findByRole('dialog',{name:'确认 3D 变更影响'})).toBeVisible();
-  expect(mocks.characterImpact).toHaveBeenCalledWith('c1');
-  expect(mocks.approveModel3D).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button',{name:'仅批准'}));
-  expect(mocks.approveModel3D).toHaveBeenCalledWith('job-3d');
-});
-
-it('approves a 3D candidate before regenerating its affected panels',async()=>{
-  const affected={shots:['shot-1'],assets:[],usage_count:1,episodes:[{episode_id:'e1',episode_title:'第一集',scenes:[{scene_id:'sc1',scene_label:'场景 01 · 巷道',shots:[{id:'shot-1',position:1,composition:'近景'}]}]}]};
-  const candidate={id:'rep-ai',character_id:'c1',variant_id:null,state_id:null,asset_id:'model-ai',label:'AI 生成 3D 候选',format:'glb',version:2,is_active:false,review_status:'draft',model_url:'/media/linxia-ai.glb',mesh_count:1,triangle_count:2400,material_count:1,has_skeleton:false,bounds:{},created_at:'',updated_at:''};
-  const order:string[]=[];
-  mocks.representations.mockResolvedValue([candidate]);
-  mocks.latestModel3D.mockResolvedValue({...job('succeeded',{representation_id:'rep-ai',is_active:false}),id:'job-3d'});
-  mocks.characterImpact.mockResolvedValue(affected);
-  mocks.approveModel3D.mockImplementation(async()=>{order.push('approve');return{review_status:'approved',is_active:true};});
-  mocks.createProductionRun.mockImplementation(async()=>{order.push('regenerate');return{id:'run-impact'};});
-  const user=userEvent.setup();
-  render(<CharacterWorkspace characters={[character]}/>);
-  await user.click(await screen.findByRole('button',{name:/林夏/}));
-  await user.click(await screen.findByRole('button',{name:'批准使用 3D 候选'}));
-  await user.click(await screen.findByRole('button',{name:'批准并重生成'}));
-
-  expect(order).toEqual(['approve','regenerate']);
-  expect(await screen.findByText('3D 候选已批准，已启动 1 集的画面重生成')).toBeVisible();
-});
-
 it('starts one forced panel run per affected episode',async()=>{
   const affected={shots:['shot-1','shot-2'],assets:[],usage_count:2,episodes:[
     {episode_id:'e1',episode_title:'第一集',scenes:[{scene_id:'sc1',scene_label:'场景 01 · 巷道',shots:[{id:'shot-1',position:1,composition:'近景'}]}]},
@@ -477,14 +362,6 @@ it('starts one forced panel run per affected episode',async()=>{
   expect(mocks.createProductionRun).toHaveBeenNthCalledWith(1,'e1',{stages:['panels'],shot_ids:['shot-1'],concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
   expect(mocks.createProductionRun).toHaveBeenNthCalledWith(2,'e2',{stages:['panels'],shot_ids:['shot-2'],concurrency:2,regenerate_panels:true,regenerate_speech:false,regenerate_videos:false});
   expect(await screen.findByText('已启动 1 集，1 集失败：第二集：队列不可用')).toBeVisible();
-});
-
-it('does not generate 3D from unapproved character references',async()=>{
-  mocks.list.mockResolvedValue(allReferences.map(item=>({...item,review_status:'draft',is_active:false})));
-  render(<CharacterWorkspace characters={[character]}/>);
-  await userEvent.click(await screen.findByRole('button',{name:/林夏/}));
-
-  expect(screen.getByRole('button',{name:'根据参考图生成 3D'})).toBeDisabled();
 });
 
 it('loads every character asset summary for catalog filters',async()=>{

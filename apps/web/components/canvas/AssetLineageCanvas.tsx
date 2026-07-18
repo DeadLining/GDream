@@ -52,7 +52,7 @@ type UsageDraft = {
 type ShotOption = {id: string; label: string};
 
 const usageBindingLabels:Record<AssetVariantUsage['binding_status'],string>={
-  pending:'待解析',resolved:'已解析',fallback:'已回退',missing_representation:'缺少 3D',missing_director_object:'缺少导演对象',invalid_scope:'作用域失效',
+  pending:'待解析',resolved:'已解析',fallback:'已回退',invalid_scope:'作用域失效',
 };
 
 type Selection =
@@ -304,9 +304,7 @@ export function AssetLineageCanvas({
       title: `镜头 ${selected.item.shot_id}`,
       inherited: selected.variant.label,
       overridden: `${selected.item.usage_kind} · ${usageBindingLabels[selected.item.binding_status]}`,
-      impact: selected.item.effective_representation_version
-        ? `3D V${selected.item.effective_representation_version} · ${selected.item.director_object_id?'导演对象已绑定':'导演对象未绑定'}`
-        : '尚未绑定有效 3D',
+      impact: selected.item.asset_id ? `已绑定素材 ${selected.item.asset_id}` : '使用角色设定与变体约束',
       version: selected.variant.version,
     };
   }, [selected]);

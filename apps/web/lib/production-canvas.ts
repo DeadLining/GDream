@@ -1,10 +1,9 @@
 import type {EpisodeProductionGraph,ProductionCanvasLayout} from './types';
 import ELK from 'elkjs/lib/elk.bundled.js';
-import {directorNodePresentation} from './director-readiness-presentation';
 
 export type ProductionCanvasNode={
   id:string;
-  type:'scene-group'|'shot'|'asset'|'director'|'panel-render'|'dialogue'|'tts'|'video-render'|'visual-review';
+  type:'scene-group'|'shot'|'asset'|'panel-render'|'dialogue'|'tts'|'video-render'|'visual-review';
   position:{x:number;y:number};
   parentId?:string;
   extent?:'parent';
@@ -27,7 +26,6 @@ export const productionNodeId={
   shot:(id:string)=>`shot:${id}`,
   variant:(id:string)=>`asset-variant:${id}`,
   state:(id:string)=>`asset-state:${id}`,
-  director:(shotId:string)=>`director:${shotId}`,
   panelRender:(shotId:string,assetId:string|null)=>`panel-render:${shotId}:${assetId??'pending'}`,
   dialogue:(shotId:string)=>`dialogue:${shotId}`,
   tts:(shotId:string)=>`tts:${shotId}`,
@@ -61,7 +59,6 @@ export function buildProductionCanvasGraph(
     const columns=Math.min(2,Math.max(1,sceneShots.length));
     nodes.push({id:productionNodeId.shot(shot.id),type:'shot',parentId:productionNodeId.scene(shot.scene_id),extent:'parent',position:{x:24+(index%columns)*204,y:58+Math.floor(index/columns)*136},data:{...shot}});
     if(!expanded.has(shot.id))return;
-    const directorId=productionNodeId.director(shot.id);
     const panelId=productionNodeId.panelRender(shot.id,shot.active_panel_asset_id);
     const dialogueId=productionNodeId.dialogue(shot.id);
     const ttsId=productionNodeId.tts(shot.id);
@@ -74,9 +71,7 @@ export function buildProductionCanvasGraph(
     const reviewBlocked=!hasPanel;
 	    const videoBlocked=!hasPanel||!reviewApproved;
 	    const videoBlockedReason=!hasPanel?'请先生成分镜画面':!reviewApproved?'请先完成视觉审阅':null;
-	    const directorPresentation=directorNodePresentation(shot);
 	    nodes.push(
-	      {id:directorId,type:'director',position:{x:820,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,optional:false,...directorPresentation}},
       {id:panelId,type:'panel-render',position:{x:1050,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,assetId:shot.active_panel_asset_id,mediaUrl:shot.active_panel_media_url,statusLabel:shot.active_panel_asset_id?'候选已生成':'待生成',executorLabel:panelBinding?'自定义工作流':'默认图片执行器',workflowLabel:panelBinding?`${panelBinding.workflow_id} · v${panelBinding.workflow_version}`:null}},
       {id:reviewId,type:'visual-review',position:{x:1280,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,status:shot.review_status,blocked:reviewBlocked,blockedReason:reviewBlocked?'请先生成分镜画面':null,statusLabel:reviewBlocked?'等待画面':reviewApproved?'已通过':'待审阅'}},
       {id:videoId,type:'video-render',position:{x:1510,y:80+index*188},data:{shotId:shot.id,shotPosition:shot.position,assetId:shot.active_video_asset_id,mediaUrl:shot.active_video_media_url,blocked:videoBlocked,blockedReason:videoBlockedReason,statusLabel:shot.active_video_asset_id?'已生成':shot.video_render_status==='running'?'生成中':videoBlocked?'已锁定':'待生成',executorLabel:videoBinding?'自定义工作流':'默认视频执行器',workflowLabel:videoBinding?`${videoBinding.workflow_id} · v${videoBinding.workflow_version}`:null}},
@@ -86,8 +81,6 @@ export function buildProductionCanvasGraph(
     const shotId=productionNodeId.shot(shot.id);
     edges.push(
       {id:`dependency:${shotId}:${panelId}`,source:shotId,target:panelId,sourceHandle:'production-main',targetHandle:'production-main',type:'dependency',data:{lineStyle:'solid'}},
-      {id:`dependency:${shotId}:${directorId}`,source:shotId,target:directorId,sourceHandle:'director-branch',targetHandle:'production-main',type:'dependency',data:{lineStyle:'dashed'}},
-      {id:`dependency:${directorId}:${panelId}`,source:directorId,target:panelId,sourceHandle:'production-main',targetHandle:'director-branch',type:'dependency',data:{lineStyle:'dashed'}},
       {id:`${reviewBlocked?'blocked':'dependency'}:${panelId}:${reviewId}`,source:panelId,target:reviewId,sourceHandle:'production-main',targetHandle:'production-main',type:reviewBlocked?'blocked':'dependency',data:{lineStyle:reviewBlocked?'dashed':'solid'}},
       {id:`${videoBlocked?'blocked':'dependency'}:${reviewId}:${videoId}`,source:reviewId,target:videoId,sourceHandle:'production-main',targetHandle:'production-main',type:videoBlocked?'blocked':'dependency',data:{lineStyle:videoBlocked?'dashed':'solid'}},
       {id:`dependency:${shotId}:${dialogueId}`,source:shotId,target:dialogueId,sourceHandle:'dialogue-branch',targetHandle:'production-main',type:'dependency',data:{lineStyle:'solid'}},
@@ -130,7 +123,7 @@ const nodeSize=(type:ProductionCanvasNode['type'])=>{
   if(type==='scene-group')return {width:456,height:214};
   if(type==='asset')return {width:184,height:142};
   if(type==='shot')return {width:180,height:116};
-  if(['director','panel-render','dialogue','tts','video-render','visual-review'].includes(type))return {width:188,height:112};
+  if(['panel-render','dialogue','tts','video-render','visual-review'].includes(type))return {width:188,height:112};
   return {width:152,height:92};
 };
 

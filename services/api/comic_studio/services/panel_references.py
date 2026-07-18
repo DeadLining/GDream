@@ -12,8 +12,6 @@ from comic_studio.services.shot_inputs import CompiledShotInput
 
 PanelReferenceRole = Literal[
     "previous_shot_tail",
-    "director_preview",
-    "director_guidance",
     "character_reference",
     "bound_asset",
 ]
@@ -31,12 +29,6 @@ CHARACTER_REFERENCE_LABELS = {
     "primary": "主参考图",
     "front": "正面参考图",
     "outfit": "服装参考图",
-}
-DIRECTOR_GUIDANCE_LABELS = {
-    "silhouette": "轮廓引导",
-    "skeleton_pose": "骨架引导",
-    "depth": "深度引导",
-    "object_mask": "对象遮罩",
 }
 LIBRARY_ASSET_KIND_LABELS = {
     "scene": "场景背景",
@@ -68,36 +60,7 @@ def resolve_panel_generation_references(
         )
 
     non_tail: list[PanelGenerationReference] = []
-    if compiled.director_preview_asset_id:
-        asset = session.get(models.Asset, compiled.director_preview_asset_id)
-        if asset is not None:
-            non_tail.append(
-                PanelGenerationReference(
-                    asset,
-                    "director_preview",
-                    f"镜头 {shot.position:02d} · 3D 导演构图",
-                )
-            )
-    for guidance_kind, asset_id in compiled.director_guidance_asset_ids:
-        asset = session.get(models.Asset, asset_id)
-        if asset is not None:
-            non_tail.append(
-                PanelGenerationReference(
-                    asset,
-                    "director_guidance",
-                    f"镜头 {shot.position:02d} · "
-                    f"{DIRECTOR_GUIDANCE_LABELS.get(guidance_kind, '3D 导演引导')}",
-                    guidance_kind=guidance_kind,
-                )
-            )
 
-    director_character_ids = [
-        item.get("source_id")
-        for item in compiled.snapshot.get("director", {}).get("objects", [])
-        if item.get("kind") == "character"
-        and item.get("source_type") == "character_reference"
-        and isinstance(item.get("source_id"), str)
-    ]
     character_ids = list(
         dict.fromkeys(
             [
@@ -108,7 +71,6 @@ def resolve_panel_generation_references(
                     if line.character_id is not None
                 ),
                 *sorted(compiled.character_ids),
-                *director_character_ids,
             ]
         )
     )

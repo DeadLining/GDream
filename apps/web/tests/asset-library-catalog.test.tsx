@@ -125,15 +125,13 @@ it('prefills and binds a newly created asset from the selected requirement',asyn
   expect(onBind).toHaveBeenCalledWith('la-new','req-prop');
 });
 
-it('offers the next director step after the shot assets become ready',async()=>{
-  const onReturn=vi.fn();const onOpenDirector=vi.fn();
+it('returns to the shot after its assets become ready',async()=>{
+  const onReturn=vi.fn();
   const readiness:ShotGenerationReadiness={shot_id:'shot-1',project_id:'p1',script_revision_id:'rev-1',ready:false,asset_ready:true,blocking_ready:false,camera_ready:false,blockers:['blocking_not_initialized','director_preview_missing'],requirement_ids:['req-scene']};
-  render(<AssetCatalogView characters={[]} character={null} references={[]} variants={[]} requestedCategory="scene" libraryAssets={assets} requirements={[{...sceneRequirement,status:'ready'}]} generationReadiness={readiness} onReturnToShot={onReturn} onOpenDirector={onOpenDirector} onSelect={vi.fn()} onOpen={vi.fn()}/>);
+  render(<AssetCatalogView characters={[]} character={null} references={[]} variants={[]} requestedCategory="scene" libraryAssets={assets} requirements={[{...sceneRequirement,status:'ready'}]} generationReadiness={readiness} onReturnToShot={onReturn} onSelect={vi.fn()} onOpen={vi.fn()}/>);
 
-  expect(screen.getByRole('status')).toHaveTextContent('资产已就绪，下一步完成导演站位与机位');
-  await userEvent.click(screen.getByRole('button',{name:'打开 3D 导演台'}));
+  expect(screen.getByRole('status')).toHaveTextContent('资产已就绪，可返回镜头继续完善构图和提示词');
   await userEvent.click(screen.getByRole('button',{name:'返回原镜头'}));
-  expect(onOpenDirector).toHaveBeenCalledTimes(1);
   expect(onReturn).toHaveBeenCalledTimes(1);
 });
 
@@ -169,22 +167,7 @@ it('uploads kind-specific media for a library asset',async()=>{
   expect(onUpload).toHaveBeenCalledWith('la4',file);
 
   await user.click(screen.getByRole('button',{name:'道具 1'}));
-  expect(screen.getByLabelText('上传道具媒体')).toHaveAttribute('accept',expect.stringContaining('.glb'));
-});
-
-it('generates and approves a 3D candidate for an image-backed prop',async()=>{
-  const user=userEvent.setup();
-  const onGenerate=vi.fn().mockResolvedValue({id:'job-prop',operation:'runtime_model3d',target_type:'library_asset',target_id:'la3',status:'succeeded',progress:100,result_metadata:{model_url:'/media/watch.glb',review_status:'draft',is_active:false},error:'',retry_count:0,created_at:'',updated_at:''});
-  const onApprove=vi.fn().mockResolvedValue(undefined);
-  const imageProp=assets.map(item=>item.id==='la3'?{...item,media_asset_id:'ref-watch',media_url:'/media/watch.png',media_type:'image/png'}:item);
-  render(<AssetCatalogView characters={[character]} character={character} references={[]} variants={[]} libraryAssets={imageProp} onSelect={vi.fn()} onOpen={vi.fn()} onGenerateLibraryAssetModel={onGenerate} onApproveLibraryAssetModel={onApprove}/>);
-
-  await user.click(screen.getByRole('button',{name:'道具 1'}));
-  await user.click(screen.getByRole('button',{name:'根据参考图生成 3D'}));
-
-  expect(onGenerate).toHaveBeenCalledWith('la3','ref-watch');
-  await user.click(await screen.findByRole('button',{name:'批准使用 3D 候选'}));
-  expect(onApprove).toHaveBeenCalledWith('job-prop');
+  expect(screen.getByLabelText('上传道具媒体')).toHaveAttribute('accept','image/png,image/jpeg,image/webp');
 });
 
 it('shows scene thumbnails and generates a scene reference image with AI',async()=>{

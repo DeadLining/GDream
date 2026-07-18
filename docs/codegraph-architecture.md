@@ -19,7 +19,6 @@ Storylines are cross-episode tracking relationships. Asset lineage is:
 | `apps/web/app/` | Next.js entry points, global styles, design tokens |
 | `apps/web/components/Workspace.tsx` | Application composition and loaded project/episode state |
 | `apps/web/components/canvas/` | Storyline and asset-lineage canvas views |
-| `apps/web/components/director/` | 3D director workspace and scene manipulation |
 | `apps/web/components/*Workspace.tsx` | Feature-level page composition |
 | `apps/web/lib/api.ts` | HTTP transport functions |
 | `apps/web/lib/navigation.ts` | Shared page, section, and work-area navigation model |

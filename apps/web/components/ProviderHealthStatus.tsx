@@ -10,7 +10,6 @@ const providers: Array<{kind: ProviderHealthKind; label: string}> = [
   {kind: 'image', label: '画面生成'},
   {kind: 'tts', label: '语音合成'},
   {kind: 'video', label: '视频生成'},
-  {kind: 'model3d', label: '3D 生成'},
 ];
 
 const unavailableProvider: ProviderHealthItem = {

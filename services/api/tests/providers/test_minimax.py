@@ -118,31 +118,6 @@ VALID_DIRECTOR_SUGGESTION = {
 
 
 @pytest.mark.anyio
-async def test_minimax_director_suggestion_uses_schema_and_retries_invalid_json():
-    requests = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        requests.append(json.loads(request.content))
-        payload = {} if len(requests) == 1 else VALID_DIRECTOR_SUGGESTION
-        return httpx.Response(
-            200, json={"content": [{"type": "text", "text": json.dumps(payload)}]}
-        )
-
-    async with httpx.AsyncClient(
-        transport=httpx.MockTransport(handler),
-        base_url="https://api.minimaxi.com/anthropic",
-    ) as client:
-        result = await MiniMaxProvider(
-            api_key="secret", client=client
-        ).suggest_director({"stage": {"id": "stage-1"}})
-
-    assert len(requests) == 2
-    assert "object_patches" in requests[0]["messages"][0]["content"]
-    assert result.camera.focal_length_mm == 85
-    assert "validation" in requests[1]["messages"][-1]["content"].lower()
-
-
-@pytest.mark.anyio
 async def test_minimax_uses_m3_anthropic_contract():
     captured = {}
 

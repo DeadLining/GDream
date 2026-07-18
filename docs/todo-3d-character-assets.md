@@ -1,5 +1,7 @@
 # TODO: 3D Character Assets and Director Integration
 
+> **已废弃 (2026-07-18)**：3D 导演台子系统、`MODEL_3D` 能力，以及角色 GLB 上传、生成和预览链路已从产品中彻底移除。本文档仅作为历史参考，不再反映当前架构。
+
 ## Status
 
 - Priority: Active

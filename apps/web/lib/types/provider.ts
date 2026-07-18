@@ -3,7 +3,7 @@
 
 import type {JobStatus} from './common';
 
-export type ProviderHealthKind = 'llm' | 'image' | 'tts' | 'video' | 'model3d';
+export type ProviderHealthKind = 'llm' | 'image' | 'tts' | 'video';
 export type ProviderHealthItem = {
   status: 'ok' | 'failed' | 'disabled';
   model: string;
@@ -13,7 +13,7 @@ export type ProviderHealthItem = {
   error: string | null;
 };
 export type ProviderHealth = Record<ProviderHealthKind, ProviderHealthItem>;
-export type ProviderChannelKind = 'llm' | 'image' | 'tts' | 'video' | 'model3d';
+export type ProviderChannelKind = 'llm' | 'image' | 'tts' | 'video';
 export type ProviderChannelRead = {
   name: string;
   enabled: boolean;
@@ -45,7 +45,7 @@ export type ProviderChannelTestResult = {
   check_scope: 'model' | 'endpoint' | 'audio';
   error: string | null;
 };
-export type ModelCapability = 'text' | 'image' | 'speech' | 'video' | 'model3d';
+export type ModelCapability = 'text' | 'image' | 'speech' | 'video';
 export type ModelRuntimeCapabilityHealth = {
   status: 'healthy' | 'unavailable' | 'disabled';
   model: string;

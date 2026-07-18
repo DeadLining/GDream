@@ -6,26 +6,13 @@ import {
   deleteScript,
   deleteScriptRevision,
   generateCharacterReferenceSet,
-  generateModel3D,
   createCharacter,
   updateCharacter,
   deleteCharacterReference,
   listScripts,
   patchScript,
   restoreScriptRevision,
-  applyDirectorSuggestionToShot,
-  createDirectorStage,
-  createDirectorSuggestion,
-  deleteDirectorObject,
-  getDirectorStage,
   getShotGenerationReadiness,
-  inheritDirectorBlocking,
-  listDirectorRevisions,
-  restoreDirectorRevision,
-  updateDirectorStage,
-  updateDirectorCamera,
-  uploadDirectorPreview,
-  uploadDirectorGuidance,
   createVolume,
   deleteVolume,
   createStoryline,
@@ -206,39 +193,7 @@ describe('character reference api', () => {
       }),
     }));
   });
-
-  it('passes approved multi-view references to character 3D generation', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      job_id: 'job-3d',
-      capability: 'model3d',
-      status: 'queued',
-    }), {
-      status: 202,
-      headers: {'content-type': 'application/json'},
-    }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await generateModel3D(
-      'character',
-      'character-1',
-      'asset-front',
-      null,
-      null,
-      ['asset-front', 'asset-side', 'asset-back'],
-    );
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/model-runtime/model3d', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({
-        target_type: 'character',
-        target_id: 'character-1',
-        reference_asset_id: 'asset-front',
-        reference_asset_ids: ['asset-front', 'asset-side', 'asset-back'],
-        variant_id: null,
-        state_id: null,
-      }),
-    }));
-  });
+;
 });
 
 describe('script library api', () => {
@@ -285,81 +240,6 @@ describe('script library api', () => {
   });
 });
 
-describe('director api', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('accepts a successful no-content object deletion', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {status:204})));
-
-    await expect(deleteDirectorObject('object-1', 3)).resolves.toBeUndefined();
-  });
-
-  it('uses scene, stage, camera, suggestion, and apply endpoints', async () => {
-    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
-    vi.stubGlobal('fetch',fetchMock);
-    await createDirectorStage('scene-1');
-    await getDirectorStage('scene-1');
-    await getShotGenerationReadiness('shot-1');
-    await updateDirectorCamera('stage-1','shot-1',2,{focal_length_mm:85});
-    await inheritDirectorBlocking('stage-1','shot-1',3);
-    await createDirectorSuggestion('stage-1','shot-1','shot_composition');
-    await applyDirectorSuggestionToShot('stage-1','shot-1','suggestion-1',['composition']);
-    expect(fetchMock.mock.calls.map(call=>String(call[0]))).toEqual([
-      '/api/scenes/scene-1/director-stage',
-      '/api/scenes/scene-1/director-stage',
-      '/api/shots/shot-1/generation-readiness',
-      '/api/director-stages/stage-1/shots/shot-1/camera',
-      '/api/director-stages/stage-1/shots/shot-1/inherit-blocking',
-      '/api/director-stages/stage-1/suggestions',
-      '/api/director-stages/stage-1/shots/shot-1/apply-to-shot',
-    ]);
-    expect(fetchMock.mock.calls[3][1]).toMatchObject({method:'PUT',body:JSON.stringify({expected_version:2,camera:{focal_length_mm:85}})});
-    expect(fetchMock.mock.calls[4][1]).toMatchObject({method:'POST',body:JSON.stringify({expected_version:3})});
-  });
-
-  it('updates director environment settings with optimistic locking',async()=>{
-    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:200,headers:{'content-type':'application/json'}}));
-    vi.stubGlobal('fetch',fetchMock);
-
-    await updateDirectorStage('stage-1',3,{background_color:'#112233',ground:'solid'});
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/director-stages/stage-1',expect.objectContaining({method:'PATCH',body:JSON.stringify({expected_version:3,stage:{environment:{background_color:'#112233',ground:'solid'}}})}));
-  });
-
-  it('lists and restores director revisions with optimistic locking',async()=>{
-    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify([]),{status:200,headers:{'content-type':'application/json'}}));
-    vi.stubGlobal('fetch',fetchMock);
-
-    await listDirectorRevisions('stage-1');
-    await restoreDirectorRevision('stage-1','revision-1',4);
-
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/director-stages/stage-1/revisions');
-    expect(fetchMock.mock.calls[1]).toEqual(['/api/director-stages/stage-1/revisions/revision-1/restore',expect.objectContaining({method:'POST',body:JSON.stringify({expected_version:4})})]);
-  });
-
-  it('uploads previews as multipart without forcing a JSON content type', async () => {
-    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
-    vi.stubGlobal('fetch',fetchMock);
-    const blob=new Blob(['png'],{type:'image/png'});
-    await uploadDirectorPreview('camera-1',blob);
-    const init=fetchMock.mock.calls[0][1] as RequestInit;
-    expect(init.method).toBe('POST');
-    expect(init.body).toBeInstanceOf(FormData);
-    expect(init.headers).toBeUndefined();
-  });
-
-  it('uploads typed director guidance as multipart', async () => {
-    const fetchMock=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({}),{status:201,headers:{'content-type':'application/json'}}));
-    vi.stubGlobal('fetch',fetchMock);
-    const blob=new Blob(['png'],{type:'image/png'});
-    await uploadDirectorGuidance('camera-1','skeleton_pose',blob);
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/director-cameras/camera-1/guidance/skeleton_pose');
-    expect((fetchMock.mock.calls[0][1] as RequestInit).body).toBeInstanceOf(FormData);
-
-    await uploadDirectorGuidance('camera-1','object_mask',blob);
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/director-cameras/camera-1/guidance/object_mask');
-  });
-});
 
 describe('narrative structure api', () => {
   afterEach(() => vi.unstubAllGlobals());

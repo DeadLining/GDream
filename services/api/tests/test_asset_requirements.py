@@ -159,8 +159,6 @@ def test_shot_generation_readiness_tracks_assets_blocking_and_preview(client):
         "missing_character_reference",
         "missing_background",
         "missing_required_prop",
-        "blocking_not_initialized",
-        "director_preview_missing",
     }
 
     with client.app.state.session_factory() as session:
@@ -205,51 +203,6 @@ def test_shot_generation_readiness_tracks_assets_blocking_and_preview(client):
                 ),
             ]
         )
-        preview = _media_asset(
-            session, project["id"], "director_preview", "director-preview"
-        )
-        stage = models.DirectorStage(
-            scene_id=ids["scene_id"],
-            version=1,
-            environment={"background_asset_id": scene_asset.id},
-        )
-        session.add(stage)
-        session.flush()
-        stage.objects.extend(
-            [
-                models.DirectorObject(
-                    kind="character",
-                    source_type="character_reference",
-                    source_id=ids["character_id"],
-                    label="张三",
-                    position=1,
-                    transform={
-                        "position": [-0.8, 0, 0],
-                        "rotation": [0, 0, 0],
-                        "scale": [1, 1, 1],
-                    },
-                ),
-                models.DirectorObject(
-                    kind="prop",
-                    source_type="library_asset",
-                    source_id=prop_asset.id,
-                    label="银色怀表",
-                    position=2,
-                    transform={
-                        "position": [0, 0, 0],
-                        "rotation": [0, 0, 0],
-                        "scale": [1, 1, 1],
-                    },
-                ),
-            ]
-        )
-        stage.shot_cameras.append(
-            models.ShotCamera(
-                shot_id=ids["shot_id"],
-                version=1,
-                preview_asset_id=preview.id,
-            )
-        )
         session.commit()
 
     ready = client.get(f"/api/shots/{ids['shot_id']}/generation-readiness")
@@ -273,8 +226,6 @@ def test_direct_panel_endpoint_rejects_a_script_driven_blocked_shot(client):
                 "missing_character_reference",
                 "missing_background",
                 "missing_required_prop",
-                "blocking_not_initialized",
-                "director_preview_missing",
             ]
         },
     }
@@ -311,8 +262,6 @@ def test_model_runtime_image_endpoint_rejects_blocked_shot_before_queueing(clien
             "missing_character_reference",
             "missing_background",
             "missing_required_prop",
-            "blocking_not_initialized",
-            "director_preview_missing",
         ]
     }
     assert runtime.created is False

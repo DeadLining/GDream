@@ -12,7 +12,6 @@ ai-comic-studio 当前已经具备较强的工程化基础：
 - `ProductionRun` 批语义：并发、暂停、续跑、失败隔离
 - `ModelRuntime` 能力边界：TEXT / IMAGE / SPEECH / VIDEO
 - Alembic 有序迁移
-- 3D Director Stage
 - 就绪门、审核、发布、回收站
 
 本 roadmap 的目标不是推翻现有架构，而是在以下三个方向补强：

@@ -21,7 +21,6 @@ import {WorkspaceTabs, type WorkArea} from './WorkspaceTabs';
 import {ScriptLibrary} from './ScriptLibrary';
 import {CharacterWorkspace} from './CharacterWorkspace';
 import {DeleteEpisodeDialog} from './DeleteEpisodeDialog';
-import {DirectorWorkspace} from './director/DirectorWorkspace';
 import {SceneWorkspace} from './SceneWorkspace';
 import {VisualReviewWorkspace} from './VisualReviewWorkspace';
 import {ProductionDialogueWorkspace} from './production-canvas/ProductionDialogueWorkspace';
@@ -50,7 +49,6 @@ export function Workspace() {
   const [readinessError, setReadinessError] = useState('');
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [productionReviewShotId,setProductionReviewShotId]=useState<string|null>(null);
-  const [productionDirectorShotId,setProductionDirectorShotId]=useState<string|null>(null);
   const [productionDialogueShotId,setProductionDialogueShotId]=useState<string|null>(null);
   const [productionMedia,setProductionMedia]=useState<{shotId:string;mode:ProductionMediaMode}|null>(null);
   const [productionRefreshKey,setProductionRefreshKey]=useState(0);
@@ -104,7 +102,7 @@ export function Workspace() {
     setReadiness(current => loadedReadiness ?? (current?.episode_id === id ? current : null));
     if(loadedReadiness)setReadinessByEpisode(current=>({...current,[id]:loadedReadiness}));
     setReadinessError(readinessFailure);
-    if(!preserveSelection){setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);}
+    if(!preserveSelection){setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);}
     const loadedShots = loaded.scenes.flatMap(scene => scene.shots);
     setSelectedShotId(current => preserveSelection && loadedShots.some(shot => shot.id === current) ? current : loadedShots[0]?.id ?? null);
     localStorage.setItem('ai-comic-episode', id);
@@ -199,20 +197,19 @@ export function Workspace() {
   };
   const selectShot = (shot: Shot) => selectShotById(shot.id);
   const changeWorkArea = (next: WorkArea) => {
-    if(next==='production'&&workArea==='production'&&(productionReviewShotId||productionDirectorShotId||productionDialogueShotId||productionMedia)){setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);return true;}
-    if(next!=='production'){setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);}
+    if(next==='production'&&workArea==='production'&&(productionReviewShotId||productionDialogueShotId||productionMedia)){setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);return true;}
+    if(next!=='production'){setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);}
     if (next === workArea) return true;
     setWorkArea(next);
     return true;
   };
   const openAssets=(request:GenerationAssetRequest={target:'character',shotId:'',requirementIds:[]},returnTarget:GenerationReturnTarget|null=null)=>{
     setSearchTarget(null);
-    setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);
+    setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);
     setGenerationReturnTarget(returnTarget);
     setPlatformPage('project');setRequestedAssetRequest(request);setGlobalSection('assets');setWorkArea('characters');
   };
   const returnToAssetShot=(shotId:string)=>{setGenerationReturnTarget(null);setPlatformPage('project');setGlobalSection('episode');selectShotById(shotId);changeWorkArea('storyboard');};
-  const openAssetShotDirector=(shotId:string)=>{setPlatformPage('project');setGlobalSection('episode');selectShotById(shotId);if(generationReturnTarget?.surface==='media'||generationReturnTarget?.surface==='production'){setWorkArea('production');setProductionDirectorShotId(shotId);}else changeWorkArea('director');};
   const canLeaveSettings = () => {
     if ((platformPage !== 'models' && platformPage !== 'settings') || !settingsDirty) return true;
     const confirmed = window.confirm(platformPage === 'models' ? '模型渠道有未保存更改，确定离开吗？' : '作品设置有未保存更改，确定离开吗？');
@@ -236,7 +233,7 @@ export function Workspace() {
   const openReview = () => {
     const blockers = readiness?.blockers;
     const target=shots.find(shot=>shot.id===selectedShotId)??(blockers&&shots.find(shot=>blockers.unapproved_shots.includes(shot.id)||blockers.missing_panels.includes(shot.id)||blockers.stale_panels?.includes(shot.id)))??shots[0];
-    if(target){setSelectedShotId(target.id);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);setProductionReviewShotId(target.id);}
+    if(target){setSelectedShotId(target.id);setProductionDialogueShotId(null);setProductionMedia(null);setProductionReviewShotId(target.id);}
     setGlobalSection('episode');
     changeWorkArea('production');
   };
@@ -246,25 +243,6 @@ export function Workspace() {
   const updateShotInEpisode = async (updated: Shot) => {
     setEpisode(current => current ? {...current, scenes: current.scenes.map(scene => ({...scene, shots: scene.shots.map(item => item.id === updated.id ? updated : item)}))} : current);
     await refreshEpisode();
-  };
-  const returnDirectorShotToGeneration=async()=>{
-    const target=generationReturnTarget;
-    if(!target)return;
-    await refreshEpisode();
-    setProductionRefreshKey(value=>value+1);
-    setPlatformPage('project');setGlobalSection('episode');setSelectedShotId(target.shotId);
-    setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionDirectorShotId(null);
-    if(target.surface==='media'&&target.mode){setWorkArea('production');setProductionMedia({shotId:target.shotId,mode:target.mode});}
-    else if(target.surface==='production'){setWorkArea('production');setProductionMedia(null);}
-    else{setWorkArea('storyboard');setProductionMedia(null);}
-    setGenerationReturnTarget(null);
-  };
-  const completeDirectorScene=async()=>{
-    await refreshEpisode();
-    setProductionRefreshKey(value=>value+1);
-    setPlatformPage('project');setGlobalSection('episode');setWorkArea('production');
-    setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionDirectorShotId(null);setProductionMedia(null);
-    setGenerationReturnTarget(null);
   };
   const planEpisode = async () => {
     if (!episode || planStarting || (job && ['queued', 'running'].includes(job.status))) return;
@@ -328,23 +306,20 @@ export function Workspace() {
 
   const episodeIndex = project && episode ? project.episodes.findIndex(item => item.id === episode.id) : -1;
   const episodeNumber = episodeIndex >= 0 ? episodeIndex + 1 : undefined;
-  const productionDirectorScene=productionDirectorShotId?episode?.scenes.find(scene=>scene.shots.some(shot=>shot.id===productionDirectorShotId))??null:null;
   const productionDialogueShot=productionDialogueShotId?shots.find(shot=>shot.id===productionDialogueShotId)??null:null;
   const productionMediaShot=productionMedia?shots.find(shot=>shot.id===productionMedia.shotId)??null:null;
   let center;
   if (globalSection === 'overview' && project) center = <ProductOverview project={project} episode={episode} readiness={readiness} readinessByEpisode={readinessByEpisode} metrics={overviewMetrics} volumes={volumes} storylines={storylines} onOpenEpisode={id => {setGlobalSection('episode'); changeWorkArea('overview'); if (id !== episode?.id) void loadEpisode(id);}} onOpenScript={() => {setFocusedStorylineId(null);setGlobalSection('script'); changeWorkArea('import');}} onOpenStoryline={id=>{setFocusedStorylineId(id);setGlobalSection('script');changeWorkArea('import');}} onOpenAssets={()=>openAssets()} onCreateVolume={async data=>{await createVolume(project.id,data);setVolumes(await listVolumes(project.id));}} onUpdateVolume={async(id,data)=>{await updateVolume(id,data);setVolumes(await listVolumes(project.id));}} onDeleteVolume={async id=>{await deleteVolume(id);await loadProject(project.id);}} onMoveEpisode={async(id,volumeId)=>{await moveEpisodeToVolume(id,volumeId);await loadProject(project.id);}}/>;
   else if (workArea === 'import' && project) center = <ScriptLibrary projectId={project.id} onConfirmed={refreshOverviewSummary} initialView={focusedStorylineId?'storyline':'document'} initialStorylineId={focusedStorylineId??undefined}/>;
-  else if (workArea === 'characters' && project) center = <CharacterWorkspace projectId={project.id} characters={project.characters} episodes={project.episodes} requestedAssetRequest={requestedAssetRequest} searchTarget={searchTarget} onCharactersChanged={()=>loadProject(project.id)} onMetricsChanged={refreshOverviewSummary} onReturnToShot={returnToAssetShot} onOpenDirector={openAssetShotDirector}/>;
+  else if (workArea === 'characters' && project) center = <CharacterWorkspace projectId={project.id} characters={project.characters} episodes={project.episodes} requestedAssetRequest={requestedAssetRequest} searchTarget={searchTarget} onCharactersChanged={()=>loadProject(project.id)} onMetricsChanged={refreshOverviewSummary} onReturnToShot={returnToAssetShot}/>;
   else if (!projects.length) center = <main className="center-state"><h1>新建第一个项目</h1><p>建立故事设定后即可创建剧集和分镜。</p>{error && <p className="form-error">{error}</p>}<button className="command-button" onClick={() => setProjectDialog(true)}>创建项目</button></main>;
   else if (!episode) center = <Storyboard episode={null} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   else if (workArea === 'overview' && readiness) center = <EpisodeOverview episode={episode} episodeNumber={episodeNumber} readiness={readiness} onSelectShot={id => {selectShotById(id); setGlobalSection('episode'); changeWorkArea('storyboard');}} onOpenProduction={() => {setGlobalSection('episode'); changeWorkArea('production');}} onOpenReview={openReview}/>;
   else if (workArea === 'overview') center = <main className="episode-overview center-state"><h1>剧集总览暂不可用</h1><p>无法加载当前剧集的渲染准备状态。</p></main>;
   else if (workArea === 'scene') center = <SceneWorkspace episode={episode} initialSceneId={searchTarget?.kind==='scene'?searchTarget.scene_id??undefined:undefined} onEpisodeChanged={refreshEpisode} onOpenShot={id => {selectShotById(id); changeWorkArea('storyboard');}}/>;
-  else if (workArea === 'production') center = <div className="production-flow-shell"><div className="production-flow-canvas" hidden={Boolean(productionReviewShotId||productionDirectorShotId||productionDialogueShotId||productionMedia)}><ProductionPanel episodeId={episode.id} refreshKey={productionRefreshKey} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById} onSelectCanvasShot={setSelectedShotId} onOpenAssets={request=>openAssets(request,{shotId:request.shotId,surface:'production'})} onOpenVisualReview={id=>{setSelectedShotId(id);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);setProductionReviewShotId(id);}} onOpenDirector={id=>{setGenerationReturnTarget({shotId:id,surface:'production'});setSelectedShotId(id);setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia(null);setProductionDirectorShotId(id);}} onOpenDialogue={id=>{setSelectedShotId(id);setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionMedia(null);setProductionDialogueShotId(id);}} onOpenMedia={(id,mode)=>{setGenerationReturnTarget(null);setSelectedShotId(id);setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia({shotId:id,mode});}}/></div>{productionReviewShotId&&<div className="production-flow-review"><VisualReviewWorkspace episode={episode} selectedShotId={productionReviewShotId} onBackToProduction={()=>setProductionReviewShotId(null)} onCandidateAccepted={async()=>{await refreshEpisode();setProductionRefreshKey(value=>value+1);}}/></div>}{productionDirectorShotId&&productionDirectorScene&&<div className="production-flow-director"><DirectorWorkspace scene={productionDirectorScene} selectedShotId={productionDirectorShotId} mobile={mobile} onSelectShot={id=>{setSelectedShotId(id);setProductionDirectorShotId(id);}} onBackToProduction={()=>{setGenerationReturnTarget(null);setProductionDirectorShotId(null);}} onReturnToGeneration={generationReturnTarget?.shotId===productionDirectorShotId?()=>void returnDirectorShotToGeneration():undefined} onCompleteScene={()=>void completeDirectorScene()} onShotUpdated={async updated=>{await updateShotInEpisode(updated);setProductionRefreshKey(value=>value+1);}}/></div>}{productionDialogueShot&&<div className="production-flow-dialogue"><ProductionDialogueWorkspace shot={productionDialogueShot} characters={project?.characters??[]} onBackToProduction={()=>setProductionDialogueShotId(null)} onShotUpdated={async updated=>{await updateShotInEpisode(updated);setProductionRefreshKey(value=>value+1);}}/></div>}{productionMedia&&productionMediaShot&&<div className="production-flow-media"><ProductionMediaWorkspace mode={productionMedia.mode} shot={productionMediaShot} onBackToProduction={()=>{setGenerationReturnTarget(null);setProductionMedia(null);}} onOpenAssets={request=>openAssets(request,{shotId:productionMediaShot.id,surface:'media',mode:productionMedia.mode})} onOpenDirector={()=>{setGenerationReturnTarget({shotId:productionMediaShot.id,surface:'media',mode:productionMedia.mode});setProductionMedia(null);setProductionDirectorShotId(productionMediaShot.id);}} onShotUpdated={async updated=>{await updateShotInEpisode(updated);setProductionRefreshKey(value=>value+1);}}/></div>}</div>;
+  else if (workArea === 'production') center = <div className="production-flow-shell"><div className="production-flow-canvas" hidden={Boolean(productionReviewShotId||productionDialogueShotId||productionMedia)}><ProductionPanel episodeId={episode.id} refreshKey={productionRefreshKey} onReadiness={() => void refreshEpisode()} onSelectTarget={selectShotById} onSelectCanvasShot={setSelectedShotId} onOpenAssets={request=>openAssets(request,{shotId:request.shotId,surface:'production'})} onOpenVisualReview={id=>{setSelectedShotId(id);setProductionDialogueShotId(null);setProductionMedia(null);setProductionReviewShotId(id);}} onOpenDialogue={id=>{setSelectedShotId(id);setProductionReviewShotId(null);setProductionMedia(null);setProductionDialogueShotId(id);}} onOpenMedia={(id,mode)=>{setGenerationReturnTarget(null);setSelectedShotId(id);setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia({shotId:id,mode});}}/></div>{productionReviewShotId&&<div className="production-flow-review"><VisualReviewWorkspace episode={episode} selectedShotId={productionReviewShotId} onBackToProduction={()=>setProductionReviewShotId(null)} onCandidateAccepted={async()=>{await refreshEpisode();setProductionRefreshKey(value=>value+1);}}/></div>}{productionDialogueShot&&<div className="production-flow-dialogue"><ProductionDialogueWorkspace shot={productionDialogueShot} characters={project?.characters??[]} onBackToProduction={()=>setProductionDialogueShotId(null)} onShotUpdated={async updated=>{await updateShotInEpisode(updated);setProductionRefreshKey(value=>value+1);}}/></div>}{productionMedia&&productionMediaShot&&<div className="production-flow-media"><ProductionMediaWorkspace mode={productionMedia.mode} shot={productionMediaShot} onBackToProduction={()=>{setGenerationReturnTarget(null);setProductionMedia(null);}} onOpenAssets={request=>openAssets(request,{shotId:productionMediaShot.id,surface:'media',mode:productionMedia.mode})} onShotUpdated={async updated=>{await updateShotInEpisode(updated);setProductionRefreshKey(value=>value+1);}}/></div>}</div>;
   else if (workArea === 'review' && readiness) center = <ReviewPanel episode={episode} readiness={readiness} initialShotId={selectedShotId??undefined} onSelectShot={selectShotById}/>;
-  else if (workArea === 'director' && selectedScene && selectedShotId) center = <DirectorWorkspace scene={selectedScene} selectedShotId={selectedShotId} mobile={mobile} onSelectShot={setSelectedShotId} onReturnToGeneration={generationReturnTarget?.shotId===selectedShotId?()=>void returnDirectorShotToGeneration():undefined} onCompleteScene={()=>void completeDirectorScene()} onShotUpdated={updateShotInEpisode}/>;
-  else if (workArea === 'director') center = <main className="center-state"><h1>3D 导演台</h1><p>请先生成并选择一个分镜。</p></main>;
-  else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} onOpenDirector={id => {selectShotById(id); changeWorkArea('director');}} job={job} planStarting={planStarting}/>;
+  else center = <Storyboard episode={episode} selectedId={selectedShotId} onSelect={selectShot} onPlan={planEpisode} job={job} planStarting={planStarting}/>;
   const showShotInspector = workArea === 'storyboard' || workArea === 'inspector';
   const stageWorkAreas: WorkArea[] = ['overview', 'scene', 'storyboard', 'production'];
   const visibleWorkAreas: WorkArea[] = globalSection === 'episode'
@@ -382,7 +357,7 @@ export function Workspace() {
         id={workArea === 'inspector' ? 'workspace-panel-inspector' : undefined}
         role={workArea === 'inspector' ? 'tabpanel' : undefined}
         aria-labelledby={workArea === 'inspector' ? 'workspace-tab-inspector' : undefined}
-      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode} onOpenAssets={request=>openAssets(request,{shotId:selectedShot.id,surface:'storyboard'})} onOpenDirector={()=>{setGenerationReturnTarget({shotId:selectedShot.id,surface:'storyboard'});setGlobalSection('episode');changeWorkArea('director');}} onOpenMedia={mode=>{setSelectedShotId(selectedShot.id);setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionDialogueShotId(null);setProductionMedia({shotId:selectedShot.id,mode});setGlobalSection('episode');changeWorkArea('production');}} onOpenDialogue={()=>{setSelectedShotId(selectedShot.id);setProductionReviewShotId(null);setProductionDirectorShotId(null);setProductionMedia(null);setProductionDialogueShotId(selectedShot.id);setGlobalSection('episode');changeWorkArea('production');}}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
+      >{selectedShot ? <Inspector shot={selectedShot} onShotUpdated={updateShotInEpisode} onOpenAssets={request=>openAssets(request,{shotId:selectedShot.id,surface:'storyboard'})} onOpenMedia={mode=>{setSelectedShotId(selectedShot.id);setProductionReviewShotId(null);setProductionDialogueShotId(null);setProductionMedia({shotId:selectedShot.id,mode});setGlobalSection('episode');changeWorkArea('production');}} onOpenDialogue={()=>{setSelectedShotId(selectedShot.id);setProductionReviewShotId(null);setProductionMedia(null);setProductionDialogueShotId(selectedShot.id);setGlobalSection('episode');changeWorkArea('production');}}/> : <aside className="inspector empty-inspector"><p>选择镜头后编辑制作参数。</p></aside>}</section>}
     </div>
     <CreateProjectDialog open={projectDialog} onClose={() => setProjectDialog(false)} onCreate={async (data: ProjectCreate) => {const created = await createProject(data); setProjectDialog(false); await reloadProjects(created.id);}}/>
     <CreateEpisodeDialog open={episodeDialog} onClose={() => setEpisodeDialog(false)} onCreate={async (data: EpisodeCreate) => {if (!project) return; const created = await createEpisode(project.id, data); setEpisodeDialog(false); await loadProject(project.id); await loadEpisode(created.id);}}/>

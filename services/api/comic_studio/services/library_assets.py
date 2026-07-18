@@ -9,10 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from comic_studio import models, schemas
-from comic_studio.services.character_3d import (
-    Character3DRepresentationError,
-    Character3DRepresentationService,
-)
 
 
 class DuplicateLibraryAssetError(RuntimeError):
@@ -121,13 +117,7 @@ class LibraryAssetService:
             return None
         if not content:
             raise LibraryAssetMediaError("empty_media")
-        model_upload = Path(filename).suffix.lower() == ".glb" or content[:4] == b"glTF"
-        max_bytes = (
-            Character3DRepresentationService.MAX_BYTES
-            if model_upload
-            else self.MAX_MEDIA_BYTES
-        )
-        if len(content) > max_bytes:
+        if len(content) > self.MAX_MEDIA_BYTES:
             raise LibraryAssetMediaError("media_too_large")
 
         width = None
@@ -141,16 +131,6 @@ class LibraryAssetService:
             media_type, extension = self._audio_format(content)
             if media_type is None:
                 raise LibraryAssetMediaError("sound_asset_requires_audio")
-        elif model_upload:
-            if library_asset.kind not in {"scene", "prop"}:
-                raise LibraryAssetMediaError("asset_kind_does_not_support_glb")
-            try:
-                metrics = Character3DRepresentationService.inspect_glb(content)
-            except Character3DRepresentationError as exc:
-                raise LibraryAssetMediaError(str(exc)) from exc
-            media_type, extension = "model/gltf-binary", ".glb"
-            stored_request_metadata["format"] = "glb"
-            stored_request_metadata["glb_metrics"] = metrics
         else:
             try:
                 with Image.open(BytesIO(content)) as image:

@@ -202,11 +202,6 @@ class Character(Base):
     variants: Mapped[list[AssetVariant]] = relationship(
         back_populates="character", cascade="all, delete-orphan", order_by="AssetVariant.created_at"
     )
-    representations_3d: Mapped[list[Character3DRepresentation]] = relationship(
-        back_populates="character",
-        cascade="all, delete-orphan",
-        order_by="Character3DRepresentation.version",
-    )
 
 
 class AssetVariant(Base):
@@ -274,17 +269,6 @@ class AssetVariantUsage(Base):
     )
     effective_state_id: Mapped[str | None] = mapped_column(
         ForeignKey("asset_variant_states.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    effective_representation_id: Mapped[str | None] = mapped_column(
-        ForeignKey("character_3d_representations.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    effective_representation_version: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
-    director_object_id: Mapped[str | None] = mapped_column(
-        ForeignKey("director_objects.id", ondelete="SET NULL"), nullable=True, index=True
     )
     binding_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     binding_updated_at: Mapped[datetime | None] = mapped_column(
@@ -374,9 +358,6 @@ class Scene(Base):
     shots: Mapped[list[Shot]] = relationship(
         back_populates="scene", cascade="all, delete-orphan", order_by="Shot.position"
     )
-    director_stage: Mapped[DirectorStage | None] = relationship(
-        back_populates="scene", cascade="all, delete-orphan", uselist=False
-    )
     library_asset_bindings: Mapped[list[LibraryAssetSceneBinding]] = relationship(
         back_populates="scene",
         cascade="all, delete-orphan",
@@ -440,12 +421,6 @@ class Shot(Base):
     scene: Mapped[Scene] = relationship(back_populates="shots")
     dialogue: Mapped[list[DialogueLine]] = relationship(
         back_populates="shot", cascade="all, delete-orphan", order_by="DialogueLine.position"
-    )
-    director_camera: Mapped[ShotCamera | None] = relationship(
-        back_populates="shot",
-        cascade="all, delete-orphan",
-        uselist=False,
-        foreign_keys="ShotCamera.shot_id",
     )
     visual_review_threads: Mapped[list[VisualReviewThread]] = relationship(
         back_populates="shot", cascade="all, delete-orphan", order_by="VisualReviewThread.created_at"
@@ -571,110 +546,6 @@ class PublicationRecord(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     candidate: Mapped[ReleaseCandidate] = relationship(back_populates="publications")
-
-
-class DirectorStage(Base):
-    __tablename__ = "director_stages"
-    __table_args__ = (UniqueConstraint("scene_id", name="uq_director_stage_scene"),)
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    scene_id: Mapped[str] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    environment: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
-    scene: Mapped[Scene] = relationship(back_populates="director_stage")
-    objects: Mapped[list[DirectorObject]] = relationship(back_populates="stage", cascade="all, delete-orphan", order_by="DirectorObject.position")
-    shot_cameras: Mapped[list[ShotCamera]] = relationship(back_populates="stage", cascade="all, delete-orphan", order_by="ShotCamera.created_at")
-    revisions: Mapped[list[DirectorRevision]] = relationship(back_populates="stage", cascade="all, delete-orphan", order_by="DirectorRevision.created_at")
-    suggestions: Mapped[list[DirectorSuggestion]] = relationship(back_populates="stage", cascade="all, delete-orphan", order_by="DirectorSuggestion.created_at")
-
-
-class DirectorObject(Base):
-    __tablename__ = "director_objects"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    stage_id: Mapped[str] = mapped_column(ForeignKey("director_stages.id", ondelete="CASCADE"), index=True)
-    kind: Mapped[str] = mapped_column(String(24), index=True)
-    source_type: Mapped[str] = mapped_column(String(32))
-    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    label: Mapped[str] = mapped_column(String(160))
-    position: Mapped[int] = mapped_column(Integer, default=0)
-    transform: Mapped[dict] = mapped_column(JSON, default=dict)
-    appearance: Mapped[dict] = mapped_column(JSON, default=dict)
-    object_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    visible: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
-    stage: Mapped[DirectorStage] = relationship(back_populates="objects")
-
-
-class ShotCamera(Base):
-    __tablename__ = "shot_cameras"
-    __table_args__ = (UniqueConstraint("stage_id", "shot_id", name="uq_stage_shot_camera"),)
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    stage_id: Mapped[str] = mapped_column(ForeignKey("director_stages.id", ondelete="CASCADE"), index=True)
-    shot_id: Mapped[str] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), unique=True, index=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    position: Mapped[list] = mapped_column(JSON, default=lambda: [0, 1.6, 5])
-    target: Mapped[list] = mapped_column(JSON, default=lambda: [0, 1.2, 0])
-    rotation: Mapped[list] = mapped_column(JSON, default=lambda: [0, 0, 0])
-    focal_length_mm: Mapped[float] = mapped_column(Float, default=50)
-    near: Mapped[float] = mapped_column(Float, default=0.1)
-    far: Mapped[float] = mapped_column(Float, default=1000)
-    shot_size: Mapped[str] = mapped_column(String(40), default="medium")
-    camera_motion: Mapped[str] = mapped_column(String(80), default="static")
-    framing_guides: Mapped[dict] = mapped_column(JSON, default=dict)
-    object_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
-    preview_asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    guidance_asset_ids: Mapped[dict] = mapped_column(JSON, default=dict)
-    initialized_from_shot_id: Mapped[str | None] = mapped_column(
-        ForeignKey("shots.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
-    stage: Mapped[DirectorStage] = relationship(back_populates="shot_cameras")
-    shot: Mapped[Shot] = relationship(
-        back_populates="director_camera", foreign_keys=[shot_id]
-    )
-    revisions: Mapped[list[DirectorRevision]] = relationship(back_populates="shot_camera")
-
-
-class DirectorRevision(Base):
-    __tablename__ = "director_revisions"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    stage_id: Mapped[str] = mapped_column(ForeignKey("director_stages.id", ondelete="CASCADE"), index=True)
-    shot_camera_id: Mapped[str | None] = mapped_column(ForeignKey("shot_cameras.id", ondelete="SET NULL"), nullable=True, index=True)
-    stage_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
-    camera_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
-    reason: Mapped[str] = mapped_column(String(32), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-
-    stage: Mapped[DirectorStage] = relationship(back_populates="revisions")
-    shot_camera: Mapped[ShotCamera | None] = relationship(back_populates="revisions")
-
-
-class DirectorSuggestion(Base):
-    __tablename__ = "director_suggestions"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    stage_id: Mapped[str] = mapped_column(ForeignKey("director_stages.id", ondelete="CASCADE"), index=True)
-    shot_id: Mapped[str | None] = mapped_column(ForeignKey("shots.id", ondelete="CASCADE"), nullable=True, index=True)
-    kind: Mapped[str] = mapped_column(String(32), index=True)
-    status: Mapped[str] = mapped_column(String(24), index=True)
-    request_context: Mapped[dict] = mapped_column(JSON, default=dict)
-    suggested_patch: Mapped[dict] = mapped_column(JSON, default=dict)
-    error_category: Mapped[str] = mapped_column(String(64), default="")
-    error: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    stage: Mapped[DirectorStage] = relationship(back_populates="suggestions")
 
 
 class DialogueLine(Base):
@@ -980,45 +851,6 @@ class CharacterReference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     character: Mapped[Character] = relationship(back_populates="references")
-
-
-class Character3DRepresentation(Base):
-    __tablename__ = "character_3d_representations"
-    __table_args__ = (
-        UniqueConstraint("character_id", "version", name="uq_character_3d_version"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    character_id: Mapped[str] = mapped_column(
-        ForeignKey("characters.id", ondelete="CASCADE"), index=True
-    )
-    variant_id: Mapped[str | None] = mapped_column(
-        ForeignKey("asset_variants.id", ondelete="CASCADE"), nullable=True, index=True
-    )
-    state_id: Mapped[str | None] = mapped_column(
-        ForeignKey("asset_variant_states.id", ondelete="CASCADE"), nullable=True, index=True
-    )
-    asset_id: Mapped[str] = mapped_column(
-        ForeignKey("assets.id", ondelete="RESTRICT"), index=True
-    )
-    label: Mapped[str] = mapped_column(String(160))
-    format: Mapped[str] = mapped_column(String(16), default="glb")
-    version: Mapped[int] = mapped_column(Integer)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    review_status: Mapped[str] = mapped_column(String(32), default="approved", index=True)
-    bounds: Mapped[dict] = mapped_column(JSON, default=dict)
-    mesh_count: Mapped[int] = mapped_column(Integer, default=0)
-    triangle_count: Mapped[int] = mapped_column(Integer, default=0)
-    material_count: Mapped[int] = mapped_column(Integer, default=0)
-    has_skeleton: Mapped[bool] = mapped_column(Boolean, default=False)
-    representation_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, onupdate=utc_now
-    )
-
-    character: Mapped[Character] = relationship(back_populates="representations_3d")
-    asset: Mapped[Asset] = relationship(foreign_keys=[asset_id])
 
 
 class ProductionRun(Base):

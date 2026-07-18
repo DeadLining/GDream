@@ -16,18 +16,6 @@ from comic_studio.services.visual_review_markup import render_visual_review_mark
 
 # Four grid shots can each contribute one preview plus four guidance images.
 MAX_PANEL_REFERENCE_IMAGES = 24
-DIRECTOR_GUIDANCE_LABELS = {
-    "silhouette": "silhouette guidance",
-    "skeleton_pose": "skeleton pose guidance",
-    "depth": "depth guidance",
-    "object_mask": "object mask guidance",
-}
-DIRECTOR_GUIDANCE_CONSTRAINTS = {
-    "silhouette": "subject boundaries and occlusion",
-    "skeleton_pose": "body pose and joint placement",
-    "depth": "relative depth, foreground separation, and occlusion",
-    "object_mask": "per-object boundaries, visibility, and overlap",
-}
 
 
 class PanelService:
@@ -82,18 +70,6 @@ class PanelService:
             )
             present_character_ids.update(compiled.character_ids)
         reference_assets: list[models.Asset] = []
-        director_reference_ids = []
-        for compiled in compiled_inputs:
-            if compiled.director_preview_asset_id:
-                director_reference_ids.append(compiled.director_preview_asset_id)
-            director_reference_ids.extend(
-                asset_id
-                for _kind, asset_id in compiled.director_guidance_asset_ids
-            )
-        for asset_id in dict.fromkeys(director_reference_ids):
-            director_asset = self.session.get(models.Asset, asset_id)
-            if director_asset is not None:
-                reference_assets.append(director_asset)
         if present_character_ids:
             references = list(
                 self.session.scalars(
@@ -170,25 +146,6 @@ class PanelService:
             zip(shots, compiled_inputs), start=1
         ):
             lines = [f"{index}. Shot: {shot.composition}. {shot.image_prompt}"]
-            preview_index = reference_indices.get(compiled.director_preview_asset_id or "")
-            if preview_index is not None:
-                lines.append(
-                    f"Use reference image {preview_index} as the saved 3D director "
-                    f"composition for panel {index}. Preserve its camera angle, "
-                    "framing, subject placement, and spatial proportions."
-                )
-            for guidance_kind, guidance_asset_id in compiled.director_guidance_asset_ids:
-                guidance_index = reference_indices.get(guidance_asset_id)
-                if guidance_index is None:
-                    continue
-                label = DIRECTOR_GUIDANCE_LABELS.get(guidance_kind, "guidance")
-                constraint = DIRECTOR_GUIDANCE_CONSTRAINTS.get(
-                    guidance_kind, "composition"
-                )
-                lines.append(
-                    f"Use reference image {guidance_index} as the 3D director {label} "
-                    f"for panel {index}. Preserve the indicated {constraint}."
-                )
             if compiled.prompt_constraints:
                 lines.append(compiled.prompt_constraints)
             panel_description_items.append("\n".join(lines))
@@ -284,19 +241,6 @@ class PanelService:
             if item.role != "previous_shot_tail"
         ]
         reference_assets = [item.asset for item in non_tail_references]
-        director_preview_reference = next(
-            (
-                item
-                for item in non_tail_references
-                if item.role == "director_preview"
-            ),
-            None,
-        )
-        director_preview = (
-            director_preview_reference.asset
-            if director_preview_reference is not None
-            else None
-        )
         from comic_studio.services.art_style_loader import get_art_style_loader
 
         character_rules = "\n".join(
@@ -357,36 +301,6 @@ class PanelService:
             asset.id: index + (1 if tail_asset is not None else 0)
             for index, asset in enumerate(reference_assets, start=1)
         }
-        if director_preview is not None and review_source is None:
-            preview_index = reference_indices.get(director_preview.id)
-        else:
-            preview_index = None
-        if preview_index is not None:
-            prompt = (
-                f"{prompt}\n\nComposition reference: use the saved 3D director preview "
-                f"(reference image {preview_index}) for camera angle, framing, subject "
-                "placement, and spatial proportions. Preserve character identity and "
-                "the requested visual style from the other references and prompt."
-            )
-        if review_source is None and non_tail_references:
-            guidance_lines = []
-            for reference in non_tail_references:
-                if reference.role != "director_guidance":
-                    continue
-                guidance_kind = reference.guidance_kind or ""
-                guidance_index = reference_indices.get(reference.asset.id)
-                if guidance_index is None:
-                    continue
-                label = DIRECTOR_GUIDANCE_LABELS.get(guidance_kind, "guidance")
-                constraint = DIRECTOR_GUIDANCE_CONSTRAINTS.get(
-                    guidance_kind, "composition"
-                )
-                guidance_lines.append(
-                    f"Use reference image {guidance_index} as the 3D director {label}; "
-                    f"preserve {constraint}."
-                )
-            if guidance_lines:
-                prompt = f"{prompt}\n\n" + "\n".join(guidance_lines)
         reference_inputs = []
         annotated_reference = False
         if review_source is not None:

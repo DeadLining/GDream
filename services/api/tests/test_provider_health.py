@@ -9,7 +9,7 @@ from comic_studio.routes.providers import test_provider as run_provider_health_t
 from comic_studio.schemas import ProviderChannelTestRead
 
 
-KINDS = ("llm", "image", "tts", "video", "model3d")
+KINDS = ("llm", "image", "tts", "video")
 
 
 def _enable_all_channels(client):
@@ -219,7 +219,7 @@ def test_provider_health_uses_media_timeouts_and_bridge_callback(client, monkeyp
     assert response.status_code == 200
     assert [call["total_timeout_seconds"] for call in calls].count(60) == 1
     assert [call["total_timeout_seconds"] for call in calls].count(30) == 1
-    assert [call["total_timeout_seconds"] for call in calls].count(8) == 3
+    assert [call["total_timeout_seconds"] for call in calls].count(8) == 2
 
 
 @pytest.mark.anyio

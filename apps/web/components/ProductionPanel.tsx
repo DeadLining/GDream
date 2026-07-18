@@ -28,7 +28,6 @@ export function ProductionPanel({
   onSelectTarget,
   onSelectCanvasShot,
   onOpenVisualReview,
-  onOpenDirector,
   onOpenDialogue,
   onOpenMedia,
   onOpenAssets,
@@ -39,7 +38,6 @@ export function ProductionPanel({
   onSelectTarget: (id: string) => void;
   onSelectCanvasShot?: (id: string) => void;
   onOpenVisualReview?: (id: string) => void;
-  onOpenDirector?: (id: string) => void;
   onOpenDialogue?: (id: string) => void;
   onOpenMedia?: (id: string, mode: ProductionMediaMode) => void;
   onOpenAssets?: (request: GenerationAssetRequest) => void;
@@ -258,8 +256,8 @@ export function ProductionPanel({
       </div>}
     </header>
     <div className="production-canvas-stage">
-      <EpisodeAIRunControls episodeId={episodeId} onCompleted={refreshAfterAIRun} onOpenAssets={onOpenAssets} onOpenDirector={onOpenDirector}/>
-      {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onOpenVisualReview={onOpenVisualReview} onOpenDirector={onOpenDirector} onOpenDialogue={onOpenDialogue} onOpenMedia={onOpenMedia} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
+      <EpisodeAIRunControls episodeId={episodeId} onCompleted={refreshAfterAIRun} onOpenAssets={onOpenAssets}/>
+      {canvasGraph?<ProductionCanvas graph={canvasGraph} layout={canvasLayout} selectedShotId={selectedShotId} onSelectShot={selectCanvasShot} onOpenVisualReview={onOpenVisualReview} onOpenDialogue={onOpenDialogue} onOpenMedia={onOpenMedia} onLayoutChange={saveCanvasLayout} onSelectedShotIdsChange={setSelectedCanvasShotIds}/>:canvasError?<section className="production-canvas-error" role="alert" aria-label="生产画布加载失败"><strong>生产画布暂时无法加载</strong><p>{canvasError}</p><button type="button" onClick={retryCanvas}>重试加载画布</button></section>:<section className="production-canvas-loading" aria-label="单集生产画布">正在加载生产画布…</section>}
       <ShotGroupRerun selectedShotIds={selectedCanvasShotIds} starting={rerunStarting} error={rerunError} onSubmit={stages=>void startShotGroupRerun(stages)}/>
       <ProductionRunControls open={configOpen} onOpenChange={setConfigOpen} stages={stages} setStages={setStages} concurrency={concurrency} setConcurrency={setConcurrency}
         regenerate={{panels:regenPanels,speech:regenSpeech,videos:regenVideos}} setRegenerate={next=>{setRegenPanels(next.panels);setRegenSpeech(next.speech);setRegenVideos(next.videos);}}

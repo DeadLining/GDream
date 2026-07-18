@@ -1,5 +1,8 @@
 import type {ShotGenerationReadiness} from './types';
+import {apiRequest} from './api/core';
 import {ApiError} from './api/core';
+
+export const getShotGenerationReadiness=(shotId:string)=>apiRequest<ShotGenerationReadiness>(`/api/shots/${shotId}/generation-readiness`);
 
 export type GenerationAssetTarget='character'|'scene'|'prop';
 export type GenerationAssetRequest={target:GenerationAssetTarget;shotId:string;requirementIds:string[]};
@@ -14,8 +17,6 @@ const blockerLabels:Record<string,string>={
   missing_character_reference:'缺少角色参考图',
   missing_background:'缺少场景背景',
   missing_required_prop:'缺少必要道具',
-  blocking_not_initialized:'尚未建立镜头站位',
-  director_preview_missing:'尚未保存导演预览',
 };
 
 export const shotGenerationBlockerLabel=(blocker:string)=>blockerLabels[blocker]??blocker;
@@ -56,7 +57,7 @@ export const applyShotGenerationBlockers=(readiness:ShotGenerationReadiness,bloc
   ...readiness,
   ready:false,
   asset_ready:!blockers.some(item=>['missing_character_reference','missing_background','missing_required_prop'].includes(item)),
-  blocking_ready:!blockers.includes('blocking_not_initialized'),
-  camera_ready:!blockers.includes('director_preview_missing'),
+  blocking_ready:true,
+  camera_ready:true,
   blockers,
 });

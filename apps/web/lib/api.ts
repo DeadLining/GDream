@@ -21,7 +21,7 @@ export * from './api/visual-review';
 export * from './api/review-publish';
 export * from './api/task';
 export * from './api/workspace';
-export * from './api/director';
+export {getShotGenerationReadiness} from './shot-generation-readiness';
 export * from './api/skill';
 export * from './api/portability';
 export * from './api/library-asset';

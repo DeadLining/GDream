@@ -6,7 +6,6 @@ export type WorkArea =
   | 'import'
   | 'characters'
   | 'storyboard'
-  | 'director'
   | 'production'
   | 'visual-review'
   | 'review'

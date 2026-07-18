@@ -14,7 +14,7 @@ import {ProductionCanvasInspector} from './ProductionCanvasInspector';
 import {ProductionCanvasToolbar} from './ProductionCanvasToolbar';
 import type {ProductionMediaMode} from './ProductionMediaWorkspace';
 
-const nodeTypes={'scene-group':SceneGroupNode,shot:ShotNode,asset:AssetNode,director:DomainNode,'panel-render':DomainNode,dialogue:DomainNode,tts:DomainNode,'video-render':DomainNode,'visual-review':DomainNode};
+const nodeTypes={'scene-group':SceneGroupNode,shot:ShotNode,asset:AssetNode,'panel-render':DomainNode,dialogue:DomainNode,tts:DomainNode,'video-render':DomainNode,'visual-review':DomainNode};
 type ProductionCanvasView='overview'|'focus'|'assets';
 type ProductionCanvasTheme='dark'|'cream';
 
@@ -43,7 +43,7 @@ function ProductionCanvasChrome({view,onView,theme,onTheme,selectedShot,sceneCou
   </>;
 }
 
-export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLayoutChange,onSelectedShotIdsChange,onOpenVisualReview,onOpenDirector,onOpenDialogue,onOpenMedia}:{graph:EpisodeProductionGraph;layout?:ProductionCanvasLayout|null;selectedShotId:string|null;onSelectShot:(id:string)=>void;onLayoutChange?:(layout:ProductionCanvasLayout)=>void;onSelectedShotIdsChange?:(shotIds:string[])=>void;onOpenVisualReview?:(shotId:string)=>void;onOpenDirector?:(shotId:string)=>void;onOpenDialogue?:(shotId:string)=>void;onOpenMedia?:(shotId:string,mode:ProductionMediaMode)=>void}){
+export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLayoutChange,onSelectedShotIdsChange,onOpenVisualReview,onOpenDialogue,onOpenMedia}:{graph:EpisodeProductionGraph;layout?:ProductionCanvasLayout|null;selectedShotId:string|null;onSelectShot:(id:string)=>void;onLayoutChange?:(layout:ProductionCanvasLayout)=>void;onSelectedShotIdsChange?:(shotIds:string[])=>void;onOpenVisualReview?:(shotId:string)=>void;onOpenDialogue?:(shotId:string)=>void;onOpenMedia?:(shotId:string,mode:ProductionMediaMode)=>void}){
   const effectiveLayout=layout?.version===3?layout:null;
   const restoredShotId=selectedShotId??effectiveLayout?.expanded_shots[0]??null;
   const [activeShotId,setActiveShotId]=useState(restoredShotId);
@@ -153,7 +153,6 @@ export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLay
     focusShotRef.current=shotId;
     setActiveShotId(shotId);
     onSelectShot(shotId);
-    if(node.type==='director'&&!node.data.blocked)onOpenDirector?.(shotId);
     if(node.type==='visual-review'&&!node.data.blocked)onOpenVisualReview?.(shotId);
     if(node.type==='dialogue'||node.type==='tts')onOpenDialogue?.(shotId);
     if(node.type==='panel-render')onOpenMedia?.(shotId,'panel');
@@ -276,6 +275,6 @@ export function ProductionCanvas({graph,layout,selectedShotId,onSelectShot,onLay
       </div>
       {canvasView==='assets'&&!relatedAssets.length&&<section className="production-view-empty" role="status" aria-label="资产关系状态"><Library size={22}/><strong>尚未建立资产与镜头的使用关系</strong><span>在资产库确认变体或状态，并绑定镜头后，关系会显示在这里。</span></section>}
     </div>
-    {inspectorOpen&&<ProductionCanvasInspector node={selectedNode} shot={selectedShot} workflows={graph.workflow_bindings} items={graph.production_items} pinned={Boolean(activeShotId&&pinnedShotIds.has(activeShotId))} onTogglePin={togglePin} onOpenVisualReview={()=>{if(activeShotId)onOpenVisualReview?.(activeShotId);}} onOpenDirector={()=>{if(activeShotId)onOpenDirector?.(activeShotId);}} onOpenDialogue={()=>{if(activeShotId)onOpenDialogue?.(activeShotId);}} onOpenMedia={mode=>{if(activeShotId)onOpenMedia?.(activeShotId,mode);}}/>}
+    {inspectorOpen&&<ProductionCanvasInspector node={selectedNode} shot={selectedShot} workflows={graph.workflow_bindings} items={graph.production_items} pinned={Boolean(activeShotId&&pinnedShotIds.has(activeShotId))} onTogglePin={togglePin} onOpenVisualReview={()=>{if(activeShotId)onOpenVisualReview?.(activeShotId);}} onOpenDialogue={()=>{if(activeShotId)onOpenDialogue?.(activeShotId);}} onOpenMedia={mode=>{if(activeShotId)onOpenMedia?.(activeShotId,mode);}}/>}
   </section>;
 }
