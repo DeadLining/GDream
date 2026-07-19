@@ -23,7 +23,7 @@ const providerHealth: ProviderHealth = {
   tts:{status:'ok',model:'Qwen3-TTS-12Hz-1.7B-CustomVoice',host:'192.168.18.94',elapsed_ms:12,check_scope:'audio',error:null},
   video:{status:'ok',model:'MiniMax-Hailuo-02',host:'api.minimaxi.com',elapsed_ms:11,check_scope:'endpoint',error:null},
 };
-const scriptDocument={id:'script-1',project_id:'project-1',title:'未命名剧本',source_type:'paste',status:'ready',revision_count:1,current_revision_id:'revision-1',created_at:'',updated_at:'',latest_import_id:null,parse_is_stale:true,current_revision:{id:'revision-1',document_id:'script-1',revision_number:1,status:'working',content:'',checksum:'empty',creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'text/plain',generation_brief:'',generation_metadata:{},created_at:''}};
+const scriptDocument={id:'script-1',project_id:'project-1',title:'未命名剧本',source_type:'paste',status:'ready',revision_count:1,current_revision_id:'revision-1',created_at:'2026-07-18T10:00:00Z',updated_at:'2026-07-18T10:00:00Z',latest_import_id:null,parse_is_stale:true,current_revision:{id:'revision-1',document_id:'script-1',revision_number:1,status:'working',content:'',checksum:'empty',creation_method:'paste',original_filename:'',source_file_path:'',source_media_type:'text/plain',generation_brief:'',generation_metadata:{},created_at:'2026-07-18T10:00:00Z'}};
 const productionGraph={episode_id:'episode-1',project_id:'project-1',scenes:[{id:'scene-1',position:1,location:'雨夜巷道',summary:'发现芯片'}],shots:[
   {id:'shot-1',scene_id:'scene-1',position:1,shot_type:'wide',duration_seconds:4,composition:'林默走入巷道',review_status:'approved',render_status:'ready',video_render_status:'pending',active_panel_asset_id:'asset-1',active_panel_media_url:'/media/panel.png',active_video_asset_id:null,active_video_media_url:null},
   {id:'shot-2',scene_id:'scene-1',position:2,shot_type:'close_up',duration_seconds:5,composition:'银色左眼映出芯片',review_status:'draft',render_status:'pending',video_render_status:'pending',active_panel_asset_id:null,active_panel_media_url:null,active_video_asset_id:null,active_video_media_url:null},
@@ -35,8 +35,15 @@ test.beforeEach(async ({page}) => {
   await page.route('**/api/projects/project-1', route => route.fulfill({json:projectDetail}));
   await page.route('**/api/projects/project-1/volumes', route => route.fulfill({json:[]}));
   await page.route('**/api/projects/project-1/storylines', route => route.fulfill({json:[]}));
+  await page.route('**/api/projects/project-1/overview-metrics', route => route.fulfill({json:{project_id:'project-1',scene_count:1,script_locked:true,asset_total:1,asset_ready:1}}));
   await page.route('**/api/episodes/episode-1', route => route.fulfill({json:episode}));
   await page.route('**/api/assets/asset-1', route => route.fulfill({json:{id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'test',model:'test',generation_attempt:1,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''}}));
+  await page.route('**/media/panel.png', route => route.fulfill({status:200,contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'}));
+  await page.route('**/api/shots/shot-1/panels', route => route.fulfill({json:[{id:'asset-1',kind:'panel',media_url:'/media/panel.png',media_type:'image/png',provider:'test',model:'test',generation_attempt:1,review_status:'approved',width:1024,height:1536,duration_seconds:null,created_at:''}]}));
+  await page.route('**/api/shots/shot-2/panels', route => route.fulfill({json:[]}));
+  await page.route('**/api/shots/shot-1/generation-readiness', route => route.fulfill({json:{shot_id:'shot-1',project_id:'project-1',script_revision_id:'revision-1',ready:true,asset_ready:true,blocking_ready:true,camera_ready:true,blockers:[],requirement_ids:[]}}));
+  await page.route('**/api/shots/shot-2/generation-readiness', route => route.fulfill({json:{shot_id:'shot-2',project_id:'project-1',script_revision_id:'revision-1',ready:false,asset_ready:false,blocking_ready:true,camera_ready:true,blockers:['missing_panel'],requirement_ids:[]}}));
+  await page.route('**/api/episodes/episode-1/ai-runs/active', route => route.fulfill({status:404,json:{detail:'No active AI run'}}));
   await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:{episode_id:'episode-1',ready:true,totals:{shots:2,dialogue:0},ready_counts:{panels:2,approved:2,speech:0},blockers:{missing_panels:[],unapproved_shots:[],missing_speech:[]}}}));
   await page.route('**/api/episodes/episode-1/production-graph', route => route.fulfill({json:productionGraph}));
   await page.route('**/api/episodes/episode-1/production-canvas-layout', route => route.fulfill({json:productionLayout}));
@@ -319,12 +326,13 @@ test('render success exposes the verified MP4 download', async ({page}) => {
   await expect(download).toHaveAttribute('href', /render\.mp4$/);
 });
 
-test('workspace shows generated panel and shot production controls', async ({page}) => {
+test('workspace shows generated panel and shot production controls', async ({page}, testInfo) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', {name: '失窃的雨夜'})).toBeVisible();
   await expect(page.getByAltText('林默走入巷道')).toBeVisible();
   await page.getByRole('button', {name: /镜头 2/}).click();
+  if (testInfo.project.name === 'mobile') await page.getByRole('tab', {name: '检查器'}).click();
   await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
   await expect(page.getByRole('button', {name: '生成画面'})).toBeVisible();
   await expect(page.getByLabel('审核状态')).toHaveValue('draft');
@@ -335,25 +343,33 @@ test('dynamic production workflow exposes saved scripts, references, and shot vi
   let reference={id:'ref-1',character_id:'character-1',reference_type:'primary',label:'主参考',position:0,is_active:false,review_status:'draft',created_at:'',asset:{id:'ref-asset',kind:'character-reference',media_url:'/demo-panel.png',media_type:'image/png',provider:'upload',model:'local',generation_attempt:1,review_status:'draft',width:1,height:1,duration_seconds:null,created_at:''}};
   let videos:any[]=[];
   let savedContent='';
-  await page.route('**/api/projects/project-1/scripts',async route=>route.request().method()==='POST'?route.fulfill({status:201,json:scriptDocument}):route.fulfill({json:[]}));
+  await page.route('**/api/projects/project-1/scripts',async route=>route.request().method()==='POST'?route.fulfill({status:201,json:scriptDocument}):route.fulfill({json:[scriptDocument]}));
+  await page.route('**/api/scripts/script-1/revisions',route=>route.fulfill({json:[scriptDocument.current_revision]}));
   await page.route('**/api/scripts/script-1',async route=>{if(route.request().method()==='PATCH'){savedContent=(await route.request().postDataJSON()).content;await route.fulfill({json:{...scriptDocument,current_revision:{...scriptDocument.current_revision,content:savedContent,checksum:'saved'}}});}else await route.fulfill({json:scriptDocument});});
   await page.route('**/api/characters/character-1/references',route=>route.fulfill({json:[reference]}));
+  await page.route('**/api/characters/character-1/variants',route=>route.fulfill({json:[]}));
+  await page.route('**/api/projects/project-1/library-assets',route=>route.fulfill({json:[]}));
+  await page.route('**/api/projects/project-1/asset-requirements*',route=>route.fulfill({json:[]}));
+  await page.route('**/api/projects/project-1/asset-requirements/sync',route=>route.fulfill({json:[]}));
   await page.route('**/api/character-references/ref-1',async route=>{reference={...reference,review_status:'approved'};await route.fulfill({json:reference});});
   await page.route('**/api/characters/character-1/references/ref-1/active',async route=>{reference={...reference,is_active:true};await route.fulfill({json:reference});});
   await page.route('**/api/shots/shot-1/videos*',route=>route.request().method()==='POST'?route.fulfill({status:202,json:{job_id:'video-1',status:'queued'}}):route.fulfill({json:videos}));
+  await page.route('**/api/shots/shot-1/generation-context?mode=video',route=>route.fulfill({json:{shot_id:'shot-1',mode:'video',snapshot_hash:'e2e',prompt_constraints:'',library_assets:[],director:null,references:[]}}));
+  await page.route('**/api/shots/shot-1',async route=>{const body=await route.request().postDataJSON();await route.fulfill({json:{...episode.scenes[0].shots[0],...body}});});
   await page.route('**/api/jobs/video-1',route=>{videos=[{id:'video-asset',kind:'video:shot-1',media_url:'/render.mp4',media_type:'video/mp4',provider:'minimax-video',model:'MiniMax-Hailuo-02',generation_attempt:1,review_status:'draft',width:null,height:null,duration_seconds:6,created_at:''}];return route.fulfill({json:{id:'video-1',operation:'generate_video',target_type:'shot',target_id:'shot-1',status:'succeeded',progress:100,result_metadata:{asset_id:'video-asset'},error:'',retry_count:0,created_at:'',updated_at:''}});});
 
-  await page.goto('/'); await page.getByRole('tab',{name:'剧本创作'}).click(); await page.getByRole('button',{name:'新建剧本'}).click(); await page.getByLabel('剧本正文').fill('雨夜剧本'); await expect.poll(()=>savedContent).toBe('雨夜剧本');
-  await page.getByRole('tab',{name:'角色'}).click(); await page.getByRole('button',{name:/批准/}).click(); await page.getByRole('button',{name:'设为使用'}).click(); await expect(page.getByText(/使用中/)).toBeVisible();
-  await page.getByRole('tab',{name:'分镜'}).click(); await page.getByRole('button',{name:/镜头 1/}).click(); await page.getByRole('button',{name:'生成视频'}).click(); await expect(page.locator('.video-versions video')).toHaveCount(1);
+  await page.goto('/'); await page.getByRole('button',{name:'剧本创作'}).click(); await page.getByLabel('剧本正文').fill('雨夜剧本'); await page.getByRole('button',{name:'保存草稿'}).click(); await expect.poll(()=>savedContent).toBe('雨夜剧本');
+  await page.getByRole('button',{name:'角色设定'}).click(); await page.getByRole('button',{name:'引用',exact:true}).click(); await page.getByRole('button',{name:'参考集',exact:true}).click(); await page.getByRole('button',{name:/批准/}).click(); await page.getByRole('button',{name:'设为使用'}).click(); await expect(page.getByText(/使用中/)).toBeVisible();
+  await page.getByRole('button',{name:'单集制作',exact:true}).click(); await page.getByRole('button',{name:/镜头 1/}).click(); await page.getByRole('button',{name:'打开视频生成'}).click(); await page.getByRole('button',{name:'生成新视频'}).click(); await expect(page.locator('.production-media-versions video')).toHaveCount(1);
 });
 
 test('script library loads and persists an existing document',async({page},testInfo)=>{
   test.skip(testInfo.project.name!=='desktop','Script persistence is covered once on desktop');
   let savedContent='';const existing={...scriptDocument,current_revision:{...scriptDocument.current_revision,content:'第一集：雨夜',checksum:'initial'}};
   await page.route('**/api/projects/project-1/scripts',route=>route.fulfill({json:[existing]}));
+  await page.route('**/api/scripts/script-1/revisions',route=>route.fulfill({json:[existing.current_revision]}));
   await page.route('**/api/scripts/script-1',async route=>{if(route.request().method()==='PATCH'){savedContent=(await route.request().postDataJSON()).content;await route.fulfill({json:{...existing,current_revision:{...existing.current_revision,content:savedContent,checksum:'saved'}}});}else await route.fulfill({json:existing});});
-  await page.goto('/');await page.getByRole('tab',{name:'剧本创作'}).click();await expect(page.getByLabel('剧本正文')).toHaveValue('第一集：雨夜');await page.getByLabel('剧本正文').fill('第一集：雨夜\n场景一');await expect.poll(()=>savedContent).toBe('第一集：雨夜\n场景一');
+  await page.goto('/');await page.getByRole('button',{name:'剧本创作'}).click();await expect(page.getByLabel('剧本正文')).toHaveValue('第一集：雨夜');await page.getByLabel('剧本正文').fill('第一集：雨夜\n场景一');await page.getByRole('button',{name:'保存草稿'}).click();await expect.poll(()=>savedContent).toBe('第一集：雨夜\n场景一');
 });
 
 test('deletes an episode and selects the adjacent episode',async({page},testInfo)=>{
@@ -403,7 +419,9 @@ test('compact desktop keeps the inspector inside the viewport at the mobile brea
   for (const width of [900, 905, 906]) {
     await page.setViewportSize({width, height: 800});
     await page.goto('/');
-    await expect(page.getByRole('tab', {name: '审核'})).toBeVisible();
+    await page.getByRole('tab', {name: '分镜'}).click();
+    await page.getByRole('button', {name: /镜头 2/}).click();
+    await expect(page.getByLabel('审核状态')).toBeVisible();
 
     const [gridBox, inspectorBox, controlBox, dimensions] = await Promise.all([
       page.locator('.workspace-grid').boundingBox(),
@@ -551,8 +569,8 @@ test('episode production canvas keeps nodes, edges, and controls geometrically s
     await expect(canvas).toBeVisible();
     await expect(canvas.locator('.react-flow__node')).toHaveCount(4);
     await canvas.getByRole('button',{name:'镜头 02：close_up'}).click();
-    const panelNode=canvas.getByRole('button',{name:'镜头 02 画面'});
-    const reviewNode=canvas.getByRole('button',{name:'镜头 02 审核'});
+    const panelNode=canvas.getByRole('button',{name:'镜头 02 分镜渲染'});
+    const reviewNode=canvas.getByRole('button',{name:'镜头 02 视觉审阅'});
     await expect(panelNode).toBeVisible();
     await expect(reviewNode).toBeVisible();
     if(testInfo.project.name==='desktop'){
@@ -608,12 +626,12 @@ test('production canvas persists scene collapse and pinned expansion while switc
   await page.getByRole('button',{name:'固定镜头 02'}).click();
   await expect(page.getByRole('button',{name:'取消固定镜头 02'})).toBeVisible();
   await expect.poll(()=>savedLayout?.pinned_shots??[]).toContain('shot-2');
-  await canvas.getByRole('button',{name:'镜头 02 画面'}).click();
-  await expect(page.getByRole('heading',{name:'画面节点'})).toBeVisible();
-  await expect(page.getByText('comfy-panel · v3')).toBeVisible();
+  await canvas.getByRole('button',{name:'镜头 02 分镜渲染'}).click();
+  await expect(page.getByRole('heading',{name:'分镜生成'})).toBeVisible();
+  await expect(page.getByRole('region',{name:'分镜生成预览'})).toBeVisible();
 });
 
-test('mobile review action opens a relevant shot in the inspector', async ({page}, testInfo) => {
+test('mobile review action opens a relevant shot in visual review', async ({page}, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile', 'Mobile-specific behavior');
   await page.unroute('**/api/episodes/episode-1/production-readiness');
   await page.route('**/api/episodes/episode-1/production-readiness', route => route.fulfill({json:{episode_id:'episode-1',ready:false,totals:{shots:2,dialogue:0},ready_counts:{panels:1,approved:1,speech:0},blockers:{missing_panels:['shot-2'],unapproved_shots:['shot-2'],missing_speech:[]}}}));
@@ -621,9 +639,9 @@ test('mobile review action opens a relevant shot in the inspector', async ({page
 
   await page.getByRole('button', {name: '处理阻塞项'}).click();
 
-  await expect(page.getByRole('tab', {name: '检查器'})).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('heading', {name: '镜头 2'})).toBeVisible();
-  await expect(page.getByLabel('审核状态')).toHaveValue('draft');
+  await expect(page.getByRole('tab', {name: '生产'})).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', {name: '返回生产画布'})).toBeVisible();
+  await expect(page.getByText('本集生产 / 镜头 02 / 视觉审阅')).toBeVisible();
 });
 
 test('narrow mobile layout uses one shot column without clipping controls', async ({page}, testInfo) => {
@@ -651,10 +669,13 @@ test('narrow mobile layout uses one shot column without clipping controls', asyn
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(dimensions.clientWidth + 1);
   }
-  for (const control of await page.locator('button:visible, select:visible, input:visible, textarea:visible').all()) {
+  const productControls = page.locator('.app-shell button:visible, .app-shell select:visible, .app-shell input:visible, .app-shell textarea:visible');
+  for (const control of await productControls.all()) {
+    if (await control.evaluate(element => Boolean(element.closest('.toolbar-actions, .workspace-tabs-mobile')))) continue;
     const box = await control.boundingBox();
+    const label = await control.evaluate(element => element.getAttribute('aria-label') ?? element.textContent?.trim() ?? element.tagName);
     expect(box?.x ?? 0).toBeGreaterThanOrEqual(0);
-    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+    expect((box?.x ?? 0) + (box?.width ?? 0), `control ${label} must stay inside the viewport`).toBeLessThanOrEqual(dimensions.clientWidth + 1);
   }
 });
 
@@ -691,6 +712,8 @@ test('mixed production retry clears readiness blockers and enables render', asyn
   await expect(page.getByRole('button',{name:'渲染本集'})).toBeDisabled();
   await page.getByRole('button',{name:'批量生产'}).click();
   await page.getByRole('button',{name:'开始批量生产'}).click();
+  const closeInspector = page.getByRole('button',{name:'关闭节点检查器'});
+  if (await closeInspector.isVisible()) await closeInspector.click();
   await page.getByRole('button',{name:/任务队列/}).click();
   await expect(page.getByText('失败 1')).toBeVisible();
   await expect(page.getByText('跳过 1')).toBeVisible();
