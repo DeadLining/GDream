@@ -1,6 +1,7 @@
-# GDream / GDream — 架构与功能流程总览
+# GDream — 架构与功能流程总览
 
-> 版本 v2.9.8 · 分支 `codex/kunpeng-enhanced` · MIT
+> 历史结构快照：v2.9.8；部分功能、规模与调用方式已变化，不能作为当前验收结论。
+> 当前许可范围见 [LICENSING.md](../LICENSING.md)，投流模块与旧品牌兼容代码现状见 [残留审计](legacy-code-audit-2026-11-17.md)。
 > 代码规模约 17 万行（`src` + `src-tauri/src` 的 ts/tsx/rs）
 > 本文是代码结构勘察结论，所有结论均可按文件路径回溯验证。
 

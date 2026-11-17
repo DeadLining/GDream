@@ -64,3 +64,7 @@ docs/creative-proposals/
 **/.conversation_state.json
 skills/video-style-replication/夹缝/
 skills/video-style-replication/确认/
+
+# Literal shell home/Desktop paths created by accidental relative writes
+**/~/
+**/Desktop/
