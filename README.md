@@ -8,7 +8,7 @@ GDream 基于 React + TypeScript、Tauri / Rust 和固定版本的 DeepSeek Harn
 
 **许可：本仓库新增及有权许可的内容仅限非商业用途，商业使用需另行授权。原有 MIT 代码和第三方许可保留，具体范围见 [LICENSING.md](LICENSING.md)。**
 
-![GDream主界面 · 普通对话模式](docs/images/hero-main.png)
+> 界面截图待更新：原随附截图来自“鲲鹏”旧版界面，已撤下；当前 GDream 的展示图将以实际运行截图为准。
 
 ## 本地与自定义 API
 
@@ -29,25 +29,13 @@ GDream 基于 React + TypeScript、Tauri / Rust 和固定版本的 DeepSeek Harn
 - 所有助手入口统一使用固定版 **DeepSeek Harness**（ACP/MCP 桥），不提供旧内置模式切换或失败回放。
 - 同时接入 **GLM-5.3 / Kimi K3 / MiniMax M3 / 通义 Qwen3.8 / 豆包 Seed 2.1**，按所配渠道协议接入，Agent 执行统一经过 DSH；失败明确报错，不重放已执行付费工具的任务。
 
-![六家对话模型统一接入](docs/images/model-providers.png)
-
-![DeepSeek Harness 引擎一键切换](docs/images/harness-toggle.png)
-
 ### 全能画布：主流画布能力全配齐
 
 智能扩图、局部重绘、擦除物体、抠图去底、专业色卡、一键三视图、反推提示词，全部内置；画布支持全智能自动化操作——打开侧边 AI 助手，全程用自然语言指挥 AI 搭建画布、排布节点、优化画面结构。
 
-![节点画布全貌](docs/images/canvas-overview.png)
-
-![画布 AI 工具](docs/images/canvas-ai-tools.png)
-
-![侧边 AI 助手指挥画布](docs/images/canvas-ai-assistant.png)
-
 ### 风格库：245 种一键风格
 
 内置 **161 种 GPT 全系风格 + 84 种 Midjourney 专属风格**（附实测参数），自然语言描述即可一键匹配，免去手写复杂提示词的工作量。
-
-![161 种风格一键调用](docs/images/style-library.png)
 
 ### 流水线工坊：打磨最久、使用率最高的核心
 
@@ -59,35 +47,17 @@ GDream 基于 React + TypeScript、Tauri / Rust 和固定版本的 DeepSeek Harn
 
 小白可以一键全自动出片，老手把它当专属的分镜库、素材库、提示词仓库。
 
-![剧本一键拆解](docs/images/workshop-script-breakdown.png)
-
-![角色三视图与场景资产图](docs/images/workshop-assets.png)
-
-![结构化分镜提示词表](docs/images/workshop-shot-prompts.png)
-
-![画布与工坊双向互通](docs/images/canvas-workshop-sync.png)
-
 ### 故事板与镜头规划
 
 影视级项目工作台：自动读取剧本生成高清故事板（导演约束版、九宫格分镜版），镜头画面、表演细节、构图风格都可单独修改。另内置两套顶配提示词模板，分别适配 Seedance 2.0 / 2.5 的模型质感。
-
-![高清故事板 + 导演约束卡](docs/images/workshop-storyboard.png)
 
 ### 对话式 AI 剪辑（A 剪）与配音闭环
 
 短视频口播或长篇剧情，都可以用对话指令完成剪辑：自动剔除口播水词、优化语句节奏。配音环节先用豆包精修配音，再导入工作流精准把控音画匹配。
 
-![对话式剪辑时间轴](docs/images/editor-aicut.png)
-
-![台词配音与音色资产](docs/images/voice-dubbing.png)
-
 ### MG 动画
 
 HTML 页面动效 + MiniMax H3 / Seedance Mini / Omni 多引擎生成，画布内置 72 种 MG 风格预设，动画制作效率翻倍。
-
-![72 种 MG 风格预设](docs/images/mg-style-library.png)
-
-![MG 引擎与叙事结构选择](docs/images/mg-engine-panel.png)
 
 ### AI 写作：去 AI 化审阅
 
