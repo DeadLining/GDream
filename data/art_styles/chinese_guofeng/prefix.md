@@ -1,1 +1,0 @@
-Chinese traditional ink and gongbi painting style, elegant flowing robes, ancient architecture, misty mountains, delicate brush lines, soft watercolor gradients, poetic atmosphere, vertical scroll composition.

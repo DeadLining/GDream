@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/h3-prompt-writing/h3-prompt.schema.json",
+  "title": "H3 Layer 2 Prompt Artifact",
+  "type": "object",
+  "required": ["mode", "duration", "prompt"],
+  "properties": {
+    "mode": { "enum": ["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"] },
+    "duration": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)? seconds$" },
+    "prompt": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

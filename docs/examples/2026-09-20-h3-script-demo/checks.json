@@ -1,0 +1,49 @@
+{
+  "scope": "Static sample checks only; no paid generation, no workshop write, no visual-reference verification.",
+  "shots": [
+    {
+      "shot": "01-01",
+      "seconds": 8,
+      "characters": 7244,
+      "intervals": 6,
+      "cuts": [
+        3.15
+      ],
+      "dialogue_exact_match": true
+    },
+    {
+      "shot": "01-02",
+      "seconds": 7,
+      "characters": 7215,
+      "intervals": 6,
+      "cuts": [
+        0.65,
+        3.35
+      ],
+      "dialogue_exact_match": true
+    },
+    {
+      "shot": "01-03",
+      "seconds": 8,
+      "characters": 7497,
+      "intervals": 8,
+      "cuts": [
+        2.75,
+        4.45,
+        6.0
+      ],
+      "dialogue_exact_match": true
+    },
+    {
+      "shot": "01-04",
+      "seconds": 7,
+      "characters": 7501,
+      "intervals": 7,
+      "cuts": [
+        4.2,
+        5.2
+      ],
+      "dialogue_exact_match": true
+    }
+  ]
+}

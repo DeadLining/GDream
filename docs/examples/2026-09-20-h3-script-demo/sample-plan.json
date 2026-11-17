@@ -1,0 +1,213 @@
+[
+  {
+    "no": "01-01",
+    "duration": 8,
+    "title": "你是不是觉得，我只会送？",
+    "dialogue": [
+      [
+        "zhou_ye",
+        "你是不是觉得，我只会送？"
+      ],
+      [
+        "lu_chen",
+        "我怕你又白白冲进去。"
+      ]
+    ],
+    "rows": [
+      [
+        "0.00–0.55",
+        "周野右掌把桌上耳机向前推约十厘米，掌心仍压着耳罩；吸一口短气，转脸直视陆沉。陆沉停住鼠标，眼睛先看耳机再看周野。秦教练从屏幕转看两人。",
+        "固定三人中全景；耳罩擦过桌垫，电脑风扇声。"
+      ],
+      [
+        "0.55–3.15",
+        "周野：“你是不是觉得，我只会送？”前半句急，末尾“送”字声音反而低下去；眉头抬起又挤拢，嘴角撑出的挑衅逐渐消失。他问完不躲开陆沉。陆沉嘴唇微启又闭上，等对方说完；秦教练没有插话。",
+        "保持固定构图，观众同时看见质问者与听者；不靠摇晃制造愤怒。"
+      ],
+      [
+        "3.15–3.55",
+        "周野最后一个音落下，右手离开耳机。陆沉把头转向周野，准备回应。",
+        "3.15 秒切至周野肩后看陆沉的近景，仍在两人轴线南侧。"
+      ],
+      [
+        "3.55–4.10",
+        "陆沉先看周野的眼睛，眉间压紧；不是轻蔑，是担心已经被顶成了防备。周野的肩膀在前景绷住。",
+        "近景静止；半秒回答前的迟疑。"
+      ],
+      [
+        "4.10–6.60",
+        "陆沉：“我怕你又白白冲进去。”重音落在“怕”，说到“又”时察觉刺痛了对方，尾句力度减弱。前景周野下巴略抬，随后转开一点脸。秦教练在画外保持不发声。",
+        "焦点留在陆沉眼睛，嘴部清楚可见；只听这句原文，不叠旁白。"
+      ],
+      [
+        "6.60–8.00",
+        "陆沉看见周野转开，眼里的防备松了一点，却没有马上找补。周野仍坐着，不把耳机摔下；秦教练准备介入，但尚未说话。",
+        "保持陆沉近景作为结束画面。没有额外慢推，也不把沉默拖长。"
+      ]
+    ],
+    "exit": "Lu is seated with his head turned toward Zhou and a visibly softened, regretful expression; his right hand remains resting on his mouse. Zhou is seated, face slightly averted, with his right hand off the headset. The headset is ten centimetres farther forward on Zhou's mat than at the opening. Qin remains standing at the desk end. The last image is Lu's close shot over Zhou's shoulder.",
+    "entry": "A shared medium-wide view shows Qin standing left, Lu seated centre-left with his right hand resting on his mouse, and Zhou seated right with his right palm touching the headset on his mat. Zhou is already turning toward Lu to challenge him; Lu is about to notice. No headset slide has yet occurred.",
+    "prompt_file": "01-01-i2va.txt"
+  },
+  {
+    "no": "01-02",
+    "duration": 7,
+    "title": "把决定权还给他",
+    "dialogue": [
+      [
+        "qin_yan",
+        "你替他打，还是让他打？"
+      ]
+    ],
+    "rows": [
+      [
+        "0.00–0.65",
+        "从上一镜陆沉近景原样接住。陆沉没有重新转头或重复刚才的话；他听见秦教练轻轻把手按上桌面的声音，眼睛先向左偏过去。周野顺着他的视线转向教练。",
+        "延续上一镜尾帧；掌心轻触桌面一声，不拍桌。"
+      ],
+      [
+        "0.65–0.85",
+        "秦教练稍微探身，让视线与坐着的陆沉接近同一高度；神情严肃，但没有训斥前的夸张蓄势。",
+        "0.65 秒切教练中近景，桌沿和陆沉一侧肩膀保留空间关系。"
+      ],
+      [
+        "0.85–3.35",
+        "秦教练：“你替他打，还是让他打？”前半句平直，“还是”前有短停顿，后半句是确实在等答案的问题。陆沉画外不抢答；周野刚扬起一点嘴角，又收回去，明白教练并非替他吵赢。",
+        "教练说完前不切镜，口型完整；没有训话配乐。"
+      ],
+      [
+        "3.35–3.75",
+        "秦教练说完闭合嘴唇，视线仍落在陆沉；压在桌面的手没有继续敲击。",
+        "3.35 秒切回两人中景，教练保留在左侧边缘。"
+      ],
+      [
+        "3.75–5.15",
+        "陆沉先垂眼看自己压着鼠标的手，再望向周野，眉头放开。周野与他对视，原先的攻击性变成谨慎等待。",
+        "一次很短的焦点转移：陆沉的手→他的脸，不改变座位和机位。"
+      ],
+      [
+        "5.15–7.00",
+        "陆沉把椅子原地转向周野约四分之一圈，椅脚不平移；呼气时出现一点承认自己过度保护的苦笑。周野不催促，身体也稍转向他。秦教练松开撑桌的手指。",
+        "双人中景收住，保留教练边缘；这一段停顿承担“改变想法”，不是开场拖延。"
+      ]
+    ],
+    "exit": "Lu and Zhou remain in their original chairs, with both upper bodies now angled toward each other. Lu has a small rueful smile rather than a defensive stare. Qin stands at the west desk end with his right palm lightly on the tabletop. The headset is still on Zhou's mat in its previously displaced position. The ending image is the medium two-shot with Qin at the left edge.",
+    "entry": "Lu is seated with his head turned toward Zhou and a visibly softened, regretful expression; his right hand remains resting on his mouse. Zhou is seated, face slightly averted, with his right hand off the headset. The headset is ten centimetres farther forward on Zhou's mat than at the opening. Qin remains standing at the desk end. The last image is Lu's close shot over Zhou's shoulder.",
+    "prompt_file": "01-02-i2va.txt"
+  },
+  {
+    "no": "01-03",
+    "duration": 8,
+    "title": "我跟",
+    "dialogue": [
+      [
+        "lu_chen",
+        "下一波，你来喊。"
+      ],
+      [
+        "zhou_ye",
+        "喊错了呢？"
+      ],
+      [
+        "lu_chen",
+        "我跟。"
+      ]
+    ],
+    "rows": [
+      [
+        "0.00–0.85",
+        "原样继承上一镜双人中景。陆沉把苦笑收成认真的注视，肩膀不再端着；周野的脸仍带着疑问，秦教练静等。",
+        "固定双人构图，不先加一个无意义的推近。"
+      ],
+      [
+        "0.85–2.75",
+        "陆沉：“下一波，你来喊。”语气不是下命令，重音给“你”；说完轻轻点一下头，把决定权明确交出去。周野眼睛稍睁大，眉头松开一半，仍没完全相信。",
+        "台词在同一构图内完整说完，同时看见接收方。"
+      ],
+      [
+        "2.75–3.20",
+        "周野看一眼教练，再回看陆沉；下唇松开，原本藏在质问后面的不安露出来。",
+        "2.75 秒切周野近景，陆沉的肩膀留在左前景。"
+      ],
+      [
+        "3.20–4.45",
+        "周野：“喊错了呢？”声音比第一镜低，尾音上扬，不是顶嘴，而是试探承诺能不能当真。陆沉在前景稍向前倾听。",
+        "周野正面三分之二侧脸，嘴、眼睛都清楚。"
+      ],
+      [
+        "4.45–5.10",
+        "周野说完仍望着陆沉，没有低头逃开。陆沉先点头，再开口。",
+        "4.45 秒切陆沉反应近景；两机位均留在人物轴线南侧。"
+      ],
+      [
+        "5.10–6.00",
+        "陆沉：“我跟。”不装深沉，语速自然、落字干脆，说完露出真正的笑意。",
+        "近景保持，给这句承诺完整落点，不抢切。"
+      ],
+      [
+        "6.00–6.65",
+        "周野肩膀终于下落，鼻间轻轻出一口气，笑容不是得意，而是得到支持后的放松。秦教练看着两人，嘴角也松开。",
+        "6.00 秒切回双人中景，看到承诺被接住。"
+      ],
+      [
+        "6.65–8.00",
+        "两人转回各自屏幕。陆沉右手落稳鼠标、左手移到键盘；周野双手移到耳机两侧并接触耳罩，但不提前戴起。秦教练收回撑桌的手，站直。",
+        "中景略向右摇以容纳周野的准备动作，末尾停稳；耳机仍在桌面，为下一镜保留明确起点。"
+      ]
+    ],
+    "exit": "Both players face their own monitors again. Lu's right hand rests on his mouse and his left on his keyboard. Zhou's two hands touch the headset cups on the desk mat but have not lifted it. Qin stands upright at the west desk end with his hand off the table. Zhou's relieved smile remains visible. The camera has stopped in the medium two-shot.",
+    "entry": "Lu and Zhou remain in their original chairs, with both upper bodies now angled toward each other. Lu has a small rueful smile rather than a defensive stare. Qin stands at the west desk end with his right palm lightly on the tabletop. The headset is still on Zhou's mat in its previously displaced position. The ending image is the medium two-shot with Qin at the left edge.",
+    "prompt_file": "01-03-i2va.txt"
+  },
+  {
+    "no": "01-04",
+    "duration": 7,
+    "title": "第一次一起进",
+    "dialogue": [
+      [
+        "zhou_ye",
+        "三、二、一，进！"
+      ]
+    ],
+    "rows": [
+      [
+        "0.00–0.95",
+        "从双手接触耳机的上一镜尾帧开始。周野双手握住耳罩，把耳机抬离桌面，头稍低让头梁越过发顶。陆沉保持就位，侧眼确认周野准备好了；秦教练站在原处。",
+        "固定中景；不让耳机凭空出现在头上。"
+      ],
+      [
+        "0.95–1.50",
+        "周野把两侧耳罩贴合耳朵，右拇指微调后松手，笑意转成专注。陆沉把视线落回屏幕，但仍留意队友的声音。",
+        "中景看清戴耳机的完成状态，耳机摩擦头发的轻响。"
+      ],
+      [
+        "1.50–2.00",
+        "周野左手落到键盘，右手落到鼠标，身体向桌面略前倾。秦教练看向屏幕，神情由审视变成期待。",
+        "手和桌面可见；动作进入可达接触范围后才操作。"
+      ],
+      [
+        "2.00–4.20",
+        "周野：“三、二、一，进！”前三拍不抢，最后一个字明显提高音量，眼神由确认队友转向锁定屏幕；陆沉听到最后口令才准备执行，不提前抢指挥。",
+        "保持双人中景，整句原文说完，不靠剪辑缩短倒数。"
+      ],
+      [
+        "4.20–4.75",
+        "周野按键并点击，陆沉紧接着按键；两人的动作形成很短的先后差，而非机械同步。",
+        "4.20 秒切两套键鼠的斜俯近景，保持周野右、陆沉左；两声按键、一声鼠标点击。"
+      ],
+      [
+        "4.75–5.20",
+        "两人继续看各自屏幕，屏幕内只有抽象运动和明暗反馈，不显示胜利结果；耳机仍戴在周野头上。",
+        "保持手部镜头，让接触动作完成后再切走。"
+      ],
+      [
+        "5.20–7.00",
+        "秦教练轻轻点一次头。陆沉短暂瞥周野一眼，笑意没有消失；周野已经专注操作，不再看陆沉等指令。",
+        "5.20 秒切回三人中全景，固定收尾：变化的是合作关系，不是凭空赢下一局。"
+      ]
+    ],
+    "exit": "Zhou wears his headset and operates his own keyboard and mouse; Lu uses his own controls and follows Zhou's lead. Both remain in their original seats. Qin stands at the west desk end after one approving nod. The final medium-wide image includes the three people and the desk; no game outcome has been claimed.",
+    "entry": "Both players face their own monitors again. Lu's right hand rests on his mouse and his left on his keyboard. Zhou's two hands touch the headset cups on the desk mat but have not lifted it. Qin stands upright at the west desk end with his hand off the table. Zhou's relieved smile remains visible. The camera has stopped in the medium two-shot.",
+    "prompt_file": "01-04-i2va.txt"
+  }
+]

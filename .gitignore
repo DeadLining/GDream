@@ -1,35 +1,66 @@
-.DS_Store
-.env
-.venv/
-__pycache__/
-.pytest_cache/
-.ruff_cache/
-*.pyc
 node_modules/
-.next/
-coverage/
-playwright-report/
-test-results/
-.playwright-cli/
-.superpowers/
-.worktrees/
-.runtime/
-output/
-/data/provider-channels.json
-/data/provider-channels.json.*.tmp
-/data/studio.db
-out/
 dist/
-packages/compositor/public/fixture/
-packages/compositor/public/jobs/
+src-tauri/target/
+.DS_Store
 
-# Build / tooling artifacts
-*.tsbuildinfo
+# ── 运行时/产物（可再生成或体积过大，不入库）──
+.local-browsers/
+dsh-runtime/node/
+tmp/
+output/
+*.zip
+
+# ── 环境与密钥 ──
+.env
+.env.*
+!.env.example
+
+# ── 私人覆盖层（开源仓库绝不包含，见 docs/开源计划 06）──
+private.defaults.json
+private/
+
+# ── 个人内容与内部文档 ──
+AGENT.md
+DEVLOG.md*
+HANDOFF-*.md
+aigc-memory/MEMORY.md
+aigc-memory/projects/
+aigc-memory/project-bibles/
+aigc-memory/project-status/
+aigc-memory/generation-log/
+aigc-memory/lessons-learned/
+aigc-memory/director-dna/
+aigc-memory/theme-arcs/
+skills/xiaozhi-moss-mcp/
+skills/video-script-writer/
+skills/digital-human-skill/
+.claude/
+.agents/
+.kimi-*
+.codex-*
+
+# 内部文档
+AIGC_MEMORY_ARCHITECTURE.md
+
+# ── 流水线实测产物（可再生成，6MB 打包体不入库）──
+scripts/pipeline-probe/.gen/
+
+# Local generated artifacts
+scripts/__pycache__/
+*.pyc
+
+# Publication privacy boundary
+.workbuddy/
+.workbuddy-ai/
 .codegraph/
-page_image/
+.seywo/
+.playwright-cli/
+fl2va-v40-request-*.txt
+docs/creative-proposals/
+*.bundle
+*gitleaks-report*.json
 
-# Runtime data (generated assets, logs)
-/.runtime/
-/data/projects/
-/data/mock-ssh.json
-/data/mock-ssh.log
+# Skill runtime sessions and personal creative records
+**/.conversation_state.json
+skills/video-style-replication/夹缝/
+skills/video-style-replication/确认/

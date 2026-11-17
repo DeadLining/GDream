@@ -1,0 +1,39 @@
+For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.
+
+integrated_multimodal_description: [Shot 1] Live-action dramatic performance, 16:9, 8.00 seconds. Begin with the supplied opening image, preserving its exact composition and physical state before following the approved camera plan below.
+
+[SUBJECTS]
+Lu Chen (S1) is the young adult man at the west station, with the lower, slightly dry conversational voice. Zhou Ye (S2) is the young adult man at the east station, with the brighter mid-register voice. Coach Qin (S3) is the standing adult man at the west desk end, with a clear grounded baritone. Preserve their faces, hair, clothes, apparent ages and proportions from the supplied opening image. Speaker IDs identify voices across the four generation units; only the lines explicitly present in this unit may be spoken. A person outside a close framing remains in the same physical position and does not vanish from the room.
+
+[WORLD_CONTINUITY]
+A single modest esports training room at night. One straight shared desk runs east-west. Both players sit on its north side facing south toward their own physical monitors: Lu at the west station, Zhou at the east station. Qin stands at the west desk end, addressing them diagonally. All camera positions stay south of the east-west interaction axis; in shared front views Lu stays left of Zhou. The monitors and desk do not move. Soft overhead room light keeps eyes and mouths readable, with restrained cooler display fill; changes in framing do not change the lighting direction or the time of night.
+
+[OBJECT_CONTINUITY]
+Each player has exactly one keyboard, mouse and physical monitor at his own station. Zhou's single black over-ear headset follows the explicitly described desk-to-head sequence; never duplicate it or put a second pair around his neck. Monitor light and abstract game motion remain inside the screens. Hands may contact only reachable equipment, and camera cuts preserve object ownership and every completed state change.
+
+[ACTION_ENGINE]
+From 00:00.000 to 00:00.850, begin from the inherited medium two-shot. Lu turns his rueful smile into steady, open eye contact with Zhou; his shoulders lose their defensive lift. Zhou still looks uncertain. Qin quietly waits at the left desk end, without nodding in advance of a decision.
+From 00:00.850 to 00:02.750, Lu Chen (S1), the lower-voiced young adult man, says: <d>[Chinese] 下一波，你来喊。</d> Put the emphasis on giving Zhou the choice, not on issuing an order. Lu adds one small affirmative nod only as the sentence ends. Zhou's eyes widen slightly and his brow begins to release, but his lips remain parted in disbelief rather than immediately forming a triumphant grin. Qin's attention stays on the exchange.
+[Shot 2] At 00:02.750, the camera cuts to a close shot of Zhou, with Lu's shoulder at the near left edge, on the same south side of the two-person axis. From 00:02.750 to 00:03.200, Zhou briefly checks Qin's face and returns his gaze to Lu; his lower lip relaxes as vulnerability replaces the earlier challenge.
+From 00:03.200 to 00:04.450, Zhou Ye (S2), the brighter-voiced young adult man, asks in a quieter, unguarded tone: <d>[Chinese] 喊错了呢？</d> The upward ending asks whether Lu's promise survives a mistake. His mouth makes the actual words, not a vague moving-lips loop. Lu's foreground shoulder inclines slightly as he listens, with no overlapping speech.
+[Shot 3] At 00:04.450, the camera cuts to Lu's matching close reaction from the same permitted side of the axis. From 00:04.450 to 00:05.100, Lu gives a small clear nod before answering; his eyes stay on Zhou, not down on the mouse.
+From 00:05.100 to 00:06.000, Lu (S1) answers at a natural conversational pace: <d>[Chinese] 我跟。</d> Let the words land plainly, with a genuine smile appearing after the commitment rather than a stylised smirk. Do not deepen or slow the voice into a trailer narration.
+[Shot 4] At 00:06.000, the camera cuts back to the medium two-shot. From 00:06.000 to 00:06.650, Zhou's shoulders drop, a small nasal exhale escapes, and relief opens his smile. Qin's mouth softens at the edge of frame; he says nothing.
+From 00:06.650 to 00:08.000, both players turn back toward their own monitors. Lu settles his right hand on his mouse and his left on his keyboard. Zhou reaches along his own desk mat with both hands and places his fingertips against the two headset cups, leaving the headset on the desk. Qin removes his palm from the tabletop and straightens without stepping away. A small rightward pan keeps Zhou's preparation inside the medium framing and stops before the end.
+
+[DIALOGUE]
+The only permitted dialogue is the Chinese speech embedded once in ACTION_ENGINE. Stable voice mapping: S1 = Lu Chen; S2 = Zhou Ye; S3 = Coach Qin. Bind each voice to the named speaker's physical mouth and position. Preserve each listener's response without giving that listener an additional line. All speech finishes before its next camera cut; no repeated speech or synthetic voiceover bridges are needed.
+
+[CAMERA_LOGIC]
+Use the inherited two-shot to show an offer and its reception together. Cut at 2.750 seconds to expose the insecurity behind Zhou's challenge, at 4.450 seconds to Lu's decision, and at 6.000 seconds to the shared reaction. These are motivated conversational views within one continuous scene, not new plot events. All cameras remain south of the players' axis; the two matching close shots have complementary eyelines and do not swap seats. No sentence spans a cut. Finish with one small rightward pan, not a push-in, to include Zhou's hands reaching the headset; end in a stable medium composition suitable for the next opening frame.
+
+[STATE_TRANSITION]
+Opening: Lu and Zhou remain in their original chairs, with both upper bodies now angled toward each other. Lu has a small rueful smile rather than a defensive stare. Qin stands at the west desk end with his right palm lightly on the tabletop. The headset is still on Zhou's mat in its previously displaced position. The ending image is the medium two-shot with Qin at the left edge.
+Ending at 8.00 seconds: Both players face their own monitors again. Lu's right hand rests on his mouse and his left on his keyboard. Zhou's two hands touch the headset cups on the desk mat but have not lifted it. Qin stands upright at the west desk end with his hand off the table. Zhou's relieved smile remains visible. The camera has stopped in the medium two-shot.
+
+[RESTRICTIONS]
+Preserve the original Chinese dialogue exactly once at its stated time, with no added words, narration, voiceover, repeated line, off-screen conversation or subtitles. Keep the approved edits and the continuous story time; no teleportation, seat swap, mirrored layout, identity replacement, new participant, new prop, extra finger or equipment duplication. Do not invent readable interface text, logos or a game result. Preserve expressive faces: identity consistency is not an instruction to freeze eyes, lips or posture. Do not add a universal slow push or turn the scene into a silent performance.
+
+overall_soundscape: Maintain the fan bed and close room ambience. The three short spoken lines do not overlap; between them use natural breaths, a slight chair swivel and a faint fingertip contact on the headset, without additional dialogue or laughter syllables.
+
+non_diegetic_music: None. Let the conversation, pauses and practical sounds carry the change in the relationship.

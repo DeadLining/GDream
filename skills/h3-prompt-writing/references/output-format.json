@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "baseFields": [
+    "integrated_multimodal_description",
+    "overall_soundscape",
+    "non_diegetic_music"
+  ],
+  "referenceFields": [
+    "subject_definitions",
+    "summary",
+    "retention_analysis",
+    "detailed_description",
+    "overall_soundscape",
+    "non_diegetic_music"
+  ],
+  "baseTimelineField": "integrated_multimodal_description",
+  "referenceTimelineField": "detailed_description",
+  "shotLabel": "[Shot N]",
+  "emptyAudioValue": "N/A"
+}
