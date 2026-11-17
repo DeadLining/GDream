@@ -1,1 +1,0 @@
-2D anime cel-shaded style, clean black line art, flat color shadows, expressive character eyes, smooth gradients, high detail faces, vertical comic composition, cinematic lighting.

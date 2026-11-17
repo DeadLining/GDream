@@ -1,1 +1,0 @@
-3D render, photorealistic, live action, western cartoon, chibi, deformed, blurry, low resolution, watermark, text, signature, cropped frame.

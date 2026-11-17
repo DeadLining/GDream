@@ -1,1 +1,0 @@
-3D render, photorealistic, anime cel-shading, bold black lines, neon, chibi, dark gritty, watermark, text, signature, cropped frame.

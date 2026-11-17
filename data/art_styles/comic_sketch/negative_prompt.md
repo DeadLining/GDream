@@ -1,1 +1,0 @@
-anime, 3D render, photorealistic, smooth digital painting, pastel colors, chibi, blurry, watermark, text, signature, clean vector lines.

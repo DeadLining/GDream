@@ -1,1 +1,0 @@
-Watercolor painting style, soft transparent washes, pastel tones, gentle gradients, hand-painted texture, delicate edges, dreamy atmosphere, vertical comic composition, warm lighting.

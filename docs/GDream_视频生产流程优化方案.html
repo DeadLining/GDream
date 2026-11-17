@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GDream 视频生产流程优化方案</title>
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--ink:#172033;--muted:#667085;--line:#e4e7ec;--blue:#2563eb;--blue-soft:#eff6ff;--green:#087443;--amber:#9a6700}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    .wrap{max-width:1080px;margin:0 auto;padding:48px 24px 80px}.hero{background:linear-gradient(135deg,#172554,#2563eb);color:#fff;border-radius:24px;padding:40px 44px;margin-bottom:24px}.hero h1{margin:0 0 10px;font-size:32px}.hero p{margin:0;color:#dbeafe}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;margin:18px 0}.card h2{margin:0 0 12px;font-size:21px}.card h3{font-size:16px;margin:20px 0 6px}.card p{margin:8px 0}.card ul{margin:8px 0;padding-left:22px}.tag{display:inline-block;background:var(--blue-soft);color:var(--blue);border-radius:999px;padding:3px 10px;margin:3px 5px 3px 0;font-size:12px}.priority{border-left:4px solid var(--blue);padding-left:16px}.warn{border-left-color:#d99000}.ok{border-left-color:#12b76a}pre{background:#101828;color:#d1e9ff;padding:16px;border-radius:10px;overflow:auto;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:10px 8px;vertical-align:top}th{color:var(--muted);font-weight:600}.footer{color:var(--muted);font-size:13px;margin-top:28px}@media(max-width:760px){.grid{grid-template-columns:1fr}.hero{padding:28px 24px}.hero h1{font-size:26px}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <section class="hero"><h1>GDream 视频生产流程优化方案</h1><p>目标：让整集视频在人物、道具、空间、机位、动作时间和声音上可追踪、可校验、可复现。</p></section>
+
+  <section class="card"><h2>一、当前判断</h2><p>项目已经具备分镜拆解、<code>actionTimeline</code>、资产引用、首尾帧继承、H3 提示词契约、生产审计和结构化连续性流程，但连续性主要依赖自然语言。下一阶段应把连续性从“提示词约束”升级为“结构化状态 + 生成前硬校验 + 冻结提交包”。</p><span class="tag">唯一数据模型</span><span class="tag">跨镜头校验</span><span class="tag">资产指纹</span><span class="tag">已移除白模预演</span></section>
+
+  <section class="card"><h2>二、目标流程</h2><table><thead><tr><th>阶段</th><th>输入</th><th>输出</th><th>门禁</th></tr></thead><tbody>
+    <tr><td>故事开发</td><td>梗概、人物、场景、道具</td><td>逐集结构、节拍、剧本事实</td><td>剧本审核通过</td></tr>
+    <tr><td>分镜拆解</td><td>剧本事实、相邻集状态</td><td><code>WsShot</code>、开场/结束状态</td><td>原子镜头 Reviewer 通过</td></tr>
+    <tr><td>时间轴</td><td>单镜事实、对白、时长</td><td>结构化 <code>actionTimeline</code></td><td>Schema、范围、轨道冲突检查</td></tr>
+    <tr><td>资产绑定</td><td>首帧可见主体、资产库</td><td>场景/人物/道具/色卡引用签名</td><td>文件存在、无错绑、无重复</td></tr>
+    <tr><td>已废弃：白模并行路径</td><td>两张场景俯视图、镜头事实</td><td>不再进入生产链</td><td>功能已移除；历史字段加载时清理</td></tr>
+    <tr><td>提示词与生成</td><td>状态、时间轴、资产</td><td>首帧/视频提示词及 production packet</td><td>签名冻结后才允许付费生成</td></tr>
+  </tbody></table></section>
+
+  <section class="card"><h2>二点一、单集与单镜头的拆解合同</h2>
+    <p>每集先由剧本阶段确定事件和冲突，再由分镜阶段把事件拆成可拍摄的原子镜头。每个镜头必须有明确的开始状态、唯一目标动作、结束状态和时长；不能只生成一段长提示词。</p>
+    <table><thead><tr><th>镜头字段</th><th>生成依据</th><th>必须产出</th></tr></thead><tbody>
+      <tr><td>镜头事实</td><td>剧本事件、人物关系、场景</td><td>shotNo、景别、机位、时长、镜头目标</td></tr>
+      <tr><td>状态账本</td><td>上一镜 exitState 与本镜 entryState</td><td>人物位置/朝向/姿态、道具持有/落点、环境声光</td></tr>
+      <tr><td>动作时间轴</td><td>镜头时长、动作因果、对白节奏</td><td>按时间段排列的动作事件，结束时间等于镜头时长</td></tr>
+      <tr><td>参考绑定</td><td>首帧实际可见内容与资产库</td><td>场景视角、实体人物、屏幕人物、资产道具</td></tr>
+      <tr><td>生成提示词</td><td>以上结构化结果</td><td>首帧 imagePrompt、视频 H3 prompt、声音描述</td></tr>
+    </tbody></table>
+    <pre>镜头 01-01：entryState → 0.00 秒首帧 → actionTimeline → exitState
+镜头 01-02：继承 01-01 exitState，只写发生变化的动作
+若发生换景、跨时或机位轴线重置，必须显式写 transitionPlan。</pre>
+  </section>
+
+  <section class="grid"><div class="card priority"><h2>三、最高优先级改造</h2><h3>1. 拆分人物集合（已落地）</h3><p>不要让 <code>characterIds</code> 同时表示实体人物、屏幕人物和所有可见人物。</p><pre>physicalCharacterIds // 场景中实际出现
+visibleCharacterIds   // 首帧中所有可见人物
+screenCharacterIds    // 电视、手机、海报中的人物</pre><p>首帧生图读取可见集合；实体人物参与空间连续性，屏幕人物拥有外观参考但不创建房间实体代理。</p><h3>2. 拆分道具语义</h3><pre>assetPropIds       // 资产库中有外观图的道具
+incidentalObjects  // 现场物件，无独立资产图</pre><p>例如“夏至设计手稿”是资产道具，“散落花枝”是现场物件，不能互相替代。</p></div>
+    <div class="card priority"><h2>四、结构化连续性账本</h2><p>为每个镜头新增可比较的状态快照，而不是只保存长文本。</p><pre>continuitySnapshot: {
+  sceneId,
+  cameraSignature,
+  spatialAnchorSignature,
+  lightingSignature,
+  visibleCharacters: [{ id, presence, anchor, facing, posture }],
+  props: [{ id, state, holder, anchor, contact }],
+  framePath
+}</pre><p>下一镜声明 <code>inherit</code> 时，必须比较上一镜快照 → 本镜 entryState → actionTimeline → exitState；场景切换则明确使用 <code>scene-cut</code>。</p></div></section>
+
+  <section class="card deprecated"><h2>五、已废弃：空间、白模与相机</h2><p><strong>该白模链路已移除，以下仅保留历史方案记录。</strong></p><p>场景两张斜对角俯视图只负责建立唯一世界坐标和物体锚点，不是最终输出机位。建议给场景资产增加：</p><pre>sceneSpatialProfile: {
+  anchors: [{ id, label, side }],
+  canonicalViews: ['diagonal-a', 'diagonal-b'],
+  coordinateVersion: 1
+}</pre><ul><li>阶段 A：建立场景拓扑，不放人物、不加灯光、不加材质。</li><li>阶段 B：依据本镜 0.00 秒状态放置实体人物、现场道具和相机，输出严格 9:16 纯白/中性灰白模。</li><li>最终每镜只允许一个 <code>stageBImagePath</code>；重新生成直接覆盖旧图。</li><li>写入前检查本机文件存在、PNG 指纹、尺寸和镜头 revision。</li></ul></section>
+
+  <section class="card"><h2>六、跨镜头一致性校验</h2><p>新增 <code>validateEpisodeContinuity(shots)</code>，至少检查：</p><ul><li>上一镜尾状态与下一镜 entryState 是否一致。</li><li>人物是否瞬移、消失或从屏幕人物变成实体人物。</li><li>道具持有人、落点、完整/破损状态是否有可见交接过程。</li><li>同场景相机侧别、画幅和主要光线是否突然变化。</li><li>时间轴是否越界、倒置、重叠，最后结束时间是否等于镜头时长。</li><li>转场是否只发生一次，且有 <code>transitionPlan</code>。</li></ul><pre>01-02：顾念上一镜站在电视前，本镜写成坐在床沿，但没有移动段或转场计划。
+01-03：U盘上一镜在右手，本镜直接出现在桌面，缺少放下动作。
+01-04：同场景相机从左前跳到右后，未声明 scene-cut 或受控转场。</pre></section>
+
+  <section class="card"><h2>七、Production Packet 冻结提交</h2><p>付费生成前创建不可变提交包，实际任务只能读取它：</p><pre>{
+  shotNo, promptVersion, referenceSignature, referencePaths,
+  actionTimeline, entryState, exitState, continuitySnapshot,
+  imagePrompt, videoPrompt, generatedAt
+  }</pre><p>首帧生图和视频生成都必须创建 packet；其中 <code>referencePaths</code> 按最终绑定顺序冻结，<code>referenceSignature</code> 记录绑定版本，<code>inputFingerprint</code> 对提示词、参考图、音频和参数做指纹。任何剧本事实、资产、时间轴或提示词变化都使 packet 失效，必须重新生成，避免界面内容和实际提交内容不一致。</p><p><span class="tag">当前实现：视频与首帧生图均冻结 provider 输入</span></p></section>
+
+  <section class="card"><h2>八、提示词生成规则收敛</h2><ul><li>把重复规则抽成共享构建器：<code>buildTimelineInstruction</code>、<code>buildReferenceInstruction</code>、<code>buildContinuityInstruction</code>、<code>已移除 buildWhiteboxInstruction</code>。</li><li><code>actionTimeline</code> 必须先写回并重新读取，之后才允许写视频提示词。</li><li><code>imagePrompt</code> 必须引用真实最终资产顺序；空间信息由场景资产和结构化镜头状态共同约束。</li><li>H3 的 <code>[ACTION_ENGINE]</code> 逐段读取真实时间轴；不同 H3 模式遵循各自素材引用规则。</li><li>首帧只描述 0.00 秒状态，不能提前加入后续动作或结尾状态。</li></ul></section>
+
+  <section class="card"><h2>九、实施顺序与验收</h2><div class="priority"><h3>P0：先做数据正确性</h3><p>人物集合拆分、道具集合拆分、连续性快照、生成前资产清单和硬校验。</p></div><div class="priority"><h3>P1：再做跨镜头可控性</h3><p>episode continuity validator、相机/空间/灯光签名、production packet 和结构化空间字段。</p></div><div class="priority"><h3>P2：最后做维护性</h3><p>提示词契约构建器、连续性状态表 UI、同场景拓扑缓存和更清晰的错误恢复。</p></div><h3>验收标准</h3><ul><li>每个镜头能明确列出实体人物、屏幕人物、资产道具和现场物件。</li><li>任意相邻镜头可解释人物、道具、相机和空间状态如何从 A 变为 B。</li><li>首帧、视频提示词、参考路径和签名来自同一个冻结 packet。</li><li>历史白模字段和参考路径不会再次进入生成请求。</li><li>时间轴、提示词、资产绑定和生成审计测试全部通过。</li></ul></section>
+
+  <section class="card ok"><h2>十、执行原则</h2><p><strong>剧本事实决定人物和动作；结构化状态决定连续性；场景资产和镜头状态决定空间与机位；资产图决定真实外观；时间轴决定动作持续时间；production packet 决定最终提交内容。</strong></p></section>
+  <section class="card"><h2>十一、当前落地状态</h2><table><thead><tr><th>能力</th><th>状态</th><th>说明</th></tr></thead><tbody><tr><td>首帧/视频 production packet</td><td>已接入</td><td>两类付费生成均冻结提示词、参考路径和输入指纹。</td></tr><tr><td>生成前资产清单校验</td><td>已接入</td><td>检查场景、人物、道具和重复路径，失败时阻断提交。</td></tr><tr><td>跨镜头连续性门禁</td><td>进行中</td><td>已具备校验器，仍需接入所有 UI 生成入口。</td></tr></tbody></table></section>
+  <section class="card"><h2>十二、旁路入口收敛</h2><p>画布和自动化工具存在直接调用生成核心的入口。它们必须复用工坊的参考绑定、连续性校验和 production packet，避免出现“工坊显示的资产”和“实际提交的资产”不一致。统一入口只接收冻结后的 packet，并把任务 ID、输入指纹和产物路径回写到同一镜头。</p></section>
+  <p class="footer">文档用途：后续可将本方案拆成独立 goal，按 P0 → P1 → P2 执行。内部存储路径和兼容键不应因品牌更新而改变。</p>
+</main>
+</body>
+</html>

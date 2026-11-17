@@ -1,0 +1,232 @@
+# Full-Reference Mode Prompt Writing Guide
+
+## Canonical Format, Event-Led Content
+
+Write a description of the audiovisual event as it unfolds inside the official
+six-field envelope. This is a deterministic artifact contract, not a model quality
+requirement. Use these exact lowercase fields once each, at the start of a
+line, in this order:
+
+```text
+subject_definitions: Actual subject/source bindings and reference roles.
+
+summary: [reference generation] One concise task/reference-scope sentence.
+
+retention_analysis: Concise preservation/transfer instructions by reference role.
+
+detailed_description: [Shot 1] Opening composition and meaningful timed events.
+
+overall_soundscape: Whole-clip ambience and physical sound, or N/A.
+
+non_diegetic_music: Audience-only score, or N/A.
+```
+
+The field contract is shared with the base-mode skill in
+`../../h3-prompt-writing/references/output-format.json`. Do not return a partial
+envelope, free-form prompt, Markdown fence, or a second action/dialogue ledger.
+Start detailed_description with [Shot 1], including a single take; add
+consecutive [Shot N] blocks only for actual cuts, with cut times at the start
+of later blocks. Use meaningful MM:SS.mmm-MM:SS.mmm event windows inside a
+shot, without equal subdivisions or a minimum number of beats. The opening
+composition comes first; the approved ending lives in the last action paragraph.
+
+subject_definitions binds each identity and actual source once. summary names
+the task and reference scope without replaying the plot. retention_analysis
+records what remains stable or transfers: use fully_preserved,
+partially_preserved, attribute_transfer, or weak_reference for visible roles;
+use fully_copy, partially_copy, reference, or weak_reference for audio roles.
+Preserving identity does not freeze pose, expression, prop state, or camera.
+New planned motion is not a loss of identity fidelity. Do not quote dialogue
+or repeat timed actions in either summary or retention_analysis.
+
+A simple shot may need a short reference binding and one action paragraph.
+A complex shot may need timed beats. Additional headings do not create quality,
+and a fixed character count does not establish completeness.
+
+## References and Identity
+
+Bind actual sources once, using their real modality order: <Picture N>,
+<Video N>, and <Audio N>. Character references anchor identity and wardrobe;
+scene references anchor environment and layout; props anchor appearance and
+proportions. A style or motion reference guides only its declared role.
+Preserve intentional medium differences such as anime linework, documentary
+recording artifacts, or clean product photography.
+
+For multiple people, use a compact mapping such as:
+
+<Subject 1> (Mei): identity and coat from <Picture 2>.
+<Subject 2> (Jun): identity and shirt from <Picture 3>.
+The apartment layout and morning light come from <Picture 1>.
+
+Put mappings inside subject_definitions. Use
+one identity per physical person, including aliases and titles. A visual group
+is not automatically a speaking subject: give the group a voice ID only when
+the group speaks together, and map an individual speaker inside that group as
+their own physical subject. When dialogue needs machine alignment, retain the
+canonical speaker's name in the mapping, number speaking subjects in
+first-speaking order, and use stable labels beside their actual lines. Silent
+people and environments need no voice ID. Never reuse one voice ID for two
+physical speakers.
+An individually mapped group member remains the same already-present person,
+not an additional body. Describe the remaining group without counting that
+person again. Collective speech uses the participating speakers' compound IDs,
+not a new voice identity for the group.
+
+Do not repeat reference indices or full wardrobe descriptions in every beat.
+Do not turn every described object into a reference asset. Separate images
+serve recognizable continuity or a viewer-facing focal detail, not mere
+repetition or handling. Use text for generic incidental objects and preserve
+their state and actions. Reuse appearance already covered by scene or character
+assets; do not split off each furnishing or accessory. Reference selection
+belongs to asset planning or authorized binding edits; prompt-only rewriting
+preserves the actual supplied list and explicit user references.
+Do not transfer an asset sheet's multi-view composition into the video frame.
+An explicitly selected first frame fixes the opening instant; a continuity
+reference alone does not fix camera or pose throughout the shot.
+
+If the actual images and canonical facts cannot establish an identity, return
+REFERENCE_BINDING_UNRESOLVED: followed by the specific unresolved mapping.
+
+## Events, Camera, and Style
+
+### Retention State Scope
+
+`fully_preserved` refers to the explicitly defined reference role; it does not mean every pictured state lasts throughout the clip. Name the stable properties being preserved and distinguish them from states changed by the action. For example, removed glasses remain the same object with the same design, but their location changes from the face to the holding hand. Preserve that resulting state in later action paragraphs and the ending. Do not describe an accessory as worn throughout when the timeline removes it.
+
+Do not use a blanket preservation claim followed by an exception. Separate stable identity/design from the initial state, the action that changes it and the resulting state. A relationship marker is not a substitute for this scope. Compare the claim with subject_definitions, summary and detailed_description; rewrite contradictory claims at their source rather than appending a prohibition. Apply the same scope check to space, object ownership, lighting, camera motion and audio, without adding audit sections to the output.
+
+Apply the viewpoint and visibility contract across all six sections, not only first appearances. Distinguish story context, a character's view and the camera's visible/readable content: a rear-facing display does not expose its interface to the camera. Label necessary unseen facts as off-camera context rather than requesting their visual display; do not change approved coverage to reveal them. Identity/design reference images supply the subject, not their contact-sheet layout, captions or backing, unless that presentation is explicitly the assigned reference role. Resolve conflicts in the original description instead of appending contradictory restrictions.
+
+### Cross-shot Opening State Continuity
+
+When a preceding accepted tail is explicitly selected as the first frame, its
+visible state supplies the opening evidence. Otherwise it remains continuity
+context, not a mandatory composition. Asset sheets supply identity and design,
+not a replacement object state. Asset references supply identity and appearance,
+not an unobserved state. Preserve consequential visible states until an
+explicit action changes them: a closed device opens visibly, and a held object
+is placed or transferred before appearing elsewhere. Do not infer hidden states
+or add an event merely to satisfy continuity. Report material conflicts with an
+explicit opening requirement rather than claiming contradictory states match.
+Ref2VA is a prompt-level condition, not a pixel-lock guarantee or proof of quality.
+
+Write the actual opening states in the first action paragraph, then carry them forward until an explicit action changes them. A closed laptop stays closed until a visible opening action; a seated person rises before acting from a standing position; an object held in one hand is placed or transferred before appearing elsewhere. These are examples, not mandatory actions. If the script does not require the change, preserve the existing state. Unknown details remain unspecified.
+
+Begin with the framing and starting state needed for the main event. Develop
+observable changes in playback order and land on the approved ending. For
+contact or transformation, make the connection and consequence legible:
+cause -> action -> contact or path -> visible consequence -> changed state.
+Use only the mechanics that matter; do not over-specify ordinary incidental
+gestures. A deliberate pause or sustained view may itself be the planned beat.
+
+Respect explicit camera intent. Otherwise choose coverage that lets the viewer
+read the action or response: tracking follows a journey, a close-up reveals a
+small change, a held two-shot lets an exchange develop. Show when a movement,
+focus change, or cut happens rather than writing a camera inventory elsewhere.
+For internal cuts, add consecutive [Shot N] blocks with cut times. A single
+continuous take still starts with [Shot 1]. Timing follows events and natural speaking pace, not
+equal subdivisions or a minimum number of blocks.
+
+Convey style through concrete choices: surface reflections, linework, contrast,
+light source, motion texture, lens behavior, recording defects, and acoustic
+space. State only those relevant to the intended treatment. Do not default to
+cinematic gloss, dramatic score, or exaggerated acting.
+
+## Dialogue and Sound
+
+The supplied script is the only speech source. Emit each canonical turn once,
+in order, inside the chronological event passage beside its sole speaker and
+stable voice ID. Preserve original language and use the supplied
+requiredDialogueTag verbatim:
+
+<Subject 1> (S1) says quietly, <d>[Chinese] 你回来啦。</d>
+
+Reuse S1 for that speaker's later lines; assign S2 only when a second physical
+speaker actually speaks. Keep each line adjacent to the action that produces
+it, and use an approximate time window or an unmistakable sequence cue when
+exact timing is not required. Keep faces and mouths identifiable when the
+planned framing shows the speaker. Express delivery and relevant listening
+behavior in the same event paragraph, not only in a detached dialogue
+catalogue. For a deliberately off-screen voice, preserve its established
+identity and acoustic position. Never infer ownership from a listener,
+addressee, title, or nearby group label.
+Action narration must agree with the supplied turns: do not describe one
+person speaking while tagging another, or imply additional questions or
+intelligible conversation that is absent from the canonical dialogue.
+
+After a line, describe the appropriate listener response, continuation, or hold
+when it carries the scene. Do not fill a silent shot with invented speech.
+Diegetic sound can live beside the action. The required overall_soundscape and
+non_diegetic_music fields contain whole-clip instructions, without repeating
+speech. State an explicit no-music choice as N/A. Reference audio may guide
+timbre, rhythm, ambience, or direct reuse; say which role is intended.
+
+If dialogue spans an authored cut, keep the same speaker. The optional
+<scenetrans> marker may connect fragments, and <cutoff> marks only an explicitly
+requested interruption; neither permits dropping supplied words.
+
+Treat duration and time windows as planning references unless explicitly hard.
+Allocate complete dialogue at a natural pace, including breaths, punctuation,
+turn handoffs and relevant reactions; measured audio takes precedence over a
+text estimate. Overlap listening, movement and ambience where plausible.
+Shorten or extend timing within the caller's clip budget from the actual events,
+not from description length. First-frame composition, appearance and already
+completed opening actions are states, not additional timed beats to replay.
+Do not pad short content to retain an old duration; a long silent hold needs
+a supported dramatic or visual purpose. An oversized reference or text estimate
+alone does not prove infeasibility. Reflow flexible windows and update the total
+and endpoints together. Do not accelerate, truncate or paraphrase speech to
+fit. Above the budget, split at complete turns/action results in planning or
+report H3_TIMING_UNRESOLVED in prompt-only revision. If explicit hard constraints
+cannot coexist, return REF2VA_TIMING_UNRESOLVED with the conflict, outside the
+usable prompt.
+
+## Examples of Different Levels of Detail
+
+Short dialogue beat in the required envelope:
+
+
+subject_definitions:
+
+<Subject 1> (Mei): face and coat from <Picture 2>.
+<Subject 2> (Jun): face and shirt from <Picture 3>.
+The hallway and window light follow <Picture 1>.
+summary: [reference generation] A two-person greeting using the supplied identities and hallway.
+retention_analysis: <Subject 1>, <Subject 2>: fully_preserved - identity and wardrobe, with natural performance. <Picture 1>: fully_preserved - hallway layout and light.
+detailed_description: [Shot 1] 00:00.000-00:04.000:
+A held eye-level two-shot. Mei stops beside the open door and says softly,
+<Subject 1> (S1) <d>[Chinese] 你回来啦。</d> Jun's hand settles on the handle;
+he looks toward her and holds the look. Distant traffic and the handle's small
+click remain audible.
+overall_soundscape: Distant traffic, clothing rustle and the handle click.
+non_diegetic_music: N/A.
+
+Silent product body excerpt (the full output still includes all six fields):
+
+[Shot 1] The headphones follow <Picture 1> in shape and materials. Over the first half
+of the clip, a lateral macro track crosses the fabric ear pad, bringing its
+weave into focus. The view widens as the headphones turn to reveal the metal
+yoke; the rotation settles into the approved final three-quarter view. A soft
+motor hum follows the rotation and fades when it stops.
+
+Action body excerpt when intermediate states matter:
+
+[Shot 1] The cyclist and bicycle follow their supplied references. The low tracking
+camera stays alongside the front wheel as it enters a shallow puddle. The tire
+compresses the water into a forward spray; droplets strike the frame while
+the rear wheel follows the same path. The rider corrects the handlebar slightly
+and continues onto dry pavement. Tire hiss gives way to the harder rolling
+sound. The approved exit position remains the final state.
+
+These examples illustrate prose density, not reusable plots, fixed shot counts,
+or required durations. Transfer the writing logic, not their characters or events.
+
+## Final Check
+
+Check actual reference bindings, canonical cast, complete dialogue and ownership,
+duration, meaningful continuity, camera intent, and the approved ending. Remove
+duplicate identity descriptions, analysis, speculative scene facts, and padding.
+Validate the six fields, non-empty content, exact order and consecutive shot
+labels. Legacy free-form text can be read as source material, but new saved
+prompts must use the canonical envelope. Format validation does not predict
+video quality.
