@@ -1,0 +1,5 @@
+# Local model weights and service process files
+models/
+server.log
+server.pid
+__pycache__/

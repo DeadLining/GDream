@@ -11,7 +11,10 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
 MODEL_NAME = "Qwen3-TTS-12Hz-1.7B-CustomVoice"
-MODEL_PATH = os.environ.get("QWEN3_TTS_MODEL_PATH", "/gpu3/guhj/models/" + MODEL_NAME)
+MODEL_PATH = os.environ.get(
+    "QWEN3_TTS_MODEL_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", MODEL_NAME),
+)
 SPEAKERS = ("vivian", "serena", "uncle_fu", "dylan", "eric", "ryan", "aiden", "ono_anna", "sohee")
 model = None
 inference_lock = threading.Lock()

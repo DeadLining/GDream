@@ -5,32 +5,36 @@ It supports nine preset speakers with an independent instruction string. It is
 **not** VoiceDesign and does not clone voices. Spoken `input` and style
 `instructions` are always passed to separate model arguments.
 
-## Deployment on 95
+## Deployment
 
-- Directory: `/gpu3/guhj/apps/gdream-qwen3-tts`
-- Model: `/gpu3/guhj/models/Qwen3-TTS-12Hz-1.7B-CustomVoice`
-- Existing Python: `/gpu3/guhj/envs/speech-llm/bin/python`
-- Address: `http://127.0.0.1:8815`
-- GPU: `CUDA_VISIBLE_DEVICES=0` (one worker/model instance).
-- Runtime: existing qwen-tts, PyTorch, FastAPI, Uvicorn, numpy and soundfile;
-  no changes to the shared environment. Uses SDPA, not optional flash-attn.
-- Offline model loading: no weights downloaded on startup.
+Use a CUDA-capable host with Python, qwen-tts, PyTorch, FastAPI, Uvicorn,
+numpy and soundfile installed. Prepare the CustomVoice model weights locally
+before starting; startup is offline and does not download model weights.
+The adapter uses SDPA and does not require optional flash-attn.
 
-The running service is detached from the terminal. `server.pid` records the
-process and `server.log` records startup/errors. Do not launch a second copy on
-an occupied port or stop unrelated GPU processes. For a foreground manual start,
-after checking the service is stopped:
+From the repository root:
 
 ```bash
-cd /gpu3/guhj/apps/gdream-qwen3-tts
-bash run.sh
+export QWEN3_TTS_MODEL_PATH="/path/to/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+# Optional: choose the Python interpreter in your prepared environment.
+export QWEN3_TTS_PYTHON="/path/to/venv/bin/python"
+bash services/qwen3-tts/run.sh
 ```
 
-`QWEN3_TTS_GPU`, `QWEN3_TTS_PYTHON`, `QWEN3_TTS_MODEL_PATH`,
-`QWEN3_TTS_HOST`, and `QWEN3_TTS_PORT` override deployment defaults.
-This is **trusted-LAN only**, bound to the LAN address rather than all
-interfaces, without authentication or browser CORS access. Do not expose it
-on the public Internet. Authentication/TLS would be required for that use.
+Deployment settings:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `QWEN3_TTS_MODEL_PATH` | `models/Qwen3-TTS-12Hz-1.7B-CustomVoice` beside `server.py` | Local model directory |
+| `QWEN3_TTS_PYTHON` | `python3` from PATH | Python interpreter |
+| `QWEN3_TTS_GPU` | `0` | Visible GPU |
+| `QWEN3_TTS_HOST` | `127.0.0.1` | Listen address |
+| `QWEN3_TTS_PORT` | `8815` | Listen port |
+
+Run one worker per model instance. The service starts in the foreground and
+binds to loopback by default. It has no authentication or browser CORS access;
+use it on the same host or a trusted private network. Public deployment requires
+authentication and TLS. Keep local model weights and service logs outside Git.
 
 ## Contract
 
@@ -72,6 +76,6 @@ not change shot dubbing, ASR, uploaded voices or existing H3 audio references.
 # App request contract (no network)
 node --test src/lib/qwen3Tts/qwen3Tts.test.ts
 # Service contract (fake model, no GPU inference)
-cd /gpu3/guhj/apps/gdream-qwen3-tts
-/gpu3/guhj/envs/speech-llm/bin/python -m unittest test_server.py -v
+cd services/qwen3-tts
+python3 -m unittest test_server.py -v
 ```

@@ -181,15 +181,12 @@
     }
   },
   "documentation": {
-    "readme": "README_NEW.md",
-    "config_example": "config/config.example.json",
+    "readme": "README.md",
+    "config_example": "config.example.json",
     "prompts": {
       "body_views": "config/prompts/body_views.json",
       "details": "config/prompts/details.json"
-    },
-    "examples": [
-      "examples/bmw_x3_case_study.md"
-    ]
+    }
   },
   "changelog": {
     "3.0.0": {
