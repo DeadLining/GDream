@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-深度对比《未来废土风》视频与平衡版图片
+深度对比参考视频与平衡版图片
 找出"为什么总差一点"的根本原因
 同时标注：哪些调整会导致CG化（绝对禁止）
 """
@@ -16,18 +16,23 @@ BASE_URL = os.environ.get("DMXAPI_BASE_URL", "https://www.dmxapi.cn") + "/v1"
 def deep_compare_with_video():
     """深度对比视频与平衡版"""
     
+    # 输入由调用者指定，避免绑定旧项目的桌面文件。
+    input_names = ("REFERENCE_VIDEO", "CURRENT_STORYBOARD", "BASELINE_STORYBOARD")
+    if any(not os.environ.get(name) for name in input_names):
+        raise ValueError("请设置 REFERENCE_VIDEO、CURRENT_STORYBOARD、BASELINE_STORYBOARD 输入路径")
+
     # 读取视频
-    video_path = Path.home() / "Desktop" / "未来废土风.MP4"
+    video_path = Path(os.environ["REFERENCE_VIDEO"]).expanduser()
     with open(video_path, "rb") as f:
         video_base64 = base64.b64encode(f.read()).decode()
     
     # 读取平衡版图片
-    image_path = Path.home() / "Desktop" / "视频复刻" / "苏醒片段_九宫格_平衡版.jpg"
+    image_path = Path(os.environ["CURRENT_STORYBOARD"]).expanduser()
     with open(image_path, "rb") as f:
         image_base64 = base64.b64encode(f.read()).decode()
     
     # 读取v3（作为写实基准）
-    v3_path = Path.home() / "Desktop" / "视频复刻" / "苏醒片段_九宫格_v3.jpg"
+    v3_path = Path(os.environ["BASELINE_STORYBOARD"]).expanduser()
     with open(v3_path, "rb") as f:
         v3_base64 = base64.b64encode(f.read()).decode()
     
@@ -35,7 +40,7 @@ def deep_compare_with_video():
     prompt = """
 你是专业的影视视觉风格分析师，擅长对比视频与静态图片的视觉差异。
 
-**任务**：深度对比《未来废土风》视频与平衡版图片，找出"为什么总差一点"的根本原因。
+**任务**：深度对比参考视频与平衡版图片，找出"为什么总差一点"的根本原因。
 
 **对比维度**：
 1. **光影氛围的微妙差异**
@@ -219,7 +224,7 @@ def deep_compare_with_video():
 
 def main():
     print("\n" + "="*80)
-    print("【深度对比：《未来废土风》视频 vs 平衡版】")
+    print("【深度对比：参考视频 vs 平衡版】")
     print("找出'为什么总差一点'的根本原因")
     print("标注安全边界（避免CG化）")
     print("="*80 + "\n")

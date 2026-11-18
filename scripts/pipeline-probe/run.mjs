@@ -1490,7 +1490,7 @@ MODULES.autosteps34 = async () => {
  */
 MODULES.image = async () => {
   const IMG = (process.env.PROBE_IMG_BASE || 'http://127.0.0.1:7865').replace(/\/+$/, '');
-  const IMG_MODEL = process.env.PROBE_IMG_MODEL || '/gpu/nfs/raymodel/Qwen/Qwen-Image-Edit-2509';
+  const IMG_MODEL = process.env.PROBE_IMG_MODEL || 'Qwen-Image-Edit-2509';
   const REF = process.env.PROBE_IMG_REF || path.join(here, '../../public/logo-char.png');
   const IMG_TIMEOUT_MS = Number(process.env.PROBE_IMG_TIMEOUT_MS || 360_000);
   const PROMPT = '复刻参考图中的人物形象，保持人脸、发型、服饰高度一致。中景，柔和冷色顶光，电影感构图，纯色浅灰背景，无文字无水印。';

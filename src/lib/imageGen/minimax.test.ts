@@ -44,6 +44,6 @@ test('custom routing does not advertise unsupported native modes', async () => {
  const { supportsCustomImageMode } = await import('./minimax.ts');
  assert.equal(supportsCustomImageMode('https://api.minimax.cn/v1/image_generation','image-01','image-to-image'),true);
  assert.equal(supportsCustomImageMode('https://api.minimax.cn','image-01','text-to-image'),true);
- assert.equal(supportsCustomImageMode('http://127.0.0.1:7865','/gpu/nfs/raymodel/Qwen/Qwen-Image-Edit-2509','text-to-image'),false);
- assert.equal(supportsCustomImageMode('http://127.0.0.1:7865','/gpu/nfs/raymodel/Qwen/Qwen-Image-Edit-2509','image-to-image'),true);
+ assert.equal(supportsCustomImageMode('http://127.0.0.1:7865','/opt/models/Qwen-Image-Edit-2509','text-to-image'),false);
+ assert.equal(supportsCustomImageMode('http://127.0.0.1:7865','/opt/models/Qwen-Image-Edit-2509','image-to-image'),true);
 });

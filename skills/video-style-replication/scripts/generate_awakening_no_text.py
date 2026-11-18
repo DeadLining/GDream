@@ -21,7 +21,7 @@ def generate_no_text_version(ref_image_path):
         ref_image_base64 = base64.b64encode(f.read()).decode()
     
     # 读取提示词
-    prompt_path = Path.home() / "Desktop" / "视频复刻" / "awakening_prompt_no_text.md"
+    prompt_path = Path(__file__).resolve().parents[1] / "database" / "awakening_prompt_no_text.md"
     with open(prompt_path, "r", encoding="utf-8") as f:
         prompt = f.read()
     
@@ -31,16 +31,16 @@ def generate_no_text_version(ref_image_path):
     
     print("\n" + "="*80)
     print("【苏醒片段九宫格 - 无文字版】")
-    print("v3人脸美化 + 最终版光影系统 + 禁止文字")
+    print("虚构角色一致性 + 写实光影系统 + 禁止文字")
     print("="*80 + "\n")
     
     print("🎨 正在生成无文字版九宫格分镜...")
     print("\n【核心策略】")
-    print("  ✓ 人脸：完全复刻参考图 + v3美化（精致20%）")
+    print("  ✓ 人脸：保持虚构角色一致 + 自然皮肤质感")
     print("  ✓ 光影：1:1还原视频 + 安全增强")
     print("  ✓ 材质：真实质感 + 边缘精致化")
     print("  ✗ 特别禁止：图片中出现任何文字、字幕、标签")
-    print("  ✓ 目标：v3美化效果 + 视频级光影 + 纯视觉画面")
+    print("  ✓ 目标：角色一致性 + 写实光影 + 纯视觉画面")
     
     response = requests.post(
         f"{BASE_URL}/images/generations",
@@ -92,12 +92,12 @@ def main():
         print("="*80)
         print(f"✅ 文件位置: {result}")
         print("\n无文字版特点：")
-        print("  1. 人脸：完全复刻参考图 + v3美化")
+        print("  1. 人脸：保持虚构角色一致 + 自然皮肤质感")
         print("  2. 光影：视频级系统 + 安全增强")
         print("  3. 材质：真实质感 + 边缘精致化")
         print("  4. 特别禁止：图片中无任何文字、字幕、标签")
-        print("  5. 预期：v3美化 + 视频级光影 + 纯视觉画面")
-        print("\n📁 提示词已保存: ~/Desktop/视频复刻/awakening_prompt_no_text.md")
+        print("  5. 预期：角色一致性 + 写实光影 + 纯视觉画面")
+        print("\n📁 提示词来源: 技能内置 database/awakening_prompt_no_text.md")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,8 @@
 豆包视觉分析客户端 - 质量分析和提示词优化
 """
 
-import osfrom pathlib import Path
+import os
+from pathlib import Path
 from typing import Dict, Optional
 import base64
 import json

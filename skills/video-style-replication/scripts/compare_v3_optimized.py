@@ -35,10 +35,12 @@ def compare_versions(v3_path, optimized_path, plan_path):
     prompt = f"""
 你是专业的AI图像质量评估师。请对比这两张九宫格图片：
 
-**图片1（v3版本）**：用户认为真实感较好
-**图片2（优化版）**：用户反馈CG感太强，不真实
+**图片1（v3版本）**：写实基准候选，需根据附件评估
+**图片2（优化版）**：风格增强候选，检查是否出现过强CG感
 
-**原始约束（来自awakening_3x3_plan.json）**：
+以下为通用对比练习，不代表真实用户评价；先验证问题是否存在，再给出建议。
+
+**原始约束（来自调用者提供的计划JSON）**：
 {json.dumps(original_plan.get("realism_requirements", {}), ensure_ascii=False, indent=2)}
 
 **任务**：

@@ -1,13 +1,10 @@
-# 配置文件示例
-# 复制此文件为 config.json 并填入您的配置
-
 {
   "api_keys": {
     "anthropic": "your-anthropic-api-key-here",
     "bananapro": "your-bananapro-api-key-here"
   },
   "paths": {
-    "default_input": "C:\\Users\\38684\\Desktop\\蔚来es8",
+    "default_input": "./car_database/NIO/ES8/reference",
     "default_output": "./output"
   },
   "classification": {

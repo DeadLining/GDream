@@ -5,7 +5,8 @@
 核心策略：强化参考图权重，弱化文字描述，消除AI幻觉
 """
 
-import osfrom pathlib import Path
+import os
+from pathlib import Path
 from typing import List, Dict
 import base64
 

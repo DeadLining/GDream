@@ -102,8 +102,9 @@ from PIL import Image
 ### Step 7: 用户确认 → 存档
 
 ```bash
-# 存档（用户确认后）
-cp {path} ~/Desktop/夹缝-白日梦想家/outputs/
+# 存档到用户确认的项目目录（先设置 PROJECT_DIR）
+mkdir -p "${PROJECT_DIR:?请设置项目目录}/outputs"
+cp "{path}" "$PROJECT_DIR/outputs/"
 ```
 
 ---

@@ -5,7 +5,8 @@
 功能：对比生成图片与参考图的细节差异，自动分析问题
 """
 
-import osfrom pathlib import Path
+import os
+from pathlib import Path
 from typing import List, Dict, Tuple
 import json
 from openai import OpenAI

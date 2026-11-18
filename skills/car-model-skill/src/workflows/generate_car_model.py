@@ -4,7 +4,8 @@
 汽车模型生成完整工作流
 """
 
-import osfrom pathlib import Path
+import os
+from pathlib import Path
 from typing import Dict, List, Optional
 import json
 import shutil

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-分析《未来废土风》视频的影调特征，优化苏醒片段的视觉风格
+分析参考视频的影调特征，优化苏醒片段的视觉风格
 重点：繁复光影、巨物感、老旧油画感
 """
 import os
@@ -33,7 +33,7 @@ def analyze_video_tone(video_path, current_plan_path):
     
     # 构建分析提示词
     analysis_prompt = f"""
-你是一个专业的影视视觉分析师。请分析这段《未来废土风》视频的影调特征，重点关注以下三个方面：
+你是一个专业的影视视觉分析师。请分析这段参考视频的影调特征，重点关注以下三个方面：
 
 1. **繁复光影**：
    - 光影层次（几层光影？主光、辅光、环境光的关系）
@@ -201,8 +201,11 @@ def main():
     print("重点：繁复光影 + 巨物感 + 老旧油画感")
     print("="*80 + "\n")
     
-    video_path = Path.home() / "Desktop" / "未来废土风.MP4"
-    plan_path = Path.home() / "Desktop" / "视频复刻" / "awakening_3x3_plan.json"
+    if len(sys.argv) != 3:
+        print("Usage: python3 analyze_tone_for_awakening.py <参考视频路径> <分镜计划JSON路径>")
+        return
+    video_path = Path(sys.argv[1]).expanduser()
+    plan_path = Path(sys.argv[2]).expanduser()
     
     if not video_path.exists():
         print(f"❌ 视频文件不存在: {video_path}")

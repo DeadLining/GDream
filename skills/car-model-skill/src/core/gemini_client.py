@@ -4,7 +4,8 @@
 Gemini 多参考图融合客户端 - 核心模块
 """
 
-import osfrom pathlib import Path
+import os
+from pathlib import Path
 from typing import List, Optional
 import base64
 import json

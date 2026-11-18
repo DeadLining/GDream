@@ -40,7 +40,7 @@ def analyze_cg_and_design_storyboard(video_path, plan_c_path, optimized_path):
 2. 方案C图片
 3. 优化版图片
 
-用户反馈：优化版还可以，但希望再往方案C的CG感靠一点。
+示例目标（非用户历史反馈）：评估优化版与方案C的CG感差异，并探索适度靠近方案C的方式。
 
 请详细分析：
 - 方案C的CG感具体好在哪里？（具体特征，不是概括）
@@ -48,7 +48,7 @@ def analyze_cg_and_design_storyboard(video_path, plan_c_path, optimized_path):
 - 如何让优化版更接近方案C的CG感？（具体调整建议）
 
 【任务2：设计"苏醒"片段的详细分镜】
-用户要求：
+示例任务约束（可按本次输入替换）：
 - 只做"苏醒"这个片段的分镜
 - 把苏醒部分做丰富点（不要只有1-2个分镜，可能需要4-6个）
 - 其他分镜不用做

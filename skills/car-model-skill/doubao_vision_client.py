@@ -5,7 +5,8 @@
 用于图像分类和参数提取
 """
 
-import osimport requests
+import os
+import requests
 import base64
 import json
 from pathlib import Path

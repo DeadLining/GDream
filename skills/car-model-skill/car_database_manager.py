@@ -256,7 +256,7 @@ def save_nio_es8_to_database():
     generated_dir = Path("output_v3_enhanced/generated")
 
     # 参考图目录
-    reference_dir = Path(r"C:\Users\38684\Desktop\蔚来es8")
+    reference_dir = Path(__file__).resolve().parent / "car_database/NIO/ES8/reference"
 
     # 额外元数据
     metadata = {

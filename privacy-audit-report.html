@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="GDream 仓库隐私信息检查报告：已脱敏发现、风险分级、处理建议与检查边界。">
+  <title>GDream · 隐私信息检查报告</title>
+  <style>
+    :root { --ink:#182b3c; --muted:#576a7b; --line:#dce4ec; --paper:#fff; --bg:#f2f5f9; --blue:#175bc1; --red:#a62932; --amber:#87520c; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    a { color:var(--blue); text-underline-offset:3px; }
+    a:focus-visible, button:focus-visible { outline:3px solid #508ee8; outline-offset:4px; }
+    .page { max-width:1120px; margin:auto; padding:48px 28px 64px; }
+    header { border-top:5px solid var(--blue); padding:30px 32px; background:var(--paper); border-radius:0 0 16px 16px; }
+    .eyebrow { margin:0 0 8px; color:var(--blue); font-size:12px; font-weight:700; letter-spacing:2px; }
+    h1 { margin:0; font-size:clamp(26px,4vw,38px); line-height:1.3; letter-spacing:-.5px; }
+    .intro { margin:14px 0 18px; color:var(--muted); max-width:800px; }
+    .meta { display:flex; flex-wrap:wrap; gap:8px 22px; font-size:12px; color:var(--muted); }
+    .toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin:20px 0; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:13px; }
+    button { border:1px solid var(--line); border-radius:8px; padding:8px 15px; background:#fff; color:var(--ink); cursor:pointer; font:inherit; font-size:13px; }
+    button:hover { background:#eaf1fc; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .stat { border:1px solid var(--line); border-radius:12px; background:var(--paper); padding:18px 22px; }
+    .stat strong { display:block; font-size:28px; line-height:1.35; }
+    .stat span { color:var(--muted); font-size:13px; }
+    section { margin-top:24px; padding:26px 30px; background:var(--paper); border:1px solid var(--line); border-radius:14px; scroll-margin-top:20px; }
+    h2 { margin:0 0 14px; font-size:21px; }
+    h3 { margin:20px 0 8px; font-size:16px; }
+    p { margin:8px 0 12px; }
+    .callout { border-left:4px solid var(--red); background:#fff3f3; padding:14px 18px; border-radius:0 8px 8px 0; }
+    .note { color:var(--muted); font-size:13px; }
+    code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:.88em; background:#edf2f8; padding:2px 5px; border-radius:4px; overflow-wrap:anywhere; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    caption { text-align:left; color:var(--muted); padding-bottom:12px; font-size:13px; }
+    th { text-align:left; background:#f1f5fa; color:#415669; font-weight:600; }
+    th,td { padding:14px 12px; vertical-align:top; border-bottom:1px solid var(--line); }
+    th:first-child { width:110px; }
+    td:nth-child(2) { width:32%; }
+    tr:last-child td { border-bottom:0; }
+    .badge { display:inline-block; border-radius:5px; padding:2px 7px; white-space:nowrap; font-size:11px; font-weight:700; }
+    .priority { color:var(--red); background:#ffe5e7; }
+    .moderate { color:var(--amber); background:#fff0d8; }
+    .review { color:#43578b; background:#eaf0ff; }
+    ul,ol { padding-left:22px; margin:8px 0; }
+    li { margin:7px 0; }
+    .steps li { padding-left:5px; margin:12px 0; }
+    footer { margin-top:22px; color:var(--muted); font-size:12px; text-align:center; }
+    @media(max-width:700px) { .page { padding:20px 14px 36px; } header,section { padding:22px 18px; } .stats { grid-template-columns:1fr; gap:8px; } .stat { display:flex; gap:14px; align-items:center; padding:12px 18px; } .stat strong { font-size:23px; } table { min-width:760px; } }
+    @media print { @page { margin:15mm; } body { background:#fff; font-size:11px; } .page { max-width:none; padding:0; } header { padding:18px 0; } .toolbar { display:none; } section { padding:18px 0; border:0; border-top:1px solid var(--line); border-radius:0; } .stats { gap:8px; } .stat { padding:10px 14px; } .stat strong { font-size:22px; } h2,h3 { break-after:avoid; } tr,.callout,.stat { break-inside:avoid; } table { min-width:0; font-size:10px; } th,td { padding:9px 6px; } .table-wrap { overflow:visible; } a { color:inherit; text-decoration:none; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">GDREAM / PRIVACY AUDIT</p>
+      <h1>隐私信息检查报告</h1>
+      <p class="intro">对从 GitHub 克隆的 GDream 仓库进行只读检查，区分已确认的信息暴露、待确认的创作资料与示例测试数据。本报告仅列脱敏描述，不包含完整业务账户 ID、个人邮箱或凭证。</p>
+      <div class="meta">
+        <span>整理日期：<time datetime="2026-11-18">2026-11-18</time></span>
+        <span>仓库：DeadLining/GDream</span>
+        <span>检查版本：<code>a9474e5</code></span>
+        <span>原始审计快照：已另行开展清理，见下方修复记录</span>
+      </div>
+    </header>
+    <div class="toolbar">
+      <nav aria-label="报告章节">
+        <a href="#summary">结论</a><a href="#findings">确认发现</a><a href="#review">待确认内容</a><a href="#actions">处理建议</a><a href="#scope">检查范围</a>
+      </nav>
+      <button id="print-report" type="button">打印 / 保存为 PDF</button>
+    </div>
+    <section id="remediation" aria-labelledby="remediation-title">
+      <h2 id="remediation-title">本轮清理与运行验证</h2>
+      <p><strong>本轮在远程版本 <code>1aa0866</code> 基础上进行本地修改。</strong>下面的原始审计章节仍对应 <code>a9474e5</code>，其中旧文件位置、行号和数量不是当前工作区状态。</p>
+      <ul>
+        <li>远程更新已删除含广告账户标识的旧指南，以及继承的设置页截图。</li>
+        <li>语音服务的个人 GPU / Python / 模型目录改为服务相对路径或环境变量；图片探针改用通用模型名称。</li>
+        <li>车辆技能配置、示例代码和 30 条素材来源路径改为相对路径；素材文件仍可解析。</li>
+        <li>技能中的私人项目存档位置、参考文件路径、具体反馈与人物参考记录已改为调用者输入或通用虚构教学示例。</li>
+        <li>公开打包入口只收录 Git 跟踪的技能及记忆资源，排除未跟踪 / ignored 私人文件，并拒绝异常路径和符号链接重定向。5 项边界测试通过；未制作或发布 DMG。</li>
+        <li>修复技能脚本原有的 7 处语法错误；130 个技能 Python 文件均通过语法解析。</li>
+      </ul>
+      <h3>已验证</h3>
+      <ul>
+        <li>TypeScript 类型检查、前端生产构建、Rust 检查及桌面可执行文件编译。</li>
+        <li>Harness 701 项、DSH runtime 12 项、Omni 6 项、Context 10 项、MiniMax H3 34 项、Qwen3-TTS 模拟服务 5 项测试通过；Rust 单元测试 24 项通过、1 项导出夹具默认忽略。</li>
+        <li>本地模拟服务下的文本 ACP 边界检查通过；原生图片 ACP / MCP 输入输出链路通过。首次原生测试因冷编译超过 180 秒失败，完成预编译后重跑成功。</li>
+        <li>以隔离 HOME 实际启动原生桌面进程，系统窗口列表确认可见的 <code>GDream</code> 主窗口（1200 × 800）；本地前端 HTTP 200。未执行真实付费任务。</li>
+      </ul>
+      <h3>仍需区分的边界</h3>
+      <p>本轮清理的是当前代码和随附资料，<strong>未改写或推送 Git 历史</strong>。旧提交中的文档、路径、账户标识和提交邮箱仍可能被读取。完整历史改写需要另行授权，不能用当前文件已清理代替历史清理。</p>
+      <p class="note">真实网关冒烟缺少 API Key，未完成在线验证；Qwen3-TTS 真实推理仍需使用者配置模型权重与 GPU 环境，部分独立 Gemini 技能需安装 Google GenAI SDK。离线测试、语法检查与桌面启动不等于所有第三方服务已配置可用，也不等于对全部图片完成视觉隐私审核。</p>
+    </section>
+    <div class="stats" aria-label="原始审计检查规模">
+      <div class="stat"><strong>1,930</strong><span>当前 Git 跟踪文件</span></div>
+      <div class="stat"><strong>622</strong><span>本地可达 Git 提交</span></div>
+      <div class="stat"><strong>未发现</strong><span>可直接使用的真实凭证</span></div>
+    </div>
+    <section id="summary" aria-labelledby="summary-title">
+      <h2 id="summary-title">01 / 检查结论</h2>
+      <div class="callout"><strong>确认存在隐私及业务信息残留。</strong><br>主要涉及广告账户标识、个人文件路径、服务器部署目录以及 Git 提交邮箱。建议先清理业务账户信息，再处理个人路径和历史记录。</div>
+      <p>本次未发现可直接使用的 API Key、密码或私钥；已复核的疑似密钥是占位符或测试数据。<strong>“未发现”不等于保证不存在泄露。</strong>本次未在线验证任何账户或凭证的有效性。</p>
+      <p class="note">风险分级按本次发现的暴露性质及处理优先级划分，不是漏洞利用评级。当前文件内容与 Git 历史应分别处理。</p>
+    </section>
+    <section id="findings" aria-labelledby="findings-title">
+      <h2 id="findings-title">02 / 已确认的发现</h2>
+      <div class="table-wrap">
+        <table>
+          <caption>文件位置相对于项目根目录；行号对应检查时的版本。历史条目注明了提交版本。</caption>
+          <thead><tr><th scope="col">优先级 / 类型</th><th scope="col">证据位置</th><th scope="col">脱敏发现与影响</th><th scope="col">建议</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge priority">优先处理</span><br>业务账户标识</td><td><code>src-tauri/~/Desktop/小ad投放/touliu_skill修复指南.md</code><br>第 103–104、149 行</td><td>包含广告账户 / 租户标识，且该标识出现在服务 URL 参数中。属于业务信息，但没有证据表明仅凭标识即可登录。<code>~</code> 是仓库内的实际目录名。</td><td>将真实账户替换为明确占位符，检查这份桌面来源资料是否应公开。</td></tr>
+            <tr><td><span class="badge moderate">建议清理</span><br>个人部署路径</td><td><code>services/qwen3-tts/README.md</code><br>第 10–12、25、75–76 行</td><td>披露 GPU 服务器上的个人账号名，以及应用、模型和 Python 环境的目录结构。文中回环地址本身不属于私网地址泄露。</td><td>使用通用部署目录或环境变量，不保留具体个人账号与机器布局。</td></tr>
+            <tr><td><span class="badge moderate">建议清理</span><br>个人 Windows 路径</td><td><code>skills/car-model-skill/config.example.json</code><br>第 10 行<br><code>skills/car-model-skill/car_database_manager.py</code><br>第 259 行</td><td>公开示例配置和示例代码保留了具体 Windows 用户名、桌面目录和参考素材目录。</td><td>改为项目相对路径或要求使用者显式传入的目录。</td></tr>
+            <tr><td><span class="badge moderate">建议清理</span><br>素材来源元数据</td><td><code>skills/car-model-skill/car_database/NIO/ES8/classification_result.json</code><br>第 3–40 行</td><td>30 条图片绝对路径保留个人 Windows 用户目录及素材文件信息。</td><td>改为参考素材目录下的相对路径；如属一次性生成产物，确认是否应从发布内容排除。</td></tr>
+            <tr><td><span class="badge moderate">需确认意愿</span><br>Git 提交邮箱</td><td>Git 作者 / 提交者元数据<br>620 条提交记录</td><td>存在一个非 GitHub 隐私邮箱。邮箱可能是有意公开的提交身份，但在按隐私标准发布前应确认；这里不展示完整地址。</td><td>后续提交使用 GitHub noreply 邮箱。历史身份是否改写，需单独决定。</td></tr>
+            <tr><td><span class="badge moderate">历史残留</span><br>个人工程路径</td><td><code>8c06f6c</code> 中的<br><code>docs/superpowers/plans/2026-07-13-production-dependency-canvas.md</code><br>第 1036 行<br><br><code>85aa697</code> 中的<br><code>docs/worktree-inventory-2026-07-16.md</code><br>第 24 行</td><td>历史文档保留个人主目录和本地工程目录。相关文件当前已不存在，但可从 Git 历史读取。</td><td>仅改当前文件无法清除这些内容；如需彻底移除，应另行评估历史清理及协作影响。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="review" aria-labelledby="review-title">
+      <h2 id="review-title">03 / 待确认公开意图的内容</h2>
+      <p><span class="badge review">待人工确认</span> 以下是具体创作资料，不等同于已确认的个人隐私泄露，也不应未经确认直接删除。</p>
+      <ul>
+        <li><code>skills/video-style-replication/database/workflow_analysis.md</code>：包含项目工作流复盘、参考文件信息及用户反馈，需确认是否适合公开分发。</li>
+        <li><code>skills/video-style-replication/database/awakening_prompt_no_text.md</code>：包含具体创作项目的提示词和人物参考描述，需确认内容及参考素材授权。</li>
+      </ul>
+      <h3>已区分的正常内容</h3>
+      <ul>
+        <li>示例配置中的占位密钥和测试中的虚拟凭证，不列为真实凭证泄露。</li>
+        <li>公开模型服务端点、回环地址，以及通用示例路径，不直接视为个人隐私。</li>
+        <li>开源许可证署名、维护者归属和公开报告渠道，不应因“隐私清理”而擅自移除。</li>
+      </ul>
+    </section>
+    <section id="actions" aria-labelledby="actions-title">
+      <h2 id="actions-title">04 / 建议的处理顺序</h2>
+      <ol class="steps">
+        <li><strong>先清理当前业务标识。</strong>对投放指南中的广告账户、租户标识及 URL 参数做脱敏，并确认该文件是否应随代码发布。</li>
+        <li><strong>替换个人和机器路径。</strong>将语音服务部署文档、车辆技能配置和分类结果中的绝对路径改为通用配置或相对路径，并验证示例仍可使用。</li>
+        <li><strong>确认创作资料的公开权限。</strong>区分通用模板与个人项目记录，保留合法开源署名，不把所有记忆或风格库一概判为私人内容。</li>
+        <li><strong>单独决定是否清理 Git 历史。</strong>邮箱、已删除文档和旧版本内容不会因当前文件修复而消失。历史改写会改变提交 ID、影响协作，需明确授权后再执行。</li>
+        <li><strong>修复后复查。</strong>对当前目录和完整历史分别复扫，增加截图与图片元数据审核；如后续确认真实凭证泄露，应先撤销 / 轮换凭证，再清理内容。</li>
+      </ol>
+      <p class="note">已有 CI 工作流 <code>.github/workflows/secret-scan.yml</code> 使用 Gitleaks 扫描检出目录。本次未运行该工具；目录密钥扫描也不能代替个人路径、业务标识、图像内容及完整 Git 历史的检查。</p>
+    </section>
+    <section id="scope" aria-labelledby="scope-title">
+      <h2 id="scope-title">05 / 检查范围与限制</h2>
+      <h3>本次已做</h3>
+      <ul>
+        <li>检查当前 Git 跟踪文件中的源码、配置、文档、脚本与技能资料，复核疑似凭证及个人信息命中。</li>
+        <li>对 622 条本地可达提交的文本变更做规则扫描并复核候选；检查提交作者 / 提交者邮箱。</li>
+        <li>检查未跟踪及 ignored 文件：检查时未发现这些本地文件。</li>
+        <li>抽查文档截图；对 360 个 JPG、49 个 PNG、1 个 JPEG 和 1 个 PDF 做基础元数据模式检查，未命中所用的 GPS、联系方式和个人路径模式。</li>
+        <li>只读检查结束时工作区干净；本 HTML 是后续单独生成的报告，不属于被扫描的原始文件集。</li>
+      </ul>
+      <h3>不作出的保证</h3>
+      <ul>
+        <li>没有逐张完成所有图片的视觉、OCR 或完整 EXIF 解析，不能排除图片中的账户信息、人脸或其他敏感内容。</li>
+        <li>没有对 Git 历史中的全部二进制文件做内容审查，也未扫描远端不可达对象、其他克隆、缓存或下载件。</li>
+        <li>未安装依赖、未运行应用、未访问外部服务或验证密钥有效性；这不是运行时安全、渗透或依赖漏洞审计。</li>
+        <li>规则扫描存在漏报可能；本报告不是“仓库绝无隐私信息”的证明。</li>
+      </ul>
+    </section>
+    <footer>GDream 隐私检查 · 脱敏报告 · 单文件离线可读，无外部字体、资源、统计或网络请求</footer>
+  </main>
+  <script>document.getElementById('print-report').addEventListener('click', function () { window.print(); });</script>
+</body>
+</html>
