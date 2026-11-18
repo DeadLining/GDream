@@ -289,7 +289,7 @@ Rust 侧 `wechat.rs`(66KB/12 命令) 提供微信消息通道；前端 `lib/mess
 | 新增对话模型渠道 | `channels/catalog.ts` + `credentials.ts` + `agent/providers/` 加实现 |
 | 新增生图/生视频渠道 | `src/lib/<vendor>/` 新建目录 + `channels/catalog.ts` 登记 + Rust 侧如需代理 |
 | 新增 Agent 工具 | `agent/tools/` 加文件 → `toolRegistry.ts:170` 注册 |
-| 新增技能 | `skills/<name>/SKILL.md` + `skills-lock.json` |
+| 新增技能 | `skills/<name>/SKILL.md`；需要工具栏入口时配置 `skill.json` |
 | 新增长期知识 | `aigc-memory/` 对应子目录 |
 
 ---
@@ -302,7 +302,6 @@ Rust 侧 `wechat.rs`(66KB/12 命令) 提供微信消息通道；前端 `lib/mess
 | 路由策略未实现 | `providers/router.ts:116,296` | `parallel_race` / `task_routing` 抛 not implemented |
 | 巨型文件 | `lib/agent/skillLoader.ts`（63KB）、`coordinator.ts`（58KB） | 建议按职责拆分 |
 | 已废弃代码 | `lib/promptBuilder.ts:20` | 标 Deprecated，仅保编译 |
-| 占位内容 | `SECURITY.md:11` 安全邮箱 | 开源发布前应补 |
 | 未接监听 | `catalog.ts:20` 提到 `StatusBar.tsx` 监听器 | Tier 4.x 未完成 |
 | 平台 | 仅 macOS（Apple Silicon 为主） | Windows 未移植 |
 | 产品边界 | 内置 AI 精细剪辑仍有局限 | 高精度成片建议外接专业剪辑 |
