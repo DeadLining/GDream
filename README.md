@@ -207,7 +207,6 @@ npm run tauri:build
 
 - 本仓库新增及有权许可的内容以 [PolyForm Noncommercial 1.0.0](LICENSE) 提供，仅限许可允许的非商业用途；原有 MIT 及第三方许可范围见 [LICENSING.md](LICENSING.md)。
 - 第三方组件声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)（含 DeepSeek Harness、Node.js、sharp/libvips 等）。
-- 更新记录见 [历史更新记录](docs/CHANGELOG.md)。
 
 ### 设置持久化与启动保护
 
