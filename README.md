@@ -191,7 +191,7 @@ npm run tauri:build
 
 欢迎 Issue 和 PR。环境准备与开发、打包命令见上方“从源码构建”，完整脚本列表见 `package.json`。
 
-- 从 `main` 创建功能分支，每个 PR 聚焦一个问题，说明改动原因、关联 Issue 和实际验证结果，使用仓库内的 PR 模板提交。
+- 从 `main` 创建功能分支，每个 PR 聚焦一个问题，说明改动原因、关联 Issue 和实际验证结果。
 - 提交前运行与改动相关的检查：`npx tsc --noEmit`、`npm run test:harness`、`npm run test:dsh-runtime`；涉及 Rust 时运行 `cargo check --manifest-path src-tauri/Cargo.toml`。多模态与上下文改动另有 `test:omni`、`test:context`，按改动范围选用。
 - DeepSeek Harness 锁定 **`0.1.0-rc.6`**，不直接修改运行时上游依赖。升级须通过 Harness、dsh-runtime 全量回归与真实 ACP 冒烟。
 - **DSH 是唯一用户任务执行引擎**，失败明确报错，不回退普通模式；付费工具执行后不得整轮重放，避免重复扣费。
