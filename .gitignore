@@ -15,7 +15,7 @@ output/
 .env.*
 !.env.example
 
-# ── 私人覆盖层（开源仓库绝不包含，见 docs/开源计划 06）──
+# ── 私人覆盖层（不入库）──
 private.defaults.json
 private/
 

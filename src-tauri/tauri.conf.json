@@ -17,7 +17,6 @@
         "assetScope": [
           "$HOME/**",
           "$HOME/.gdream/**",
-          "$HOME/.kunpeng/**",
           "/tmp/**",
           "/private/tmp/**",
           "$DESKTOP/**"
@@ -52,7 +51,6 @@
         "scope": [
           "$HOME/**",
           "$HOME/.gdream/**",
-          "$HOME/.kunpeng/**",
           "/tmp/**",
           "/private/tmp/**"
         ]

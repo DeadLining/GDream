@@ -4,7 +4,7 @@
     "bananapro": "your-bananapro-api-key-here"
   },
   "paths": {
-    "default_input": "./car_database/NIO/ES8/reference",
+    "default_input": "./reference",
     "default_output": "./output"
   },
   "classification": {

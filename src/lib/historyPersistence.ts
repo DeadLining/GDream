@@ -32,10 +32,6 @@ const CHATS_DIR = '.gdream/chats';
 const INDEX_REL_PATH = `${CHATS_DIR}/index.json`;
 const INDEX_TMP_REL_PATH = `${CHATS_DIR}/index.json.tmp`;
 
-// Legacy global-snapshot file (Phase 220-232). Kept here only so that
-// migrateLocalStorageToFiles can read its contents if it exists.
-const LEGACY_HISTORY_REL_PATH = '.kunpeng/chat-history.json';
-
 const SESSIONS_LS_KEY = 'gdream-sessions';
 const MESSAGES_LS_PREFIX = 'gdream-messages-';
 const AGENT_MESSAGES_LS_PREFIX = 'gdream-agent-messages-';
@@ -46,15 +42,6 @@ export interface SessionFile {
   updatedAt: number;
   messages: Message[];
   agentMessages: AgentMessage[];
-}
-
-// ── Legacy global-snapshot shape (read-only, for migration) ─────────────
-export interface PersistedHistory {
-  schemaVersion: 1;
-  updatedAt: number;
-  sessions: Session[];
-  messagesBySession: Record<string, Message[]>;
-  agentMessagesBySession: Record<string, AgentMessage[]>;
 }
 
 function safeParse<T>(raw: string): T | null {
@@ -451,7 +438,7 @@ export function hydrateLocalStorageSessions(sessions: Session[]): void {
   }
 }
 
-// ─── One-time migration: localStorage + legacy snapshot → per-session files
+// ─── Persist the GDream localStorage cache → per-session files
 // Idempotent: only writes a session file if it doesn't already exist on disk.
 // Safe to call on every boot.
 export async function migrateLocalStorageToFiles(): Promise<{ migrated: number }> {
@@ -481,27 +468,6 @@ export async function migrateLocalStorageToFiles(): Promise<{ migrated: number }
       if (messages.length === 0 && agentMessages.length === 0) continue;
       await writeSessionToFile(s.id, { messages, agentMessages });
       migrated++;
-    }
-
-    // 3) Salvage from legacy chat-history.json if present (one-off)
-    try {
-      if (await exists(LEGACY_HISTORY_REL_PATH, { dir: BaseDirectory.Home })) {
-        const raw = await readTextFile(LEGACY_HISTORY_REL_PATH, { dir: BaseDirectory.Home });
-        const legacy = safeParse<PersistedHistory>(raw);
-        if (legacy && legacy.schemaVersion === 1 && Array.isArray(legacy.sessions)) {
-          for (const s of legacy.sessions) {
-            const path = sessionRelPath(s.id);
-            if (await exists(path, { dir: BaseDirectory.Home })) continue;
-            const messages = legacy.messagesBySession?.[s.id] ?? [];
-            const agentMessages = legacy.agentMessagesBySession?.[s.id] ?? [];
-            if (messages.length === 0 && agentMessages.length === 0) continue;
-            await writeSessionToFile(s.id, { messages, agentMessages });
-            migrated++;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[historyPersistence] legacy migration failed:', err);
     }
 
     if (migrated > 0) {

@@ -658,12 +658,10 @@ pub fn import_project_zip(zip_path: String) -> Result<ImportResult, String> {
             }
             // 重映射 workshop.json + project.json 里的绝对路径
             let new_home_str = home.to_string_lossy().to_string();
-            // 源包新旧版都可能：旧导出的路径是 ~/.kunpeng，新导出是 ~/.gdream。
-            // 两个候选都要参与替换，否则导出的老包路径会留在文件里。
-            let old_prefixes = [
-                format!("{}/{}/aigc-memory/projects/{}", source_home, crate::commands::LEGACY_DATA_DIR_NAME, old_aigc_id),
-                format!("{}/{}/aigc-memory/projects/{}", source_home, crate::commands::DATA_DIR_NAME, old_aigc_id),
-            ];
+            let old_prefix = format!(
+                "{}/{}/aigc-memory/projects/{}",
+                source_home, crate::commands::DATA_DIR_NAME, old_aigc_id
+            );
             let new_prefix = format!(
                 "{}/{}/aigc-memory/projects/{}",
                 new_home_str, crate::commands::DATA_DIR_NAME, new_aigc_id
@@ -688,9 +686,7 @@ pub fn import_project_zip(zip_path: String) -> Result<ImportResult, String> {
                                 }
                             }
                         }
-                        for old_p in &old_prefixes {
-                            replaced = replaced.replace(old_p, &new_prefix);
-                        }
+                        replaced = replaced.replace(&old_prefix, &new_prefix);
                         // 也替换 source_home 根（覆盖 voicePath 等可能用到的 home 根路径，
                         // 但只替换出现在 aigc-memory/projects 上下文里的——简单起见全替换 home 根）
                         replaced = if source_home != new_home_str {
@@ -758,18 +754,15 @@ pub fn import_project_zip(zip_path: String) -> Result<ImportResult, String> {
             if let (Some(ref old_aigc_id), Some(ref new_aigc_id)) =
                 (&old_aigc_id_opt, &final_aigc_project_id)
             {
-                // 同上：源包可能是旧版(.kunpeng)或新版(.gdream)导出，两种都要替换。
-                let old_aigc_prefixes = [
-                    format!("{}/{}/aigc-memory/projects/{}", source_home, crate::commands::LEGACY_DATA_DIR_NAME, old_aigc_id),
-                    format!("{}/{}/aigc-memory/projects/{}", source_home, crate::commands::DATA_DIR_NAME, old_aigc_id),
-                ];
+                let old_aigc_prefix = format!(
+                    "{}/{}/aigc-memory/projects/{}",
+                    source_home, crate::commands::DATA_DIR_NAME, old_aigc_id
+                );
                 let new_aigc_prefix = format!(
                     "{}/{}/aigc-memory/projects/{}",
                     new_home_str, crate::commands::DATA_DIR_NAME, new_aigc_id
                 );
-                for old_p in &old_aigc_prefixes {
-                    replaced = replaced.replace(old_p, &new_aigc_prefix);
-                }
+                replaced = replaced.replace(&old_aigc_prefix, &new_aigc_prefix);
             }
             if !source_home.trim().is_empty() {
                 replaced = replaced.replace(&old_ws_prefix, &new_ws_prefix);

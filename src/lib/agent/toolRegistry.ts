@@ -229,7 +229,6 @@ import { browserControlTool, browserInstallTool } from './tools/browserTool';
 import { readImageTool } from './tools/readImageTool';
 import { sleepTool, scheduleCronTool } from './tools/scheduleCronTool';
 import { aigcOptimizePromptTool } from './tools/genTools';
-import { allTouliuTools } from './tools/touliuTools';
 import { doubaoSpeechGenerateTool } from './tools/doubaoSpeechTool';
 import { allProjectTools } from './tools/projectTools';
 import { allAppTools } from './tools/appTools';
@@ -291,8 +290,5 @@ export function createDefaultRegistry(): ToolRegistry {
     registry.register(tool);
   }
   registry.register(aigcOptimizePromptTool);
-  for (const tool of allTouliuTools) {
-    registry.register(tool);
-  }
   return registry;
 }

@@ -14,7 +14,7 @@
 - **许可证**：MIT
 - **位置**：`dsh-runtime/node_modules/@deepseek-ai/`
 - **上游**：<https://www.npmjs.com/package/@deepseek-ai/dsh>
-- 说明：GDream内嵌 DeepSeek Harness 引擎作为 DeepSeek 渠道的 agent 运行时（ACP/MCP 桥）。版本升级需全量回归，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- 说明：GDream内嵌 DeepSeek Harness 引擎作为 DeepSeek 渠道的 agent 运行时（ACP/MCP 桥）。版本升级需全量回归，见 [README 的参与贡献说明](README.md#参与贡献)。
 
 ### Node.js
 

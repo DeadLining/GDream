@@ -1,0 +1,8 @@
+# Local credentials and generated car assets
+config.json
+car_database/**
+!car_database/index.json
+output/
+output_*/
+reference/
+__pycache__/

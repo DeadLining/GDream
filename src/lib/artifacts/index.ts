@@ -26,7 +26,6 @@ export interface ArtifactEntry {
 }
 
 const MANIFEST_REL = '.gdream/artifacts-manifest.json';
-const LEGACY_MANIFEST_REL = '.kunpeng/artifacts-manifest.json';
 
 export function typeFromPath(path: string): ArtifactType {
   const ext = path.split('.').pop()?.toLowerCase() ?? '';
@@ -41,18 +40,14 @@ export function typeFromPath(path: string): ArtifactType {
 let manifestQueue: Promise<void> = Promise.resolve();
 
 async function readManifest(): Promise<ArtifactEntry[]> {
-  // 迁移期：新清单不存在时回退读旧目录的清单，让改名前产出的记录继续可见。
-  for (const rel of [MANIFEST_REL, LEGACY_MANIFEST_REL]) {
-    try {
-      if (!(await exists(rel, { dir: BaseDirectory.Home }))) continue;
-      const raw = await readTextFile(rel, { dir: BaseDirectory.Home });
-      const parsed = JSON.parse(raw) as { entries?: ArtifactEntry[] };
-      return Array.isArray(parsed.entries) ? parsed.entries : [];
-    } catch {
-      /* try next */
-    }
+  try {
+    if (!(await exists(MANIFEST_REL, { dir: BaseDirectory.Home }))) return [];
+    const raw = await readTextFile(MANIFEST_REL, { dir: BaseDirectory.Home });
+    const parsed = JSON.parse(raw) as { entries?: ArtifactEntry[] };
+    return Array.isArray(parsed.entries) ? parsed.entries : [];
+  } catch {
+    return [];
   }
-  return [];
 }
 
 export function appendArtifact(entry: Omit<ArtifactEntry, 'size' | 'createdAt'> & { size?: number; createdAt?: number }): Promise<void> {
@@ -87,7 +82,6 @@ export async function listArtifacts(): Promise<ArtifactEntry[]> {
   const [
     manifest,
     workspaceFiles, projectFiles, aigcFiles, outputFiles,
-    legacyWorkspaceFiles, legacyProjectFiles, legacyAigcFiles, legacyOutputFiles,
   ] = await Promise.all([
     readManifest(),
     scan('.gdream/workspace'),
@@ -96,30 +90,18 @@ export async function listArtifacts(): Promise<ArtifactEntry[]> {
     // 画布生成的自定义视频等直接落在 ~/.gdream/outputs（见 canvasGen /
     // useCanvasTaskRecovery），此前不在扫描范围内，导致生成后资产库看不到。
     scan('.gdream/outputs'),
-    // 迁移期同时扫旧目录：数据目录是「补缺式」复制，迁移中途失败、或用户在
-    // 旧版本里又产出过文件时，只扫新目录会漏掉它们。旧目录结果按下面的
-    // canonical 去重，不会与新目录里的同一批文件成对重复。
-    scan('.kunpeng/workspace'),
-    scan('.kunpeng/projects'),
-    scan('.kunpeng/aigc-memory'),
-    scan('.kunpeng/outputs'),
   ]);
 
-  // `~/.kunpeng` 与 `~/.gdream` 指向同一批数据（迁移用硬链接实现），
-  // 去重时必须归一到同一个 key，否则资产库会把每个文件显示两遍。
-  const canonical = (p: string) => p.replace('/.kunpeng/', '/.gdream/');
-
-  const byCanonical = new Map<string, ArtifactEntry>();
+  const byPath = new Map<string, ArtifactEntry>();
   // manifest 由生成管线写入，带 prompt / projectId 等元数据，优先于裸扫描结果。
   for (const m of manifest) {
-    const key = canonical(m.path);
-    if (!byCanonical.has(key)) byCanonical.set(key, m);
+    const key = m.path;
+    if (!byPath.has(key)) byPath.set(key, m);
   }
 
   const liveFiles = new Set<string>();
   const allFiles = [
     ...workspaceFiles, ...projectFiles, ...aigcFiles, ...outputFiles,
-    ...legacyWorkspaceFiles, ...legacyProjectFiles, ...legacyAigcFiles, ...legacyOutputFiles,
   ];
   for (const f of allFiles) {
     const type = typeFromPath(f.path);
@@ -127,14 +109,14 @@ export async function listArtifacts(): Promise<ArtifactEntry[]> {
     // canvas.json / project.json are not artifacts
     if (f.path.endsWith('.json')) continue;
     liveFiles.add(f.path);
-    const key = canonical(f.path);
-    const existing = byCanonical.get(key);
+    const key = f.path;
+    const existing = byPath.get(key);
     if (existing) {
       if (!existing.size) existing.size = f.size;
       continue;
     }
-    const projectMatch = /\.(?:gdream|kunpeng)\/(?:projects|aigc-memory\/projects)\/([^/]+)\//.exec(f.path);
-    byCanonical.set(key, {
+    const projectMatch = /\.gdream\/(?:projects|aigc-memory\/projects)\/([^/]+)\//.exec(f.path);
+    byPath.set(key, {
       path: f.path,
       type,
       size: f.size,
@@ -147,7 +129,7 @@ export async function listArtifacts(): Promise<ArtifactEntry[]> {
   // Scanned-only entries are dropped if the file vanished; manifest entries
   // are trusted (written by our pipeline) so they survive regardless of scan
   // cap — a deleted file will simply fail to render in the UI.
-  return [...byCanonical.values()]
+  return [...byPath.values()]
     .filter((e) => !e.scanned || liveFiles.has(e.path))
     .sort((a, b) => b.createdAt - a.createdAt);
 }

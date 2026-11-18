@@ -52,10 +52,6 @@ export function isToolEnabled(name: string): boolean {
   if (name.startsWith('workshop_')) {
     return useChatStore.getState().activeView === 'workshop';
   }
-  // touliu_* 投流工具始终可见（toolbar 级别，不受视图限制）
-  if (name.startsWith('touliu_')) {
-    return true;
-  }
   const gate = GATED[name];
   return gate ? gate() : true;
 }

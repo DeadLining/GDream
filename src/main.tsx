@@ -1,8 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// ⚠️ 必须排在 ./App 之前：本模块 import 时就把 kunpeng-* / kunpeng.* 的
-// localStorage 值复制到 gdream-* / gdream.*，供随后求值的 store 读取。
-import './lib/legacyRenameBoot';
 import App from './App';
 import { applyPrivateDefaults } from './lib/privateDefaults';
 import './index.css';

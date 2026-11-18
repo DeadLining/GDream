@@ -18,22 +18,7 @@ function isRegenerableKey(key: string): boolean {
     key === 'gdream-canvas' ||                  // 画布二级缓存（canvas.json 为源）
     key === 'gdream-canvas-tasks' ||            // 任务队列历史（可丢）
     key === 'gdream-render-queue' ||             // 渲染队列历史（候选已落盘时可重建）
-    key === 'gdream-run-steps' ||               // 运行步骤缓存（完整记录另存 run-history 文件）
-    // 改名前遗留的旧键同样是「可再生缓存」，迁移期一并纳入清理范围，
-    // 否则这些旧副本会一直占着配额不再被回收。
-    isLegacyRegenerableKey(key)
-  );
-}
-
-/** 改名前（kunpeng-*）遗留的可再生缓存键，迁移期仍需可清理。 */
-function isLegacyRegenerableKey(key: string): boolean {
-  return (
-    key.startsWith('kunpeng-messages-') ||
-    key.startsWith('kunpeng-agent-messages-') ||
-    key === 'kunpeng-canvas' ||
-    key === 'kunpeng-canvas-tasks' ||
-    key === 'kunpeng-render-queue' ||
-    key === 'kunpeng-run-steps'
+    key === 'gdream-run-steps'                 // 运行步骤缓存（完整记录另存 run-history 文件）
   );
 }
 

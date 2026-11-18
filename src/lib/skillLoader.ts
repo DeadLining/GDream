@@ -3,7 +3,7 @@ import { readDir, readTextFile, createDir, BaseDirectory } from '@tauri-apps/api
 import { homeDir } from '@tauri-apps/api/path';
 import { buildStoryDirectorPrompt } from '@/lib/workshop/storyDirectorPrompt';
 
-// ── 7 Built-in skill fallbacks ──────────────────────────────────────────────
+// ── Built-in skill fallbacks ──────────────────────────────────────────────
 // These are embedded so the app works even without ~/.gdream/skills/
 
 const BUILTIN_SKILLS: SkillManifest[] = [
@@ -1430,116 +1430,6 @@ AI应用ID：{{webappId}}
 - 图片模型 endpoint 格式：{imageModel}/text-to-image
   - 特殊：youchuan/v7 → youchuan/text-to-image-v7`,
   },
-
-  // 9. Ocean Engine Ad (巨量投流)
-  {
-    id: 'ocean-engine-ad',
-    name: '巨量投流',
-    icon: 'megaphone',
-    description: '巨量引擎广告投放自动化（Safari + osascript）',
-    version: '1.0.0',
-    hasPanel: true,
-    accentColor: 'orange',
-    placeholder: '补充说明（如目标人群、投放时段等）...',
-    panel: {
-      fields: [
-        {
-          key: 'operation',
-          label: '操作类型',
-          type: 'select',
-          default: 'free-chat',
-          options: [
-            { value: 'free-chat', label: '自由对话' },
-            { value: 'create-project', label: '创建项目' },
-            { value: 'add-keywords', label: '添加关键词' },
-            { value: 'select-video', label: '选择视频' },
-            { value: 'view-data', label: '查看数据' },
-            { value: 'full-pipeline', label: '全流程投放' },
-          ],
-          labelMap: {
-            'free-chat': '自由对话 — 用自然语言描述你想做什么',
-            'create-project': '创建项目 — 在巨量引擎中创建新投放项目',
-            'add-keywords': '添加关键词 — 为项目添加行为/兴趣关键词',
-            'select-video': '选择视频 — 选择要投放的视频素材',
-            'view-data': '查看数据 — 查看投放效果数据指标',
-            'full-pipeline': '全流程投放 — 从创建到投放一站式完成',
-          },
-        },
-        {
-          key: 'projectName',
-          label: '项目名称',
-          type: 'input',
-          default: '',
-          placeholder: '输入投放项目名称',
-          showIf: { field: 'operation', value: ['create-project', 'full-pipeline'] },
-        },
-        {
-          key: 'budget',
-          label: '日预算（元）',
-          type: 'number',
-          default: 300,
-          min: 100,
-          max: 100000,
-          presets: [100, 300, 500, 1000, 3000],
-          showIf: { field: 'operation', value: ['create-project', 'full-pipeline'] },
-        },
-        {
-          key: 'searchCoeff',
-          label: '搜索系数',
-          type: 'number',
-          default: 1.0,
-          min: 0.1,
-          max: 3.0,
-          presets: [0.5, 1.0, 1.5, 2.0],
-          showIf: { field: 'operation', value: ['create-project', 'full-pipeline'] },
-        },
-        {
-          key: 'contentDescription',
-          label: '内容描述',
-          type: 'textarea',
-          default: '',
-          placeholder: '描述投放内容，用于 AI 生成关键词建议',
-          showIf: { field: 'operation', value: ['add-keywords', 'full-pipeline'] },
-        },
-        {
-          key: 'videoTitle',
-          label: '视频标题',
-          type: 'input',
-          default: '',
-          placeholder: '输入要投放的视频标题关键词',
-          showIf: { field: 'operation', value: ['select-video', 'full-pipeline'] },
-        },
-        {
-          key: 'bid',
-          label: '出价（元）',
-          type: 'number',
-          default: 0.2,
-          min: 0.01,
-          max: 100,
-          presets: [0.1, 0.2, 0.5, 1.0],
-          showIf: { field: 'operation', value: ['select-video', 'full-pipeline'] },
-        },
-      ],
-    },
-    promptTemplate: `[巨量投流] 操作类型：{{operation}}
-
-项目名称：{{projectName}}
-日预算：{{budget}} 元
-搜索系数：{{searchCoeff}}
-内容描述：{{contentDescription}}
-视频标题：{{videoTitle}}
-出价：{{bid}} 元
-
-{{userContent}}
-
-执行规则：
-1. 先调用 touliu_get_status 读取账户、登录和页面状态。
-2. 创建计划、修改预算、出价或正式投放前，展示关键参数并等待用户确认。
-3. 优先使用 touliu_get_status / touliu_open_safari / touliu_get_metrics / touliu_navigate / touliu_suggest_keywords / touliu_manage_account 等专用工具。
-4. 专用工具无法覆盖时才使用 touliu_execute_js 精确降级；页面变化后重新读取状态，不复用失效选择器。
-5. 复盘必须解释异常、原因、下一步实验和暂时不应调整的项目，不只罗列数据。
-详细约束参考 ~/.gdream/skills/ocean-engine-ad/SKILL.md。`,
-  },
 ];
 
 const KIMI_VIDEO_ANALYSIS_SKILL: SkillManifest = {
@@ -1574,7 +1464,6 @@ const PRODUCT_META: Record<string, Partial<SkillManifest>> = {
   'digital-human-skill': { category: 'internal', visibility: 'internal' },
   'film-master-skill': { category: 'storyboard', visibility: 'toolbar', name: '电影分镜设计', description: '按专业景别、机位、构图、光线与连续性设计分镜' },
   rhtv: { category: 'integration', visibility: 'library' },
-  'ocean-engine-ad': { category: 'marketing', visibility: 'toolbar', description: '巨量引擎投放规划、执行与数据复盘' },
 };
 
 function applyProductMeta(skill: SkillManifest): SkillManifest {

@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 ### 2. 配置API密钥
 
-复制 `config/config.example.json` 为 `config/config.json`，填入你的API密钥：
+复制 `config.example.json` 为 `config.json`，填入你的API密钥：
 
 ```json
 {
@@ -122,7 +122,6 @@ car-model-skill/
 │   │   ├── body_views.json           # 车身视图提示词
 │   │   ├── details.json              # 细节图提示词
 │   │   └── showcase.json             # Showcase提示词
-│   ├── config.example.json           # 配置示例
 │   └── settings.json                 # 全局设置
 │
 ├── templates/                         # 模板
@@ -134,11 +133,8 @@ car-model-skill/
 │       ├── showcase/                  # 展示图
 │       └── metadata.json             # 元数据
 │
-├── output/                            # 临时输出（可清理）
-│
-└── examples/                          # 示例和文档
-    ├── bmw_x3_case_study.md          # BMW X3案例研究
-    └── workflow_diagram.md           # 流程图
+├── output/                            # 本地生成结果（不入库）
+└── config.example.json                # 配置示例
 ```
 
 ## 提示词系统
@@ -312,14 +308,9 @@ result = analyzer.compare_images(
 )
 ```
 
-## 案例研究
+## 本地素材与生成结果
 
-参见 `examples/bmw_x3_case_study.md` 了解完整的BMW X3生成案例，包括：
-
-- 多次迭代优化过程
-- 豆包分析的实际应用
-- 提示词演进历程
-- 最终解决方案
+仓库仅提供空的 `car_database/index.json`。请自行准备参考图片，生成后的车型数据保存在本地，不随源码分发。
 
 ## 更新日志
 

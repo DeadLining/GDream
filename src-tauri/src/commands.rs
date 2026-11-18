@@ -2,106 +2,12 @@ use chrono::Local;
 use std::fs;
 use std::process::Command as StdCommand;
 
-/// 数据目录名：品牌从 Kunpeng 更名为 GDream 后，用户数据落在 `~/.gdream`。
+/// GDream 数据目录：`~/.gdream`。
 pub const DATA_DIR_NAME: &str = ".gdream";
-/// 更名前的数据目录名。启动时补缺式复制到新目录（旧目录保留）。
-pub const LEGACY_DATA_DIR_NAME: &str = ".kunpeng";
-/// 迁移完成标记：放在新目录里，内容为旧目录名，便于以后再加一次更名。
-const MIGRATION_MARKER_NAME: &str = ".migrated-from-kunpeng";
 
 /// 返回数据目录（`~/.gdream`），不保证存在。
 pub fn data_dir() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|h| h.join(DATA_DIR_NAME))
-}
-
-/// 一次性数据目录迁移：`~/.kunpeng` → `~/.gdream`。
-///
-/// 语义与 localStorage 迁移一致——**复制、不移动、不清源**：
-///   · 用「标记文件」判定是否迁移过，而不是「新目录是否存在」——新目录会被
-///     内置资源部署逻辑提前创建，用它判定会永久跳过迁移；
-///   · 补缺式复制（`overwrite = false`）：只补旧目录里新目录没有的文件，
-///     绝不覆盖用户在新版里已经产生的数据；
-///   · 文件优先硬链接（同卷瞬时、零额外空间），跨卷/失败回退字节复制；
-///   · 旧目录永远保留，用户可随时退回旧版本；
-///   · 任一步失败都静默降级，下次启动重试，不阻断应用启动。
-pub fn migrate_legacy_data_dir() -> bool {
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => return false,
-    };
-    let legacy = home.join(LEGACY_DATA_DIR_NAME);
-    let next = home.join(DATA_DIR_NAME);
-    if !legacy.exists() {
-        return false; // 全新用户：没有旧数据可迁移
-    }
-    let marker = next.join(MIGRATION_MARKER_NAME);
-    if marker.exists() {
-        return false; // 已迁移过
-    }
-    if let Err(err) = copy_tree_fill(&legacy, &next) {
-        // 半成品目录不清掉：补缺式复制天然可重入，下次启动继续补即可。
-        eprintln!(
-            "[migrate] {} → {} 未完成，下次启动重试: {}",
-            legacy.display(),
-            next.display(),
-            err
-        );
-        return false;
-    }
-    rename_legacy_files(&next);
-    // 标记写入成功才算迁移完成，否则下次启动重来一次（补缺式，幂等）。
-    if let Err(err) = fs::write(&marker, LEGACY_DATA_DIR_NAME) {
-        eprintln!("[migrate] 写入迁移标记失败，下次启动重试: {}", err);
-        return false;
-    }
-    true
-}
-
-/// 补缺式递归复制：只写目标端不存在的文件，已存在的一律保留。
-fn copy_tree_fill(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_tree_fill(&from, &to)?;
-        } else if ty.is_file() && !to.exists() {
-            if fs::hard_link(&from, &to).is_err() {
-                fs::copy(&from, &to)?;
-            }
-        }
-        // 已存在的文件 / 符号链接等：保留目标端现状。
-    }
-    Ok(())
-}
-
-/// 数据目录里只有少数**文件名**带旧品牌，逐条改成新名，
-/// 这样其余代码只需要认识 `~/.gdream/gdream.json` 一种路径。
-///
-/// 目前只有一处：RunningHub key 文件 `kunpeng.json` → `gdream.json`
-/// （syncRunninghubKeyFile / runninghub.py 的标准读取位置）。
-fn rename_legacy_files(root: &std::path::Path) {
-    let pairs: [(&str, &str); 1] = [("kunpeng.json", "gdream.json")];
-    for (old_name, new_name) in pairs {
-        let from = root.join(old_name);
-        let to = root.join(new_name);
-        if from.is_file() && !to.exists() {
-            // 迁移必须保持旧目录可回退：不要 move/rename 源文件。
-            // 同卷优先硬链接，失败时回退字节复制；旧文件始终保留。
-            if fs::hard_link(&from, &to).is_err() {
-                if let Err(err) = fs::copy(&from, &to) {
-                    eprintln!(
-                        "[migrate] {} → {} 复制失败（不影响启动）: {}",
-                        from.display(),
-                        to.display(),
-                        err
-                    );
-                }
-            }
-        }
-    }
 }
 
 /// 获取用户主目录

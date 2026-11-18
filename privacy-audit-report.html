@@ -75,6 +75,8 @@
     <section id="remediation" aria-labelledby="remediation-title">
       <h2 id="remediation-title">本轮清理与运行验证</h2>
       <p><strong>本轮在远程版本 <code>1aa0866</code> 基础上进行本地修改。</strong>下面的原始审计章节仍对应 <code>a9474e5</code>，其中旧文件位置、行号和数量不是当前工作区状态。</p>
+      <p><strong>同步远端补充：</strong>提交前又合并了远程 <code>442dd4b</code>。远端已进一步删除旧项目样例、车辆素材和一次性视频脚本；本轮保留这些删除，不重新发布已脱敏的旧样例。以下清理及运行记录描述合并前验证的快照，不代表这些文件仍在最终代码树中。</p>
+      <p>合并后复核：前端生产构建、Rust <code>cargo check --locked</code>、701 项 Harness、9 项公开资源及模型路由测试、5 项语音服务模拟测试通过；最终保留的 94 个技能 Python 文件均通过语法解析。</p>
       <ul>
         <li>远程更新已删除含广告账户标识的旧指南，以及继承的设置页截图。</li>
         <li>语音服务的个人 GPU / Python / 模型目录改为服务相对路径或环境变量；图片探针改用通用模型名称。</li>

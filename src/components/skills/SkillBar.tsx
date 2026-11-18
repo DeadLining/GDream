@@ -17,7 +17,6 @@ const HIDDEN_TOOLBAR_IDS = new Set([
   'rhtv',
   'video-copy-analyzer',
   'car-model-skill',
-  'ocean-engine-ad',
   'canvas-project-manager',
   'scene-image-anchor',
 ]);

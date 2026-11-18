@@ -8,7 +8,7 @@ GDream 基于 React + TypeScript、Tauri / Rust 和固定版本的 DeepSeek Harn
 
 **许可：本仓库新增及有权许可的内容仅限非商业用途，商业使用需另行授权。原有 MIT 代码和第三方许可保留，具体范围见 [LICENSING.md](LICENSING.md)。**
 
-> 界面截图待更新：原随附截图来自“鲲鹏”旧版界面，已撤下；当前 GDream 的展示图将以实际运行截图为准。
+> 界面截图待更新，后续将以实际运行的 GDream 界面为准。
 
 ## 本地与自定义 API
 
@@ -189,13 +189,24 @@ npm run tauri:build
 
 ## 参与贡献
 
-欢迎 Issue 和 PR！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。行为准则见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)，安全问题报告见 [SECURITY.md](SECURITY.md)。
+欢迎 Issue 和 PR。环境准备与开发、打包命令见上方“从源码构建”，完整脚本列表见 `package.json`。
+
+- 从 `main` 创建功能分支，每个 PR 聚焦一个问题，说明改动原因、关联 Issue 和实际验证结果。
+- 提交前运行与改动相关的检查：`npx tsc --noEmit`、`npm run test:harness`、`npm run test:dsh-runtime`；涉及 Rust 时运行 `cargo check --manifest-path src-tauri/Cargo.toml`。多模态与上下文改动另有 `test:omni`、`test:context`，按改动范围选用。
+- DeepSeek Harness 锁定 **`0.1.0-rc.6`**，不直接修改运行时上游依赖。升级须通过 Harness、dsh-runtime 全量回归与真实 ACP 冒烟。
+- **DSH 是唯一用户任务执行引擎**，失败明确报错，不回退普通模式；付费工具执行后不得整轮重放，避免重复扣费。
+- 阅读 [许可范围](LICENSING.md)，遵守 [AI 编码约定](AGENTS.md)。请勿提交 API Key、Cookie、会话数据、个人记忆、私有默认配置、内网部署地址或包含真实项目/会话信息的截图。提交前检查暂存文件；`.gitignore` 和 Secret Scan 不能替代人工检查。
+
+## 安全问题
+
+安全漏洞请通过 GitHub 的私密漏洞报告功能提交，附受影响版本、复现步骤与潜在影响；**不要在公开 Issue 中发布漏洞细节或凭证**。维护者会尽力回应，不承诺具体响应时限，安全修复主要面向最新版本。
+
+第三方 API Key 由用户自行配置和保管，不应随配置导出或代码提交。仓库使用 Gitleaks 扫描凭证；第三方服务的可用性、价格及服务条款需由使用者自行评估。
 
 ## 第三方声明与 License
 
 - 本仓库新增及有权许可的内容以 [PolyForm Noncommercial 1.0.0](LICENSE) 提供，仅限许可允许的非商业用途；原有 MIT 及第三方许可范围见 [LICENSING.md](LICENSING.md)。
 - 第三方组件声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)（含 DeepSeek Harness、Node.js、sharp/libvips 等）。
-- 更新记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ### 设置持久化与启动保护
 
