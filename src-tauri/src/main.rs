@@ -325,14 +325,6 @@ fn main() {
         .manage(tools::bash::BashProcessState::default())
         .manage(wechat::WechatState::default())
         .setup(|app| {
-            // 品牌更名一次性迁移：~/.kunpeng → ~/.gdream（硬链接优先、旧目录保留）。
-            // 必须在部署内置资源之前跑：部署会往 ~/.gdream 写 AGENT.md/skills，
-            // 先部署再迁移会让首轮迁移多绕路，也会把「迁移标记」与资源版本标记
-            // 的先后顺序搅乱，不利于排查。
-            if commands::migrate_legacy_data_dir() {
-                eprintln!("[migrate] 已将 ~/.kunpeng 迁移到 ~/.gdream（旧目录保留）");
-            }
-
             // 部署内置资源（AGENT.md/skills/aigc-memory 种子），版本变更时覆盖
             commands::deploy_bundled_resources(&app.handle());
 

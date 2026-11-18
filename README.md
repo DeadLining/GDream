@@ -8,7 +8,7 @@ GDream 基于 React + TypeScript、Tauri / Rust 和固定版本的 DeepSeek Harn
 
 **许可：本仓库新增及有权许可的内容仅限非商业用途，商业使用需另行授权。原有 MIT 代码和第三方许可保留，具体范围见 [LICENSING.md](LICENSING.md)。**
 
-> 界面截图待更新：原随附截图来自“鲲鹏”旧版界面，已撤下；当前 GDream 的展示图将以实际运行截图为准。
+> 界面截图待更新，后续将以实际运行的 GDream 界面为准。
 
 ## 本地与自定义 API
 

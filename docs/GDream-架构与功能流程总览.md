@@ -1,7 +1,7 @@
 # GDream — 架构与功能流程总览
 
 > 历史结构快照：v2.9.8；部分功能、规模与调用方式已变化，不能作为当前验收结论。
-> 当前许可范围见 [LICENSING.md](../LICENSING.md)，投流模块与旧品牌兼容代码现状见 [残留审计](legacy-code-audit-2026-11-17.md)。
+> 当前许可范围见 [LICENSING.md](../LICENSING.md)，旧模块移除范围与验证见 [残留审计](legacy-code-audit-2026-11-17.md)。
 > 代码规模约 17 万行（`src` + `src-tauri/src` 的 ts/tsx/rs）
 > 本文是代码结构勘察结论，所有结论均可按文件路径回溯验证。
 
@@ -100,7 +100,7 @@ Tauri 1.x + React 18 + Rust 的 **macOS 桌面 AIGC 视频创作工作台**。�
 | 工坊 | `workshopTools`(35) | 流水线操作，最大一组 |
 | 分镜 | `storyboardTools`(9) | 高清故事板与导演约束参考 |
 | 剪辑/文案 | `timelineTools` `copywritingTools`(7) | A 剪与去 AI 化 |
-| 其它 | `projectTools` `skillInvokeTool` `apimartRouteTool` `touliuTools` | 项目、技能、投流 |
+| 其它 | `projectTools` `skillInvokeTool` `apimartRouteTool` | 项目、技能 |
 
 ### 3.3 `src/lib/agent/dsh/` — DeepSeek Harness 桥
 
@@ -140,9 +140,9 @@ Tauri 1.x + React 18 + Rust 的 **macOS 桌面 AIGC 视频创作工作台**。�
 
 ### 3.6 状态与组件
 
-**store 分组（约 24 个）**：`chat` `settings` `skill` `wizard` `backgroundTask` `memory` `aigcProject` `runStep` `deepseekHarness` `renderQueue` 由 `stores/index.ts` 统一导出；`canvas` `canvasTask` `workshop` `editor` `copywriting` `project` `unifiedProject` `director` `todo` `askUser` `toolConfirm` `wechat` `cron` `touliu` `assetLibrary` 按域单独 import。
+**store 分组**：`chat` `settings` `skill` `wizard` `backgroundTask` `memory` `aigcProject` `runStep` `deepseekHarness` `renderQueue` 由 `stores/index.ts` 统一导出；`canvas` `canvasTask` `workshop` `editor` `copywriting` `project` `unifiedProject` `director` `todo` `askUser` `toolConfirm` `wechat` `cron` `assetLibrary` 按域单独 import。
 
-**组件域**：`chat` `canvas` `workshop` `editor` `copywriting` `director`（五大功能 + 导演），加 `shared` `wechat` `memory` `skills` `library` `settings` `wizard` `messaging` `projects` `touliu`。
+**组件域**：`chat` `canvas` `workshop` `editor` `copywriting` `director`（五大功能 + 导演），加 `shared` `wechat` `memory` `skills` `library` `settings` `wizard` `messaging` `projects`。
 
 ---
 
